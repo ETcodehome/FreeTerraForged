@@ -21,7 +21,7 @@ public class ColumnAlignment {
 		this.verticalMargin = verticalMargin;
 		this.left = horizontalMargin;
 	}
-	
+
 	public <T extends GuiEventListener & Renderable> T addColumn(float columnSize, ColumnFactory<T> factory) {
 		int pageWidth = this.parent.width - (this.horizontalMargin * 2);
 		int height = this.parent.height;
@@ -31,7 +31,7 @@ public class ColumnAlignment {
 		((ScreenInvoker) this.parent).invokeAddRenderableWidget(column);
 		return column;
 	}
-	
+
 	public interface ColumnFactory<T extends GuiEventListener> {
 		T apply(int left, int top, int columnWidth, int height, int horizontalPadding, int verticalPadding);
 	}
