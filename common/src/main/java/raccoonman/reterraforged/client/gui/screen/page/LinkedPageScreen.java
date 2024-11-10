@@ -30,7 +30,7 @@ public abstract class LinkedPageScreen extends Screen {
 	public void init() {
 		super.init();
 
-		int buttonsCenter = this.width * 52 / 62; //21 / 25;
+		int buttonsCenter = this.width/2;
         int buttonWidth = 50;
         int buttonHeight = 20;
         int buttonPad = 2;

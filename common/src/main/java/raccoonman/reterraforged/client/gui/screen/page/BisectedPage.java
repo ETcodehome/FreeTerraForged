@@ -25,7 +25,7 @@ public abstract class BisectedPage<S extends Screen, L extends AbstractWidget, R
 	private <T extends AbstractWidget> WidgetList<T> createAndPositionColumn(int left, int top, int columnWidth, int height, int horizontalPadding, int verticalPadding) {
 		final int padding = 30;
 		final int slotHeight = 25;
-		WidgetList<T> list = new WidgetList<>(this.screen.minecraft, columnWidth, height, padding, slotHeight);
+		WidgetList<T> list = new WidgetList<>(this.screen.minecraft, columnWidth, height - 65, padding, slotHeight);
 		list.setX(left);
 		return list;
 	}
