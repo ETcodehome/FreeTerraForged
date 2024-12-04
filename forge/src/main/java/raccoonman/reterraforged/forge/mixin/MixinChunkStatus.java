@@ -5,8 +5,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Function;
 
+import net.minecraft.server.level.GenerationChunkHolder;
+import net.minecraft.util.StaticCache2D;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
-import net.minecraft.world.level.chunk.status.ToFullChunk;
+import net.minecraft.world.level.chunk.status.ChunkStep;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -38,7 +40,7 @@ public class MixinChunkStatus {
 		method = { "generateStructureStarts" },
 		require = 1
 	)
-	private static void generateStructureStarts(WorldGenContext worldGenContext, ChunkStatus chunkStatus, Executor executor, ToFullChunk toFullChunk, List<ChunkAccess> list, ChunkAccess chunkAccess, CallbackInfoReturnable<CompletableFuture<ChunkAccess>> callback) {
+	private static void generateStructureStarts(WorldGenContext worldGenContext, ChunkStep chunkStep, StaticCache2D<GenerationChunkHolder> staticCache2D, ChunkAccess chunkAccess, CallbackInfoReturnable<CompletableFuture<ChunkAccess>> callback) {
 		RandomState randomState = worldGenContext.level().getChunkSource().randomState();
 		if((Object) randomState instanceof RTFRandomState rtfRandomState) {
 			ChunkPos chunkPos = chunkAccess.getPos();
@@ -56,7 +58,7 @@ public class MixinChunkStatus {
 		method = { "generateFeatures" },
 		require = 1
 	)
-	private static void generateFeatures(WorldGenContext worldGenContext, ChunkStatus chunkStatus, Executor executor, ToFullChunk toFullChunk, List<ChunkAccess> list, ChunkAccess chunkAccess, CallbackInfoReturnable<CompletableFuture<ChunkAccess>> callback) {
+	private static void generateFeatures(WorldGenContext worldGenContext, ChunkStep chunkStep, StaticCache2D<GenerationChunkHolder> staticCache2D, ChunkAccess chunkAccess, CallbackInfoReturnable<CompletableFuture<ChunkAccess>> callback) {
 		RandomState randomState = worldGenContext.level().getChunkSource().randomState();
 		if((Object) randomState instanceof RTFRandomState rtfRandomState) {
 			ChunkPos chunkPos = chunkAccess.getPos();

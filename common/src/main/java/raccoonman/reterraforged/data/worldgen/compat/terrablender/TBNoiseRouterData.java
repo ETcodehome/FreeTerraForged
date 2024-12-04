@@ -9,7 +9,7 @@ import raccoonman.reterraforged.world.worldgen.densityfunction.CellSampler;
 import raccoonman.reterraforged.world.worldgen.densityfunction.RTFDensityFunctions;
 
 public class TBNoiseRouterData {
-	public static final ResourceKey<DensityFunction> UNIQUENESS =ResourceKey.create(Registries.DENSITY_FUNCTION, new ResourceLocation("terrablender:uniqueness"));
+	public static final ResourceKey<DensityFunction> UNIQUENESS =ResourceKey.create(Registries.DENSITY_FUNCTION, ResourceLocation.fromNamespaceAndPath("terrablender","uniqueness"));
 	
 	public static void bootstrap(BootstrapContext<DensityFunction> ctx) {
 		ctx.register(UNIQUENESS, RTFDensityFunctions.cell(CellSampler.Field.BIOME_REGION));

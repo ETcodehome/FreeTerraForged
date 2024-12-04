@@ -1,7 +1,9 @@
 package raccoonman.reterraforged.forge.mixin;
 
 import java.net.Proxy;
+import java.util.Collection;
 
+import com.google.common.collect.ImmutableList;
 import org.spongepowered.asm.mixin.Implements;
 import org.spongepowered.asm.mixin.Interface;
 import org.spongepowered.asm.mixin.Mixin;
@@ -19,6 +21,7 @@ import net.minecraft.server.level.progress.ChunkProgressListenerFactory;
 import net.minecraft.server.packs.repository.PackRepository;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.world.level.storage.LevelStorageSource;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import raccoonman.reterraforged.server.RTFMinecraftServer;
 import raccoonman.reterraforged.world.worldgen.feature.template.template.FeatureTemplateManager;
 
@@ -40,11 +43,11 @@ public class MixinMinecraftServer {
 	}
 
 	@Inject(
-		method = { "lambda$reloadResources$27" },
+		method = { "lambda$reloadResources$30" },
 		require = 0,
 		at = @At("TAIL")
 	)
-	private void lambda$reloadResources$27(CallbackInfo callback) {
+	private void lambda$reloadResources$26(Collection collection, MinecraftServer.ReloadableResources arg, CallbackInfo callback) {
 		this.templateManager.onReload(this.getResourceManager());
 	}
 
