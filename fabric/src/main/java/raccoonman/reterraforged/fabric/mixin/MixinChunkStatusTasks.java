@@ -1,8 +1,6 @@
 package raccoonman.reterraforged.fabric.mixin;
 
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
 
 import net.minecraft.server.level.GenerationChunkHolder;
 import net.minecraft.util.StaticCache2D;
@@ -22,7 +20,7 @@ import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
 
 @Mixin(ChunkStatusTasks.class)
-public class MixinChunkStatus {
+public class MixinChunkStatusTasks {
 
 	@Inject(
 		at = @At("HEAD"),
