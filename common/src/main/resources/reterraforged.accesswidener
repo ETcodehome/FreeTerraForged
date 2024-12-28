@@ -41,9 +41,6 @@ accessible method net/minecraft/world/level/levelgen/structure/placement/Structu
 accessible method net/minecraft/world/level/levelgen/NoiseChunk wrap (Lnet/minecraft/world/level/levelgen/DensityFunction;)Lnet/minecraft/world/level/levelgen/DensityFunction;
 accessible method net/minecraft/world/level/biome/Biome getTemperature (Lnet/minecraft/core/BlockPos;)F
 accessible field net/minecraft/world/level/StructureManager level Lnet/minecraft/world/level/LevelAccessor;
-accessible field net/minecraft/server/level/WorldGenRegion firstPos Lnet/minecraft/world/level/ChunkPos;
-accessible field net/minecraft/server/level/WorldGenRegion lastPos Lnet/minecraft/world/level/ChunkPos;
-accessible field net/minecraft/server/level/WorldGenRegion cache Ljava/util/List;
 accessible field net/minecraft/world/level/levelgen/NoiseRouterData SPAGHETTI_2D Lnet/minecraft/resources/ResourceKey;
 accessible field net/minecraft/world/level/levelgen/NoiseRouterData SPAGHETTI_ROUGHNESS_FUNCTION Lnet/minecraft/resources/ResourceKey;
 accessible field net/minecraft/world/level/levelgen/NoiseRouterData PILLARS Lnet/minecraft/resources/ResourceKey;
