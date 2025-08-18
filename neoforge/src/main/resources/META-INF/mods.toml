@@ -14,7 +14,7 @@ issueTrackerURL="https://github.com/racoonman2/reterraforged/issues"
 description="A continuation of https://github.com/TerraForged/TerraForged"
 
 [[dependencies.reterraforged]]
-    modId="forge"
+    modId="neoforge"
     mandatory=true
     versionRange="[40,)"
     ordering="NONE"

@@ -8,8 +8,8 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 
 import net.minecraft.data.tags.TagsProvider;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraftforge.common.data.ExistingFileHelper;
-import net.minecraftforge.common.data.ExistingFileHelper.IResourceType;
+import net.neoforged.common.data.ExistingFileHelper;
+import net.neoforged.common.data.ExistingFileHelper.IResourceType;
 
 @Mixin(TagsProvider.class)
 class MixinTagsProvider {
@@ -20,7 +20,7 @@ class MixinTagsProvider {
 		at = @At(
 			remap = false,
 			value = "INVOKE",
-			target = "Lnet/minecraftforge/common/data/ExistingFileHelper;trackGenerated(Lnet/minecraft/resources/ResourceLocation;Lnet/minecraftforge/common/data/ExistingFileHelper$IResourceType;)V"
+			target = "Lnet/neoforged/common/data/ExistingFileHelper;trackGenerated(Lnet/minecraft/resources/ResourceLocation;Lnet/neoforged/common/data/ExistingFileHelper$IResourceType;)V"
 		)
 	)
 	void trackGenerated(@Nullable ExistingFileHelper fileHelper, ResourceLocation loc, IResourceType type) {

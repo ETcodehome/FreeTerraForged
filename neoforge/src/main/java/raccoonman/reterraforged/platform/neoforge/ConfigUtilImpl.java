@@ -1,8 +1,8 @@
-package raccoonman.reterraforged.platform.forge;
+package raccoonman.reterraforged.platform.neoforge;
 
 import java.nio.file.Path;
 
-import net.minecraftforge.fml.loading.FMLPaths;
+import net.neoforged.fml.loading.FMLPaths;
 
 public final class ConfigUtilImpl {
 

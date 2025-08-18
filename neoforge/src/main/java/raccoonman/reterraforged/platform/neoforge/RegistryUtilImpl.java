@@ -1,4 +1,4 @@
-package raccoonman.reterraforged.platform.forge;
+package raccoonman.reterraforged.platform.neoforge;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -12,11 +12,11 @@ import com.mojang.serialization.Lifecycle;
 import net.minecraft.core.Registry;
 import net.minecraft.core.WritableRegistry;
 import net.minecraft.resources.ResourceKey;
-import net.minecraftforge.eventbus.api.IEventBus;
-import net.minecraftforge.registries.DataPackRegistryEvent;
-import net.minecraftforge.registries.DeferredRegister;
-import net.minecraftforge.registries.GameData;
-import net.minecraftforge.registries.RegistryBuilder;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.registries.DataPackRegistryEvent;
+import net.neoforged.neoforge.registries.DeferredRegister;
+import net.neoforged.neoforge.registries.GameData;
+import net.neoforged.neoforge.registries.RegistryBuilder;
 import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.registries.RTFBuiltInRegistries;
 import raccoonman.reterraforged.registries.RTFRegistries;

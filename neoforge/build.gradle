@@ -4,7 +4,7 @@ plugins {
 
 architectury {
     platformSetupLoomIde()
-    forge()
+    neoForge()
 }
 
 loom {
@@ -16,16 +16,16 @@ loom {
         }
     }
     
-    forge {
-        dataGen {
-            mod "reterraforged"
-        }
+    neoForge {
+//        dataGen {
+//            mod "reterraforged"
+//        }
     
-        convertAccessWideners = true
-        extraAccessWideners.add loom.accessWidenerPath.get().asFile.name
+//        convertAccessWideners = true
+//        extraAccessWideners.add loom.accessWidenerPath.get().asFile.name
 
-        mixinConfig "reterraforged-common.mixins.json"
-        mixinConfig "reterraforged-forge.mixins.json"
+//        mixinConfig "reterraforged-common.mixins.json"
+//        mixinConfig "reterraforged-neoforge.mixins.json"
     }
 }
 
@@ -38,12 +38,15 @@ configurations {
 }
 
 repositories {
-	maven { url = 'https://maven.minecraftforge.net/' }
+    maven {
+        name = 'NeoForged'
+        url = 'https://maven.neoforged.net/releases'
+    }
 	mavenCentral()
 }
 
 dependencies {
-    forge("net.minecraftforge:forge:${rootProject.minecraft_version}-${rootProject.forge_version}")
+    neoForge "net.neoforged:neoforge:$rootProject.neoforge_version"
     
 	compileOnly "net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}"
 //  modImplementation("com.github.glitchfiend:TerraBlender-forge:${rootProject.minecraft_version}-${rootProject.terrablender_version}")
@@ -63,12 +66,12 @@ sourceSets {
 }
 
 processResources {
-	inputs.property "forgeVersion", "50.1.6"
+	inputs.property "neoforgeVersion", "21.1.201"
     inputs.property "version", project.version
 
     filesMatching("META-INF/mods.toml") {
         expand "version": project.version
-		expand "forgeVersion": "50.1.6"
+		expand "neoforgeVersion": "21.1.201"
     }
 }
 

@@ -1,4 +1,4 @@
-package raccoonman.reterraforged.platform.forge;
+package raccoonman.reterraforged.platform.neoforge;
 
 import java.util.Iterator;
 import java.util.List;
@@ -25,9 +25,9 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
 import net.minecraft.util.RandomSource;
-import net.minecraftforge.eventbus.api.IEventBus;
-import net.minecraftforge.registries.DeferredRegister;
-import net.minecraftforge.registries.GameData;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.registries.DeferredRegister;
+import net.neoforged.neoforge.registries.GameData;
 
 // this class sucks and i hate it
 //TODO we should probably override default methods here too

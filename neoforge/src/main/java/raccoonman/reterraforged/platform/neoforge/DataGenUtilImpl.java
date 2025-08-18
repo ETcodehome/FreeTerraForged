@@ -1,4 +1,4 @@
-package raccoonman.reterraforged.platform.forge;
+package raccoonman.reterraforged.platform.neoforge;
 
 import java.util.concurrent.CompletableFuture;
 

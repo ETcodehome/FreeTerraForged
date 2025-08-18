@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: LGPL-2.1-only
  */
 
-// copy of net/minecraftforge/common/data/LanguageProvider
+// copy of net/neoforged/common/data/LanguageProvider
 package raccoonman.reterraforged.client.data;
 
 import com.google.gson.JsonObject;

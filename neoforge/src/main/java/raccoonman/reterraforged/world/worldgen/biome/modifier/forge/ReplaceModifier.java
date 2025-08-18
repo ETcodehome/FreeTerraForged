@@ -2,6 +2,7 @@ package raccoonman.reterraforged.world.worldgen.biome.modifier.forge;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import com.mojang.serialization.MapCodec;
@@ -12,27 +13,26 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderSet;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.levelgen.GenerationStep;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
-import net.minecraftforge.common.world.ModifiableBiomeInfo.BiomeInfo;
+import net.neoforged.common.world.ModifiableBiomeInfo.BiomeInfo;
 import raccoonman.reterraforged.forge.mixin.MixinBiomeGenerationSettingsPlainsBuilder;
-import raccoonman.reterraforged.world.worldgen.biome.modifier.Filter;
-import raccoonman.reterraforged.world.worldgen.biome.modifier.Order;
 
-record AddModifier(Order order, GenerationStep.Decoration step, Optional<Filter> biomes, HolderSet<PlacedFeature> features) implements ForgeBiomeModifier {
-	public static final MapCodec<AddModifier> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
-		Order.CODEC.fieldOf("order").forGetter(AddModifier::order),
-		GenerationStep.Decoration.CODEC.fieldOf("step").forGetter(AddModifier::step),
-		Filter.CODEC.optionalFieldOf("biomes").forGetter(AddModifier::biomes),
-		PlacedFeature.LIST_CODEC.fieldOf("features").forGetter(AddModifier::features)
-	).apply(instance, AddModifier::new));
+record ReplaceModifier(GenerationStep.Decoration step, Optional<HolderSet<Biome>> biomes, Map<ResourceKey<PlacedFeature>, Holder<PlacedFeature>> replacements) implements ForgeBiomeModifier {
+	public static final MapCodec<ReplaceModifier> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
+		GenerationStep.Decoration.CODEC.fieldOf("step").forGetter(ReplaceModifier::step),
+		Biome.LIST_CODEC.optionalFieldOf("biomes").forGetter(ReplaceModifier::biomes),
+		Codec.unboundedMap(ResourceKey.codec(Registries.PLACED_FEATURE), PlacedFeature.CODEC).fieldOf("replacements").forGetter(ReplaceModifier::replacements)
+	).apply(instance, ReplaceModifier::new));
 	
 	@Override
 	public void modify(Holder<Biome> biome, Phase phase, BiomeInfo.Builder builder) {
 		if(phase == Phase.AFTER_EVERYTHING) {
 			if(builder.getGenerationSettings() instanceof MixinBiomeGenerationSettingsPlainsBuilder builderAccessor) {
-				if(this.biomes.isPresent() && !this.biomes.get().test(biome)) {
+				if(this.biomes.isPresent() && !this.biomes.get().contains(biome)) {
 					return;
 				}
 				
@@ -42,8 +42,10 @@ record AddModifier(Order order, GenerationStep.Decoration step, Optional<Filter>
 				while (index >= featureSteps.size()) {
 					featureSteps.add(Collections.emptyList());
 				}
-	
-				featureSteps.set(index, this.add(featureSteps.get(index)));
+
+				featureSteps.get(index).replaceAll((f) -> {
+					return f.unwrapKey().map(this.replacements::get).orElse(f);
+				});
 			} else {
 				throw new IllegalStateException();
 			}
@@ -51,12 +53,7 @@ record AddModifier(Order order, GenerationStep.Decoration step, Optional<Filter>
 	}
 
 	@Override
-	public MapCodec<AddModifier> codec() {
+	public MapCodec<ReplaceModifier> codec() {
 		return CODEC;
-	}
-
-	private List<Holder<PlacedFeature>> add(@Nullable List<Holder<PlacedFeature>> values) {
-		if (values == null) return this.features.stream().toList();
-		return this.order.add(values, this.features.stream().toList());
 	}
 }
