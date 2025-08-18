@@ -1,10 +1,9 @@
-package raccoonman.reterraforged.world.worldgen.biome.modifier.forge;
+package raccoonman.reterraforged.world.worldgen.biome.modifier.neoforge;
 
 import java.util.Map;
 import java.util.Optional;
 
 import com.mojang.datafixers.util.Pair;
-import com.mojang.serialization.Codec;
 
 import com.mojang.serialization.MapCodec;
 import net.minecraft.core.Holder;

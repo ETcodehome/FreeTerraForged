@@ -1,4 +1,4 @@
-package raccoonman.reterraforged.world.worldgen.biome.modifier.forge;
+package raccoonman.reterraforged.world.worldgen.biome.modifier.neoforge;
 
 import java.util.Collections;
 import java.util.List;
@@ -6,7 +6,6 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.mojang.serialization.MapCodec;
-import org.jetbrains.annotations.Nullable;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -18,7 +17,8 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.levelgen.GenerationStep;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
-import net.neoforged.common.world.ModifiableBiomeInfo.BiomeInfo;
+import net.neoforged.neoforge.common.world.BiomeModifier;
+import net.neoforged.neoforge.common.world.ModifiableBiomeInfo.BiomeInfo;
 import raccoonman.reterraforged.forge.mixin.MixinBiomeGenerationSettingsPlainsBuilder;
 
 record ReplaceModifier(GenerationStep.Decoration step, Optional<HolderSet<Biome>> biomes, Map<ResourceKey<PlacedFeature>, Holder<PlacedFeature>> replacements) implements ForgeBiomeModifier {
@@ -29,8 +29,8 @@ record ReplaceModifier(GenerationStep.Decoration step, Optional<HolderSet<Biome>
 	).apply(instance, ReplaceModifier::new));
 	
 	@Override
-	public void modify(Holder<Biome> biome, Phase phase, BiomeInfo.Builder builder) {
-		if(phase == Phase.AFTER_EVERYTHING) {
+	public void modify(Holder<Biome> biome, BiomeModifier.Phase phase, BiomeInfo.Builder builder) {
+		if(phase == BiomeModifier.Phase.AFTER_EVERYTHING) {
 			if(builder.getGenerationSettings() instanceof MixinBiomeGenerationSettingsPlainsBuilder builderAccessor) {
 				if(this.biomes.isPresent() && !this.biomes.get().contains(biome)) {
 					return;
