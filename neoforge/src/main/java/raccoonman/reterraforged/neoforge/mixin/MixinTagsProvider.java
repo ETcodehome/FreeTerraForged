@@ -14,7 +14,7 @@ import net.neoforged.neoforge.common.data.ExistingFileHelper.IResourceType;
 @Mixin(TagsProvider.class)
 class MixinTagsProvider {
 
-//	@Redirect(
+//	@Redirect( //TODO
 //		remap = false,
 //		method = "getOrCreateRawBuilder",//"lambda$getOrCreateRawBuilder$9",
 //		at = @At(

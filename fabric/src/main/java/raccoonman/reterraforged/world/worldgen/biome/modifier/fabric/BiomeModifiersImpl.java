@@ -27,11 +27,11 @@ public class BiomeModifiersImpl {
 		
 		//prevent forge biome modifiers from being loaded
 		//FIXME this is a bad way to do this 
-		register("forge:none", Dummy.makeCodec());
-		register("forge:add_features", Dummy.makeCodec());
-		register("forge:remove_features", Dummy.makeCodec());
-		register("forge:add_spawns", Dummy.makeCodec());
-		register("forge:remove_spawns", Dummy.makeCodec());
+		register("neoforge:none", Dummy.makeCodec());
+		register("neoforge:add_features", Dummy.makeCodec());
+		register("neoforge:remove_features", Dummy.makeCodec());
+		register("neoforge:add_spawns", Dummy.makeCodec());
+		register("neoforge:remove_spawns", Dummy.makeCodec());
 	}
 	
 	public static BiomeModifier add(Order order, GenerationStep.Decoration step, Optional<Pair<Filter.Behavior, HolderSet<Biome>>> biomes, HolderSet<PlacedFeature> features) {

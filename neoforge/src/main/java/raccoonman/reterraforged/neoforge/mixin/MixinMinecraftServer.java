@@ -21,7 +21,6 @@ import net.minecraft.server.level.progress.ChunkProgressListenerFactory;
 import net.minecraft.server.packs.repository.PackRepository;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.world.level.storage.LevelStorageSource;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import raccoonman.reterraforged.server.RTFMinecraftServer;
 import raccoonman.reterraforged.world.worldgen.feature.template.template.FeatureTemplateManager;
 

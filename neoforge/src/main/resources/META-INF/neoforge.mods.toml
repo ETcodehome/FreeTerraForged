@@ -2,8 +2,11 @@ modLoader="javafml"
 loaderVersion="[4,)"
 license="MIT"
 
-[[Mixins]]
+[[mixins]]
     config = "reterraforged-common.mixins.json"
+
+[[mixins]]
+    config = "reterraforged-neoforge.mixins.json"
 
 [[mods]]
     modId="reterraforged"
