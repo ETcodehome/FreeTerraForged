@@ -1,4 +1,4 @@
-package raccoonman.reterraforged.forge.mixin;
+package raccoonman.reterraforged.neoforge.mixin;
 
 import java.util.List;
 

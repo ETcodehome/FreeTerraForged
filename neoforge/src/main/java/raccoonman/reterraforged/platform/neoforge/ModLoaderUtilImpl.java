@@ -1,10 +1,10 @@
 package raccoonman.reterraforged.platform.neoforge;
 
-import net.neoforged.fml.loading.FMLLoader;
+import net.neoforged.fml.loading.LoadingModList;
 
 public class ModLoaderUtilImpl {
 	
 	public static boolean isLoaded(String modId) {
-		return FMLLoader.getLoadingModList().getModFileById(modId) != null;
+		return LoadingModList.get().getModFileById(modId) != null;
 	}
 }

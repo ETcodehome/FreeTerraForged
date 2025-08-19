@@ -46,12 +46,12 @@ public class RTFCommon {
 		BiomeModifiers.bootstrap();
 		RTFSurfaceRules.bootstrap();
 		StructureRules.bootstrap();
-		
-		RegistryUtil.createDataRegistry(RTFRegistries.NOISE, Noise.DIRECT_CODEC);
-		RegistryUtil.createDataRegistry(RTFRegistries.PRESET, Preset.DIRECT_CODEC);
-		RegistryUtil.createDataRegistry(RTFRegistries.STRUCTURE_RULE, StructureRule.DIRECT_CODEC);
+
+		RegistryUtil.createDataRegistry(RTFRegistries.NOISE, Noise.DIRECT_CODEC, false);
+		RegistryUtil.createDataRegistry(RTFRegistries.PRESET, Preset.DIRECT_CODEC, false);
+		RegistryUtil.createDataRegistry(RTFRegistries.STRUCTURE_RULE, StructureRule.DIRECT_CODEC, false);
 	}
-	
+
 	public static ResourceLocation location(String name) {
 		if (name.contains(":")) return ResourceLocation.parse(name);
 		return ResourceLocation.fromNamespaceAndPath(RTFCommon.MOD_ID, name);

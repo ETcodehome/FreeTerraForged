@@ -1,0 +1,31 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="MIT"
+
+[[Mixins]]
+    config = "reterraforged-common.mixins.json"
+
+[[mods]]
+    modId="reterraforged"
+    displayName="ReTerraForged"
+    version="0.0.6"
+    authors="dags,Won-Ton,raccoonman"
+    credits="dags,Won-Ton,raccoonman"
+    logoFile="logo.png"
+    displayURL="https://github.com/racoonman2/reterraforged/"
+    issueTrackerURL="https://github.com/racoonman2/reterraforged/issues"
+    description="A continuation of https://github.com/TerraForged/TerraForged"
+
+[[dependencies.reterraforged]]
+    modId="neoforge"
+    mandatory=true
+    versionRange="[21,)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.reterraforged]]
+	modId = "minecraft"
+	mandatory = true
+	versionRange = "[1.21.1,)"
+	ordering = "NONE"
+	side = "BOTH"

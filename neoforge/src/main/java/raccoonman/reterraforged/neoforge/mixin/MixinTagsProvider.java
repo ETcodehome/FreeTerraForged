@@ -1,4 +1,4 @@
-package raccoonman.reterraforged.forge.mixin;
+package raccoonman.reterraforged.neoforge.mixin;
 
 import javax.annotation.Nullable;
 
@@ -8,21 +8,21 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 
 import net.minecraft.data.tags.TagsProvider;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.common.data.ExistingFileHelper;
-import net.neoforged.common.data.ExistingFileHelper.IResourceType;
+import net.neoforged.neoforge.common.data.ExistingFileHelper;
+import net.neoforged.neoforge.common.data.ExistingFileHelper.IResourceType;
 
 @Mixin(TagsProvider.class)
 class MixinTagsProvider {
 
-	@Redirect(
-		remap = false,
-		method = "lambda$getOrCreateRawBuilder$9", 
-		at = @At(
-			remap = false,
-			value = "INVOKE",
-			target = "Lnet/neoforged/common/data/ExistingFileHelper;trackGenerated(Lnet/minecraft/resources/ResourceLocation;Lnet/neoforged/common/data/ExistingFileHelper$IResourceType;)V"
-		)
-	)
+//	@Redirect(
+//		remap = false,
+//		method = "getOrCreateRawBuilder",//"lambda$getOrCreateRawBuilder$9",
+//		at = @At(
+//			remap = false,
+//			value = "INVOKE",
+//			target = "Lnet/neoforged/common/data/ExistingFileHelper;trackGenerated(Lnet/minecraft/resources/ResourceLocation;Lnet/neoforged/common/data/ExistingFileHelper$IResourceType;)V"
+//		)
+//	)
 	void trackGenerated(@Nullable ExistingFileHelper fileHelper, ResourceLocation loc, IResourceType type) {
 		// what the hell forge
 		// they even annotated it with @Nullable

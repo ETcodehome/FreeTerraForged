@@ -15,17 +15,14 @@ loom {
             ideConfigGenerated(true)
         }
     }
-    
-    neoForge {
-//        dataGen {
-//            mod "reterraforged"
-//        }
-    
-//        convertAccessWideners = true
-//        extraAccessWideners.add loom.accessWidenerPath.get().asFile.name
 
-//        mixinConfig "reterraforged-common.mixins.json"
-//        mixinConfig "reterraforged-neoforge.mixins.json"
+    runs {
+        data {
+            data()
+            programArgs "--all", "--mod", "reterraforged"
+            programArgs "--output", file('src/generated/resources').absolutePath
+            programArgs "--existing", file('src/generated/resources').absolutePath
+        }
     }
 }
 
@@ -34,25 +31,21 @@ configurations {
     shadowCommon
     compileClasspath.extendsFrom common
     runtimeClasspath.extendsFrom common
-    developmentForge.extendsFrom common
+    developmentNeoForge.extendsFrom common
 }
 
 repositories {
-    maven {
-        name = 'NeoForged'
-        url = 'https://maven.neoforged.net/releases'
-    }
-	mavenCentral()
+    maven { url "https://maven.neoforged.net/releases/" }
 }
 
 dependencies {
     neoForge "net.neoforged:neoforge:$rootProject.neoforge_version"
     
-	compileOnly "net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}"
+//	compileOnly "net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}"
 //  modImplementation("com.github.glitchfiend:TerraBlender-forge:${rootProject.minecraft_version}-${rootProject.terrablender_version}")
     
     common(project(path: ":common", configuration: "namedElements")) { transitive false }
-    shadowCommon(project(path: ":common", configuration: "transformProductionForge")) { transitive false }
+    shadowCommon(project(path: ":common", configuration: "transformProductionNeoForge")) { transitive false }
 }
 
 sourceSets {
@@ -80,13 +73,14 @@ shadowJar {
     exclude "architectury.common.json"
 
     configurations = [project.configurations.shadowCommon]
-    archiveClassifier.set("dev-shadow")
+    archiveClassifier.set("shadow")
 }
 
 remapJar {
+    atAccessWideners.add('reterraforged.accesswidener')
+
     input.set shadowJar.archiveFile
     dependsOn shadowJar
-    archiveClassifier.set("forge-${rootProject.minecraft_version}")
 }
 
 jar {
@@ -94,11 +88,11 @@ jar {
 }
 
 processResources {
-	duplicatesStrategy "exclude"
+    duplicatesStrategy "exclude"
 }
 
 sourcesJar {
-	duplicatesStrategy "exclude"
+    duplicatesStrategy "exclude"
     def commonSources = project(":common").sourcesJar
     dependsOn commonSources
     from commonSources.archiveFile.map { zipTree(it) }

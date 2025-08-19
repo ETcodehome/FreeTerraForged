@@ -16,7 +16,7 @@ import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.levelgen.GenerationStep;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.neoforged.neoforge.common.world.ModifiableBiomeInfo.BiomeInfo;
-import raccoonman.reterraforged.forge.mixin.MixinBiomeGenerationSettingsPlainsBuilder;
+import raccoonman.reterraforged.neoforge.mixin.MixinBiomeGenerationSettingsPlainsBuilder;
 import raccoonman.reterraforged.world.worldgen.biome.modifier.Filter;
 import raccoonman.reterraforged.world.worldgen.biome.modifier.Order;
 

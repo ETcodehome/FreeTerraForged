@@ -19,7 +19,7 @@ import net.minecraft.world.level.levelgen.GenerationStep;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.neoforged.neoforge.common.world.BiomeModifier;
 import net.neoforged.neoforge.common.world.ModifiableBiomeInfo.BiomeInfo;
-import raccoonman.reterraforged.forge.mixin.MixinBiomeGenerationSettingsPlainsBuilder;
+import raccoonman.reterraforged.neoforge.mixin.MixinBiomeGenerationSettingsPlainsBuilder;
 
 record ReplaceModifier(GenerationStep.Decoration step, Optional<HolderSet<Biome>> biomes, Map<ResourceKey<PlacedFeature>, Holder<PlacedFeature>> replacements) implements ForgeBiomeModifier {
 	public static final MapCodec<ReplaceModifier> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(

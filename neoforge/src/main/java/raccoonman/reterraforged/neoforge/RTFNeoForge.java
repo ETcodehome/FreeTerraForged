@@ -15,27 +15,24 @@ import raccoonman.reterraforged.client.data.RTFLanguageProvider;
 import raccoonman.reterraforged.client.data.RTFTranslationKeys;
 import raccoonman.reterraforged.platform.neoforge.RegistryUtilImpl;
 
-@Mod(RTFCommon.MOD_ID)
+@Mod("reterraforged")
 public class RTFNeoForge {
 
-    public RTFNeoForge(IEventBus modBus, ModContainer container) {
+    public RTFNeoForge(IEventBus modEventBus, ModContainer container) {
     	RTFCommon.bootstrap();
 
-//    	IEventBus modBus = FMLJavaModLoadingContext.get().getModEventBus();
-
     	if (FMLEnvironment.dist == Dist.CLIENT) {
-    		modBus.addListener(RTFNeoForgeClient::registerPresetEditors);
+    		modEventBus.addListener(RTFNeoForgeClient::registerPresetEditors);
     	}
-    	modBus.addListener(RTFNeoForge::gatherData);
-
-    	RegistryUtilImpl.register(modBus);
+    	modEventBus.addListener(RTFNeoForge::gatherData);
+    	RegistryUtilImpl.register(modEventBus);
     }
     
     private static void gatherData(GatherDataEvent event) {
-    	boolean includeClient = event.includeClient();
+    	boolean includeClient = true; //event.includeClient();
     	DataGenerator generator = event.getGenerator();
     	PackOutput output = generator.getPackOutput();
-    	
+
     	generator.addProvider(includeClient, new RTFLanguageProvider.EnglishUS(output));
     	generator.addProvider(includeClient, PackMetadataGenerator.forFeaturePack(output, Component.translatable(RTFTranslationKeys.METADATA_DESCRIPTION)));
     }

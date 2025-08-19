@@ -1,4 +1,4 @@
-package raccoonman.reterraforged.forge.mixin;
+package raccoonman.reterraforged.neoforge.mixin;
 
 import java.net.Proxy;
 import java.util.Collection;
