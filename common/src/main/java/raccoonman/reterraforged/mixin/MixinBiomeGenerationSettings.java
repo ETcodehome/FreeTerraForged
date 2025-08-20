@@ -17,7 +17,7 @@ import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 public interface MixinBiomeGenerationSettings {
 	@Accessor
 	List<HolderSet<PlacedFeature>> getFeatures();
-	
+
 	@Accessor
 	void setFlowerFeatures(Supplier<List<ConfiguredFeature<?, ?>>> flowerFeatures);
 }

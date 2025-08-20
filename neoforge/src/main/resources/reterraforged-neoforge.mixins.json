@@ -6,7 +6,7 @@
   "mixins": [
   	"MixinTagsProvider",
   	"MixinBiomeGenerationSettingsPlainsBuilder",
-  	"MixinChunkStatus",
+    "MixinChunkStatusTasks",
   	"MixinMinecraftServer"
   ],
   "injectors": {

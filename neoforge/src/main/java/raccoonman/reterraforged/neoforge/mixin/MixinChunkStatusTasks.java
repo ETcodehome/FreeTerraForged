@@ -21,7 +21,7 @@ import raccoonman.reterraforged.world.worldgen.RTFRandomState;
 import net.minecraft.world.level.chunk.status.WorldGenContext;
 
 @Mixin(ChunkStatusTasks.class)
-public class MixinChunkStatus {
+public class MixinChunkStatusTasks {
 
 	@Inject(
 		at = @At("HEAD"),

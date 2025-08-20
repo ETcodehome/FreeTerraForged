@@ -19,8 +19,6 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 import net.neoforged.neoforge.registries.NewRegistryEvent;
 import net.neoforged.neoforge.registries.RegistryBuilder;
 import raccoonman.reterraforged.RTFCommon;
-//import raccoonman.reterraforged.registries.RTFBuiltInRegistries;
-//import raccoonman.reterraforged.registries.RTFRegistries;
 
 //this is only public so the initializer class can call register
 //TODO make this non public
