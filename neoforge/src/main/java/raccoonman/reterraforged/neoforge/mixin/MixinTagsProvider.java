@@ -14,15 +14,15 @@ import net.neoforged.neoforge.common.data.ExistingFileHelper.IResourceType;
 @Mixin(TagsProvider.class)
 class MixinTagsProvider {
 
-//	@Redirect( //TODO
-//		remap = false,
-//		method = "getOrCreateRawBuilder",//"lambda$getOrCreateRawBuilder$9",
-//		at = @At(
-//			remap = false,
-//			value = "INVOKE",
-//			target = "Lnet/neoforged/common/data/ExistingFileHelper;trackGenerated(Lnet/minecraft/resources/ResourceLocation;Lnet/neoforged/common/data/ExistingFileHelper$IResourceType;)V"
-//		)
-//	)
+	@Redirect( //TODO
+		remap = false,
+		method = "getOrCreateRawBuilder",
+		at = @At(
+			remap = false,
+			value = "INVOKE",
+			target = "Lnet/neoforged/neoforge/common/data/ExistingFileHelper;trackGenerated(Lnet/minecraft/resources/ResourceLocation;Lnet/neoforged/neoforge/common/data/ExistingFileHelper$IResourceType;)V"
+		)
+	)
 	void trackGenerated(@Nullable ExistingFileHelper fileHelper, ResourceLocation loc, IResourceType type) {
 		// what the hell forge
 		// they even annotated it with @Nullable
