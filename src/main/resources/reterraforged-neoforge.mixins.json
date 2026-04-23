@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "package": "raccoonman.reterraforged.neoforge.mixin",
+  "minVersion": "0.8",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+  	"MixinTagsProvider",
+  	"MixinBiomeGenerationSettingsPlainsBuilder",
+  	"MixinMinecraftServer",
+  	"MixinServerLifecycleHooks"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

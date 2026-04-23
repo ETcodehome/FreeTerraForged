@@ -1,0 +1,44 @@
+modLoader="javafml"
+loaderVersion="${loader_version_range}"
+license="${mod_license}"
+
+[[mods]]
+modId="${mod_id}"
+displayName="${mod_name}"
+version="${mod_version}"
+authors="${mod_authors}"
+credits="dags,Won-Ton,raccoonman,Steveplays28,EdoEquin0x"
+logoFile="logo.png"
+displayURL="https://github.com/ETcodehome/ReTerraForged"
+issueTrackerURL="https://github.com/ETcodehome/ReTerraForged/issues"
+description='''${mod_description}'''
+
+[[dependencies.${mod_id}]]
+    modId="neoforge"
+    type="required"
+    versionRange="${neo_version_range}" #mandatory
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="minecraft"
+    type="required"
+    # This version range declares a minimum of the current minecraft version up to but not including the next major version
+    versionRange="${minecraft_version_range}"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="terrablender"
+    type="optional" # This is the key part
+    ordering="AFTER"
+    side="BOTH"
+
+
+# The [[mixins]] block allows you to declare your mixin config to FML so that it gets loaded.
+[[mixins]]
+config="${mod_id}-common.mixins.json"
+
+[[mixins]]
+config="${mod_id}-neoforge.mixins.json"
+# The coremods config file path is not configurable and is always loaded from META-INF/coremods.json
