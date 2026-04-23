@@ -1,5 +1,7 @@
 package raccoonman.reterraforged;
 
+import net.minecraft.core.RegistrySetBuilder;
+import net.minecraft.core.registries.Registries;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -70,7 +72,7 @@ public class RTFCommon {
 	}
 	
 	public static ResourceLocation location(String name) {
-		if (name.contains(":")) return new ResourceLocation(name);
-		return new ResourceLocation(RTFCommon.MOD_ID, name);
+		if (name.contains(":")) return ResourceLocation.parse(name);
+		return ResourceLocation.fromNamespaceAndPath(RTFCommon.MOD_ID, name);
 	}
 }

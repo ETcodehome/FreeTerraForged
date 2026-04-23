@@ -21,7 +21,7 @@ public final class DataGenUtil {
 		return new DatapackBuiltinEntriesProvider(
 				output,
 				providerLookup,
-				RTFCommon.REGISTRY_BUILDER, // This should be your RegistrySetBuilder instance
+				RTFCommon.getRegistryBuilder(), // This should be your RegistrySetBuilder instance
 				Set.of(RTFCommon.MOD_ID)
 		);
 	}

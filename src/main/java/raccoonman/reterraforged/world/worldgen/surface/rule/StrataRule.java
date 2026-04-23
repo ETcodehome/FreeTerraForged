@@ -3,6 +3,7 @@ package raccoonman.reterraforged.world.worldgen.surface.rule;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.mojang.serialization.MapCodec;
 import org.jetbrains.annotations.Nullable;
 
 import com.mojang.serialization.Codec;
@@ -35,12 +36,12 @@ import raccoonman.reterraforged.world.worldgen.tile.Tile;
 import raccoonman.reterraforged.world.worldgen.util.PosUtil;
 
 public record StrataRule(ResourceLocation cacheId, int buffer, int iterations, Holder<Noise> selector, List<Layer> layers) implements SurfaceRules.RuleSource {
-	public static final Codec<StrataRule> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-		ResourceLocation.CODEC.fieldOf("cache_id").forGetter(StrataRule::cacheId),
-		Codec.INT.fieldOf("buffer").forGetter(StrataRule::buffer),
-		Codec.INT.fieldOf("iterations").forGetter(StrataRule::iterations),
-		Noise.CODEC.fieldOf("selector").forGetter(StrataRule::selector),
-		Layer.CODEC.listOf().fieldOf("layers").forGetter(StrataRule::layers)
+	public static final MapCodec<StrataRule> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
+			ResourceLocation.CODEC.fieldOf("cache_id").forGetter(StrataRule::cacheId),
+			Codec.INT.fieldOf("buffer").forGetter(StrataRule::buffer),
+			Codec.INT.fieldOf("iterations").forGetter(StrataRule::iterations),
+			Noise.CODEC.fieldOf("selector").forGetter(StrataRule::selector),
+			Layer.CODEC.listOf().fieldOf("layers").forGetter(StrataRule::layers)
 	).apply(instance, StrataRule::new));
 
 	@Override
@@ -54,7 +55,7 @@ public record StrataRule(ResourceLocation cacheId, int buffer, int iterations, H
 
 	@Override
 	public KeyDispatchDataCodec<StrataRule> codec() {
-		return new KeyDispatchDataCodec<>(CODEC);
+		return KeyDispatchDataCodec.of(CODEC);
 	}
 	
 	public List<Strata> generate(RandomSource random) {

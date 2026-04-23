@@ -1,6 +1,7 @@
 package raccoonman.reterraforged.world.worldgen.densityfunction;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import net.minecraft.core.Holder;
@@ -26,15 +27,16 @@ public record NoiseSampler(Holder<Noise> noise, int seed) implements MappedFunct
 	}
 	
 	public record Marker(Holder<Noise> noise) implements MappedFunction.Marker {
-		public static final Codec<NoiseSampler.Marker> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-			Noise.CODEC.fieldOf("noise").forGetter(NoiseSampler.Marker::noise)
+
+		public static final MapCodec<Marker> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
+				Noise.CODEC.fieldOf("noise").forGetter(NoiseSampler.Marker::noise)
 		).apply(instance, NoiseSampler.Marker::new));
 
 		@Override
-		public KeyDispatchDataCodec<NoiseSampler.Marker> codec() {
-			return new KeyDispatchDataCodec<>(CODEC);
+		public KeyDispatchDataCodec<? extends DensityFunction> codec() {
+			// Use the .of() factory to handle the MapCodec
+			return KeyDispatchDataCodec.of(CODEC);
 		}
-
 		@Override
 		public DensityFunction mapAll(Visitor visitor) {
 			DensityFunction self = visitor instanceof Noise.Visitor noiseVisitor ?
