@@ -20,7 +20,7 @@ public class RTFFabric implements ModInitializer, DataGeneratorEntrypoint {
 	public void onInitialize() {
 		RTFCommon.bootstrap();
 
-		RegistryUtil.createDataRegistry(RTFRegistries.BIOME_MODIFIER, BiomeModifier.CODEC, false);
+		RegistryUtil.createDataRegistry(RTFRegistries.BIOME_MODIFIER, BiomeModifier.DIRECT_CODEC, false);
 	}
 
 	//TODO merge this with forge's datagen since they're the same now

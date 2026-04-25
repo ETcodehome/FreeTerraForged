@@ -57,3 +57,4 @@ public class RTFCommon {
 		return ResourceLocation.fromNamespaceAndPath(RTFCommon.MOD_ID, name);
 	}
 }
+
