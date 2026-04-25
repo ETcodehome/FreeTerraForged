@@ -73,7 +73,7 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 		Cloner.Factory factory = new Cloner.Factory();
 		RegistryDataLoader.WORLDGEN_REGISTRIES.forEach(registryData -> registryData.runWithArguments(factory::addCodec));
 		factory.addCodec(RTFRegistries.NOISE, Noise.DIRECT_CODEC);
-		factory.addCodec(RTFRegistries.BIOME_MODIFIER, BiomeModifier.CODEC);
+		factory.addCodec(RTFRegistries.BIOME_MODIFIER, BiomeModifier.DIRECT_CODEC);
 		factory.addCodec(RTFRegistries.STRUCTURE_RULE, StructureRule.DIRECT_CODEC);
 		factory.addCodec(RTFRegistries.PRESET, Preset.DIRECT_CODEC);
 		return builder.buildPatch(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), registries, factory).patches();
