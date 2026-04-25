@@ -1,5 +1,6 @@
 package raccoonman.reterraforged.world.worldgen.feature.chance;
 
+import com.mojang.serialization.MapCodec;
 import org.jetbrains.annotations.Nullable;
 
 import com.mojang.serialization.Codec;
@@ -10,10 +11,10 @@ import net.minecraft.core.SectionPos;
 import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
-import raccoonman.reterraforged.world.worldgen.tile.Tile;
+import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
 
 class BiomeEdgeChanceModifier extends RangeChanceModifier {
-	public static final Codec<BiomeEdgeChanceModifier> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+	public static final MapCodec<BiomeEdgeChanceModifier> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		Codec.FLOAT.fieldOf("from").forGetter((o) -> o.from),
 		Codec.FLOAT.fieldOf("to").forGetter((o) -> o.to),
 		Codec.BOOL.fieldOf("exclusive").forGetter((o) -> o.exclusive)
@@ -24,7 +25,7 @@ class BiomeEdgeChanceModifier extends RangeChanceModifier {
 	}
 
 	@Override
-	public Codec<BiomeEdgeChanceModifier> codec() {
+	public MapCodec<BiomeEdgeChanceModifier> codec() {
 		return CODEC;
 	}
 

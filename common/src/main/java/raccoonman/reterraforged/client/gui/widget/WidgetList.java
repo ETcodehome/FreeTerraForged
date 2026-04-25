@@ -14,10 +14,10 @@ import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetEditorPage;
 public class WidgetList<T extends AbstractWidget> extends ContainerObjectSelectionList<WidgetList.Entry<T>> {
 	private boolean renderSelected;
 	
-    public WidgetList(Minecraft minecraft, int i, int j, int k, int l, int slotHeight) {
-        super(minecraft, i, j, k, l, slotHeight);
+    public WidgetList(Minecraft minecraft, int i, int j, int k, int l) {
+        super(minecraft, i, j, k, l);
     }
-    
+
     public void select(T widget) {
     	for(Entry<T> entry : this.children()) {
     		if(entry.widget.equals(widget)) {
@@ -35,7 +35,7 @@ public class WidgetList<T extends AbstractWidget> extends ContainerObjectSelecti
     public void setRenderSelected(boolean renderSelected) {
     	this.renderSelected = renderSelected;
     }
-    
+
     @Override
     protected boolean isSelectedItem(int i) {
         return this.renderSelected && Objects.equals(this.getSelected(), this.children().get(i));
@@ -75,7 +75,7 @@ public class WidgetList<T extends AbstractWidget> extends ContainerObjectSelecti
             widget.setY(top);
             widget.visible = true;
             widget.setWidth(optionWidth);
-            widget.setHeight(height - 1);	
+            widget.setHeight(height - 1);
             if(widget instanceof PresetEditorPage.Preview preview) {
             	widget.setHeight(widget.getWidth());
             }

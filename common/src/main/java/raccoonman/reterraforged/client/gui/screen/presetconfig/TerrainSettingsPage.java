@@ -9,10 +9,11 @@ import raccoonman.reterraforged.client.gui.screen.page.LinkedPageScreen.Page;
 import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
 import raccoonman.reterraforged.client.gui.widget.Slider;
 import raccoonman.reterraforged.client.gui.widget.ValueButton;
-import raccoonman.reterraforged.data.preset.settings.Preset;
-import raccoonman.reterraforged.data.preset.settings.TerrainSettings;
-import raccoonman.reterraforged.data.preset.settings.TerrainSettings.General;
-import raccoonman.reterraforged.data.preset.settings.TerrainSettings.Terrain;
+import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
+import raccoonman.reterraforged.data.worldgen.preset.settings.TerrainSettings;
+import raccoonman.reterraforged.data.worldgen.preset.settings.TerrainSettings.General;
+import raccoonman.reterraforged.data.worldgen.preset.settings.TerrainSettings.Terrain;
+import raccoonman.reterraforged.world.worldgen.feature.ErodeFeature;
 
 public class TerrainSettingsPage extends PresetEditorPage {
 	private ValueButton<Integer> terrainSeedOffset;
@@ -20,6 +21,7 @@ public class TerrainSettingsPage extends PresetEditorPage {
 	private Slider globalVerticalScale;
 	private Slider globalHorizontalScale;
 	private CycleButton<Boolean> fancyMountains;
+	private CycleButton<Boolean> legacyMountainScaling;
 	
 	private Slider steppeWeight;
 	private Slider steppeBaseScale;
@@ -106,6 +108,11 @@ public class TerrainSettingsPage extends PresetEditorPage {
 			general.fancyMountains = value;
 			this.regenerate();
 		});
+		this.legacyMountainScaling = PresetWidgets.createToggle(general.legacyMountainScaling, RTFTranslationKeys.GUI_BUTTON_LEGACY_MOUNTAIN_SCALING, (button, value) -> {
+			general.legacyMountainScaling = value;
+			this.regenerate();
+		});
+
 		Terrain steppe = terrain.steppe;
 		this.steppeWeight = PresetWidgets.createFloatSlider(steppe.weight, 0.0F, 10.0F, RTFTranslationKeys.GUI_SLIDER_TERRAIN_WEIGHT, (slider, value) -> {
 			steppe.weight = (float) slider.scaleValue(value);
@@ -310,6 +317,7 @@ public class TerrainSettingsPage extends PresetEditorPage {
 		this.left.addWidget(this.globalVerticalScale);
 		this.left.addWidget(this.globalHorizontalScale);
 		this.left.addWidget(this.fancyMountains);
+		this.left.addWidget(this.legacyMountainScaling);
 
 		this.left.addWidget(PresetWidgets.createLabel(RTFTranslationKeys.GUI_LABEL_STEPPE));
 		this.left.addWidget(this.steppeWeight);

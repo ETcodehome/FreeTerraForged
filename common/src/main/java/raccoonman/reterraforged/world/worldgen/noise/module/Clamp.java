@@ -1,12 +1,13 @@
 package raccoonman.reterraforged.world.worldgen.noise.module;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 
 record Clamp(Noise input, Noise min, Noise max) implements Noise {
-	public static final Codec<Clamp> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+	public static final MapCodec<Clamp> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		Noise.HOLDER_HELPER_CODEC.fieldOf("input").forGetter(Clamp::input),
 		Noise.HOLDER_HELPER_CODEC.fieldOf("min").forGetter(Clamp::min),
 		Noise.HOLDER_HELPER_CODEC.fieldOf("max").forGetter(Clamp::max)
@@ -33,7 +34,7 @@ record Clamp(Noise input, Noise min, Noise max) implements Noise {
 	}
 
 	@Override
-	public Codec<Clamp> codec() {
+	public MapCodec<Clamp> codec() {
 		return CODEC;
 	}
 }

@@ -1,12 +1,13 @@
 package raccoonman.reterraforged.world.worldgen.noise.module;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 
 record Sin(float frequency, Noise alpha) implements Noise {
-	public static final Codec<Sin> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+	public static final MapCodec<Sin> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		Codec.FLOAT.fieldOf("frequency").forGetter(Sin::frequency),
 		Noise.HOLDER_HELPER_CODEC.fieldOf("alpha").forGetter(Sin::alpha)
 	).apply(instance, Sin::new));
@@ -45,7 +46,7 @@ record Sin(float frequency, Noise alpha) implements Noise {
 	}
 
 	@Override
-	public Codec<Sin> codec() {
+	public MapCodec<Sin> codec() {
 		return CODEC;
 	}
 }

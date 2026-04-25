@@ -1,9 +1,9 @@
 package raccoonman.reterraforged.world.worldgen.noise.module;
 
-import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 
 record Constant(float value) implements Noise {
-	public static final Codec<Constant> CODEC = Noises.NOISE_VALUE_CODEC.xmap(Constant::new, Constant::value);
+	public static final MapCodec<Constant> CODEC = Noises.NOISE_VALUE_CODEC.xmap(Constant::new, Constant::value).fieldOf("value");
 
 	@Override
 	public float compute(float x, float z, int seed) {
@@ -26,7 +26,7 @@ record Constant(float value) implements Noise {
 	}
 
 	@Override
-	public Codec<Constant> codec() {
+	public MapCodec<Constant> codec() {
 		return CODEC;
 	}
 }

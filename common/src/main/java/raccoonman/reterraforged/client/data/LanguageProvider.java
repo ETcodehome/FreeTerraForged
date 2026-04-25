@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: LGPL-2.1-only
  */
 
-// copy of net/minecraftforge/common/data/LanguageProvider
+// copy of net/neoforged/common/data/LanguageProvider
 package raccoonman.reterraforged.client.data;
 
 import com.google.gson.JsonObject;
@@ -42,7 +42,7 @@ public abstract class LanguageProvider implements DataProvider {
 
         if (!this.data.isEmpty())
             return this.save(cache, this.output.getOutputFolder(PackOutput.Target.RESOURCE_PACK).resolve(this.modid).resolve("lang").resolve(this.locale + ".json"));
-        
+
         return CompletableFuture.allOf();
     }
 
@@ -81,13 +81,13 @@ public abstract class LanguageProvider implements DataProvider {
         add(key.getDescriptionId(), name);
     }
 
-    public void addEnchantment(Supplier<? extends Enchantment> key, String name) {
-        add(key.get(), name);
-    }
-
-    public void add(Enchantment key, String name) {
-        add(key.getDescriptionId(), name);
-    }
+    //public void addEnchantment(Supplier<? extends Enchantment> key, String name) {
+    //    add(key.get(), name);
+    //}
+//
+    //public void add(Enchantment key, String name) {
+    //    add(key.getDescriptionId(), name);
+    //}
 
     /*
     public void addBiome(Supplier<? extends Biome> key, String name) {

@@ -1,12 +1,13 @@
 package raccoonman.reterraforged.world.worldgen.noise.domain;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise.Visitor;
 
 public record CompoundWarp(Domain input1, Domain input2) implements Domain {
-	public static final Codec<CompoundWarp> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+	public static final MapCodec<CompoundWarp> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		Domain.CODEC.fieldOf("input1").forGetter(CompoundWarp::input1),
 		Domain.CODEC.fieldOf("input2").forGetter(CompoundWarp::input2)
 	).apply(instance, CompoundWarp::new));
@@ -31,7 +32,7 @@ public record CompoundWarp(Domain input1, Domain input2) implements Domain {
 	}
 
 	@Override
-	public Codec<CompoundWarp> codec() {
+	public MapCodec<CompoundWarp> codec() {
 		return CODEC;
 	}
 }

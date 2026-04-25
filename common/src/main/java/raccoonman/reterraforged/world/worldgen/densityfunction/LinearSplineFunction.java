@@ -6,6 +6,7 @@ import java.util.List;
 import com.google.common.collect.ImmutableList;
 import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import net.minecraft.util.ExtraCodecs;
@@ -16,7 +17,7 @@ import net.minecraft.world.level.levelgen.DensityFunctions;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 
 public record LinearSplineFunction(DensityFunction input, List<Pair<Double, DensityFunction>> points, double minValue, double maxValue) implements DensityFunction {
-	public static final Codec<LinearSplineFunction> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+	public static final MapCodec<LinearSplineFunction> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		DensityFunction.HOLDER_HELPER_CODEC.fieldOf("input").forGetter(LinearSplineFunction::input),
 		ExtraCodecs.nonEmptyList(Codec.pair(Codec.DOUBLE, DensityFunction.HOLDER_HELPER_CODEC).listOf()).fieldOf("points").forGetter(LinearSplineFunction::points)
 	).apply(instance, LinearSplineFunction::new));

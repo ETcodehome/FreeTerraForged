@@ -4,6 +4,7 @@ import java.util.function.Function;
 
 import com.mojang.serialization.Codec;
 
+import com.mojang.serialization.MapCodec;
 import raccoonman.reterraforged.registries.RTFBuiltInRegistries;
 
 public interface CurveFunction {
@@ -11,5 +12,5 @@ public interface CurveFunction {
 	
 	float apply(float f);
 	
-	Codec<? extends CurveFunction> codec();
+	MapCodec<? extends CurveFunction> codec();
 }

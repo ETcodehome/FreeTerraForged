@@ -1,12 +1,13 @@
 package raccoonman.reterraforged.world.worldgen.noise.module;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 
 record Gradient(Noise input, Noise lower, Noise upper, Noise strength) implements Noise {
-	public static final Codec<Gradient> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+	public static final MapCodec<Gradient> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		Noise.HOLDER_HELPER_CODEC.fieldOf("input").forGetter(Gradient::input),
 		Noise.HOLDER_HELPER_CODEC.fieldOf("lower").forGetter(Gradient::lower),
 		Noise.HOLDER_HELPER_CODEC.fieldOf("upper").forGetter(Gradient::upper),
@@ -46,7 +47,7 @@ record Gradient(Noise input, Noise lower, Noise upper, Noise strength) implement
 	}
 
 	@Override
-	public Codec<Gradient> codec() {
+	public MapCodec<Gradient> codec() {
 		return CODEC;
 	}
 }

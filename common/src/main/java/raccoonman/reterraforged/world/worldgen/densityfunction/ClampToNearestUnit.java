@@ -1,13 +1,14 @@
 package raccoonman.reterraforged.world.worldgen.densityfunction;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import net.minecraft.util.KeyDispatchDataCodec;
 import net.minecraft.world.level.levelgen.DensityFunction;
 
-record ClampToNearestUnit(DensityFunction function, int resolution) implements DensityFunction {
-	public static final Codec<ClampToNearestUnit> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+public record ClampToNearestUnit(DensityFunction function, int resolution) implements DensityFunction {
+	public static final MapCodec<ClampToNearestUnit> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		DensityFunction.HOLDER_HELPER_CODEC.fieldOf("function").forGetter(ClampToNearestUnit::function),
 		Codec.INT.fieldOf("resolution").forGetter(ClampToNearestUnit::resolution)
 	).apply(instance, ClampToNearestUnit::new));

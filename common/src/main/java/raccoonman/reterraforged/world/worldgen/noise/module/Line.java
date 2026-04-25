@@ -1,12 +1,13 @@
 package raccoonman.reterraforged.world.worldgen.noise.module;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 
 public record Line(float x1, float z1, float x2, float z2, Noise radiusSq, Noise fadeIn, Noise fadeOut, float feather, float featherBias, float orthX1, float orthZ1, float orthX2, float orthZ2, float dx, float dz, float lengthSq) implements Noise {
-	public static final Codec<Line> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+	public static final MapCodec<Line> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		Codec.FLOAT.fieldOf("x1").forGetter(Line::x1),
 		Codec.FLOAT.fieldOf("z1").forGetter(Line::z1),
 		Codec.FLOAT.fieldOf("x2").forGetter(Line::x2),
@@ -57,7 +58,7 @@ public record Line(float x1, float z1, float x2, float z2, Noise radiusSq, Noise
 	}
 
 	@Override
-	public Codec<Line> codec() {
+	public MapCodec<Line> codec() {
 		return CODEC;
 	}
 	

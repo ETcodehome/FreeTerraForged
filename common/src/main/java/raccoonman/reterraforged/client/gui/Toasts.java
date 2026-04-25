@@ -2,13 +2,13 @@ package raccoonman.reterraforged.client.gui;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.toasts.SystemToast;
-import net.minecraft.client.gui.components.toasts.SystemToast.SystemToastIds;
+import net.minecraft.client.gui.components.toasts.SystemToast.SystemToastId;
 import net.minecraft.network.chat.Component;
 import raccoonman.reterraforged.client.data.RTFTranslationKeys;
 
 public final class Toasts {
 
-	public static void notify(String message, Component description, SystemToastIds id) {
+	public static void notify(String message, Component description, SystemToastId id) {
 		Minecraft mc = Minecraft.getInstance();
 		SystemToast.add(mc.getToasts(), id, Component.translatable(message), description);
 	}
@@ -26,7 +26,7 @@ public final class Toasts {
 				messageComponent = Component.translatable(RTFTranslationKeys.NO_ERROR_MESSAGE);
 			}
 			
-			notify(errorMessage, messageComponent, SystemToastIds.PACK_LOAD_FAILURE);
+			notify(errorMessage, messageComponent, SystemToastId.PACK_LOAD_FAILURE);
 		}
 	}
 	

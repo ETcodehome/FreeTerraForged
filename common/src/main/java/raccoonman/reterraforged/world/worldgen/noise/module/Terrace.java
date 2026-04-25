@@ -1,12 +1,13 @@
 package raccoonman.reterraforged.world.worldgen.noise.module;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 
 public record Terrace(Noise input, Noise ramp, Noise cliff, Noise rampHeight, float blendRange, Step[] steps) implements Noise {
-	public static final Codec<Terrace> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+	public static final MapCodec<Terrace> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		Noise.HOLDER_HELPER_CODEC.fieldOf("input").forGetter(Terrace::input),
 		Noise.HOLDER_HELPER_CODEC.fieldOf("ramp").forGetter(Terrace::ramp),
 		Noise.HOLDER_HELPER_CODEC.fieldOf("cliff").forGetter(Terrace::cliff),
@@ -69,7 +70,7 @@ public record Terrace(Noise input, Noise ramp, Noise cliff, Noise rampHeight, fl
 	}
 
 	@Override
-	public Codec<Terrace> codec() {
+	public MapCodec<Terrace> codec() {
 		return CODEC;
 	}
 	

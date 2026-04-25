@@ -2,6 +2,7 @@ package raccoonman.reterraforged.world.worldgen.feature.template.decorator;
 
 import com.mojang.serialization.Codec;
 
+import com.mojang.serialization.MapCodec;
 import raccoonman.reterraforged.platform.RegistryUtil;
 import raccoonman.reterraforged.registries.RTFBuiltInRegistries;
 
@@ -19,7 +20,7 @@ public class TemplateDecorators {
 		return new TreeDecorator(decorator, modifiedDecorator);
 	}
 
-	private static void register(String name, Codec<? extends TemplateDecorator<?>> placement) {
+	private static void register(String name, MapCodec<? extends TemplateDecorator<?>> placement) {
 		RegistryUtil.register(RTFBuiltInRegistries.TEMPLATE_DECORATOR_TYPE, name, placement);
 	}
 }

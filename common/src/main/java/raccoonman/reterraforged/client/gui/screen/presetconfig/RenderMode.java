@@ -3,7 +3,7 @@ package raccoonman.reterraforged.client.gui.screen.presetconfig;
 import java.awt.Color;
 
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
-import raccoonman.reterraforged.world.worldgen.heightmap.Levels;
+import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 
 public enum RenderMode {
@@ -27,17 +27,12 @@ public enum RenderMode {
                     if (cell.height < levels.water) {
                         return RenderMode.getWaterColor();
                     } else {
-                        Color color = cell.biomeType.getColor();
+                        Color color = cell.biome.getColor();
                         float[] hsb = Color.RGBtoHSB(color.getRed(), color.getGreen(), color.getBlue(), new float[3]);
                         return rgba(hsb[0], hsb[1], (hsb[2] * scale) + bias);
                     }
             }
         }
-
-		@Override
-		public float getNoiseValue(Cell cell) {
-			return cell.biomeRegionEdge;
-		}
     },
     TRANSITION_POINTS {
     	
@@ -64,11 +59,6 @@ public enum RenderMode {
                     return rgba(0.3F, 0.7F, 0.5F);
             }
         }
-
-		@Override
-		public float getNoiseValue(Cell cell) {
-			return cell.continentEdge;
-		}
     },
     TEMPERATURE {
     	
@@ -78,11 +68,6 @@ public enum RenderMode {
             float brightness = 0.8F;
             return rgba(step(1 - cell.regionTemperature, 8) * 0.65F, saturation, brightness);
         }
-
-		@Override
-		public float getNoiseValue(Cell cell) {
-			return cell.regionTemperature;
-		}
     },
     MOISTURE {
     	
@@ -92,11 +77,6 @@ public enum RenderMode {
             float brightness = 0.8F;
             return rgba(step(cell.regionMoisture, 8) * 0.65F, saturation, brightness);
         }
-
-		@Override
-		public float getNoiseValue(Cell cell) {
-			return cell.regionMoisture;
-		}
     },
     BIOME {
     	
@@ -106,11 +86,6 @@ public enum RenderMode {
             float brightness = 0.8F;
             return rgba(cell.biomeRegionId, saturation, brightness);
         }
-
-		@Override
-		public float getNoiseValue(Cell cell) {
-			return cell.biomeRegionId;
-		}
     },
     MACRO_NOISE {
     	
@@ -120,11 +95,6 @@ public enum RenderMode {
             float brightness = 0.8F;
             return rgba(cell.macroBiomeId, saturation, brightness);
         }
-
-		@Override
-		public float getNoiseValue(Cell cell) {
-			return cell.macroBiomeId;
-		}
     },
     TERRAIN_REGION {
     	
@@ -132,52 +102,8 @@ public enum RenderMode {
         public int getColor(Cell cell, Levels levels, float scale, float bias) {
             float saturation = 0.7F;
             float brightness = 0.8F;
-            return rgba(NoiseUtil.valCoord2D(cell.terrain.getName().hashCode(), 0, 0), saturation, brightness);
+            return rgba(cell.terrain.getRenderHue(), saturation, brightness);
         }
-
-		@Override
-		public float getNoiseValue(Cell cell) {
-			return cell.terrainRegionId;
-		}
-    },
-	CONTINENT_EDGE {
-    	
-        @Override
-        public int getColor(Cell cell, Levels levels, float scale, float bias) {
-        	float continentEdge = NoiseUtil.clamp(this.getNoiseValue(cell), 0.0F, 1.0F);
-        	return rgba(continentEdge, continentEdge, continentEdge);
-        }
-
-		@Override
-		public float getNoiseValue(Cell cell) {
-			return cell.continentEdge;
-		}
-    },
-	CONTINENT_NOISE {
-    	
-        @Override
-        public int getColor(Cell cell, Levels levels, float scale, float bias) {
-        	float continentNoise = NoiseUtil.clamp(this.getNoiseValue(cell), 0.0F, 1.0F);
-        	return rgba(continentNoise, continentNoise, continentNoise);
-        }
-
-		@Override
-		public float getNoiseValue(Cell cell) {
-			return cell.continentNoise;
-		}
-    },
-	CONTINENTALNESS {
-    	
-        @Override
-        public int getColor(Cell cell, Levels levels, float scale, float bias) {
-        	float continentalness = NoiseUtil.clamp(this.getNoiseValue(cell), 0.0F, 1.0F);
-        	return rgba(continentalness, continentalness, continentalness);
-        }
-
-		@Override
-		public float getNoiseValue(Cell cell) {
-			return cell.continentalness;
-		}
     };
 
     public int getColor(Cell cell, Levels levels) {
@@ -186,17 +112,15 @@ public enum RenderMode {
         }
         float bands = 10.0F;
         float alpha = 0.2F;
-        float elevation = (Math.min(cell.height, 1.0F) - levels.water) / (1.0F - levels.water);
+        float elevation = (cell.height - levels.water) / (1.0F - levels.water);
         int band = NoiseUtil.round(elevation * bands);
         float scale = 1.0F - alpha;
         float bias = alpha * (band / bands);
-        return this.getColor(cell, levels, scale, bias);
+        return getColor(cell, levels, scale, bias);
     }
 
     public abstract int getColor(Cell cell, Levels levels, float scale, float bias);
 
-    public abstract float getNoiseValue(Cell cell);
-    
     public boolean handlesWater() {
         return false;
     }

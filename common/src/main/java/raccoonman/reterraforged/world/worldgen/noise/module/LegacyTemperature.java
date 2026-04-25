@@ -1,12 +1,13 @@
 package raccoonman.reterraforged.world.worldgen.noise.module;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;	
 
 public record LegacyTemperature(float frequency, int power) implements Noise {
-	public static final Codec<LegacyTemperature> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+	public static final MapCodec<LegacyTemperature> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		Codec.FLOAT.fieldOf("frequency").forGetter(LegacyTemperature::frequency),
 		Codec.INT.fieldOf("power").forGetter(LegacyTemperature::power)
 	).apply(instance, LegacyTemperature::new));
@@ -37,7 +38,7 @@ public record LegacyTemperature(float frequency, int power) implements Noise {
 	}
 
 	@Override
-	public Codec<LegacyTemperature> codec() {
+	public MapCodec<LegacyTemperature> codec() {
 		return CODEC;
 	}
 }

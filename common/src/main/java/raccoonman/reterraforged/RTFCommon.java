@@ -4,15 +4,10 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import net.minecraft.resources.ResourceLocation;
-import raccoonman.reterraforged.compat.terrablender.TBCompat;
-import raccoonman.reterraforged.compat.terrablender.TBSurfaceRules;
-import raccoonman.reterraforged.data.preset.settings.Preset;
+import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.platform.RegistryUtil;
-import raccoonman.reterraforged.registries.RTFArgumentTypeInfos;
 import raccoonman.reterraforged.registries.RTFBuiltInRegistries;
 import raccoonman.reterraforged.registries.RTFRegistries;
-import raccoonman.reterraforged.server.commands.RTFCommands;
-import raccoonman.reterraforged.world.worldgen.biome.modifier.BiomeModifier;
 import raccoonman.reterraforged.world.worldgen.biome.modifier.BiomeModifiers;
 import raccoonman.reterraforged.world.worldgen.densityfunction.RTFDensityFunctions;
 import raccoonman.reterraforged.world.worldgen.feature.RTFFeatures;
@@ -28,8 +23,6 @@ import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noises;
 import raccoonman.reterraforged.world.worldgen.structure.rule.StructureRule;
 import raccoonman.reterraforged.world.worldgen.structure.rule.StructureRules;
-import raccoonman.reterraforged.world.worldgen.surface.condition.RTFSurfaceConditions;
-import raccoonman.reterraforged.world.worldgen.surface.rule.LayeredSurfaceRule;
 import raccoonman.reterraforged.world.worldgen.surface.rule.RTFSurfaceRules;
 
 public class RTFCommon {
@@ -50,27 +43,18 @@ public class RTFCommon {
 		RTFFeatures.bootstrap();
 		RTFHeightProviderTypes.bootstrap();
 		RTFFloatProviderTypes.bootstrap();
-		RTFSurfaceRules.bootstrap();
-		RTFSurfaceConditions.bootstrap();
 		BiomeModifiers.bootstrap();
+		RTFSurfaceRules.bootstrap();
 		StructureRules.bootstrap();
 
-		RTFCommands.bootstrap();
-		RTFArgumentTypeInfos.bootstrap();
-		
-		if(TBCompat.isEnabled()) {
-			TBCompat.bootstrap();
-		}
-		
-		RegistryUtil.createDataRegistry(RTFRegistries.NOISE, Noise.DIRECT_CODEC);
-		RegistryUtil.createDataRegistry(RTFRegistries.BIOME_MODIFIER, BiomeModifier.CODEC);
-		RegistryUtil.createDataRegistry(RTFRegistries.STRUCTURE_RULE, StructureRule.CODEC);
-		RegistryUtil.createDataRegistry(RTFRegistries.SURFACE_LAYERS, LayeredSurfaceRule.Layer.CODEC);
-		RegistryUtil.createDataRegistry(RTFRegistries.PRESET, Preset.CODEC);
+		RegistryUtil.createDataRegistry(RTFRegistries.NOISE, Noise.DIRECT_CODEC, false);
+		RegistryUtil.createDataRegistry(RTFRegistries.PRESET, Preset.DIRECT_CODEC, false);
+		RegistryUtil.createDataRegistry(RTFRegistries.STRUCTURE_RULE, StructureRule.DIRECT_CODEC, false);
 	}
-	
+
 	public static ResourceLocation location(String name) {
-		if (name.contains(":")) return new ResourceLocation(name);
-		return new ResourceLocation(RTFCommon.MOD_ID, name);
+		if (name.contains(":")) return ResourceLocation.parse(name);
+		return ResourceLocation.fromNamespaceAndPath(RTFCommon.MOD_ID, name);
 	}
 }
+

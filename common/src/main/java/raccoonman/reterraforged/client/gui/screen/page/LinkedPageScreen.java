@@ -29,8 +29,8 @@ public abstract class LinkedPageScreen extends Screen {
 	@Override
 	public void init() {
 		super.init();
-		
-		int buttonsCenter = this.width / 2;
+
+		int buttonsCenter = this.width/2;
         int buttonWidth = 50;
         int buttonHeight = 20;
         int buttonPad = 2;
@@ -58,7 +58,7 @@ public abstract class LinkedPageScreen extends Screen {
 		this.currentPage.init();
 
 		// these must be overlayed onto the current page
-		this.addRenderableOnly(new Label(16, 15, 20, 20, this.currentPage.title()));
+		this.addRenderableOnly(new Label(16, 10, 20, 20, this.currentPage.title()));
 
 		this.addRenderableWidget(this.cancelButton);
 		this.addRenderableWidget(this.doneButton);

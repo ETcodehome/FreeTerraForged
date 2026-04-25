@@ -1,13 +1,14 @@
 package raccoonman.reterraforged.world.worldgen.noise.module;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 import raccoonman.reterraforged.world.worldgen.noise.function.Interpolation;
 
 record Blend(Noise alpha, Noise lower, Noise upper, float mid, float range, Interpolation interpolation) implements Noise {
-	public static final Codec<Blend> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+	public static final MapCodec<Blend> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		Noise.HOLDER_HELPER_CODEC.fieldOf("alpha").forGetter(Blend::alpha),
 		Noise.HOLDER_HELPER_CODEC.fieldOf("lower").forGetter(Blend::lower),
 		Noise.HOLDER_HELPER_CODEC.fieldOf("upper").forGetter(Blend::upper),
@@ -48,7 +49,7 @@ record Blend(Noise alpha, Noise lower, Noise upper, float mid, float range, Inte
 	}
 
 	@Override
-	public Codec<Blend> codec() {
+	public MapCodec<Blend> codec() {
 		return CODEC;
 	}
 }

@@ -1,13 +1,14 @@
 package raccoonman.reterraforged.world.worldgen.noise.module;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 import raccoonman.reterraforged.world.worldgen.noise.function.Interpolation;
 
 record SimplexRidge(float frequency, int octaves, float lacunarity, float gain, Interpolation interpolation, float[] spectralWeights, float min, float max) implements Noise {
-	public static final Codec<PerlinRidge> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+	public static final MapCodec<PerlinRidge> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		Codec.FLOAT.fieldOf("frequency").forGetter(PerlinRidge::frequency),
 		Codec.INT.fieldOf("octaves").forGetter(PerlinRidge::octaves),
 		Codec.FLOAT.fieldOf("lacunarity").forGetter(PerlinRidge::lacunarity),
@@ -63,7 +64,7 @@ record SimplexRidge(float frequency, int octaves, float lacunarity, float gain, 
 	}
 
 	@Override
-	public Codec<PerlinRidge> codec() {
+	public MapCodec<PerlinRidge> codec() {
 		return CODEC;
 	}
 	

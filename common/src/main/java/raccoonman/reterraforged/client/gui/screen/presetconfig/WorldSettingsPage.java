@@ -11,10 +11,10 @@ import raccoonman.reterraforged.client.data.RTFTranslationKeys;
 import raccoonman.reterraforged.client.gui.screen.page.LinkedPageScreen.Page;
 import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
 import raccoonman.reterraforged.client.gui.widget.Slider;
-import raccoonman.reterraforged.data.preset.settings.Preset;
-import raccoonman.reterraforged.data.preset.settings.WorldSettings;
-import raccoonman.reterraforged.world.worldgen.biome.spawn.SpawnType;
-import raccoonman.reterraforged.world.worldgen.continent.ContinentType;
+import raccoonman.reterraforged.data.worldgen.preset.settings.ContinentType;
+import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
+import raccoonman.reterraforged.data.worldgen.preset.settings.SpawnType;
+import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings;
 import raccoonman.reterraforged.world.worldgen.noise.function.DistanceFunction;
 
 public class WorldSettingsPage extends PresetEditorPage {
@@ -34,9 +34,7 @@ public class WorldSettingsPage extends PresetEditorPage {
 	private Slider shallowOcean;
 	private Slider beach;
 	private Slider coast;
-	private Slider nearInland;
-	private Slider midInland;
-	private Slider farInland;
+	private Slider inland;
 	
 	private CycleButton<SpawnType> spawnType;
 	private Slider worldHeight;
@@ -67,8 +65,7 @@ public class WorldSettingsPage extends PresetEditorPage {
 			ImmutableList.of(
 				ContinentType.MULTI,
 				ContinentType.SINGLE,
-				ContinentType.MULTI_IMPROVED,
-				ContinentType.EXPERIMENTAL
+				ContinentType.MULTI_IMPROVED
 			),
 			continent.continentType, RTFTranslationKeys.GUI_BUTTON_CONTINENT_TYPE, 
 			(button, value) -> {
@@ -151,26 +148,14 @@ public class WorldSettingsPage extends PresetEditorPage {
 			return value;
 		});
 		this.coast = PresetWidgets.createFloatSlider(controlPoints.coast, 0.0F, 1.0F, RTFTranslationKeys.GUI_SLIDER_COAST, (slider, value) -> {
-			value = Mth.clamp(value, this.beach.getValue(), this.nearInland.getValue());
+			value = Mth.clamp(value, this.beach.getValue(), this.inland.getValue());
 			controlPoints.coast = (float) slider.scaleValue(value);
 			this.regenerate();
 			return value;
 		});
-		this.nearInland = PresetWidgets.createFloatSlider(controlPoints.nearInland, 0.0F, 5.0F, RTFTranslationKeys.GUI_SLIDER_NEAR_INLAND, (slider, value) -> {
-//			value = Mth.clamp(value, this.coast.getValue(), this.farInland.getValue());
-			controlPoints.nearInland = (float) slider.scaleValue(value);
-			this.regenerate();
-			return value;
-		});
-		this.midInland = PresetWidgets.createFloatSlider(controlPoints.midInland, 0.0F, 5.0F, RTFTranslationKeys.GUI_SLIDER_MID_INLAND, (slider, value) -> {
-//			value = Mth.clamp(value, this.inland.getValue(), this.maxInland.getValue());
-			controlPoints.midInland = (float) slider.scaleValue(value);
-			this.regenerate();
-			return value;
-		});
-		this.farInland = PresetWidgets.createFloatSlider(controlPoints.farInland, 0.0F, 5.0F, RTFTranslationKeys.GUI_SLIDER_FAR_INLAND, (slider, value) -> {
-//			value = Math.max(value, this.farInland.getValue());
-			controlPoints.farInland = (float) slider.scaleValue(value);
+		this.inland = PresetWidgets.createFloatSlider(controlPoints.inland, 0.0F, 1.0F, RTFTranslationKeys.GUI_SLIDER_INLAND, (slider, value) -> {
+			value = Math.max(value, this.coast.getValue());
+			controlPoints.inland = (float) slider.scaleValue(value);
 			this.regenerate();
 			return value;
 		});
@@ -194,7 +179,7 @@ public class WorldSettingsPage extends PresetEditorPage {
 			this.regenerate();
 			return value;
 		});
-		this.lavaLevel = PresetWidgets.createIntSlider(properties.lavaLevel, -1024, 1024, RTFTranslationKeys.GUI_SLIDER_LAVA_LEVEL, (slider, value) -> {
+		this.lavaLevel = PresetWidgets.createIntSlider(properties.lavaLevel, -1024, 128, RTFTranslationKeys.GUI_SLIDER_LAVA_LEVEL, (slider, value) -> {
 			properties.lavaLevel = (int) slider.scaleValue(value);
 			return value;
 		});
@@ -217,9 +202,7 @@ public class WorldSettingsPage extends PresetEditorPage {
 		this.left.addWidget(this.shallowOcean);
 		this.left.addWidget(this.beach);
 		this.left.addWidget(this.coast);
-		this.left.addWidget(this.nearInland);
-		this.left.addWidget(this.midInland);
-		this.left.addWidget(this.farInland);
+		this.left.addWidget(this.inland);
 		
 		this.left.addWidget(PresetWidgets.createLabel(RTFTranslationKeys.GUI_LABEL_PROPERTIES));
 		this.left.addWidget(this.spawnType);

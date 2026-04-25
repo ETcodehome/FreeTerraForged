@@ -2,13 +2,14 @@ package raccoonman.reterraforged.world.worldgen.floatproviders;
 
 import com.mojang.serialization.Codec;
 
+import com.mojang.serialization.MapCodec;
 import net.minecraft.util.RandomSource;
 import net.minecraft.util.valueproviders.FloatProvider;
 import net.minecraft.util.valueproviders.FloatProviderType;
 
 @Deprecated
 public class LegacyCanyonYScale extends FloatProvider {
-	public static final Codec<LegacyCanyonYScale> CODEC = Codec.unit(LegacyCanyonYScale::new);
+	public static final MapCodec<LegacyCanyonYScale> CODEC = MapCodec.unit(LegacyCanyonYScale::new);
 	
 	@Override
 	public float sample(RandomSource random) {

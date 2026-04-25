@@ -18,13 +18,14 @@ import net.minecraft.client.gui.screens.worldselection.CreateWorldScreen;
 import net.minecraft.client.gui.screens.worldselection.WorldCreationContext;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.data.DataGenerator;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.packs.repository.PackRepository;
 import net.minecraft.world.level.levelgen.WorldOptions;
 import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.client.gui.screen.page.LinkedPageScreen;
 import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
-import raccoonman.reterraforged.data.RTFDataGen;
-import raccoonman.reterraforged.data.preset.settings.Preset;
+import raccoonman.reterraforged.data.worldgen.Datapacks;
+import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 
 //FIXME pressing the create world screen before the pack is copied will fuck the game up (surprisingly noone seems to have run into this?)
 public class PresetConfigScreen extends LinkedPageScreen {
@@ -72,8 +73,9 @@ public class PresetConfigScreen extends LinkedPageScreen {
 		RegistryAccess registryAccess = this.getSettings().worldgenLoadContext();
 
 		Preset preset = presetEntry.getPreset();
+		Component presetName = presetEntry.getName();
 		
-		DataGenerator dataGenerator = RTFDataGen.makePreset(preset, registryAccess, datagenPath, datagenOutputPath);
+		DataGenerator dataGenerator = Datapacks.makePreset(preset, registryAccess, datagenPath, datagenOutputPath, presetName.getString());
 		dataGenerator.run();
 		copyToZip(datagenOutputPath, outputPath);
 		PathUtils.deleteDirectory(datagenPath);

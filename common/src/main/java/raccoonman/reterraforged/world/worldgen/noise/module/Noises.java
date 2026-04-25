@@ -5,11 +5,10 @@ import java.util.function.Function;
 import com.mojang.datafixers.util.Either;
 import com.mojang.serialization.Codec;
 
+import com.mojang.serialization.MapCodec;
 import net.minecraft.core.Holder;
 import raccoonman.reterraforged.platform.RegistryUtil;
 import raccoonman.reterraforged.registries.RTFBuiltInRegistries;
-import raccoonman.reterraforged.world.worldgen.cell.CellField;
-import raccoonman.reterraforged.world.worldgen.cell.noise.CellSampler;
 import raccoonman.reterraforged.world.worldgen.noise.domain.Domain;
 import raccoonman.reterraforged.world.worldgen.noise.domain.Domains;
 import raccoonman.reterraforged.world.worldgen.noise.function.CellFunction;
@@ -69,7 +68,6 @@ public class Noises {
 		register("erosion", Erosion.CODEC);
 		register("linear_spline", LinearSpline.CODEC);
 		register("cache", Cache2d.CODEC);
-		register("cell", CellSampler.Marker.CODEC);
 		
 		register("legacy_temperature", LegacyTemperature.CODEC);
 		register("legacy_moisture", LegacyMoisture.CODEC);
@@ -267,12 +265,12 @@ public class Noises {
 		return new Gradient(input, lower, upper, strength);
 	}
 	
-	public static Noise terrace(Noise input, float lowerCurve, float upperCurve, float lower, float blendRange, int steps) {
-		return terrace(input, constant(lowerCurve), constant(upperCurve), constant(lower), blendRange, steps);
-	}
-	
-	public static Noise terrace(Noise input, Noise lowerCurve, Noise upperCurve, Noise rampHeight, float blendRange, int steps) {
-        return new Terrace(input, lowerCurve, upperCurve, rampHeight, blendRange, steps);
+	public static Noise terrace(Noise input, float lowerCurve, float upperCurve, float lowerHeight, float blendRange, int steps) {
+        return terrace(input, constant(lowerCurve), constant(upperCurve), constant(lowerHeight), blendRange, steps);
+    }
+
+	public static Noise terrace(Noise input, Noise lowerCurve, Noise upperCurve, Noise lowerHeight, float blendRange, int steps) {
+        return new Terrace(input, lowerCurve, upperCurve, lowerHeight, blendRange, steps);
     }
 
 	public static Noise advancedTerrace(Noise input, float modulation, float mask, float slope, float blendMin, float blendMax, int steps, int octaves) {
@@ -410,12 +408,8 @@ public class Noises {
 	public static Noise erosion(Noise input, int seed, int octaves, float strength, float gridSize, float amplitude, float lacunarity, float distanceFallOff, Erosion.BlendMode blendMode) {
 		return new Erosion(input, seed, octaves, strength, gridSize, amplitude, lacunarity, distanceFallOff, blendMode);
 	}
-	
-	public static Noise cell(CellField field) {
-		return new CellSampler.Marker(field);
-	}
  
-	private static void register(String name, Codec<? extends Noise> value) {
+	private static void register(String name, MapCodec<? extends Noise> value) {
 		RegistryUtil.register(RTFBuiltInRegistries.NOISE_TYPE, name, value);
 	}
 	
@@ -442,7 +436,7 @@ public class Noises {
 		}
 
 		@Override
-		public Codec<HolderHolder> codec() {
+		public MapCodec<HolderHolder> codec() {
 			throw new UnsupportedOperationException("Called .codec() on HolderHolder");
 		}
 	}

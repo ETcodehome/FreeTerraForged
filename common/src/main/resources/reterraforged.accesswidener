@@ -1,10 +1,9 @@
 accessWidener	v2	named
 
 accessible class net/minecraft/world/level/levelgen/SurfaceRules$Condition
-accessible class net/minecraft/world/level/levelgen/SurfaceRules$SurfaceRule
 accessible class net/minecraft/world/level/levelgen/SurfaceRules$Context
+accessible class net/minecraft/world/level/levelgen/SurfaceRules$SurfaceRule
 accessible class net/minecraft/world/level/levelgen/SurfaceRules$LazyCondition
-accessible class net/minecraft/world/level/levelgen/SurfaceRules$LazyYCondition
 accessible class net/minecraft/world/level/levelgen/SurfaceRules$LazyXZCondition
 accessible method net/minecraft/world/level/levelgen/SurfaceRules$Context <init> (Lnet/minecraft/world/level/levelgen/SurfaceSystem;Lnet/minecraft/world/level/levelgen/RandomState;Lnet/minecraft/world/level/chunk/ChunkAccess;Lnet/minecraft/world/level/levelgen/NoiseChunk;Ljava/util/function/Function;Lnet/minecraft/core/Registry;Lnet/minecraft/world/level/levelgen/WorldGenerationContext;)V
 accessible method net/minecraft/world/level/levelgen/SurfaceRules$Context updateXZ (II)V
@@ -22,8 +21,6 @@ accessible field net/minecraft/world/level/levelgen/SurfaceRules$Context biomeGe
 accessible field net/minecraft/world/level/levelgen/SurfaceRules$Context biome Ljava/util/function/Supplier;
 accessible field net/minecraft/world/level/levelgen/SurfaceSystem seaLevel I
 accessible field net/minecraft/world/level/levelgen/NoiseChunk initialDensityNoJaggedness Lnet/minecraft/world/level/levelgen/DensityFunction;
-mutable field net/minecraft/world/level/levelgen/NoiseChunk cellCountY I
-accessible method net/minecraft/world/level/levelgen/NoiseChunk wrap (Lnet/minecraft/world/level/levelgen/DensityFunction;)Lnet/minecraft/world/level/levelgen/DensityFunction;
 accessible field net/minecraft/world/level/levelgen/DensityFunctions MAX_REASONABLE_NOISE_VALUE D
 accessible class net/minecraft/world/level/levelgen/OreVeinifier$VeinType
 accessible field net/minecraft/world/level/levelgen/OreVeinifier$VeinType minY I
@@ -41,11 +38,9 @@ accessible method net/minecraft/client/gui/screens/worldselection/CreateWorldScr
 accessible field net/minecraft/data/DataGenerator vanillaPackOutput Lnet/minecraft/data/PackOutput;
 accessible method net/minecraft/data/DataGenerator$PackGenerator <init> (Lnet/minecraft/data/DataGenerator;ZLjava/lang/String;Lnet/minecraft/data/PackOutput;)V
 accessible method net/minecraft/world/level/levelgen/structure/placement/StructurePlacement salt ()I
+accessible method net/minecraft/world/level/levelgen/NoiseChunk wrap (Lnet/minecraft/world/level/levelgen/DensityFunction;)Lnet/minecraft/world/level/levelgen/DensityFunction;
 accessible method net/minecraft/world/level/biome/Biome getTemperature (Lnet/minecraft/core/BlockPos;)F
 accessible field net/minecraft/world/level/StructureManager level Lnet/minecraft/world/level/LevelAccessor;
-accessible field net/minecraft/server/level/WorldGenRegion firstPos Lnet/minecraft/world/level/ChunkPos;
-accessible field net/minecraft/server/level/WorldGenRegion lastPos Lnet/minecraft/world/level/ChunkPos;
-accessible field net/minecraft/server/level/WorldGenRegion cache Ljava/util/List;
 accessible field net/minecraft/world/level/levelgen/NoiseRouterData SPAGHETTI_2D Lnet/minecraft/resources/ResourceKey;
 accessible field net/minecraft/world/level/levelgen/NoiseRouterData SPAGHETTI_ROUGHNESS_FUNCTION Lnet/minecraft/resources/ResourceKey;
 accessible field net/minecraft/world/level/levelgen/NoiseRouterData PILLARS Lnet/minecraft/resources/ResourceKey;
@@ -61,18 +56,6 @@ accessible method net/minecraft/world/level/levelgen/NoiseRouterData entrances (
 accessible method net/minecraft/world/level/levelgen/NoiseRouterData postProcess (Lnet/minecraft/world/level/levelgen/DensityFunction;)Lnet/minecraft/world/level/levelgen/DensityFunction;
 accessible method net/minecraft/world/level/levelgen/NoiseRouterData noiseGradientDensity (Lnet/minecraft/world/level/levelgen/DensityFunction;Lnet/minecraft/world/level/levelgen/DensityFunction;)Lnet/minecraft/world/level/levelgen/DensityFunction;
 accessible method net/minecraft/world/level/levelgen/NoiseRouterData getFunction (Lnet/minecraft/core/HolderGetter;Lnet/minecraft/resources/ResourceKey;)Lnet/minecraft/world/level/levelgen/DensityFunction;
-accessible method net/minecraft/world/level/levelgen/NoiseRouterData registerAndWrap (Lnet/minecraft/data/worldgen/BootstapContext;Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/world/level/levelgen/DensityFunction;)Lnet/minecraft/world/level/levelgen/DensityFunction;
+accessible method net/minecraft/world/level/levelgen/NoiseRouterData registerAndWrap (Lnet/minecraft/data/worldgen/BootstrapContext;Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/world/level/levelgen/DensityFunction;)Lnet/minecraft/world/level/levelgen/DensityFunction;
 accessible field net/minecraft/client/gui/screens/worldselection/CreateWorldScreen tabNavigationBar Lnet/minecraft/client/gui/components/tabs/TabNavigationBar;
 accessible method net/minecraft/world/level/biome/Climate$ParameterPoint fitness (Lnet/minecraft/world/level/biome/Climate$TargetPoint;)J
-accessible field net/minecraft/world/level/levelgen/structure/placement/StructurePlacement locateOffset Lnet/minecraft/core/Vec3i;
-accessible field net/minecraft/world/level/levelgen/structure/placement/StructurePlacement frequencyReductionMethod Lnet/minecraft/world/level/levelgen/structure/placement/StructurePlacement$FrequencyReductionMethod;
-accessible field net/minecraft/world/level/levelgen/structure/placement/StructurePlacement frequency F
-accessible field net/minecraft/world/level/levelgen/structure/placement/StructurePlacement salt I
-accessible field net/minecraft/world/level/levelgen/structure/placement/StructurePlacement exclusionZone Ljava/util/Optional;
-accessible method net/minecraft/commands/synchronization/ArgumentTypeInfos register (Lnet/minecraft/core/Registry;Ljava/lang/String;Ljava/lang/Class;Lnet/minecraft/commands/synchronization/ArgumentTypeInfo;)Lnet/minecraft/commands/synchronization/ArgumentTypeInfo;
-accessible field net/minecraft/world/level/levelgen/RandomState random Lnet/minecraft/world/level/levelgen/PositionalRandomFactory;
-accessible field net/minecraft/world/level/levelgen/SurfaceRules$Context stoneDepthBelow I
-accessible field net/minecraft/world/level/levelgen/SurfaceRules$Context stoneDepthAbove I
-mutable field net/minecraft/world/level/levelgen/SurfaceRules$Context biomeGetter Ljava/util/function/Function;
-accessible field net/minecraft/world/level/levelgen/Beardifier pieceIterator Lit/unimi/dsi/fastutil/objects/ObjectListIterator;
-accessible field net/minecraft/world/level/levelgen/Beardifier junctionIterator Lit/unimi/dsi/fastutil/objects/ObjectListIterator;

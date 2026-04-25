@@ -4,6 +4,7 @@ import java.util.function.Function;
 
 import com.mojang.serialization.Codec;
 
+import com.mojang.serialization.MapCodec;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.LevelAccessor;
 import raccoonman.reterraforged.registries.RTFBuiltInRegistries;
@@ -14,5 +15,5 @@ public interface TemplateDecorator<T extends TemplateContext> {
     
     void apply(LevelAccessor level, T buffer, RandomSource random, boolean modified);
     
-    Codec<? extends TemplateDecorator<T>> codec();
+    MapCodec<? extends TemplateDecorator<T>> codec();
 }

@@ -1,6 +1,7 @@
 package raccoonman.reterraforged.world.worldgen.noise.module;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
@@ -8,7 +9,7 @@ import raccoonman.reterraforged.world.worldgen.noise.function.CellFunction;
 import raccoonman.reterraforged.world.worldgen.noise.function.DistanceFunction;
 
 record Worley(float frequency, float distance, CellFunction cellFunction, DistanceFunction distanceFunction, Noise lookup, float min, float max) implements Noise {
-	public static final Codec<Worley> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+	public static final MapCodec<Worley> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		Codec.FLOAT.fieldOf("frequency").forGetter(Worley::frequency),
 		Codec.FLOAT.fieldOf("distance").forGetter(Worley::distance),
 		CellFunction.CODEC.fieldOf("cell_function").forGetter(Worley::cellFunction),
@@ -44,7 +45,7 @@ record Worley(float frequency, float distance, CellFunction cellFunction, Distan
 	}
 
 	@Override
-	public Codec<Worley> codec() {
+	public MapCodec<Worley> codec() {
 		return CODEC;
 	}
 	

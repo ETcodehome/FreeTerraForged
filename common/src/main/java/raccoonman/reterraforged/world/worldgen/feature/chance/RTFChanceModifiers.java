@@ -2,6 +2,7 @@ package raccoonman.reterraforged.world.worldgen.feature.chance;
 
 import com.mojang.serialization.Codec;
 
+import com.mojang.serialization.MapCodec;
 import raccoonman.reterraforged.platform.RegistryUtil;
 import raccoonman.reterraforged.registries.RTFBuiltInRegistries;
 
@@ -28,7 +29,7 @@ public class RTFChanceModifiers {
 		return new BiomeEdgeChanceModifier(from, to, exclusive);
 	}
 	
-	private static void register(String name, Codec<? extends ChanceModifier> placement) {
+	private static void register(String name, MapCodec<? extends ChanceModifier> placement) {
 		RegistryUtil.register(RTFBuiltInRegistries.CHANCE_MODIFIER_TYPE, name, placement);
 	}
 }

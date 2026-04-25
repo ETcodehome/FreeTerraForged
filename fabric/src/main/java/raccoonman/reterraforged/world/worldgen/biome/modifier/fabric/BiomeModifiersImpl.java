@@ -6,6 +6,7 @@ import java.util.Optional;
 import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.Codec;
 
+import com.mojang.serialization.MapCodec;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderSet;
 import net.minecraft.resources.ResourceKey;
@@ -23,6 +24,14 @@ public class BiomeModifiersImpl {
 	public static void bootstrap() {
 		register("add", AddModifier.CODEC);
 		register("replace", ReplaceModifier.CODEC);
+		
+		//prevent forge biome modifiers from being loaded
+		//FIXME this is a bad way to do this 
+		register("neoforge:none", Dummy.makeCodec());
+		register("neoforge:add_features", Dummy.makeCodec());
+		register("neoforge:remove_features", Dummy.makeCodec());
+		register("neoforge:add_spawns", Dummy.makeCodec());
+		register("neoforge:remove_spawns", Dummy.makeCodec());
 	}
 	
 	public static BiomeModifier add(Order order, GenerationStep.Decoration step, Optional<Pair<Filter.Behavior, HolderSet<Biome>>> biomes, HolderSet<PlacedFeature> features) {
@@ -33,7 +42,19 @@ public class BiomeModifiersImpl {
 		return new ReplaceModifier(step, biomes, replacements);
 	}
 	
-	public static void register(String name, Codec<? extends BiomeModifier> value) {
+	public static void register(String name, MapCodec<? extends BiomeModifier> value) {
 		RegistryUtil.register(RTFBuiltInRegistries.BIOME_MODIFIER_TYPE, name, value);
 	}
+
+	private record Dummy() implements BiomeModifier	{
+		
+		@Override
+		public MapCodec<Dummy> codec() {
+			return makeCodec();
+		}
+		
+		public static MapCodec<Dummy> makeCodec() {
+			return MapCodec.unit(Dummy::new);
+		}
+	};
 }

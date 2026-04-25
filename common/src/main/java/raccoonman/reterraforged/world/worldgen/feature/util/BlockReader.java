@@ -7,7 +7,6 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.material.Fluids;
 
-@Deprecated(forRemoval = true)
 public class BlockReader implements BlockGetter {
 	private BlockState state;
 	

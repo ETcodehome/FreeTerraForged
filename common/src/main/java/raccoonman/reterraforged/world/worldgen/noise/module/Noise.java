@@ -2,6 +2,7 @@ package raccoonman.reterraforged.world.worldgen.noise.module;
 
 import com.mojang.serialization.Codec;
 
+import com.mojang.serialization.MapCodec;
 import net.minecraft.core.Holder;
 import net.minecraft.resources.RegistryFileCodec;
 import raccoonman.reterraforged.registries.RTFRegistries;
@@ -24,7 +25,7 @@ public interface Noise {
 	
 	Noise mapAll(Visitor visitor);
 	
-	Codec<? extends Noise> codec();
+	MapCodec<? extends Noise> codec();
 	
 	public interface Visitor {
 		Noise apply(Noise input);

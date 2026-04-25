@@ -48,7 +48,7 @@ public class Cache<V extends ExpiringEntry> implements AutoCloseable {
     }
 
 	@Override
-	public void close() {
+	public void close() throws Exception {
 		this.poll.cancel(false);
 	}
 }

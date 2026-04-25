@@ -2,6 +2,7 @@ package raccoonman.reterraforged.world.worldgen.floatproviders;
 
 import com.mojang.serialization.Codec;
 
+import com.mojang.serialization.MapCodec;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.util.valueproviders.FloatProvider;
 import net.minecraft.util.valueproviders.FloatProviderType;
@@ -13,7 +14,7 @@ public class RTFFloatProviderTypes {
 	public static void bootstrap() {
 	}
 	
-	private static <T extends FloatProvider> FloatProviderType<T> register(String name, Codec<T> codec) {
+	private static <T extends FloatProvider> FloatProviderType<T> register(String name, MapCodec<T> codec) {
 		FloatProviderType<T> type = () -> codec;
 		RegistryUtil.register(BuiltInRegistries.FLOAT_PROVIDER_TYPE, name, type);
 		return type;

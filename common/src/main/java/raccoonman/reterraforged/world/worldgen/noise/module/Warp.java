@@ -1,12 +1,13 @@
 package raccoonman.reterraforged.world.worldgen.noise.module;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import raccoonman.reterraforged.world.worldgen.noise.domain.Domain;
 
 record Warp(Noise input, Domain domain) implements Noise {
-	public static final Codec<Warp> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+	public static final MapCodec<Warp> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		Noise.HOLDER_HELPER_CODEC.fieldOf("input").forGetter(Warp::input),
 		Domain.CODEC.fieldOf("domain").forGetter(Warp::domain)
 	).apply(instance, Warp::new));
@@ -32,7 +33,7 @@ record Warp(Noise input, Domain domain) implements Noise {
 	}
 
 	@Override
-	public Codec<Warp> codec() {
+	public MapCodec<Warp> codec() {
 		return CODEC;
 	}
 }

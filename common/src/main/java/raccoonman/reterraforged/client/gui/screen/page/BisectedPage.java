@@ -21,12 +21,12 @@ public abstract class BisectedPage<S extends Screen, L extends AbstractWidget, R
 		this.left = alignment.addColumn(0.7F, this::createAndPositionColumn);
 		this.right = alignment.addColumn(0.3F, this::createAndPositionColumn);
 	}
-	
+
 	private <T extends AbstractWidget> WidgetList<T> createAndPositionColumn(int left, int top, int columnWidth, int height, int horizontalPadding, int verticalPadding) {
 		final int padding = 30;
 		final int slotHeight = 25;
-		WidgetList<T> list = new WidgetList<>(this.screen.minecraft, columnWidth, height, padding, height - padding, slotHeight);
-		list.setLeftPos(left);
+		WidgetList<T> list = new WidgetList<>(this.screen.minecraft, columnWidth, height - 65, padding, slotHeight);
+		list.setX(left);
 		return list;
 	}
 }

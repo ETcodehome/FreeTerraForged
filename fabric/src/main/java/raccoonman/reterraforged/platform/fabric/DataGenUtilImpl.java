@@ -1,8 +1,10 @@
 package raccoonman.reterraforged.platform.fabric;
 
 import java.nio.file.Path;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
 import org.slf4j.Logger;
@@ -24,6 +26,7 @@ import net.minecraft.resources.RegistryDataLoader;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
+import raccoonman.reterraforged.mixin.MixinRegistrySetBuilder$EmptyTagLookup;
 
 public class DataGenUtilImpl {
 
@@ -45,7 +48,29 @@ public class DataGenUtilImpl {
 	    @Override
 	    public CompletableFuture<?> run(CachedOutput arg) {
 	        return this.registries.thenCompose(provider -> {
-	            RegistryOps<JsonElement> ops = RegistryOps.create(JsonOps.INSTANCE, provider);
+				@SuppressWarnings("unchecked")
+				class HolderLookupAdapterButWithCursedPatchForOwnerJuggling implements RegistryOps.RegistryInfoLookup {
+					private final HolderLookup.Provider lookupProvider;
+					private final Map<ResourceKey<? extends Registry<?>>, Optional<? extends RegistryOps.RegistryInfo<?>>> lookups = new ConcurrentHashMap();
+
+					public HolderLookupAdapterButWithCursedPatchForOwnerJuggling(HolderLookup.Provider provider) {
+						this.lookupProvider = provider;
+					}
+					public <E> Optional<RegistryOps.RegistryInfo<E>> lookup(ResourceKey<? extends Registry<? extends E>> resourceKey) {
+						return (Optional<RegistryOps.RegistryInfo<E>>) this.lookups.computeIfAbsent(resourceKey, this::createLookup);
+					}
+
+					private Optional<RegistryOps.RegistryInfo<Object>> createLookup(ResourceKey<? extends Registry<?>> resourceKey) {
+						return this.lookupProvider.lookup(resourceKey).map(l -> {
+							if (l instanceof MixinRegistrySetBuilder$EmptyTagLookup<?> e) {
+								return new RegistryOps.RegistryInfo(e.getOwner(), l, l.registryLifecycle());
+							} else {
+								return RegistryOps.RegistryInfo.fromRegistryLookup(l);
+							}
+						});
+					}
+				}
+	            RegistryOps<JsonElement> ops = RegistryOps.create(JsonOps.INSTANCE, new HolderLookupAdapterButWithCursedPatchForOwnerJuggling(provider));
 	            return CompletableFuture.allOf(DynamicRegistries.getDynamicRegistries().stream().flatMap(arg3 -> this.dumpRegistryCap(arg, provider, ops, arg3).stream()).toArray(CompletableFuture[]::new));
 	        });
 	    }

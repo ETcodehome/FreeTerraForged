@@ -2,10 +2,11 @@ package raccoonman.reterraforged.world.worldgen.noise.domain;
 
 import com.mojang.serialization.Codec;
 
+import com.mojang.serialization.MapCodec;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise.Visitor;
 
 public record DirectWarp() implements Domain {
-	public static final Codec<DirectWarp> CODEC = Codec.unit(DirectWarp::new);
+	public static final MapCodec<DirectWarp> CODEC = MapCodec.unit(DirectWarp::new);
 	
 	@Override
 	public float getOffsetX(float x, float z, int seed) {
@@ -23,7 +24,7 @@ public record DirectWarp() implements Domain {
 	}
 
 	@Override
-	public Codec<DirectWarp> codec() {
+	public MapCodec<DirectWarp> codec() {
 		return CODEC;
 	}
 }

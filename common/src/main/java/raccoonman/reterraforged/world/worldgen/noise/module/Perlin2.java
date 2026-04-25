@@ -1,13 +1,14 @@
 package raccoonman.reterraforged.world.worldgen.noise.module;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 import raccoonman.reterraforged.world.worldgen.noise.function.Interpolation;
 
 public record Perlin2(@Deprecated int seed, float frequency, int octaves, float lacunarity, float gain, Interpolation interpolation, float min, float max) implements Noise {
-	public static final Codec<Perlin2> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+	public static final MapCodec<Perlin2> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		Codec.INT.fieldOf("seed").forGetter(Perlin2::seed),
 		Codec.FLOAT.fieldOf("frequency").forGetter(Perlin2::frequency),
 		Codec.INT.fieldOf("octaves").forGetter(Perlin2::octaves),
@@ -55,7 +56,7 @@ public record Perlin2(@Deprecated int seed, float frequency, int octaves, float 
 	}
 
 	@Override
-	public Codec<Perlin2> codec() {
+	public MapCodec<Perlin2> codec() {
 		return CODEC;
 	}
 

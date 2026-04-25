@@ -18,7 +18,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.google.gson.stream.JsonWriter;
 import com.mojang.serialization.DataResult;
-import com.mojang.serialization.DataResult.PartialResult;
+import com.mojang.serialization.DataResult.Error;
 import com.mojang.serialization.JsonOps;
 
 import io.netty.util.internal.StringUtil;
@@ -27,8 +27,9 @@ import net.minecraft.Util;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.gui.components.toasts.SystemToast.SystemToastIds;
+import net.minecraft.client.gui.components.toasts.SystemToast.SystemToastId;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
 import net.minecraft.util.GsonHelper;
 import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.client.data.RTFTranslationKeys;
@@ -39,8 +40,8 @@ import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetListPage.Pr
 import raccoonman.reterraforged.client.gui.widget.Label;
 import raccoonman.reterraforged.client.gui.widget.WidgetList;
 import raccoonman.reterraforged.client.gui.widget.WidgetList.Entry;
-import raccoonman.reterraforged.data.preset.settings.BuiltinPresets;
-import raccoonman.reterraforged.data.preset.settings.Preset;
+import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
+import raccoonman.reterraforged.data.worldgen.preset.settings.Presets;
 import raccoonman.reterraforged.platform.ConfigUtil;
 
 class PresetListPage extends BisectedPage<PresetConfigScreen, PresetEntry, AbstractWidget> {
@@ -86,7 +87,7 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, PresetEntry, Abstr
 			this.input.setTextColor(isValid ? white : red);
 		}, Component.translatable(RTFTranslationKeys.GUI_INPUT_PROMPT).withStyle(ChatFormatting.DARK_GRAY));
 		this.createPreset = PresetWidgets.createThrowingButton(RTFTranslationKeys.GUI_BUTTON_CREATE, () -> {
-			new PresetEntry(Component.literal(this.input.getValue()), BuiltinPresets.makeLegacyDefault(), false, this).save();
+			new PresetEntry(Component.literal(this.input.getValue()), Presets.makeLegacyDefault(), false, this).save();
 			this.rebuildPresets();
 			this.input.setValue(StringUtil.EMPTY_STRING);
 		});
@@ -121,7 +122,7 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, PresetEntry, Abstr
 			this.screen.exportAsDatapack(path, preset);
 			this.rebuildPresets();
 			
-			Toasts.notify(RTFTranslationKeys.GUI_BUTTON_EXPORT_SUCCESS, Component.literal(path.toString()), SystemToastIds.WORLD_BACKUP);
+			Toasts.notify(RTFTranslationKeys.GUI_BUTTON_EXPORT_SUCCESS, Component.literal(path.toString()), SystemToastId.WORLD_BACKUP);
 		});
 
 		this.right.addWidget(this.input);
@@ -188,12 +189,12 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, PresetEntry, Abstr
 		entries.addAll(this.listPresets(PRESET_PATH));
 		entries.addAll(this.listPresets(LEGACY_PRESET_PATH));
 
-		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_DEFAULT_PRESET_NAME).withStyle(ChatFormatting.GRAY), BuiltinPresets.makeDefault(), true, this));
-		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_DEFAULT_LEGACY_PRESET_NAME).withStyle(ChatFormatting.GRAY), BuiltinPresets.makeLegacyDefault(), true, this));
-		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_BEAUTIFUL_PRESET_NAME).withStyle(ChatFormatting.GRAY), BuiltinPresets.makeLegacyBeautiful(), true, this));
-		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_HUGE_BIOMES_PRESET_NAME).withStyle(ChatFormatting.GRAY), BuiltinPresets.makeLegacyHugeBiomes(), true, this));
-		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_LITE_PRESET_NAME).withStyle(ChatFormatting.GRAY), BuiltinPresets.makeLegacyLite(), true, this));
-		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_VANILLAISH_PRESET_NAME).withStyle(ChatFormatting.GRAY), BuiltinPresets.makeLegacyVanillaish(), true, this));
+		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_DEFAULT_PRESET_NAME).withStyle(ChatFormatting.GRAY), Presets.makeRTFDefault(), true, this));
+		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_DEFAULT_LEGACY_PRESET_NAME).withStyle(ChatFormatting.GRAY), Presets.makeLegacyDefault(), true, this));
+		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_BEAUTIFUL_PRESET_NAME).withStyle(ChatFormatting.GRAY), Presets.makeLegacyBeautiful(), true, this));
+		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_HUGE_BIOMES_PRESET_NAME).withStyle(ChatFormatting.GRAY), Presets.makeLegacyHugeBiomes(), true, this));
+		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_LITE_PRESET_NAME).withStyle(ChatFormatting.GRAY), Presets.makeLegacyLite(), true, this));
+		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_VANILLAISH_PRESET_NAME).withStyle(ChatFormatting.GRAY), Presets.makeLegacyVanillaish(), true, this));
 		this.left.replaceEntries(entries.stream().map(WidgetList.Entry::new).toList());
 	}
 	
@@ -216,8 +217,8 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, PresetEntry, Abstr
 			) {
 				try(Reader reader = Files.newBufferedReader(presetPath)) {
 					String base = FileNameUtils.getBaseName(presetPath.toString());
-					DataResult<Preset> result = Preset.CODEC.parse(JsonOps.INSTANCE, JsonParser.parseReader(reader));
-					Optional<PartialResult<Preset>> error = result.error();
+					DataResult<Preset> result = Preset.DIRECT_CODEC.parse(JsonOps.INSTANCE, JsonParser.parseReader(reader));
+					Optional<Error<Preset>> error = result.error();
 					if(error.isPresent()) {
 						RTFCommon.LOGGER.error(error.get().message());
 						continue;
@@ -274,7 +275,7 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, PresetEntry, Abstr
 					Writer writer = Files.newBufferedWriter(this.getPath());
 					JsonWriter jsonWriter = new JsonWriter(writer);
 				) {
-					JsonElement element = Preset.CODEC.encodeStart(JsonOps.INSTANCE, this.preset).result().orElseThrow();
+					JsonElement element = Preset.DIRECT_CODEC.encodeStart(JsonOps.INSTANCE, this.preset).result().orElseThrow();
 					jsonWriter.setSerializeNulls(false);
 					jsonWriter.setIndent("  ");
 					GsonHelper.writeValue(jsonWriter, element, null);

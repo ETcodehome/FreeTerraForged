@@ -1,6 +1,7 @@
 package raccoonman.reterraforged.world.worldgen.noise.module;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
@@ -8,7 +9,7 @@ import raccoonman.reterraforged.world.worldgen.noise.function.DistanceFunction;
 import raccoonman.reterraforged.world.worldgen.noise.function.EdgeFunction;
 
 record WorleyEdge(float frequency, float distance, EdgeFunction edgeFunction, DistanceFunction distanceFunction) implements Noise {
-	public static final Codec<WorleyEdge> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+	public static final MapCodec<WorleyEdge> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		Codec.FLOAT.fieldOf("frequency").forGetter(WorleyEdge::frequency),
 		Codec.FLOAT.fieldOf("distance").forGetter(WorleyEdge::distance),
 		EdgeFunction.CODEC.fieldOf("edge_function").forGetter(WorleyEdge::edgeFunction),
@@ -34,7 +35,7 @@ record WorleyEdge(float frequency, float distance, EdgeFunction edgeFunction, Di
 	}
 
 	@Override
-	public Codec<WorleyEdge> codec() {
+	public MapCodec<WorleyEdge> codec() {
 		return CODEC;
 	}
 

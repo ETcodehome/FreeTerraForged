@@ -1,12 +1,13 @@
 package raccoonman.reterraforged.world.worldgen.noise.module;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 
 record Power(Noise input, float power) implements Noise {
-	public static final Codec<Power> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+	public static final MapCodec<Power> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		Noise.HOLDER_HELPER_CODEC.fieldOf("input").forGetter(Power::input),
 		Codec.FLOAT.fieldOf("power").forGetter(Power::power)
 	).apply(instance, Power::new));
@@ -32,7 +33,7 @@ record Power(Noise input, float power) implements Noise {
 	}
 
 	@Override
-	public Codec<Power> codec() {
+	public MapCodec<Power> codec() {
 		return CODEC;
 	}
 }

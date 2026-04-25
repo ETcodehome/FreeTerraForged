@@ -4,6 +4,7 @@ import java.util.Random;
 import java.util.stream.Stream;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import net.minecraft.core.BlockPos;
@@ -16,13 +17,13 @@ import net.minecraft.world.level.levelgen.placement.PlacementContext;
 import net.minecraft.world.level.levelgen.placement.PlacementModifier;
 import net.minecraft.world.level.levelgen.placement.PlacementModifierType;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
+import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
 import raccoonman.reterraforged.world.worldgen.feature.placement.RTFPlacementModifiers;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noises;
-import raccoonman.reterraforged.world.worldgen.tile.Tile;
 
 public class FastPoissonModifier extends PlacementModifier {
-	public static final Codec<FastPoissonModifier> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+	public static final MapCodec<FastPoissonModifier> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		Codec.INT.fieldOf("radius").forGetter((p) -> p.radius),
 		Codec.FLOAT.fieldOf("scale").forGetter((p) -> p.scale),
 		Codec.FLOAT.fieldOf("jitter").forGetter((p) -> p.jitter),

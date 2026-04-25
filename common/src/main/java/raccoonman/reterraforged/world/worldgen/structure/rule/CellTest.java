@@ -3,6 +3,7 @@ package raccoonman.reterraforged.world.worldgen.structure.rule;
 import java.util.List;
 import java.util.Set;
 
+import com.mojang.serialization.MapCodec;
 import org.jetbrains.annotations.Nullable;
 
 import com.google.common.collect.ImmutableSet;
@@ -14,12 +15,12 @@ import net.minecraft.world.level.levelgen.RandomState;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
-import raccoonman.reterraforged.world.worldgen.heightmap.WorldLookup;
-import raccoonman.reterraforged.world.worldgen.terrain.Terrain;
-import raccoonman.reterraforged.world.worldgen.terrain.TerrainType;
+import raccoonman.reterraforged.world.worldgen.cell.heightmap.WorldLookup;
+import raccoonman.reterraforged.world.worldgen.cell.terrain.Terrain;
+import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainType;
 
 record CellTest(float cutoff, Set<Terrain> terrainTypeBlacklist) implements StructureRule {
-	public static final Codec<CellTest> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+	public static final MapCodec<CellTest> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		Codec.FLOAT.fieldOf("cutoff").forGetter(CellTest::cutoff),
 		Codec.STRING.xmap(TerrainType::get, Terrain::getName).listOf().fieldOf("terrain_type_blacklist").forGetter((set) -> set.terrainTypeBlacklist().stream().toList())
 	).apply(instance, CellTest::new));
@@ -36,8 +37,8 @@ record CellTest(float cutoff, Set<Terrain> terrainTypeBlacklist) implements Stru
 			if(generatorContext != null) {
 				WorldLookup worldLookup = generatorContext.lookup;
 				Cell cell = new Cell();
-				worldLookup.apply(cell.reset(), pos.getX(), pos.getZ());
-				if(cell.riverDistance < this.cutoff) {//FIXME this breaks ancient city generation || this.terrainTypeBlacklist.contains(cell.terrain)) {
+				worldLookup.applyCell(cell.reset(), pos.getX(), pos.getZ(), false);
+				if(cell.riverMask < this.cutoff) {//FIXME this breaks ancient city generation || this.terrainTypeBlacklist.contains(cell.terrain)) {
 					return false;
 				}
 			}
@@ -48,7 +49,7 @@ record CellTest(float cutoff, Set<Terrain> terrainTypeBlacklist) implements Stru
 	}
 
 	@Override
-	public Codec<CellTest> codec() {
+	public MapCodec<CellTest> codec() {
 		return CODEC;
 	}
 }
