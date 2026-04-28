@@ -84,6 +84,8 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 			}
 		});
 
+		armedRegistries.add(Registries.STRUCTURE_SET);
+
 		// 4. Arm Custom RTF Registries
 		this.addAndTrack(factory, armedRegistries, RTFRegistries.NOISE, Noise.DIRECT_CODEC);
 		this.addAndTrack(factory, armedRegistries, RTFRegistries.BIOME_MODIFIER, BiomeModifier.DIRECT_CODEC);
@@ -117,12 +119,28 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 		return new RegistryAccess() {
 			@Override
 			public <T> Optional<Registry<T>> registry(ResourceKey<? extends Registry<? extends T>> key) {
-				return armed.contains(key) ? original.registry(key) : Optional.empty();
+				String namespace = key.location().getNamespace();
+
+				// Always allow standard/internal namespaces so lookups (like STRUCTURE_SET) reliably work
+				if (namespace.equals("minecraft") || namespace.equals("reterraforged")) {
+					return original.registry(key);
+				}
+
+				// For third-party mods, ONLY allow if they explicitly provided a cloner
+				if (armed.contains(key)) {
+					return original.registry(key);
+				}
+
+				// Hide everything else to keep the cloner happy
+				return Optional.empty();
 			}
 
 			@Override
 			public Stream<RegistryEntry<?>> registries() {
-				return original.registries().filter(entry -> armed.contains(entry.key()));
+				return original.registries().filter(entry -> {
+					String ns = entry.key().location().getNamespace();
+					return ns.equals("minecraft") || ns.equals("reterraforged") || armed.contains(entry.key());
+				});
 			}
 		};
 	}
