@@ -132,6 +132,36 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
         		this.initBuffer(x, z);
         		this.lastUpdateXZ = this.surfaceContext.lastUpdateXZ;
         	}
+
+			if ((Object) this.surfaceContext.randomState instanceof RTFRandomState rtfRandomState) {
+				var genCtx = rtfRandomState.generatorContext();
+
+				if (genCtx != null) {
+					// 2. Get the Cell for this specific block column
+					// We use the cache to provide the tile for the current chunk
+					var chunkPos = this.surfaceContext.chunk.getPos();
+					var tile = genCtx.cache.provideAtChunk(chunkPos.x, chunkPos.z);
+					var reader = tile.getChunkReader(chunkPos.x, chunkPos.z);
+
+					int localX = x & 0xF;
+					int localZ = z & 0xF;
+					raccoonman.reterraforged.world.worldgen.cell.Cell cell = reader.getCell(localX, localZ);
+
+					// 3. Apply the water logic
+					if ((cell.terrain.isRiver() || cell.terrain.isLake()) && cell.riverWaterLevel > 0) {
+						var levels = genCtx.generator.getHeightmap().levels();
+						int scaledY = levels.scale(cell.height);
+						int waterY = levels.scale(cell.riverWaterLevel);
+
+						if (waterY > scaledY) {
+							net.minecraft.core.BlockPos.MutableBlockPos pos = new net.minecraft.core.BlockPos.MutableBlockPos();
+							for (int wy = scaledY + 1; wy <= waterY; wy++) {
+								this.surfaceContext.chunk.setBlockState(pos.set(x, wy, z), net.minecraft.world.level.block.Blocks.WATER.defaultBlockState(), false);
+							}
+						}
+					}
+				}
+			}
         	
         	Layer last = null;
         	for(int i = 0; i < this.layers.size(); i++) {

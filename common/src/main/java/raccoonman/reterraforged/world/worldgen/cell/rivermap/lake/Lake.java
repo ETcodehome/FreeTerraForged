@@ -18,7 +18,12 @@ public class Lake {
     private float bankMin;
     private float bankMax;
     protected Vec2f center;
-    
+
+    // Persistent fields to lock the lake's height across all cells in this instance
+    private float flatWaterLevel = -1.0F;
+    private float flatFloorLevel = -1.0F;
+    private float flatBankBias = -1.0F;
+
     public Lake(Vec2f center, float radius, float multiplier, LakeConfig config) {
         float lake = radius * multiplier;
         float valley = 275.0F * multiplier;
@@ -34,61 +39,78 @@ public class Lake {
         this.lakeDistance2 = lake * lake;
         this.valleyDistance2 = this.valley2 - this.lakeDistance2;
     }
-    
+
     public void apply(Cell cell, float x, float z) {
         float distance2 = this.getDistance2(x, z);
         if (distance2 > this.valley2) {
             return;
         }
+
+        // 1. LOCK ELEVATION: Initialize flat levels based on the first cell processed
+        // This prevents the 'cascading water' effect by ensuring every block in the
+        // lake uses the same continent bias.
+        if (this.flatWaterLevel < 0) {
+            float baseBias = cell.continentEdge;
+            // 0.45F bias for banks, 0.42F for water ensures the lake sits in a slight dip
+            this.flatBankBias = baseBias * 0.49F;
+            this.flatWaterLevel = 0.25F + (baseBias * 0.485F);
+            this.flatFloorLevel = this.flatWaterLevel - this.depth;
+        }
+
         float bankHeight = this.getBankHeight(cell);
+
+        // 2. BASIN LOGIC
         if (distance2 <= this.lakeDistance2) {
+            // Ensure the terrain doesn't poke above the bank height
             cell.height = Math.min(bankHeight, cell.height);
+
             if (distance2 < this.lakeDistance2) {
                 float depthAlpha = 1.0F - distance2 / this.lakeDistance2;
-                if (depthAlpha < 0.0F) {
-                    depthAlpha = 0.0F;
-                } else if (depthAlpha > 1.0F) {
-                    depthAlpha = 1.0F;
-                }
-                float lakeDepth = Math.min(cell.height, this.depth);
-                cell.height = NoiseUtil.lerp(cell.height, lakeDepth, depthAlpha);
+                depthAlpha = NoiseUtil.clamp(depthAlpha, 0.0F, 1.0F);
+
+                // Carve the height down to the flat floor
+                cell.height = NoiseUtil.lerp(cell.height, this.flatFloorLevel, depthAlpha);
+
+                // Set metadata for StrataRule water injection and Biome selection
                 cell.terrain = TerrainType.LAKE;
+                cell.riverWaterLevel = this.flatWaterLevel;
                 cell.riverMask = Math.min(cell.riverMask, 1.0F - depthAlpha);
             }
             return;
         }
+
+        // 3. VALLEY LOGIC (Slopes leading down to the lake)
         if (cell.height < bankHeight) {
             return;
         }
+
         float valleyAlpha = 1.0F - (distance2 - this.lakeDistance2) / this.valleyDistance2;
-        if (valleyAlpha < 0.0F) {
-            valleyAlpha = 0.0F;
-        } else if (valleyAlpha > 1.0F) {
-            valleyAlpha = 1.0F;
-        }
+        valleyAlpha = NoiseUtil.clamp(valleyAlpha, 0.0F, 1.0F);
+
         cell.height = NoiseUtil.lerp(cell.height, bankHeight, valleyAlpha);
-        cell.riverMask *= 1.0F - valleyAlpha;
         cell.riverMask = Math.min(cell.riverMask, 1.0F - valleyAlpha);
     }
-    
+
     public void recordBounds(Boundsf.Builder builder) {
         builder.record(this.center.x() - this.valley * 1.2F, this.center.y() - this.valley * 1.2F);
         builder.record(this.center.x() + this.valley * 1.2F, this.center.y() + this.valley * 1.2F);
     }
-    
+
     public boolean overlaps(float x, float z, float radius2) {
         float dist2 = this.getDistance2(x, z);
         return dist2 < this.lakeDistance2 + radius2;
     }
-    
+
     protected float getDistance2(float x, float z) {
         float dx = this.center.x() - x;
         float dz = this.center.y() - z;
         return dx * dx + dz * dz;
     }
-    
+
     protected float getBankHeight(Cell cell) {
+        // Use the locked bias to ensure the shoreline is level around the entire lake
+        float bias = (this.flatBankBias < 0) ? (cell.continentEdge * 0.45F) : this.flatBankBias;
         float bankHeightAlpha = NoiseUtil.map(cell.height, this.bankAlphaMin, this.bankAlphaMax, this.bankAlphaRange);
-        return NoiseUtil.lerp(this.bankMin, this.bankMax, bankHeightAlpha);
+        return NoiseUtil.lerp(this.bankMin, this.bankMax, bankHeightAlpha) + bias;
     }
 }

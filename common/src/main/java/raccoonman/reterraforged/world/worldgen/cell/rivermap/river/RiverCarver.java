@@ -47,35 +47,46 @@ public class RiverCarver implements Comparable<RiverCarver> {
     public int compareTo(RiverCarver o) {
         return Integer.compare(this.config.order, o.config.order);
     }
-    
-    public void carve(Cell cell, float px, float pz, float pt, float x, float z, float t) {
-        float d2 = this.getDistance2(x, z, t);
-        float pd2 = this.getDistance2(px, pz, pt);
-        float valleyAlpha = this.getDistanceAlpha(pt, Math.min(d2, pd2), this.valleyWidth);
-        if (valleyAlpha == 0.0F) {
-            return;
-        }
-        float bankHeight = this.getScaledSize(t, this.banksDepth);
-        valleyAlpha = this.valleyCurve.apply(valleyAlpha);
-        cell.riverMask = Math.min(cell.riverMask, 1.0F - valleyAlpha);
-        cell.height = Math.min(NoiseUtil.lerp(cell.height, bankHeight, valleyAlpha), cell.height);
-        if (!this.connecting || t > 1.0F) {
-        	
-        }
+
+    public void carve(Cell cell, float prevX, float prevZ, float prevT, float currX, float currZ, float currT) {
+        float distSqToCurr = this.getDistance2(currX, currZ, currT);
+        float distSqToPrev = this.getDistance2(prevX, prevZ, prevT);
+
+        // 1. Valley Alpha: The broad "dip" in the landscape
+        float valleyInfluence = this.getDistanceAlpha(currT, Math.min(distSqToCurr, distSqToPrev), this.valleyWidth);
+        if (valleyInfluence == 0.0F) return;
+
+        valleyInfluence = this.valleyCurve.apply(valleyInfluence);
+        cell.riverMask = Math.min(cell.riverMask, 1.0F - valleyInfluence);
+
+        // 2. Define the 'Surface' and 'Floor'
+        // The surface now includes your 0.5F continent lift.
+        float localSurface = cell.height;
+
+        // We want the river bed to rise inland, but SLOWER than the terrain rises.
+        // terrain lift = 0.5, river lift = 0.4 ensures a 0.1 depth margin inland.
+        float riverBedLift = cell.continentEdge * 0.48F;
+        float targetBedFloor = this.waterLine + riverBedLift;
+
+        // 3. Banks Stage: Carving the slope towards the water
         float mouthModifier = getMouthModifier(cell);
-        float bedHeight = this.getScaledSize(t, this.bedDepth);
-        float banksAlpha = this.getDistanceAlpha(t, d2 * mouthModifier, this.banksWidth);
-        if (banksAlpha == 0.0F) {
-            return;
+        float bankInfluence = this.getDistanceAlpha(currT, distSqToCurr * mouthModifier, this.banksWidth);
+
+        if (bankInfluence > 0.0F) {
+            // We lerp from the high surface down to our lifted bed floor
+            float carvedHeight = NoiseUtil.lerp(localSurface, targetBedFloor, bankInfluence);
+            cell.height = Math.min(carvedHeight, cell.height);
+
+            if (bankInfluence > 0.1F) {
+                this.tag(cell, targetBedFloor);
+            }
         }
-        if (cell.height > bedHeight) {
-            cell.height = Math.min(NoiseUtil.lerp(cell.height, bedHeight, banksAlpha), cell.height);
-            this.tag(cell, bedHeight);
-        }
-        float bedAlpha = this.getDistanceAlpha(t, d2, this.bedWidth);
-        if (bedAlpha != 0.0F && cell.height > bedHeight) {
-            cell.height = NoiseUtil.lerp(cell.height, bedHeight, bedAlpha);
-            this.tag(cell, bedHeight);
+
+        // 4. Bed Stage: The actual deep channel
+        float bedInfluence = this.getDistanceAlpha(currT, distSqToCurr, this.bedWidth);
+        if (bedInfluence > 0.0F) {
+            cell.height = Math.min(NoiseUtil.lerp(cell.height, targetBedFloor, bedInfluence), cell.height);
+            this.tag(cell, targetBedFloor);
         }
     }
     
@@ -123,14 +134,27 @@ public class RiverCarver implements Comparable<RiverCarver> {
         }
         return NoiseUtil.lerp(range.min(), range.max(), t * this.fadeInv);
     }
-    
+
     private void tag(Cell cell, float bedHeight) {
+
+        // 1. Keep the 'overrides' check to prevent rivers from carving
+        // through things they shouldn't (like volcanoes or custom structures)
         if (cell.terrain.overridesRiver() && (cell.height < bedHeight || cell.height > this.waterLine)) {
             return;
         }
+
+        // 2. We are in the river channel, so enable the erosion mask
         cell.erosionMask = true;
-        if (cell.height <= this.waterLine) {
+
+        // 3. NEW LOGIC: If the height of the cell is at or near the bed we just carved,
+        // it's a river cell, regardless of its absolute altitude.
+        if (cell.height <= bedHeight + 0.02F) { // Small epsilon to catch the floor
             cell.terrain = TerrainType.RIVER;
+
+            // 4. Set the water level relative to the local bed
+            // This is what allows 'Highland Rivers' to exist.
+            float waterDepth = 0.01F; // Approx 1-2 blocks deep
+            cell.riverWaterLevel = bedHeight + waterDepth;
         }
     }
     

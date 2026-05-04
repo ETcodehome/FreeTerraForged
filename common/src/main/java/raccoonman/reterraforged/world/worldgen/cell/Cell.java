@@ -35,6 +35,7 @@ public class Cell {
     public float biomeRegionEdge;
     public float macroBiomeId;
     public float riverMask;
+    public float riverWaterLevel = 0.0F;
     public int continentX;
     public int continentZ;
     public boolean erosionMask;

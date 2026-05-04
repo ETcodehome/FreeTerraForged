@@ -23,6 +23,10 @@ public enum RenderMode {
                     return rgba(0.6F, 0.6F, 0.8F);
                 case BEACH:
                     return rgba(0.2F, 0.4F, 0.75F);
+                case RIVER:
+                case LAKE:
+                    return RenderMode.getWaterColor();
+
                 default:
                     if (cell.height < levels.water) {
                         return RenderMode.getWaterColor();
