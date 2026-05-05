@@ -52,29 +52,33 @@ public class RiverCarver implements Comparable<RiverCarver> {
         float distSqToCurr = this.getDistance2(currX, currZ, currT);
         float distSqToPrev = this.getDistance2(prevX, prevZ, prevT);
 
-        // 1. Valley Alpha: The broad "dip" in the landscape
+        // 1. Valley Alpha
         float valleyInfluence = this.getDistanceAlpha(currT, Math.min(distSqToCurr, distSqToPrev), this.valleyWidth);
         if (valleyInfluence == 0.0F) return;
 
         valleyInfluence = this.valleyCurve.apply(valleyInfluence);
         cell.riverMask = Math.min(cell.riverMask, 1.0F - valleyInfluence);
 
-        // 2. Define the 'Surface' and 'Floor'
-        // The surface now includes your 0.5F continent lift.
-        float localSurface = cell.height;
+        // 2. THE FIX: The "Relative Progress" Floor
+        // Instead of assuming the source is at 1.0, we calculate a floor
+        // that blends the local continent height with the river's progress.
 
-        // We want the river bed to rise inland, but SLOWER than the terrain rises.
-        // terrain lift = 0.5, river lift = 0.4 ensures a 0.1 depth margin inland.
-        float riverBedLift = cell.continentEdge * 0.48F;
-        float targetBedFloor = this.waterLine + riverBedLift;
+        float mouthHeight = this.waterLine;
+        // This is the floor if the river followed the land perfectly (your original logic)
+        float spatialFloor = mouthHeight + (cell.continentEdge * 0.48F);
 
-        // 3. Banks Stage: Carving the slope towards the water
+        // This is the linear ramp from Sea Level to the CURRENT local height.
+        // By lerping between Sea Level and the *local* spatial floor, we ensure
+        // that at T=0 (Mouth) we are at sea level, and at T=Head, we are at
+        // whatever height the land actually is there.
+        float targetBedFloor = NoiseUtil.lerp(spatialFloor, mouthHeight, currT);
+
+        // 3. Banks Stage
         float mouthModifier = getMouthModifier(cell);
         float bankInfluence = this.getDistanceAlpha(currT, distSqToCurr * mouthModifier, this.banksWidth);
 
         if (bankInfluence > 0.0F) {
-            // We lerp from the high surface down to our lifted bed floor
-            float carvedHeight = NoiseUtil.lerp(localSurface, targetBedFloor, bankInfluence);
+            float carvedHeight = NoiseUtil.lerp(cell.height, targetBedFloor, bankInfluence);
             cell.height = Math.min(carvedHeight, cell.height);
 
             if (bankInfluence > 0.1F) {
@@ -82,7 +86,7 @@ public class RiverCarver implements Comparable<RiverCarver> {
             }
         }
 
-        // 4. Bed Stage: The actual deep channel
+        // 4. Bed Stage
         float bedInfluence = this.getDistanceAlpha(currT, distSqToCurr, this.bedWidth);
         if (bedInfluence > 0.0F) {
             cell.height = Math.min(NoiseUtil.lerp(cell.height, targetBedFloor, bedInfluence), cell.height);
