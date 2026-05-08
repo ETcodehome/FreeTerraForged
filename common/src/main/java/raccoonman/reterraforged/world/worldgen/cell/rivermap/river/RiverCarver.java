@@ -4,6 +4,7 @@ import java.util.Random;
 
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
+import raccoonman.reterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainType;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 import raccoonman.reterraforged.world.worldgen.noise.function.CurveFunction;
@@ -59,19 +60,7 @@ public class RiverCarver implements Comparable<RiverCarver> {
         valleyInfluence = this.valleyCurve.apply(valleyInfluence);
         cell.riverMask = Math.min(cell.riverMask, 1.0F - valleyInfluence);
 
-        // 2. THE FIX: The "Relative Progress" Floor
-        // Instead of assuming the source is at 1.0, we calculate a floor
-        // that blends the local continent height with the river's progress.
-
-        float mouthHeight = this.waterLine;
-        // This is the floor if the river followed the land perfectly (your original logic)
-        float spatialFloor = mouthHeight + (cell.continentEdge * 0.48F);
-
-        // This is the linear ramp from Sea Level to the CURRENT local height.
-        // By lerping between Sea Level and the *local* spatial floor, we ensure
-        // that at T=0 (Mouth) we are at sea level, and at T=Head, we are at
-        // whatever height the land actually is there.
-        float targetBedFloor = NoiseUtil.lerp(spatialFloor, mouthHeight, currT);
+        float targetBedFloor = ContinentalHydrology.getTargetWaterHeight(cell.continentEdge) * 0.48F;// + this.waterLine;
 
         // 3. Banks Stage
         float mouthModifier = getMouthModifier(cell);
@@ -89,6 +78,8 @@ public class RiverCarver implements Comparable<RiverCarver> {
         // 4. Bed Stage
         float bedInfluence = this.getDistanceAlpha(currT, distSqToCurr, this.bedWidth);
         if (bedInfluence > 0.0F) {
+            cell.moisture = 1.0f;
+            cell.terrain = TerrainType.RIVER;
             cell.height = Math.min(NoiseUtil.lerp(cell.height, targetBedFloor, bedInfluence), cell.height);
             this.tag(cell, targetBedFloor);
         }

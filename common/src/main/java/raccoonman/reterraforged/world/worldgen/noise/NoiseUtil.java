@@ -254,4 +254,17 @@ public class NoiseUtil {
     
     public record Vec2i(int x, int y) {
     }
+
+    /**
+     * Smoothstep performs a smooth Hermite interpolation between 0 and 1.
+     * This is crucial for preventing the "pixel gaps" seen in standard thresholding.
+     */
+    public static float smoothstep(float edge0, float edge1, float x) {
+        // 1. Scale and clamp x to 0.0 - 1.0 range
+        float t = clamp((x - edge0) / (edge1 - edge0), 0.0F, 1.0F);
+
+        // 2. Evaluate polynomial: 3t^2 - 2t^3
+        // This creates the smooth "S" curve that softens the edges of the ink lines.
+        return t * t * (3.0F - 2.0F * t);
+    }
 }

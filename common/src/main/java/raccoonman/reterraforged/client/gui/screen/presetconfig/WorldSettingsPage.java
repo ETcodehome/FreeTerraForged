@@ -65,7 +65,8 @@ public class WorldSettingsPage extends PresetEditorPage {
 			ImmutableList.of(
 				ContinentType.MULTI,
 				ContinentType.SINGLE,
-				ContinentType.MULTI_IMPROVED
+				ContinentType.MULTI_IMPROVED,
+				ContinentType.UPLIFT
 			),
 			continent.continentType, RTFTranslationKeys.GUI_BUTTON_CONTINENT_TYPE, 
 			(button, value) -> {
@@ -225,7 +226,7 @@ public class WorldSettingsPage extends PresetEditorPage {
 	private void applyContinentType(ContinentType type) {
 		this.continentShape.active = type == ContinentType.MULTI || type == ContinentType.SINGLE;
 		
-		boolean isMultiImproved = type == ContinentType.MULTI_IMPROVED;
+		boolean isMultiImproved = type == ContinentType.MULTI_IMPROVED || type == ContinentType.UPLIFT;
 		this.continentSkipping.active = isMultiImproved;
 		this.continentSizeVariance.active = isMultiImproved;
 		this.continentNoiseOctaves.active = isMultiImproved;
