@@ -154,19 +154,36 @@ public enum RenderMode {
         @Override
         public int getColor(Cell cell, Levels levels, float scale, float bias) {
 
-            // Calculate color bands
-            int contourSteps = 20;
-            float topoStep = step(cell.height, contourSteps);
+            // Define color bands
+            int contourSteps = 10;
 
-            // Style
-            // Hue: 0.05 (Warm Brown) -> 0.15 (Soft Green/Yellow)
-            float hue = 0.05F + (topoStep * 0.2F);
-            float saturation = 0.3F;
+            // --- UNDERWATER LOGIC ---
+            if (cell.height < levels.water) {
 
-            // Brightness increases with altitude for the "lit" mountain look
-            float brightness = 0.4F + (topoStep * 0.5F);
+                // Normalize depth relative to water level (0.0 at surface, 1.0 at floor)
+                float depth = 1.0F - (cell.height / levels.water);
+                float depthStep = step(depth, contourSteps);
+
+                // Deep blue (0.65) to shallow cyan (0.55)
+                float hue = 0.65F - (depthStep * 0.1F);
+                float saturation = 0.4F + (depthStep * 0.4F); // Saturation peaks in shallows
+                float brightness = 0.6F - (depthStep * 0.4F); // Darker as it gets deeper
+
+                return rgba(hue, saturation, brightness);
+            }
+
+            // Normalize land height (0.0 at water level, 1.0 at peak)
+            float landRange = 1.0F - levels.water;
+            float landHeight = (cell.height - levels.water) / landRange;
+            float landStep = step(landHeight, contourSteps);
+
+            float hue = 0.05F;
+            float saturation = 0.5F;
+            // High contrast: dark shores to bright peaks
+            float brightness = 0.2F + (landStep * 0.8F);
 
             return rgba(hue, saturation, brightness);
+
         }
     };
 
