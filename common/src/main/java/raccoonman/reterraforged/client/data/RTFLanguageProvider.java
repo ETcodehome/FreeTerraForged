@@ -73,7 +73,7 @@ public final class RTFLanguageProvider {
 			this.add(RTFTranslationKeys.GUI_BUTTON_VANILLA_SPRINGS, "Vanilla Springs");
 			this.add(RTFTranslationKeys.GUI_BUTTON_VANILLA_LAVA_LAKES, "Vanilla Lava Lakes");
 			this.add(RTFTranslationKeys.GUI_BUTTON_VANILLA_LAVA_SPRINGS, "Vanilla Lava Springs");
-
+			this.add(RTFTranslationKeys.GUI_BUTTON_RENDER_MODE, "Preview");
 			this.add(RTFTranslationKeys.GUI_SLIDER_ZOOM, "Zoom");
 			this.add(RTFTranslationKeys.GUI_SLIDER_CONTINENT_SCALE, "Continent Scale");
 			this.add(RTFTranslationKeys.GUI_SLIDER_CONTINENT_JITTER, "Continent Jitter");
@@ -226,6 +226,7 @@ public final class RTFLanguageProvider {
 			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_BUTTON_VANILLA_SPRINGS), "Allow vanilla springs (water source blocks) to generate");
 			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_BUTTON_VANILLA_LAVA_LAKES), "Allow vanilla lava-lakes to generate");
 			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_BUTTON_VANILLA_LAVA_SPRINGS), "Allow vanilla springs (lava source blocks) to generate");
+			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_BUTTON_RENDER_MODE), "Cycles the render preview mode.");
 			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_SLIDER_ZOOM), "Controls the zoom level of the preview map");
 			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_SLIDER_CONTINENT_SCALE), "Controls the size of continents. You may also need to adjust the transition points to ensure beaches etc still form.");
 			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_SLIDER_CONTINENT_JITTER), "Controls how much continent centers are offset from the underlying noise grid.");
