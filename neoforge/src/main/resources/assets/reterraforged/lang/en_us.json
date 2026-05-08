@@ -59,6 +59,8 @@
   "reterraforged.gui.button.vanillaLavaLakes.tooltip": "Allow vanilla lava-lakes to generate",
   "reterraforged.gui.button.vanillaLavaSprings": "Vanilla Lava Springs",
   "reterraforged.gui.button.vanillaLavaSprings.tooltip": "Allow vanilla springs (lava source blocks) to generate",
+  "reterraforged.gui.button.renderMode": "Preview",
+  "reterraforged.gui.button.renderMode.tooltip": "Cycles the render preview mode.",
   "reterraforged.gui.button.vanillaSprings": "Vanilla Springs",
   "reterraforged.gui.button.vanillaSprings.tooltip": "Allow vanilla springs (water source blocks) to generate",
   "reterraforged.gui.caveSettings.title": "Cave Settings (Experimental)",

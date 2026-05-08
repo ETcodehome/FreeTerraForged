@@ -50,6 +50,10 @@ public interface ITerrain {
 		return false;
 	}
 
+	default boolean isWateryButNotOcean(){
+		return this.isLake() || this.isRiver() || this.isWetland();
+	}
+
 	default boolean isMountain() {
 		return false;
 	}

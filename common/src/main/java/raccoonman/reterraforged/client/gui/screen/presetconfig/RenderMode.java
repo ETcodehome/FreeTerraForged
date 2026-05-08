@@ -4,6 +4,7 @@ import java.awt.Color;
 
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
+import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainType;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 
 public enum RenderMode {
@@ -103,6 +104,69 @@ public enum RenderMode {
             float saturation = 0.7F;
             float brightness = 0.8F;
             return rgba(cell.terrain.getRenderHue(), saturation, brightness);
+        }
+    },
+    HYPSOMETRIC {
+
+        @Override
+        public boolean handlesWater() {
+            return true;
+        }
+
+        @Override
+        public int getColor(Cell cell, Levels levels, float scale, float bias) {
+
+            // highlight watery regions
+            if (cell.terrain.isWateryButNotOcean()) {
+                return RenderMode.getWaterColor();
+            }
+
+            // Grey the ocean to keep focus on landmasses
+            if (cell.height <= levels.water) {
+                return rgba(17, 17, 17);
+            }
+
+            // Normalize height relative to sea level
+            // 'h' will now be 0.0 at the shoreline and 1.0 at the highest peak
+            float h = (cell.height - levels.water) / (1.0F - levels.water);
+            h = NoiseUtil.clamp(h, 0.0F, 1.0F);
+
+            // Map Normalized Height to Hue
+            // We start the hue at 0.35F (Green/Spring) for lowlands
+            // and transition to 0.0F (Red) for mountain peaks.
+            float hue = 0.35F * (1.0F - h);
+
+            // Adjust Saturation and Brightness for depth
+            // Lowlands (near coast) are softer; peaks are more intense.
+            float saturation = 0.4F + (h * 0.4F);
+            float brightness = 0.6F + (h * 0.3F);
+
+            return rgba(hue, saturation, brightness);
+        }
+    },
+    TOPOGRAPHY {
+
+        @Override
+        public boolean handlesWater() {
+            return true;
+        }
+
+        @Override
+        public int getColor(Cell cell, Levels levels, float scale, float bias) {
+
+            // Calculate color bands
+            int contourSteps = 20;
+            float topoStep = step(cell.height, contourSteps);
+
+            // Style
+            // Hue: 0.05 (Warm Brown) -> 0.15 (Soft Green/Yellow)
+            float hue = 0.05F + (topoStep * 0.2F);
+            float saturation = 0.3F;
+
+            // Brightness increases with altitude for the "lit" mountain look
+            float brightness = 0.4F + (topoStep * 0.5F);
+
+            return rgba(hue, saturation, brightness);
         }
     };
 
