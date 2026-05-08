@@ -4,6 +4,7 @@ import java.awt.Color;
 
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
+import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainType;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 
 public enum RenderMode {
@@ -107,6 +108,114 @@ public enum RenderMode {
             float saturation = 0.7F;
             float brightness = 0.8F;
             return rgba(cell.terrain.getRenderHue(), saturation, brightness);
+        }
+    },
+    HYPSOMETRIC {
+
+        @Override
+        public boolean handlesWater() {
+            return true;
+        }
+
+        @Override
+        public int getColor(Cell cell, Levels levels, float scale, float bias) {
+
+            // highlight watery regions
+            if (cell.terrain.isWateryButNotOcean()) {
+                return RenderMode.getWaterColor();
+            }
+
+            // Grey the ocean to keep focus on landmasses
+            if (cell.height <= levels.water) {
+                return rgba(17, 17, 17);
+            }
+
+            // Normalize height relative to sea level
+            // 'h' will now be 0.0 at the shoreline and 1.0 at the highest peak
+            float h = (cell.height - levels.water) / (1.0F - levels.water);
+            h = NoiseUtil.clamp(h, 0.0F, 1.0F);
+
+            // Map Normalized Height to Hue
+            // We start the hue at 0.35F (Green/Spring) for lowlands
+            // and transition to 0.0F (Red) for mountain peaks.
+            float hue = 0.35F * (1.0F - h);
+
+            // Adjust Saturation and Brightness for depth
+            // Lowlands (near coast) are softer; peaks are more intense.
+            float saturation = 0.4F + (h * 0.4F);
+            float brightness = 0.6F + (h * 0.3F);
+
+            return rgba(hue, saturation, brightness);
+        }
+    },
+    TOPOGRAPHY {
+
+        @Override
+        public boolean handlesWater() {
+            return true;
+        }
+
+        @Override
+        public int getColor(Cell cell, Levels levels, float scale, float bias) {
+
+            // Define color bands
+            int contourSteps = 10;
+
+            // --- UNDERWATER LOGIC ---
+            if (cell.height < levels.water) {
+
+                // Normalize depth relative to water level (0.0 at surface, 1.0 at floor)
+                float depth = 1.0F - (cell.height / levels.water);
+                float depthStep = step(depth, contourSteps);
+
+                // Deep blue (0.65) to shallow cyan (0.55)
+                float hue = 0.65F - (depthStep * 0.1F);
+                float saturation = 0.4F + (depthStep * 0.4F); // Saturation peaks in shallows
+                float brightness = 0.6F - (depthStep * 0.4F); // Darker as it gets deeper
+
+                return rgba(hue, saturation, brightness);
+            }
+
+            // Normalize land height (0.0 at water level, 1.0 at peak)
+            float landRange = 1.0F - levels.water;
+            float landHeight = (cell.height - levels.water) / landRange;
+            float landStep = step(landHeight, contourSteps);
+
+            float hue = 0.05F;
+            float saturation = 0.5F;
+            // High contrast: dark shores to bright peaks
+            float brightness = 0.2F + (landStep * 0.8F);
+
+            return rgba(hue, saturation, brightness);
+
+        }
+    },
+    CONTINENT_EDGE {
+
+        @Override
+        public boolean handlesWater() {
+            return true;
+        }
+
+        @Override
+        public int getColor(Cell cell, Levels levels, float scale, float bias) {
+
+            if (cell.terrain.isDeepOcean() || cell.terrain.isShallowOcean()) {
+                return rgba(17, 17, 17);
+            }
+
+            // Ensure the value is clamped between 0.0 and 1.0
+            float edgeValue = NoiseUtil.clamp(cell.continentEdge, 0.0F, 1.0F);
+
+            // At 0.0: White (Saturation 0, Brightness 1)
+            // At 1.0: Pure Red (Hue 0, Saturation 1, Brightness 1)
+
+            float hue = 0.0F;              // Solid Red hue
+            float saturation = edgeValue;  // Increases from 0 (White) to 1 (Red)
+            float brightness = 1.0F;       // Maintain full brightness for "clean" look
+
+            return rgba(hue, saturation, brightness);
+
         }
     };
 

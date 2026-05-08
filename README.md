@@ -1,5 +1,6 @@
 # ReTerraForged
 - A Neoforge 1.21.1 release of https://github.com/TerraForged/TerraForged
+  Continues the substantial Neoforge port work completed by Equalizer32 for NeoTerraForged in https://github.com/equalizer32/NeoTerraForged/tree/1.21.1
 - Continued under the permissive MIT license as per the original repo.
 - This is not an official release, do not ask for help with it on official channels. They will throw rocks at you and tell you to go away.
   This is me wanting a 1.21.1 Neoforge release and being willing to do the legwork to fix it up and compile it so it is stable enough for a 1.21.1 play through.
