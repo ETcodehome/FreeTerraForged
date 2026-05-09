@@ -60,7 +60,7 @@ public class RiverCarver implements Comparable<RiverCarver> {
         valleyInfluence = this.valleyCurve.apply(valleyInfluence);
         cell.riverMask = Math.min(cell.riverMask, 1.0F - valleyInfluence);
 
-        float targetBedFloor = ContinentalHydrology.getTargetWaterHeight(cell.continentEdge) * 0.48F;// + this.waterLine;
+        float targetBedFloor = ContinentalHydrology.getTargetWaterHeight(cell.continentUplift) * 0.48F;// + this.waterLine;
 
         // 3. Banks Stage
         float mouthModifier = getMouthModifier(cell);

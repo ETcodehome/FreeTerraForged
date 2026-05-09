@@ -104,10 +104,10 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         }
         cell.continentId = AbstractContinent.getCellValue(this.seed, cellX, cellY);
         cell.continentEdge = this.getDistanceValue(x, y, cellX, cellY, nearest);
-        cell.continentUplift = getCellContinentUplift(rawX, rawY, x, y);
+        cell.continentUplift = getCellContinentUplift(rawX, rawY, x, y, cell.continentEdge);
     }
 
-    float getCellContinentUplift(float x, float y, float scaledX, float scaledY) {
+    float getCellContinentUplift(float x, float y, float scaledX, float scaledY, float edge) {
 
         // clean coordinates (backbone of the smooth gradient)
         float unwarpedXCoord = x * this.frequency;
@@ -164,9 +164,20 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         // Total Clean Radius: The total distance from center to mathematical edge
         float totalCleanRadius = d1Clean + dEdgeClean;
 
-        // Return pure linear ratio (0.0 at edge, 1.0 at center)
+        // Linear 0.0 - 1.0 gradient (Mathematical cell edge to center)
         float gradient = 1.0F - (d1Clean / totalCleanRadius);
-        return NoiseUtil.clamp(gradient, 0.0F, 1.0F);
+        gradient = NoiseUtil.clamp(gradient, 0.0F, 1.0F);
+
+        // We want the gradient to be 0.0 when 'edge' is 0.0 (at the shoreline).
+        // We achieve this by multiplying the gradient by a stepped version of the edge.
+        // If edge is 0 (water), uplift becomes 0. If edge is 1 (inland), uplift is full.
+        float waterAlpha = NoiseUtil.clamp(edge / 0.2F, 0.0F, 1.0F); // Adjust 0.2F to match your coastal width
+        gradient *= waterAlpha;
+
+        // Coastal White Bias (Power Curve)
+        float coastalWhiteBias = gradient * gradient;
+
+        return coastalWhiteBias;
     }
 
     @Override
