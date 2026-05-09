@@ -51,11 +51,11 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
     }
 
     @Override
-    public void apply(Cell cell, float x, float y) {
-        float wx = this.warp.getX(x, y, 0);
-        float wy = this.warp.getZ(x, y, 0);
-        x = wx * this.frequency;
-        y = wy * this.frequency;
+    public void apply(Cell cell, float rawX, float rawY) {
+        float wx = this.warp.getX(rawX, rawY, 0);
+        float wy = this.warp.getZ(rawX, rawY, 0);
+        float x = wx * this.frequency;
+        float y = wy * this.frequency;
         int xi = NoiseUtil.floor(x);
         int yi = NoiseUtil.floor(y);
         int cellX = xi;
@@ -104,6 +104,69 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         }
         cell.continentId = AbstractContinent.getCellValue(this.seed, cellX, cellY);
         cell.continentEdge = this.getDistanceValue(x, y, cellX, cellY, nearest);
+        cell.continentUplift = getCellContinentUplift(rawX, rawY, x, y);
+    }
+
+    float getCellContinentUplift(float x, float y, float scaledX, float scaledY) {
+
+        // clean coordinates (backbone of the smooth gradient)
+        float unwarpedXCoord = x * this.frequency;
+        float unwarpedYCoord = y * this.frequency;
+
+        // Determine owner using warped coords (keeps the organic shape)
+        int xi = NoiseUtil.floor(scaledX);
+        int yi = NoiseUtil.floor(scaledY);
+        float d1WarpedSq = Float.MAX_VALUE;
+        float cellPointX = 0, cellPointY = 0;
+        int continentGridX = xi, continentGridY = yi;
+
+        for (int cy = yi - 1; cy <= yi + 1; ++cy) {
+            for (int cx = xi - 1; cx <= xi + 1; ++cx) {
+                Vec2f vec = NoiseUtil.cell(this.seed, cx, cy);
+                float pxf = cx + vec.x() * this.jitter;
+                float pyf = cy + vec.y() * this.jitter;
+                float distSq = Line.distSq(scaledX, scaledY, pxf, pyf);
+                if (distSq < d1WarpedSq) {
+                    d1WarpedSq = distSq;
+                    cellPointX = pxf;
+                    cellPointY = pyf;
+                    continentGridX = cx;
+                    continentGridY = cy;
+                }
+            }
+        }
+
+        // Distance to center
+        float d1Clean = NoiseUtil.sqrt(Line.distSq(unwarpedXCoord, unwarpedYCoord, cellPointX, cellPointY));
+
+        // Use unwarped coords here to find the radius without noise jitter
+        float edgeDistCleanSq = Float.MAX_VALUE;
+
+        for (int cy2 = continentGridY - 1; cy2 <= continentGridY + 1; ++cy2) {
+            for (int cx2 = continentGridX - 1; cx2 <= continentGridX + 1; ++cx2) {
+                if (cx2 != continentGridX || cy2 != continentGridY) {
+                    Vec2f vec2 = NoiseUtil.cell(this.seed, cx2, cy2);
+                    float pxf2 = cx2 + vec2.x() * this.jitter;
+                    float pyf2 = cy2 + vec2.y() * this.jitter;
+
+                    // Use unwarped coords for edge calcs
+                    float distSq = getDistance(unwarpedXCoord, unwarpedYCoord, cellPointX, cellPointY, pxf2, pyf2);
+                    if (distSq < edgeDistCleanSq) {
+                        edgeDistCleanSq = distSq;
+                    }
+                }
+            }
+        }
+
+        // Final Noise-Free Normalization
+        float dEdgeClean = NoiseUtil.sqrt(edgeDistCleanSq);
+
+        // Total Clean Radius: The total distance from center to mathematical edge
+        float totalCleanRadius = d1Clean + dEdgeClean;
+
+        // Return pure linear ratio (0.0 at edge, 1.0 at center)
+        float gradient = 1.0F - (d1Clean / totalCleanRadius);
+        return NoiseUtil.clamp(gradient, 0.0F, 1.0F);
     }
 
     @Override
