@@ -60,7 +60,7 @@ public class RiverCarver implements Comparable<RiverCarver> {
         valleyInfluence = this.valleyCurve.apply(valleyInfluence);
         cell.riverMask = Math.min(cell.riverMask, 1.0F - valleyInfluence);
 
-        float targetBedFloor = ContinentalHydrology.getTargetWaterHeight(cell.continentUplift) * 0.48F;// + this.waterLine;
+        float targetBedFloor = ContinentalHydrology.getTargetWaterHeight(cell.continentUplift) * 0.50F - 0.02F + this.waterLine;
 
         // 3. Banks Stage
         float mouthModifier = getMouthModifier(cell);
@@ -149,7 +149,7 @@ public class RiverCarver implements Comparable<RiverCarver> {
             // 4. Set the water level relative to the local bed
             // This is what allows 'Highland Rivers' to exist.
             float waterDepth = 0.01F; // Approx 1-2 blocks deep
-            cell.riverWaterLevel = bedHeight + waterDepth;
+            cell.riverWaterLevel = Math.max(this.waterLine, bedHeight + waterDepth);
         }
     }
     

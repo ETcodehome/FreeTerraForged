@@ -23,6 +23,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.SurfaceRules;
 import net.minecraft.world.level.levelgen.SurfaceRules.Context;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
+import raccoonman.reterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noises;
@@ -148,10 +149,22 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
 					raccoonman.reterraforged.world.worldgen.cell.Cell cell = reader.getCell(localX, localZ);
 
 					// 3. Apply the water logic
-					if ((cell.terrain.isRiver() || cell.terrain.isLake()) && cell.riverWaterLevel > 0) {
+					if ((cell.terrain.isRiver() || cell.terrain.isLake() || cell.terrain.isWetland()) && cell.riverWaterLevel > 0) {
 						var levels = genCtx.generator.getHeightmap().levels();
 						int scaledY = levels.scale(cell.height);
-						int waterY = levels.scale(cell.riverWaterLevel);
+
+						// set the water level consistently based on the maths rather than individual updaters
+						int waterY;
+						if (cell.terrain.isLake()){
+							waterY = levels.scale(cell.riverWaterLevel) + 1; // why +1? this bothers me.
+						} else {
+							waterY = levels.scale(ContinentalHydrology.getTargetWaterHeight(cell.continentUplift) * 0.50F + levels.water) - 3; // why -3? this bothers me
+						}
+
+						// don't fill a river or lake below ocean level. use ocean level instead.
+						if (waterY < levels.scale(levels.water)){
+							waterY = levels.scale(levels.water);
+						}
 
 						if (waterY > scaledY) {
 							net.minecraft.core.BlockPos.MutableBlockPos pos = new net.minecraft.core.BlockPos.MutableBlockPos();

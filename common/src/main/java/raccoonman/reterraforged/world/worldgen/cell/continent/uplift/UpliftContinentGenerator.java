@@ -110,79 +110,57 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         float gridCenterX = NoiseUtil.lerp(cellPointX, sumX / 8.0F, CENTER_CORRECTION);
         float gridCenterZ = NoiseUtil.lerp(cellPointY, sumY / 8.0F, CENTER_CORRECTION);
 
-        cell.continentUplift = getCellContinentUplift(rawX, rawY, x, y, gridCenterX, gridCenterZ, cell.continentEdge);
+        cell.continentUplift = getCellContinentUplift(
+                rawX, rawY,              // raw world coords
+                gridCenterX, gridCenterZ,// the distorted peak
+                cellPointX, cellPointY,  // the clean seed of this cell
+                cellX, cellY             // the grid ID of this cell
+        );
+
     }
 
-    float getCellContinentUplift(float x, float y, float scaledX, float scaledY, float gridCenterX, float gridCenterZ, float edge) {
+    float getCellContinentUplift(float x, float y, float gridCenterX, float gridCenterZ, float cellPointX, float cellPointY, int cellX, int cellY) {
 
-        // Clean world coordinates (Provides the stable basis for the gradient)
-        float unwarpedXCoord = x * this.frequency;
-        float unwarpedYCoord = y * this.frequency;
+        // Clean world coordinates
+        float unwarpedX = x * this.frequency;
+        float unwarpedY = y * this.frequency;
 
-        // Identify vornoi cell owner using warped coords (Maintains the organic cell shape)
-        int xi = NoiseUtil.floor(scaledX);
-        int yi = NoiseUtil.floor(scaledY);
-        float d1WarpedSq = Float.MAX_VALUE;
-        float cellPointX = 0, cellPointY = 0;
-        int continentGridX = xi, continentGridY = yi;
+        // Distance to the distorted peak in clean space
+        float d1ToPeak = NoiseUtil.sqrt(Line.distSq(unwarpedX, unwarpedY, gridCenterX, gridCenterZ));
 
-        for (int cy = yi - 1; cy <= yi + 1; ++cy) {
-            for (int cx = xi - 1; cx <= xi + 1; ++cx) {
-                Vec2f vec = NoiseUtil.cell(this.seed, cx, cy);
-                float pxf = cx + vec.x() * this.jitter;
-                float pyf = cy + vec.y() * this.jitter;
-                float distSq = Line.distSq(scaledX, scaledY, pxf, pyf);
-                if (distSq < d1WarpedSq) {
-                    d1WarpedSq = distSq;
-                    cellPointX = pxf;
-                    cellPointY = pyf;
-                    continentGridX = cx;
-                    continentGridY = cy;
-                }
-            }
-        }
+        // Distance to the clean Voronoi edge (6 arguments)
+        float dEdgeClean = getCleanEdgeDist(unwarpedX, unwarpedY, cellPointX, cellPointY, cellX, cellY);
 
-        // Determine distance to the NEW distorted peak (Where the summit will be)
-        float d1ToPeak = NoiseUtil.sqrt(Line.distSq(unwarpedXCoord, unwarpedYCoord, gridCenterX, gridCenterZ));
+        // At the edge, dEdgeClean is 0, so result is 0.
+        // At the peak, d1ToPeak is 0, so dEdgeClean / dEdgeClean is 1.0.
+        float totalRadius = d1ToPeak + dEdgeClean;
+        if (totalRadius < 0.0001F) return 1.0F;
 
-        // Determine distance to the ORIGINAL seed (Used to calculate a stable radius)
-        float d1ToSeed = NoiseUtil.sqrt(Line.distSq(unwarpedXCoord, unwarpedYCoord, cellPointX, cellPointY));
+        float gradient = dEdgeClean / totalRadius;
 
-        // Determine the radius to the mathematical edge using unwarped coords
-        float edgeDistCleanSq = Float.MAX_VALUE;
-        for (int cy2 = continentGridY - 1; cy2 <= continentGridY + 1; ++cy2) {
-            for (int cx2 = continentGridX - 1; cx2 <= continentGridX + 1; ++cx2) {
-                if (cx2 != continentGridX || cy2 != continentGridY) {
-                    Vec2f vec2 = NoiseUtil.cell(this.seed, cx2, cy2);
-                    float pxf2 = cx2 + vec2.x() * this.jitter;
-                    float pyf2 = cy2 + vec2.y() * this.jitter;
+        // Cube the result to create a smooth dome instead of a sharp 'tent'
+        return NoiseUtil.clamp(gradient * gradient, 0.0F, 1.0F);
+    }
 
-                    // Edge calculation MUST use original cellPointX/Y to keep boundaries stable
-                    float distSq = getDistance(unwarpedXCoord, unwarpedYCoord, cellPointX, cellPointY, pxf2, pyf2);
-                    if (distSq < edgeDistCleanSq) {
-                        edgeDistCleanSq = distSq;
+    protected float getCleanEdgeDist(float ux, float uy, float seedX, float seedY, int cellX, int cellY) {
+        float nearestSq = Float.MAX_VALUE;
+        for (int cy = cellY - 1; cy <= cellY + 1; ++cy) {
+            for (int cx = cellX - 1; cx <= cellX + 1; ++cx) {
+                // Check all neighbors to find the closest edge boundary
+                if (cx != cellX || cy != cellY) {
+                    Vec2f vec = NoiseUtil.cell(this.seed, cx, cy);
+                    float px = cx + vec.x() * this.jitter;
+                    float py = cy + vec.y() * this.jitter;
+
+                    // getDistance calculates the distance to the line separating two seeds
+                    float distSq = getDistance(ux, uy, seedX, seedY, px, py);
+                    if (distSq < nearestSq) {
+                        nearestSq = distSq;
                     }
                 }
             }
         }
-
-        // Final normalization
-        float dEdgeClean = NoiseUtil.sqrt(edgeDistCleanSq);
-
-        // Clean radius anchored to the original Voronoi seed
-        float totalCleanRadius = d1ToSeed + dEdgeClean;
-        if (totalCleanRadius < 0.0001F) return 1.0F;
-
-        // Reaches 1.0 at (gridCenterX, gridCenterZ)
-        float gradient = 1.0F - (d1ToPeak / totalCleanRadius);
-        gradient = NoiseUtil.clamp(gradient, 0.0F, 1.0F);
-
-        // Use the passed edge value to ensure water height is always 0.0
-        float waterAlpha = NoiseUtil.clamp(edge / 0.2F, 0.0F, 1.0F);
-        gradient *= waterAlpha;
-
-        // Power curve for mountain profile
-        return gradient * gradient;
+        return NoiseUtil.sqrt(nearestSq);
     }
 
     @Override

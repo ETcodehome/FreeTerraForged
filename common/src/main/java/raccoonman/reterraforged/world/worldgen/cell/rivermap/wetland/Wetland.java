@@ -2,6 +2,7 @@ package raccoonman.reterraforged.world.worldgen.cell.rivermap.wetland;
 
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
+import raccoonman.reterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainType;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil.Vec2f;
@@ -23,17 +24,14 @@ public class Wetland {
     private Noise moundShape;
     private Noise moundHeight;
     private Noise terrainEdge;
+    private Levels levels;
     
     public Wetland(int seed, Vec2f a, Vec2f b, float radius, Levels levels) {
         this.a = a;
         this.b = b;
         this.radius = radius;
         this.radius2 = radius * radius;
-        this.bed = levels.water(-1) - 0.5F / levels.worldHeight;
-        this.banks = levels.ground(3);
-        this.moundMin = levels.water(1);
-        this.moundMax = levels.water(2);
-        this.moundVariance = this.moundMax - this.moundMin;
+        this.levels = levels;
         
         Noise moundShape = Noises.perlin(++seed, 10, 1);
         moundShape = Noises.clamp(moundShape, 0.3F, 0.6F);
@@ -52,22 +50,39 @@ public class Wetland {
     }
     
     public void apply(Cell cell, float rx, float rz, float x, float z) {
+
+        // if the cell is lower than the bed height do nothing
+        this.bed = (ContinentalHydrology.getTargetWaterHeight(cell.continentUplift) * 0.50F) + levels.scale(levels.waterLevel);
         if (cell.height < this.bed) {
             return;
         }
+
+        // if some distance is exceeded do nothing
         float t = Line.distanceOnLine(rx, rz, this.a.x(), this.a.y(), this.b.x(), this.b.y());
         float d2 = getDistance2(rx, rz, this.a.x(), this.a.y(), this.b.x(), this.b.y(), t);
         if (d2 > this.radius2) {
             return;
         }
+
+        // another do nothing
         float dist = 1.0F - d2 / this.radius2;
         if (dist <= 0.0F) {
             return;
         }
+
+        float singleBlock = levels.ground(1) - levels.ground(0);
+
+        this.banks = this.bed + 3 * singleBlock;
+        this.moundMin = this.bed + 1 * singleBlock;
+        this.moundMax = this.bed + 2 * singleBlock;
+        this.moundVariance = this.moundMax - this.moundMin;
+
+        // craft a valley if height exceeds the banks?
         float valleyAlpha = NoiseUtil.map(dist, 0.0F, 0.65F, 0.65F);
         if (cell.height > this.banks) {
             cell.height = NoiseUtil.lerp(cell.height, this.banks, valleyAlpha);
         }
+
         float poolsAlpha = NoiseUtil.map(dist, 0.65F, 0.7F, 0.050000012F);
         if (cell.height > this.bed && cell.height <= this.banks) {
             cell.height = NoiseUtil.lerp(cell.height, this.bed, poolsAlpha);

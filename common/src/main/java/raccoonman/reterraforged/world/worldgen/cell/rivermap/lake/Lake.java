@@ -1,6 +1,7 @@
 package raccoonman.reterraforged.world.worldgen.cell.rivermap.lake;
 
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
+import raccoonman.reterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainType;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil.Vec2f;
@@ -50,7 +51,7 @@ public class Lake {
         // This prevents the 'cascading water' effect by ensuring every block in the
         // lake uses the same continent bias.
         if (this.flatWaterLevel < 0) {
-            float baseBias = cell.continentEdge;
+            float baseBias = ContinentalHydrology.getTargetWaterHeight(cell.continentUplift);
             // 0.45F bias for banks, 0.42F for water ensures the lake sits in a slight dip
             this.flatBankBias = baseBias * 0.49F;
             this.flatWaterLevel = 0.25F + (baseBias * 0.485F);
