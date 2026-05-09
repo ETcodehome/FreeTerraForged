@@ -99,21 +99,27 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         cell.continentDistance = NoiseUtil.sqrt(nearest);
         cell.continentX = this.getCorrectedContinentCenter(cellPointX, sumX / 8.0F);
         cell.continentZ = this.getCorrectedContinentCenter(cellPointY, sumY / 8.0F);
+
         if (this.shouldSkip(cellX, cellY)) {
             return;
         }
         cell.continentId = AbstractContinent.getCellValue(this.seed, cellX, cellY);
         cell.continentEdge = this.getDistanceValue(x, y, cellX, cellY, nearest);
-        cell.continentUplift = getCellContinentUplift(rawX, rawY, x, y, cell.continentEdge);
+
+        // 1. Calculate the center in GRID SPACE (don't use the int version yet)
+        float gridCenterX = NoiseUtil.lerp(cellPointX, sumX / 8.0F, CENTER_CORRECTION);
+        float gridCenterZ = NoiseUtil.lerp(cellPointY, sumY / 8.0F, CENTER_CORRECTION);
+
+        cell.continentUplift = getCellContinentUplift(rawX, rawY, x, y, gridCenterX, gridCenterZ, cell.continentEdge);
     }
 
-    float getCellContinentUplift(float x, float y, float scaledX, float scaledY, float edge) {
+    float getCellContinentUplift(float x, float y, float scaledX, float scaledY, float gridCenterX, float gridCenterZ, float edge) {
 
-        // clean coordinates (backbone of the smooth gradient)
+        // Clean world coordinates (Provides the stable basis for the gradient)
         float unwarpedXCoord = x * this.frequency;
         float unwarpedYCoord = y * this.frequency;
 
-        // Determine owner using warped coords (keeps the organic shape)
+        // Identify vornoi cell owner using warped coords (Maintains the organic cell shape)
         int xi = NoiseUtil.floor(scaledX);
         int yi = NoiseUtil.floor(scaledY);
         float d1WarpedSq = Float.MAX_VALUE;
@@ -136,12 +142,14 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
             }
         }
 
-        // Distance to center
-        float d1Clean = NoiseUtil.sqrt(Line.distSq(unwarpedXCoord, unwarpedYCoord, cellPointX, cellPointY));
+        // Determine distance to the NEW distorted peak (Where the summit will be)
+        float d1ToPeak = NoiseUtil.sqrt(Line.distSq(unwarpedXCoord, unwarpedYCoord, gridCenterX, gridCenterZ));
 
-        // Use unwarped coords here to find the radius without noise jitter
+        // Determine distance to the ORIGINAL seed (Used to calculate a stable radius)
+        float d1ToSeed = NoiseUtil.sqrt(Line.distSq(unwarpedXCoord, unwarpedYCoord, cellPointX, cellPointY));
+
+        // Determine the radius to the mathematical edge using unwarped coords
         float edgeDistCleanSq = Float.MAX_VALUE;
-
         for (int cy2 = continentGridY - 1; cy2 <= continentGridY + 1; ++cy2) {
             for (int cx2 = continentGridX - 1; cx2 <= continentGridX + 1; ++cx2) {
                 if (cx2 != continentGridX || cy2 != continentGridY) {
@@ -149,7 +157,7 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
                     float pxf2 = cx2 + vec2.x() * this.jitter;
                     float pyf2 = cy2 + vec2.y() * this.jitter;
 
-                    // Use unwarped coords for edge calcs
+                    // Edge calculation MUST use original cellPointX/Y to keep boundaries stable
                     float distSq = getDistance(unwarpedXCoord, unwarpedYCoord, cellPointX, cellPointY, pxf2, pyf2);
                     if (distSq < edgeDistCleanSq) {
                         edgeDistCleanSq = distSq;
@@ -158,26 +166,23 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
             }
         }
 
-        // Final Noise-Free Normalization
+        // Final normalization
         float dEdgeClean = NoiseUtil.sqrt(edgeDistCleanSq);
 
-        // Total Clean Radius: The total distance from center to mathematical edge
-        float totalCleanRadius = d1Clean + dEdgeClean;
+        // Clean radius anchored to the original Voronoi seed
+        float totalCleanRadius = d1ToSeed + dEdgeClean;
+        if (totalCleanRadius < 0.0001F) return 1.0F;
 
-        // Linear 0.0 - 1.0 gradient (Mathematical cell edge to center)
-        float gradient = 1.0F - (d1Clean / totalCleanRadius);
+        // Reaches 1.0 at (gridCenterX, gridCenterZ)
+        float gradient = 1.0F - (d1ToPeak / totalCleanRadius);
         gradient = NoiseUtil.clamp(gradient, 0.0F, 1.0F);
 
-        // We want the gradient to be 0.0 when 'edge' is 0.0 (at the shoreline).
-        // We achieve this by multiplying the gradient by a stepped version of the edge.
-        // If edge is 0 (water), uplift becomes 0. If edge is 1 (inland), uplift is full.
-        float waterAlpha = NoiseUtil.clamp(edge / 0.2F, 0.0F, 1.0F); // Adjust 0.2F to match your coastal width
+        // Use the passed edge value to ensure water height is always 0.0
+        float waterAlpha = NoiseUtil.clamp(edge / 0.2F, 0.0F, 1.0F);
         gradient *= waterAlpha;
 
-        // Coastal White Bias (Power Curve)
-        float coastalWhiteBias = gradient * gradient;
-
-        return coastalWhiteBias;
+        // Power curve for mountain profile
+        return gradient * gradient;
     }
 
     @Override
@@ -246,7 +251,7 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
     }
 
     protected int getCorrectedContinentCenter(float point, float average) {
-        point = NoiseUtil.lerp(point, average, 0.35f) / this.frequency;
+        point = NoiseUtil.lerp(point, average, CENTER_CORRECTION) / this.frequency;
         return (int)point;
     }
 
