@@ -1,0 +1,9 @@
+{
+  "replace": false,
+  "values": [
+    "#minecraft:overworld_carver_replaceables"
+  ],
+  "remove": [
+    "minecraft:water"
+  ]
+}

@@ -6,6 +6,7 @@ import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.cell.continent.SimpleContinent;
 import raccoonman.reterraforged.world.worldgen.cell.continent.advanced.AbstractContinent;
+import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.Rivermap;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil.Vec2f;
@@ -25,6 +26,7 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
     protected Domain warp;
     protected Noise cliffNoise;
     protected Noise bayNoise;
+    protected Levels levels;
 
     public UpliftContinentGenerator(Seed seed, GeneratorContext context) {
         super(seed, context);
@@ -48,6 +50,8 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         bayNoise = Noises.add(bayNoise, 0.9F);
         bayNoise = Noises.frequency(bayNoise, frequency);
         this.bayNoise = bayNoise;
+
+        this.levels = context.levels;
     }
 
     @Override
@@ -110,36 +114,56 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         float gridCenterX = NoiseUtil.lerp(cellPointX, sumX / 8.0F, CENTER_CORRECTION);
         float gridCenterZ = NoiseUtil.lerp(cellPointY, sumY / 8.0F, CENTER_CORRECTION);
 
+        float sizeModifier = 1.0F;
+        if (this.variance > 0.0f && !this.isDefaultContinent(cellX, cellY)) {
+            float sizeValue = AbstractContinent.getCellValue(this.varianceSeed, cellX, cellY);
+            sizeModifier = NoiseUtil.map(sizeValue, 0.0f, this.variance, this.variance);
+        }
+
         cell.continentUplift = getCellContinentUplift(
                 rawX, rawY,              // raw world coords
                 gridCenterX, gridCenterZ,// the distorted peak
                 cellPointX, cellPointY,  // the clean seed of this cell
-                cellX, cellY             // the grid ID of this cell
+                cellX, cellY,            // the grid ID of this cell
+                sizeModifier
         );
+        cell.smoothVoronoi = cell.continentUplift; // store it before we perturb it.
+
+        // underwater is 0.0 is. we want 0.0 on the shoreline. so we shift it additively.
+        float offSetThreshold = this.levels.water + 0.05F;
+        if (cell.continentEdge - offSetThreshold < cell.continentUplift){
+            cell.continentUplift = NoiseUtil.clamp(cell.continentEdge - offSetThreshold, 0.0F, 1.0F);
+        }
 
     }
 
-    float getCellContinentUplift(float x, float y, float gridCenterX, float gridCenterZ, float cellPointX, float cellPointY, int cellX, int cellY) {
+    float getCellContinentUplift(float x, float y, float gridCenterX, float gridCenterZ,
+                                 float cellPointX, float cellPointY, int cellX, int cellY,
+                                 float sizeModifier) {
 
-        // Clean world coordinates
         float unwarpedX = x * this.frequency;
         float unwarpedY = y * this.frequency;
 
-        // Distance to the distorted peak in clean space
         float d1ToPeak = NoiseUtil.sqrt(Line.distSq(unwarpedX, unwarpedY, gridCenterX, gridCenterZ));
 
-        // Distance to the clean Voronoi edge (6 arguments)
+        // Calculate clean distance and apply the SAME modifier used for the coastline
         float dEdgeClean = getCleanEdgeDist(unwarpedX, unwarpedY, cellPointX, cellPointY, cellX, cellY);
 
-        // At the edge, dEdgeClean is 0, so result is 0.
-        // At the peak, d1ToPeak is 0, so dEdgeClean / dEdgeClean is 1.0.
+        // Applying the variance modifier to the edge distance
+        // If distance was multiplied by sizeModifier in getDistanceValue,
+        // we must do it here to keep them in sync.
+        dEdgeClean *= sizeModifier;
+
         float totalRadius = d1ToPeak + dEdgeClean;
         if (totalRadius < 0.0001F) return 1.0F;
 
         float gradient = dEdgeClean / totalRadius;
+        float result = NoiseUtil.clamp(gradient * gradient, 0.0F, 1.0F);
 
-        // Cube the result to create a smooth dome instead of a sharp 'tent'
-        return NoiseUtil.clamp(gradient * gradient, 0.0F, 1.0F);
+        float coastalRatio = (totalRadius > 0) ? (dEdgeClean / totalRadius) : 0F;
+        float transition = NoiseUtil.clamp(coastalRatio / 0.20F, 0.0F, 1.0F);
+
+        return result * (transition * transition);
     }
 
     protected float getCleanEdgeDist(float ux, float uy, float seedX, float seedY, int cellX, int cellY) {

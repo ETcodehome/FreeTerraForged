@@ -26,6 +26,7 @@ public class RiverCarver implements Comparable<RiverCarver> {
     public RiverWarp warp;
     public RiverConfig config;
     public CurveFunction valleyCurve;
+    private Levels levels;
     
     public RiverCarver(River river, RiverWarp warp, RiverConfig config, Settings settings, Levels levels) {
         this.fade = settings.fadeIn;
@@ -42,6 +43,7 @@ public class RiverCarver implements Comparable<RiverCarver> {
         this.bedDepth = new Range(levels.water, config.bedHeight);
         this.banksDepth = new Range(config.minBankHeight, config.maxBankHeight);
         this.valleyCurve = settings.valleyCurve;
+        this.levels = levels;
     }
 
     @Override
@@ -60,7 +62,9 @@ public class RiverCarver implements Comparable<RiverCarver> {
         valleyInfluence = this.valleyCurve.apply(valleyInfluence);
         cell.riverMask = Math.min(cell.riverMask, 1.0F - valleyInfluence);
 
-        float targetBedFloor = ContinentalHydrology.getTargetWaterHeight(cell.continentUplift) * 0.50F - 0.02F + this.waterLine;
+        float oceanHeightOffset = levels.water;
+        float bedDepthOffset = oceanHeightOffset - config.bedHeight; // bedHeight is fixed as though all water is at ocean height
+        float targetBedFloor = ContinentalHydrology.getTargetWaterHeight(cell.continentUplift) * 0.50F - bedDepthOffset + oceanHeightOffset;
 
         // 3. Banks Stage
         float mouthModifier = getMouthModifier(cell);
