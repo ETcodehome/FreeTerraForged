@@ -24,81 +24,83 @@ public class Wetland {
     private Noise moundShape;
     private Noise moundHeight;
     private Noise terrainEdge;
+    private Noise rivuletNoise; // Sharp carving for gulleys
+    private Noise warpNoise;    // Meandering distortion
     private Levels levels;
-    
+    private int seed;
+
     public Wetland(int seed, Vec2f a, Vec2f b, float radius, Levels levels) {
+        this.seed = seed;
         this.a = a;
         this.b = b;
         this.radius = radius;
         this.radius2 = radius * radius;
         this.levels = levels;
-        
-        Noise moundShape = Noises.perlin(++seed, 10, 1);
-        moundShape = Noises.clamp(moundShape, 0.3F, 0.6F);
-        moundShape = Noises.map(moundShape, 0.0F, 1.0F);
-        this.moundShape = moundShape;
-        
-        Noise moundHeight = Noises.simplex(++seed, 20, 1);
-        moundHeight = Noises.clamp(moundHeight, 0.0F, 0.3F);
-        moundHeight = Noises.map(moundHeight, 0.0F, 1.0F);
-        this.moundHeight = moundHeight;
-        
-        Noise terrainEdge = Noises.perlin(++seed, 8, 1);
-        terrainEdge = Noises.clamp(terrainEdge, 0.2F, 0.8F);
-        terrainEdge = Noises.map(terrainEdge, 0.0F, 0.9F);
-        this.terrainEdge = terrainEdge;
+
+        // Mound/terrain logic
+        this.moundShape = Noises.map(Noises.clamp(Noises.perlin(++seed, 10, 1), 0.3F, 0.6F), 0.0F, 1.0F);
+        this.moundHeight = Noises.map(Noises.clamp(Noises.simplex(++seed, 20, 1), 0.0F, 0.3F), 0.0F, 1.0F);
+        this.terrainEdge = Noises.map(Noises.clamp(Noises.perlin(++seed, 8, 1), 0.2F, 0.8F), 0.0F, 0.9F);
+
+        // Rivulet noise - Ridge is perfect for sharp, eroded gulley "veins"
+        this.rivuletNoise = Noises.perlinRidge(++seed, 12, 3);
+
+        // Warp noise - Distorts the wetland path so it's not a straight line
+        this.warpNoise = Noises.perlin(++seed, 25, 2);
     }
-    
+
     public void apply(Cell cell, float rx, float rz, float x, float z) {
+        float upliftOffset = (ContinentalHydrology.getTargetWaterHeight(cell.continentUplift) * 0.50F);
+        float oceanHeightOffset = levels.scale(levels.waterLevel - 6);
+        this.bed = upliftOffset + oceanHeightOffset;
 
-        // if the cell is lower than the bed height do nothing
-        this.bed = (ContinentalHydrology.getTargetWaterHeight(cell.continentUplift) * 0.50F) + levels.scale(levels.waterLevel);
-        if (cell.height < this.bed) {
-            return;
-        }
+        if (cell.height < this.bed) return;
 
-        // if some distance is exceeded do nothing
         float t = Line.distanceOnLine(rx, rz, this.a.x(), this.a.y(), this.b.x(), this.b.y());
         float d2 = getDistance2(rx, rz, this.a.x(), this.a.y(), this.b.x(), this.b.y(), t);
-        if (d2 > this.radius2) {
-            return;
-        }
+        if (d2 > this.radius2) return;
 
-        // another do nothing
         float dist = 1.0F - d2 / this.radius2;
-        if (dist <= 0.0F) {
-            return;
-        }
-
         float singleBlock = levels.ground(1) - levels.ground(0);
+        this.banks = this.bed + 2 * singleBlock;
 
-        this.banks = this.bed + 3 * singleBlock;
-        this.moundMin = this.bed + 1 * singleBlock;
-        this.moundMax = this.bed + 2 * singleBlock;
-        this.moundVariance = this.moundMax - this.moundMin;
+        // We use a fixed range for thresholds, only varying the intensity by noise
+        float edgeNoise = this.terrainEdge.compute(x, z, 0);
+        float tStart = 0.4F; // Start eroding here
+        float tEnd = 0.7F;   // Hit the swamp floor here
 
-        // craft a valley if height exceeds the banks?
-        float valleyAlpha = NoiseUtil.map(dist, 0.0F, 0.65F, 0.65F);
-        if (cell.height > this.banks) {
-            cell.height = NoiseUtil.lerp(cell.height, this.banks, valleyAlpha);
+        // Create a smooth 0.0 -> 1.0 alpha across the whole transition zone
+        float totalAlpha = NoiseUtil.map(dist, 0.0F, tEnd, tEnd);
+        totalAlpha = NoiseUtil.interpQuintic(totalAlpha);
+
+        // We calculate a target height that moves from Banks -> Bed based on how deep into the swamp we are.
+        float internalAlpha = NoiseUtil.map(dist, tStart, tEnd, tEnd - tStart);
+        float targetHeight = NoiseUtil.lerp(this.banks, this.bed, internalAlpha);
+
+        // Apply the height change smoothly
+        if (cell.height > targetHeight) {
+            cell.height = NoiseUtil.lerp(cell.height, targetHeight, totalAlpha);
         }
 
-        float poolsAlpha = NoiseUtil.map(dist, 0.65F, 0.7F, 0.050000012F);
-        if (cell.height > this.bed && cell.height <= this.banks) {
-            cell.height = NoiseUtil.lerp(cell.height, this.bed, poolsAlpha);
-        }
-        if (poolsAlpha >= 1.0F) {
-            cell.erosionMask = true;
-        }
-        if (dist > 0.65F && poolsAlpha > this.terrainEdge.compute(x, z, 0)) {
+        // Use internalAlpha to fade these in
+        if (internalAlpha > 0.1F) {
             cell.terrain = TerrainType.WETLAND;
+            cell.riverWaterLevel = upliftOffset;
+            if (internalAlpha > 0.8F) cell.erosionMask = true;
         }
-        if (cell.height >= this.bed && cell.height < this.moundMax) {
-            float shapeAlpha = this.moundShape.compute(x, z, 0) * poolsAlpha;
-            float mounds = this.moundMin + this.moundHeight.compute(x, z, 0) * this.moundVariance;
-            cell.height = NoiseUtil.lerp(cell.height, mounds, shapeAlpha);
+
+        // We only apply mounds where internalAlpha is significant (the flat area)
+        if (internalAlpha > 0.5F) {
+            float moundArea = NoiseUtil.map(dist, tEnd, 1.0F, 1.0F - tEnd);
+            float shapeAlpha = this.moundShape.compute(x, z, 0) * moundArea;
+            float moundHeightNoise = this.moundHeight.compute(x, z, 0);
+            float moundElev = this.bed + (moundHeightNoise * 2 * singleBlock);
+
+            // Use a softer lerp for mounds to keep them organic
+            cell.height = NoiseUtil.lerp(cell.height, moundElev, shapeAlpha * 0.8F);
         }
-        cell.riverMask = Math.min(cell.riverMask, 1.0F - valleyAlpha);
+
+        cell.riverMask = Math.min(cell.riverMask, 1.0F - totalAlpha);
     }
     
     public void recordBounds(Boundsf.Builder builder) {
