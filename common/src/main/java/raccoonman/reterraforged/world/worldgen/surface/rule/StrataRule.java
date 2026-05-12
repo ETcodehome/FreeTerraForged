@@ -2,8 +2,11 @@ package raccoonman.reterraforged.world.worldgen.surface.rule;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 import com.mojang.serialization.MapCodec;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import org.jetbrains.annotations.Nullable;
 
 import com.google.common.collect.ImmutableList;
@@ -125,7 +128,7 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
 			this.strata = strata;
 			this.lastUpdateXZ = Long.MIN_VALUE;
 		}
-		
+
         @Nullable
 		@Override
 		public BlockState tryApply(int x, int y, int z) {
@@ -153,29 +156,95 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
 						var levels = genCtx.generator.getHeightmap().levels();
 						int scaledY = levels.scale(cell.height);
 
-						// set the water level consistently based on the maths rather than individual updaters
-						int waterY;
-						if (cell.terrain.isLake()){
-							waterY = levels.scale(cell.riverWaterLevel) + 1; // why +1? this bothers me.
-						} else {
-							waterY = levels.scale(ContinentalHydrology.getTargetWaterHeight(cell.continentUplift) * 0.50F + levels.water) - 3; // why -3? this bothers me
-						}
+						// Calculate OUR integer water height
+						int waterY = cell.terrain.isLake()
+								? levels.scale(cell.riverWaterLevel) + 1
+								: levels.scale(ContinentalHydrology.getTargetWaterHeight(cell.continentUplift) * 0.50F + levels.water) - 3;
 
-						// don't fill a river or lake below ocean level. use ocean level instead.
-						if (waterY < levels.scale(levels.water)){
-							waterY = levels.scale(levels.water);
-						}
+						if (waterY < levels.scale(levels.water)) waterY = levels.scale(levels.water);
 
 						if (waterY > scaledY) {
+							boolean isTransitionColumn = false;
+							boolean multiBlockDrop = false;
+							int[] dx = {0, 0, 1, -1};
+							int[] dz = {-1, 1, 0, 0};
+
+							for (int i = 0; i < 4; i++) {
+								int nx = x + dx[i];
+								int nz = z + dz[i];
+
+								// Bridge to neighbor
+								var neighborTile = genCtx.cache.provideAtChunk(nx >> 4, nz >> 4);
+								var neighborReader = neighborTile.getChunkReader(nx >> 4, nz >> 4);
+								var neighborCell = neighborReader.getCell(nx & 0xF, nz & 0xF);
+
+								// Calculate the NEIGHBOR'S integer water height using their specific data
+								int nWaterY;
+								if (neighborCell.terrain.isLake()) {
+									nWaterY = levels.scale(neighborCell.riverWaterLevel) + 1;
+								} else {
+									nWaterY = levels.scale(ContinentalHydrology.getTargetWaterHeight(neighborCell.continentUplift) * 0.50F + levels.water) - 3;
+								}
+
+								if (nWaterY < levels.scale(levels.water)) nWaterY = levels.scale(levels.water);
+
+								// IMPORTANT: Only flag if the neighbor's actual water surface is lower than ours
+								if (nWaterY < waterY) {
+
+									if (waterY - nWaterY > 1){
+										multiBlockDrop = true;
+									}
+
+									isTransitionColumn = true;
+									if (multiBlockDrop) {
+										// make water fall onto the lower neighbour
+										for (int wy = nWaterY + 1; wy <= waterY; wy++) {
+											net.minecraft.core.BlockPos.MutableBlockPos pos = new net.minecraft.core.BlockPos.MutableBlockPos();
+											BlockState state = wy == waterY
+													? Blocks.WATER.defaultBlockState().setValue(BlockStateProperties.LEVEL, 1)
+													: Blocks.WATER.defaultBlockState();
+											this.surfaceContext.chunk.setBlockState(pos.set(nx, wy, nz), state, false);
+										}
+									}
+								}
+							}
+
 							net.minecraft.core.BlockPos.MutableBlockPos pos = new net.minecraft.core.BlockPos.MutableBlockPos();
+							BlockState water = Blocks.WATER.defaultBlockState();
+							BlockState stone = Blocks.STONE.defaultBlockState();
+
 							for (int wy = scaledY + 1; wy <= waterY; wy++) {
-								this.surfaceContext.chunk.setBlockState(pos.set(x, wy, z), net.minecraft.world.level.block.Blocks.WATER.defaultBlockState(), false);
+
+								// top row of blocks should be flowing water
+								boolean isTopBlock = wy == waterY;
+
+								// top of waterfalls on top of stone
+								if (isTopBlock && isTransitionColumn && multiBlockDrop){
+									this.surfaceContext.chunk.setBlockState(pos.set(x, wy, z), water, false);
+								}
+
+								// standard single tile step down
+								else if (isTopBlock && isTransitionColumn && !multiBlockDrop){
+									this.surfaceContext.chunk.setBlockState(pos.set(x, wy, z), water.setValue(BlockStateProperties.LEVEL, 1), false);
+								}
+
+								// waterfall "walls"
+								else if (!isTopBlock && multiBlockDrop)
+								{
+									this.surfaceContext.chunk.setBlockState(pos.set(x, wy, z), stone, false);
+								}
+
+								// standard water blocks
+								else
+								{
+									this.surfaceContext.chunk.setBlockState(pos.set(x, wy, z), water, false);
+								}
 							}
 						}
 					}
 				}
 			}
-        	
+
         	Layer last = null;
         	for(int i = 0; i < this.layers.size(); i++) {
         		Layer layer = last = this.layers.get(i);
@@ -183,7 +252,7 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
         			return layer.material();
         		}
         	}
-        	
+
         	return last != null ? last.material() : null;
 		}
 		
