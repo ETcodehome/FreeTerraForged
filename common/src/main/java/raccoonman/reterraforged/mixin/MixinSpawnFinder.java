@@ -6,56 +6,33 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.biome.Climate;
-import net.minecraft.world.level.biome.Climate.ParameterPoint;
-import net.minecraft.world.level.biome.Climate.Sampler;
+import raccoonman.reterraforged.data.worldgen.preset.settings.SpawnType;
+import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings;
 import raccoonman.reterraforged.world.worldgen.cell.biome.spawn.SpawnFinderFix;
 
-// FIXME the mixin that we should actually be using just refuses to work for some reason
-
-//@Mixin(targets = "net.minecraft.world.level.biome.Climate$SpawnFinder")
 @Mixin(Climate.class)
-class MixinSpawnFinder {
+public class MixinSpawnFinder {
 
-	@Inject(at = @At("HEAD"), method = "findSpawnPosition", cancellable = true)
-    private static void findSpawnPosition(List<ParameterPoint> list, Sampler sampler, CallbackInfoReturnable<BlockPos> callback) {
-    	callback.setReturnValue(new SpawnFinderFix(list, sampler).result.location());
+    @Inject(method = "findSpawnPosition", at = @At("HEAD"), cancellable = true)
+    private static void findSpawnPosition(List<Climate.ParameterPoint> list, Climate.Sampler sampler, CallbackInfoReturnable<BlockPos> cir) {
+
+        if (WorldSettings.Properties.spawnType == SpawnType.USER_SELECTED) {
+            int x = WorldSettings.Properties.spawnX;
+            int z = WorldSettings.Properties.spawnZ;
+            cir.setReturnValue(new BlockPos(x, 0, z));
+            return;
+        }
+
+        if (WorldSettings.Properties.spawnType == SpawnType.WORLD_ORIGIN) {
+            int x = 0;
+            int z = 0;
+            cir.setReturnValue(new BlockPos(x, 0, z));
+            return;
+        }
+
+        // other spawn type handling where it is not so deterministic.
+        cir.setReturnValue(new SpawnFinderFix(list, sampler).result.location());
     }
-//	@ModifyArg(
-//		at = @At(
-//			value = "INVOKE",
-//			target = "Lnet/minecraft/world/level/biome/Climate$SpawnFinder;getSpawnPositionAndFitness(Ljava/util/List;Lnet/minecraft/world/level/biome/Climate$Sampler;II)Lnet/minecraft/world/level/biome/Climate$SpawnFinder$Result;"
-//		),
-//		method = "<init>",
-//		index = 2,
-//		require = 1
-//	)
-//	private static int modifyX(List<ParameterPoint> points, Climate.Sampler sampler, int x, int z) {
-//		if((Object) sampler instanceof RTFClimateSampler rtfClimateSampler) {
-//			BlockPos center = rtfClimateSampler.getSpawnSearchCenter();
-//			return center != null ? center.getX() : 0;
-//		} else {
-//			return 0;
-//		}
-//	}
-//	
-//	@ModifyArg(
-//		at = @At(
-//			value = "INVOKE",
-//			target = "Lnet/minecraft/world/level/biome/Climate$SpawnFinder;getSpawnPositionAndFitness(Ljava/util/List;Lnet/minecraft/world/level/biome/Climate$Sampler;II)Lnet/minecraft/world/level/biome/Climate$SpawnFinder$Result;"
-//		),
-//		method = "<init>",
-//		index = 3,
-//		require = 1
-//	)
-//	private static int modifyZ(List<ParameterPoint> points, Climate.Sampler sampler, int x, int z) {
-//		if((Object) sampler instanceof RTFClimateSampler rtfClimateSampler) {
-//			BlockPos center = rtfClimateSampler.getSpawnSearchCenter();
-//			return center != null ? center.getZ() : 0;
-//		} else {
-//			return 0;
-//		}
-//	}
 }
