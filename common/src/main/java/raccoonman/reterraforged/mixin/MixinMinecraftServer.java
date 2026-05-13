@@ -33,7 +33,7 @@ class MixinMinecraftServer {
 			return registry.get(Preset.KEY);
 		}).ifPresent((preset) -> {
 			if((Object) randomState instanceof RTFRandomState rtfRandomState && (Object) sampler instanceof RTFClimateSampler rtfClimateSampler) {
-				BlockPos searchCenter = preset.value().world().properties.spawnType.getSearchCenter(rtfRandomState.generatorContext());
+				BlockPos searchCenter = preset.value().world().properties.spawnType.getSearchCenter(rtfRandomState.generatorContext(), preset.value().world().properties);
 				rtfClimateSampler.setSpawnSearchCenter(searchCenter);
 			} else {
 				throw new IllegalStateException();
