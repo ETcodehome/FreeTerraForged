@@ -195,6 +195,7 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, PresetEntry, Abstr
 		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_HUGE_BIOMES_PRESET_NAME).withStyle(ChatFormatting.GRAY), Presets.makeLegacyHugeBiomes(), true, this));
 		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_LITE_PRESET_NAME).withStyle(ChatFormatting.GRAY), Presets.makeLegacyLite(), true, this));
 		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_VANILLAISH_PRESET_NAME).withStyle(ChatFormatting.GRAY), Presets.makeLegacyVanillaish(), true, this));
+		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_RIVERS_PRESET_NAME).withStyle(ChatFormatting.GRAY), Presets.makeRivers(), true, this));
 		this.left.replaceEntries(entries.stream().map(WidgetList.Entry::new).toList());
 	}
 	

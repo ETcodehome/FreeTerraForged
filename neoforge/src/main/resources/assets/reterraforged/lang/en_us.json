@@ -103,6 +103,7 @@
   "reterraforged.gui.preset.legacyDefault.name": "TerraForged - Default (Legacy)",
   "reterraforged.gui.preset.lite.name": "TerraForged - Lite (Legacy)",
   "reterraforged.gui.preset.vanillaish.name": "TerraForged - Vanilla-ish (Legacy)",
+  "reterraforged.gui.preset.rivers.name": "3D Rivers",
   "reterraforged.gui.riverSettings.title": "River Settings",
   "reterraforged.gui.selectPreset.inputPrompt": "Type preset name",
   "reterraforged.gui.selectPreset.missingLegacyPresets": "Couldn't find any legacy presets",
