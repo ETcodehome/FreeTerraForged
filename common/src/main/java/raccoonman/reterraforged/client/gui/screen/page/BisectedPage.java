@@ -24,9 +24,20 @@ public abstract class BisectedPage<S extends Screen, L extends AbstractWidget, R
 
 	private <T extends AbstractWidget> WidgetList<T> createAndPositionColumn(int left, int top, int columnWidth, int height, int horizontalPadding, int verticalPadding) {
 		final int padding = 30;
-		final int slotHeight = 25;
-		WidgetList<T> list = new WidgetList<>(this.screen.minecraft, columnWidth, height - 65, padding, slotHeight);
+		WidgetList<T> list = new WidgetList<>(this.screen.minecraft, columnWidth, height - 65, padding, getSlotHeight());
 		list.setX(left);
 		return list;
 	}
+
+	public int getSlotHeight() {
+		return 25;
+	}
+
+	/**
+	 * Calculates the total vertical space occupied by the widgets currently in the list.
+	 */
+	public int getTotalListHeight(WidgetList<?> list) {
+		return list.children().size() * this.getSlotHeight();
+	}
+
 }

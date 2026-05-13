@@ -9,6 +9,10 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Map;
 
+import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.Renderable;
+import net.minecraft.client.gui.components.events.GuiEventListener;
+import net.minecraft.client.gui.narration.NarratableEntry;
 import org.apache.commons.io.file.PathUtils;
 
 import com.google.common.collect.ImmutableMap;
@@ -42,7 +46,15 @@ public class PresetConfigScreen extends LinkedPageScreen {
 
 		this.minecraft.setScreen(this.parent);
 	}
-	
+
+	public <T extends GuiEventListener & Renderable & NarratableEntry> T addWidgetToScreen(T widget) {
+		return this.addRenderableWidget(widget);
+	}
+
+	public void removeWidgetFromScreen(AbstractWidget widget) {
+		this.removeWidget(widget);
+	}
+
 	public void setSeed(long seed) {
 		//TODO update the seed edit box
 		this.parent.getUiState().setSettings(this.getSettings().withOptions((options) -> {

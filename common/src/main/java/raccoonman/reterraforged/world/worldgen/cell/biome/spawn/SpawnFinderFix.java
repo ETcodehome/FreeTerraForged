@@ -9,8 +9,7 @@ import net.minecraft.world.level.biome.Climate.ParameterPoint;
 import net.minecraft.world.level.biome.Climate.Sampler;
 import net.minecraft.world.level.biome.Climate.TargetPoint;
 import raccoonman.reterraforged.world.worldgen.biome.RTFClimateSampler;
-	
-@Deprecated(forRemoval = true)
+
 public class SpawnFinderFix {
 	public Result result;
 

@@ -36,7 +36,7 @@ public class WorldSettingsPage extends PresetEditorPage {
 	private Slider coast;
 	private Slider inland;
 	
-	private CycleButton<SpawnType> spawnType;
+	public CycleButton<SpawnType> spawnType;
 	private Slider worldHeight;
 	private Slider worldDepth;
 	private Slider seaLevel;

@@ -111,25 +111,31 @@ public class WorldSettings {
     		Codec.INT.fieldOf("worldHeight").forGetter((o) -> o.worldHeight),
     		Codec.INT.optionalFieldOf("worldDepth", 64).forGetter((o) -> o.worldDepth),
     		Codec.INT.fieldOf("seaLevel").forGetter((o) -> o.seaLevel),
-    		Codec.INT.optionalFieldOf("lavaLevel", -54).forGetter((o) -> o.lavaLevel)
+    		Codec.INT.optionalFieldOf("lavaLevel", -54).forGetter((o) -> o.lavaLevel),
+            Codec.INT.optionalFieldOf("spawnX", 0).forGetter((o) -> o.spawnX),
+            Codec.INT.optionalFieldOf("spawnZ", 0).forGetter((o) -> o.spawnZ)
     	).apply(instance, Properties::new));
     	
-        public SpawnType spawnType;
+        public static SpawnType spawnType;
         public int worldHeight;
         public int worldDepth;
         public int seaLevel;
         public int lavaLevel;
+        public static int spawnX;
+        public static int spawnZ;
         
-        public Properties(SpawnType spawnType, int worldHeight, int worldDepth, int seaLevel, int lavaLevel) {
+        public Properties(SpawnType spawnType, int worldHeight, int worldDepth, int seaLevel, int lavaLevel, int spawnX, int spawnZ) {
         	this.spawnType = spawnType;
         	this.worldHeight = worldHeight;
         	this.worldDepth = worldDepth;
         	this.seaLevel = seaLevel;
         	this.lavaLevel = lavaLevel;
+            this.spawnX = spawnX;
+            this.spawnZ = spawnZ;
         }
         
         public Properties copy() {
-        	return new Properties(this.spawnType, this.worldHeight, this.worldDepth, this.seaLevel, this.lavaLevel);
+        	return new Properties(this.spawnType, this.worldHeight, this.worldDepth, this.seaLevel, this.lavaLevel, this.spawnX, this.spawnZ);
         }
         
         @Deprecated
