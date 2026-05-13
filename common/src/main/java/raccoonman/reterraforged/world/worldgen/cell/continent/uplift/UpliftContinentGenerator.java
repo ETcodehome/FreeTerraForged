@@ -129,12 +129,16 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         );
         cell.smoothVoronoi = cell.continentUplift; // store it before we perturb it.
 
-        // underwater is 0.0 is. we want 0.0 on the shoreline. so we shift it additively.
+        // Truncate the uplift if we are in the coastal transition zone
+        // This prevents the cliff/bay noise from 'eating' the 1.0 peak in the center.
         float offSetThreshold = this.levels.water + 0.05F;
-        if (cell.continentEdge - offSetThreshold < cell.continentUplift){
-            cell.continentUplift = NoiseUtil.clamp(cell.continentEdge - offSetThreshold, 0.0F, 1.0F);
-        }
+        float shorelineValue = NoiseUtil.clamp(cell.continentEdge - offSetThreshold, 0.0F, 1.0F);
 
+        // Use Math.min only when we are close to the edge (where shorelineValue is low)
+        // If shorelineValue is high (inland), we trust the calculated uplift.
+        if (shorelineValue < 0.5F) {
+            cell.continentUplift = Math.min(cell.continentUplift, shorelineValue);
+        }
     }
 
     float getCellContinentUplift(float x, float y, float gridCenterX, float gridCenterZ,
@@ -145,25 +149,28 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         float unwarpedY = y * this.frequency;
 
         float d1ToPeak = NoiseUtil.sqrt(Line.distSq(unwarpedX, unwarpedY, gridCenterX, gridCenterZ));
-
-        // Calculate clean distance and apply the SAME modifier used for the coastline
         float dEdgeClean = getCleanEdgeDist(unwarpedX, unwarpedY, cellPointX, cellPointY, cellX, cellY);
-
-        // Applying the variance modifier to the edge distance
-        // If distance was multiplied by sizeModifier in getDistanceValue,
-        // we must do it here to keep them in sync.
         dEdgeClean *= sizeModifier;
 
         float totalRadius = d1ToPeak + dEdgeClean;
         if (totalRadius < 0.0001F) return 1.0F;
 
+        // The Gradient should be pure at the peak
         float gradient = dEdgeClean / totalRadius;
+
+        // Use a higher power for the gradient to sharpen the peak center
         float result = NoiseUtil.clamp(gradient * gradient, 0.0F, 1.0F);
 
         float coastalRatio = (totalRadius > 0) ? (dEdgeClean / totalRadius) : 0F;
+
+        // Sharpen the transition mask.
+        // This ensures that by the time you are 20% inland, the multiplier is exactly 1.0.
         float transition = NoiseUtil.clamp(coastalRatio / 0.20F, 0.0F, 1.0F);
 
-        return result * (transition * transition);
+        // Use a smoothstep-style curve for the transition so it doesn't suppress the mid-range
+        float mask = transition * transition * (3.0F - 2.0F * transition);
+
+        return result * mask;
     }
 
     protected float getCleanEdgeDist(float ux, float uy, float seedX, float seedY, int cellX, int cellY) {
