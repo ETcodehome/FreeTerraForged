@@ -190,16 +190,6 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	        }, DEFAULT_NARRATION);
 	    }
 
-		@Override
-		protected boolean clicked(double mouseX, double mouseY) {
-			// Explicitly check the square bounds
-			return this.visible &&
-					mouseX >= (double)this.getX() &&
-					mouseY >= (double)this.getY() &&
-					mouseX < (double)(this.getX() + this.width) &&
-					mouseY < (double)(this.getY() + this.height);
-		}
-
 	    public void regenerate() {
 			WorldCreationContext settings = PresetEditorPage.this.screen.getSettings();
 	        RegistryAccess.Frozen registries = settings.worldgenLoadContext();
