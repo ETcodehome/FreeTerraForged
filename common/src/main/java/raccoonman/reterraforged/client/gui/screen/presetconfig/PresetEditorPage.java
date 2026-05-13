@@ -173,11 +173,17 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 
 						// set the spawn point by clicking
 						WorldSettings.Properties props = preset.getPreset().world().properties;
-						if (props.spawnType != SpawnType.USER_SELECTED) {
-							props.spawnType = SpawnType.USER_SELECTED;
-						}
+						props.spawnType = SpawnType.USER_SELECTED;
 						props.spawnX = self.hoveredCoordX;
 						props.spawnZ = self.hoveredCoordZ;
+
+						// Synchronize the UI button if we are on the WorldSettingsPage
+						if (PresetEditorPage.this instanceof WorldSettingsPage worldPage) {
+							if (worldPage.spawnType != null) {
+								worldPage.spawnType.setValue(SpawnType.USER_SELECTED);
+							}
+						}
+
 						self.regenerate();
 			        }
 	        	}
@@ -267,10 +273,50 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	        RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
 	    	guiGraphics.blit(this.textureId, x, y, 0, 0, this.width, this.height, this.width, this.height);
 
+			renderSpawnMarker(guiGraphics);
+
 	    	this.updateLegend(mx, my);
 
 	    	this.renderLegend(guiGraphics, mx, my, this.legendLabels, this.legendValues, x, y + this.width + 40, 10, 0xFFFFFF);
 	    }
+
+		private void renderSpawnMarker(GuiGraphics guiGraphics) {
+			WorldSettings.Properties props = preset.getPreset().world().properties;
+
+			// Check if the current spawn type should be displayed
+			if (props.spawnType == SpawnType.USER_SELECTED || props.spawnType == SpawnType.CONTINENT_CENTER) {
+				int zoom = this.getZoom();
+
+				// Map world coordinates to the tile's relative center
+				float relX = (float) (props.spawnX - this.centerX) / (this.tile.getBlockSize().size() * zoom);
+				float relZ = (float) (props.spawnZ - this.centerZ) / (this.tile.getBlockSize().size() * zoom);
+
+				// Convert relative ratio to screen pixel coordinates
+				int markerX = this.getX() + (this.width / 2) + (int) (relX * this.width);
+				int markerY = this.getY() + (this.height / 2) + (int) (relZ * this.height);
+
+				// Bounds check to ensure the crosshair is inside the preview square
+				if (markerX >= this.getX() && markerX <= this.getX() + this.width &&
+						markerY >= this.getY() && markerY <= this.getY() + this.height) {
+
+					int size = 5; // Length of each crosshair arm
+					int color = 0xFFFFFFFF; // White for better visibility on most biomes
+					int shadow = 0xFF000000; // Black shadow for contrast
+
+					// Draw a horizontal line with a 1-pixel black shadow for better visibility
+					// Shadow (1px offset)
+					guiGraphics.fill(markerX - size + 1, markerY + 1, markerX + size + 2, markerY + 2, shadow);
+					// Main Line
+					guiGraphics.fill(markerX - size, markerY, markerX + size + 1, markerY + 1, color);
+
+					// Draw a vertical line
+					// Shadow (1px offset)
+					guiGraphics.fill(markerX + 1, markerY - size + 1, markerX + 2, markerY + size + 2, shadow);
+					// Main Line
+					guiGraphics.fill(markerX, markerY - size, markerX + 1, markerY + size + 1, color);
+				}
+			}
+		}
 
 	    private boolean updateLegend(int mx, int my) {
 	        if (this.tile != null) {
