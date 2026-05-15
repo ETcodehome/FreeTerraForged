@@ -63,8 +63,8 @@ public class RiverCarver implements Comparable<RiverCarver> {
         cell.riverMask = Math.min(cell.riverMask, 1.0F - valleyInfluence);
 
         float oceanHeightOffset = levels.water;
-        float bedDepthOffset = oceanHeightOffset - config.bedHeight; // bedHeight is fixed as though all water is at ocean height
-        float targetBedFloor = ContinentalHydrology.getTargetWaterHeight(cell.continentUplift) * 0.50F - bedDepthOffset + oceanHeightOffset;
+        float bedDepthOffset = oceanHeightOffset - config.bedHeight; // difference between default waterlevel and bed depth relative to ocean level;
+        float targetBedFloor = ContinentalHydrology.getWeightedWaterHeight(cell.continentUplift) - bedDepthOffset + oceanHeightOffset;
 
         // 3. Banks Stage
         float mouthModifier = getMouthModifier(cell);
@@ -73,10 +73,7 @@ public class RiverCarver implements Comparable<RiverCarver> {
         if (bankInfluence > 0.0F) {
             float carvedHeight = NoiseUtil.lerp(cell.height, targetBedFloor, bankInfluence);
             cell.height = Math.min(carvedHeight, cell.height);
-
-            if (bankInfluence > 0.1F) {
-                this.tag(cell, targetBedFloor);
-            }
+            this.tag(cell, targetBedFloor);
         }
 
         // 4. Bed Stage
@@ -135,26 +132,9 @@ public class RiverCarver implements Comparable<RiverCarver> {
     }
 
     private void tag(Cell cell, float bedHeight) {
-
-        // 1. Keep the 'overrides' check to prevent rivers from carving
-        // through things they shouldn't (like volcanoes or custom structures)
-        if (cell.terrain.overridesRiver() && (cell.height < bedHeight || cell.height > this.waterLine)) {
-            return;
-        }
-
-        // 2. We are in the river channel, so enable the erosion mask
         cell.erosionMask = true;
-
-        // 3. NEW LOGIC: If the height of the cell is at or near the bed we just carved,
-        // it's a river cell, regardless of its absolute altitude.
-        if (cell.height <= bedHeight + 0.02F) { // Small epsilon to catch the floor
-            cell.terrain = TerrainType.RIVER;
-
-            // 4. Set the water level relative to the local bed
-            // This is what allows 'Highland Rivers' to exist.
-            float waterDepth = 0.01F; // Approx 1-2 blocks deep
-            cell.riverWaterLevel = Math.max(this.waterLine, bedHeight + waterDepth);
-        }
+        cell.terrain = TerrainType.RIVER;
+        cell.riverWaterLevel = Math.max(this.waterLine, bedHeight);
     }
     
     private static float getMouthModifier(Cell cell) {

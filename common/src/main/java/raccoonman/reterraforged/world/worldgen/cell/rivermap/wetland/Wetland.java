@@ -50,9 +50,12 @@ public class Wetland {
     }
 
     public void apply(Cell cell, float rx, float rz, float x, float z) {
-        float upliftOffset = (ContinentalHydrology.getTargetWaterHeight(cell.continentUplift) * 0.50F);
-        float oceanHeightOffset = levels.scale(levels.waterLevel - 6);
-        this.bed = upliftOffset + oceanHeightOffset;
+
+        float upliftOffset = (ContinentalHydrology.getWeightedWaterHeight(cell.continentUplift));
+        float wetlandDepthOffset = levels.scale(3);
+        float oceanHeightOffset = levels.scale(levels.waterLevel);
+
+        this.bed = oceanHeightOffset + upliftOffset - wetlandDepthOffset;
 
         if (cell.height < this.bed) return;
 
@@ -62,19 +65,20 @@ public class Wetland {
 
         float dist = 1.0F - d2 / this.radius2;
         float singleBlock = levels.ground(1) - levels.ground(0);
-        this.banks = this.bed + 2 * singleBlock;
+        this.banks = this.bed;
 
         // We use a fixed range for thresholds, only varying the intensity by noise
-        float edgeNoise = this.terrainEdge.compute(x, z, 0);
         float tStart = 0.4F; // Start eroding here
         float tEnd = 0.7F;   // Hit the swamp floor here
 
         // Create a smooth 0.0 -> 1.0 alpha across the whole transition zone
         float totalAlpha = NoiseUtil.map(dist, 0.0F, tEnd, tEnd);
         totalAlpha = NoiseUtil.interpQuintic(totalAlpha);
+        totalAlpha = Math.max(0, Math.min(1, totalAlpha));
 
         // We calculate a target height that moves from Banks -> Bed based on how deep into the swamp we are.
         float internalAlpha = NoiseUtil.map(dist, tStart, tEnd, tEnd - tStart);
+        internalAlpha = Math.max(0, Math.min(1, internalAlpha));
         float targetHeight = NoiseUtil.lerp(this.banks, this.bed, internalAlpha);
 
         // Apply the height change smoothly

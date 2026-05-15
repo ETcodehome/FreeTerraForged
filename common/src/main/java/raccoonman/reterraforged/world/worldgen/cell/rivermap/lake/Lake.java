@@ -18,6 +18,7 @@ public class Lake {
     private float depth;
     private float bankMin;
     private float bankMax;
+    private float oceanLevel;
     protected Vec2f center;
 
     // Persistent fields to lock the lake's height across all cells in this instance
@@ -39,6 +40,7 @@ public class Lake {
         this.bankAlphaRange = this.bankAlphaMax - this.bankAlphaMin;
         this.lakeDistance2 = lake * lake;
         this.valleyDistance2 = this.valley2 - this.lakeDistance2;
+        this.oceanLevel = config.oceanLevel;
     }
 
     public void apply(Cell cell, float x, float z) {
@@ -47,15 +49,13 @@ public class Lake {
             return;
         }
 
-        // 1. LOCK ELEVATION: Initialize flat levels based on the first cell processed
+        // Initialize the flat level based on the first cell processed
         // This prevents the 'cascading water' effect by ensuring every block in the
         // lake uses the same continent bias.
         if (this.flatWaterLevel < 0) {
-            float baseBias = ContinentalHydrology.getTargetWaterHeight(cell.continentUplift);
-            // 0.45F bias for banks, 0.42F for water ensures the lake sits in a slight dip
-            this.flatBankBias = baseBias * 0.49F;
-            this.flatWaterLevel = 0.25F + (baseBias * 0.485F);
-            this.flatFloorLevel = this.flatWaterLevel - this.depth;
+            this.flatBankBias = ContinentalHydrology.getWeightedWaterHeight(cell.continentUplift);
+            this.flatWaterLevel = ContinentalHydrology.getWeightedWaterHeight(cell.continentUplift) + this.oceanLevel;
+            this.flatFloorLevel = this.flatWaterLevel - this.depth + this.oceanLevel;
         }
 
         float bankHeight = this.getBankHeight(cell);
@@ -80,7 +80,7 @@ public class Lake {
             return;
         }
 
-        // 3. VALLEY LOGIC (Slopes leading down to the lake)
+        // VALLEY LOGIC (Slopes leading down to the lake)
         if (cell.height < bankHeight) {
             return;
         }

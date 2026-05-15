@@ -79,6 +79,10 @@ public class ContinentalHydrology {
     public static float getTargetWaterHeight(float continentEdge) {
         return fixedCurvedStep(continentEdge);
     }
+
+    public static float getWeightedWaterHeight(float inlandPercentage) {
+        return getTargetWaterHeight(inlandPercentage) * 0.50F;
+    }
 }
 
 

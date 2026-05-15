@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Random;
 
 import com.mojang.serialization.MapCodec;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import org.jetbrains.annotations.Nullable;
@@ -157,9 +158,10 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
 						int scaledY = levels.scale(cell.height);
 
 						// Calculate OUR integer water height
+						float oceanLevel = levels.water;
 						int waterY = cell.terrain.isLake()
-								? levels.scale(cell.riverWaterLevel) + 1
-								: levels.scale(ContinentalHydrology.getTargetWaterHeight(cell.continentUplift) * 0.50F + levels.water) - 3;
+								? levels.scale(cell.riverWaterLevel) // defer to lake water level that gets overridden
+								: levels.scale(ContinentalHydrology.getWeightedWaterHeight(cell.continentUplift) + oceanLevel);
 
 						if (waterY < levels.scale(levels.water)) waterY = levels.scale(levels.water);
 
@@ -181,14 +183,14 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
 								// Calculate the NEIGHBOR'S integer water height using their specific data
 								int nWaterY;
 								if (neighborCell.terrain.isLake()) {
-									nWaterY = levels.scale(neighborCell.riverWaterLevel) + 1;
+									nWaterY = levels.scale(neighborCell.riverWaterLevel); // defer to lake calculated water level
 								} else {
-									nWaterY = levels.scale(ContinentalHydrology.getTargetWaterHeight(neighborCell.continentUplift) * 0.50F + levels.water) - 3;
+									nWaterY = levels.scale(ContinentalHydrology.getWeightedWaterHeight(neighborCell.continentUplift) + levels.water);
 								}
 
 								if (nWaterY < levels.scale(levels.water)) nWaterY = levels.scale(levels.water);
 
-								// IMPORTANT: Only flag if the neighbor's actual water surface is lower than ours
+								// Only flag if the neighbor's actual water surface is lower than ours
 								if (nWaterY < waterY) {
 
 									if (waterY - nWaterY > 1){
@@ -197,13 +199,14 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
 
 									isTransitionColumn = true;
 									if (multiBlockDrop) {
+
 										// make water fall onto the lower neighbour
 										for (int wy = nWaterY + 1; wy <= waterY; wy++) {
-											net.minecraft.core.BlockPos.MutableBlockPos pos = new net.minecraft.core.BlockPos.MutableBlockPos();
 											BlockState state = wy == waterY
 													? Blocks.WATER.defaultBlockState().setValue(BlockStateProperties.LEVEL, 1)
 													: Blocks.WATER.defaultBlockState();
-											this.surfaceContext.chunk.setBlockState(pos.set(nx, wy, nz), state, false);
+											BlockPos neighbour = new BlockPos(nx, wy, nz);
+											this.surfaceContext.chunk.setBlockState(neighbour, state, true);
 										}
 									}
 								}
@@ -229,6 +232,7 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
 								}
 
 								// waterfall "walls"
+								// TODO - this needs to be better
 								else if (!isTopBlock && multiBlockDrop)
 								{
 									this.surfaceContext.chunk.setBlockState(pos.set(x, wy, z), stone, false);

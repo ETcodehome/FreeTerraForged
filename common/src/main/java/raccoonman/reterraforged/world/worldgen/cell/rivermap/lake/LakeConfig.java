@@ -13,6 +13,7 @@ public class LakeConfig {
     public float bankMax;
     public float distanceMin;
     public float distanceMax;
+    public float oceanLevel;
     
     private LakeConfig(Builder builder) {
         this.depth = builder.depth;
@@ -24,6 +25,7 @@ public class LakeConfig {
         this.bankMax = builder.bankMax;
         this.distanceMin = builder.distanceMin;
         this.distanceMax = builder.distanceMax;
+        this.oceanLevel = builder.oceanLevel;
     }
     
     public static LakeConfig of(RiverSettings.Lake settings, Levels levels) {
@@ -36,6 +38,7 @@ public class LakeConfig {
         builder.distanceMax = settings.maxStartDistance;
         builder.bankMin = levels.water(settings.minBankHeight);
         builder.bankMax = levels.water(settings.maxBankHeight);
+        builder.oceanLevel = levels.water;
         return new LakeConfig(builder);
     }
     
@@ -48,6 +51,7 @@ public class LakeConfig {
         public float bankMax;
         public float distanceMin;
         public float distanceMax;
+        public float oceanLevel;
         
         public Builder() {
             this.depth = 10.0F;
@@ -57,6 +61,7 @@ public class LakeConfig {
             this.bankMax = 8.0F;
             this.distanceMin = 0.025F;
             this.distanceMax = 0.05F;
+            this.oceanLevel = 0.25F;
         }
     }
 }

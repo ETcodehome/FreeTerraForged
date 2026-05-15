@@ -135,7 +135,7 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
         CellPopulator oceans = new ContinentLerper3(deepOcean, shallowOcean, coast, controlPoints.deepOcean, controlPoints.shallowOcean, controlPoints.coast);
         CellPopulator terrain = new ContinentLerper2(oceans, (cell, x, z) -> {
             land.apply(cell, x, z);
-            cell.height += (ContinentalHydrology.getTargetWaterHeight(cell.smoothVoronoi) * 0.5F);
+            cell.height += (ContinentalHydrology.getWeightedWaterHeight(cell.smoothVoronoi));
         }, controlPoints.shallowOcean, controlPoints.inland);
 
         Noise beachNoise = Noises.perlin2(ctx.seed.next(), 20, 1);
