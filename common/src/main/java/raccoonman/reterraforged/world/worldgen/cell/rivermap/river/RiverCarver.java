@@ -100,14 +100,22 @@ public class RiverCarver implements Comparable<RiverCarver> {
 
         // Banks Stage (Only runs OUTSIDE the core water channel)
         if (!isInsideChannel) {
+
             // How far inside the bank erosion zone are we? (0.0 at mountain edge, 1.0 at water's edge)
             float bankProgress = (bankRadius - currentLinearDist) / (bankRadius - bedRadius);
             bankProgress = NoiseUtil.clamp(bankProgress, 0.0F, 1.0F);
 
-            // Cubic smoothstep for a natural rolling hilltop transition
-            float smoothBankAlpha = bankProgress * bankProgress * (3.0F - 2.0F * bankProgress);
+            // High-frequency micro-perturbation to make bank borders jagged.
+            float microNoise = (float) Math.sin(currX * 0.4F) * (float) Math.cos(currZ * 0.4F);
+            // Multiply by (1.0F - bankProgress) so the distortion fades to zero at the river's edge,
+            // preventing the distance field from compressing and creating steep walls.
+            float lateralWarp = microNoise * 0.08F * (1.0F - bankProgress);
+            float roughBankProgress = NoiseUtil.clamp(bankProgress + lateralWarp, 0.0F, 1.0F);
 
-            // 5. Runoff Gully Noise Component
+            // Cubic smoothstep using the roughened progress
+            float smoothBankAlpha = roughBankProgress * roughBankProgress * (3.0F - 2.0F * roughBankProgress);
+
+            // Runoff Gully Noise Component
             float gullyFreq = 0.05F;
             float nx = currX * gullyFreq;
             float nz = currZ * gullyFreq;
@@ -115,16 +123,27 @@ public class RiverCarver implements Comparable<RiverCarver> {
             float gullyEffect = 1.0F - Math.abs(noiseSample);
             gullyEffect = gullyEffect * gullyEffect; // Sharpen gully channels
 
+            // (Terracing / Micro-slopes)
+            // High frequency layered noise to add small ledge textures inside the valley walls
+            float detailFreq = 0.25F;
+            float detailSample = (float) Math.sin(currX * detailFreq) * (float) Math.sin(currZ * detailFreq);
+            // Modulate gully effect so it feels rocky and broken rather than a smooth slide
+            float roughGullyEffect = NoiseUtil.lerp(gullyEffect, gullyEffect * (0.8F + detailSample * 0.2F), bankProgress);
+
             // Shoreline Taper, fade out the noise completely as it approaches the water's edge
             float noiseWeight = bankProgress * bankProgress;
-            float finalErosionInfluence = smoothBankAlpha * NoiseUtil.lerp(gullyEffect, 1.0F, noiseWeight);
+            float finalErosionInfluence = smoothBankAlpha * NoiseUtil.lerp(roughGullyEffect, 1.0F, noiseWeight);
 
             // To protect water width, the bank interpolates toward the shoreline height not the deep river floor
             float rawCarvedHeight = NoiseUtil.lerp(cell.height, targetWaterLevel, finalErosionInfluence);
 
-            // Calculate allowed drop relative to the uncarved mountain edge boundary
+            // Calculate allowed drop relative to the uncarved mountain edge boundary using PURE physical distance
             float horizontalDistanceFromBoundary = bankRadius - currentLinearDist;
-            float maxAllowableDrop = horizontalDistanceFromBoundary * 0.75F; // Safe walkable grade (~36° max slope)
+
+            // Lowered the base slope factor to push the valley walls back.
+            // We keep a tiny variation (0.05F) to keep it looking natural, but its maximum limit is heavily restricted.
+            float dynamicSlopeFactor = 0.55F + (detailSample * 0.05F);
+            float maxAllowableDrop = horizontalDistanceFromBoundary * dynamicSlopeFactor;
             float slopeLimitedHeight = cell.height - maxAllowableDrop;
 
             // Enforce the slope cap relative to the natural hill profile
@@ -134,11 +153,11 @@ public class RiverCarver implements Comparable<RiverCarver> {
                 cell.height = finalBankHeight;
 
                 // If a deep gully dips below water level it should just use the min.
-                // This shouldn't be needed, but it makes me sleep better at night
                 if (cell.height < targetWaterLevel) {
                     cell.height = targetWaterLevel;
                 }
             }
+
         } else {
             setHeightRiverInternals(cell, currT, distSqToCurr, targetBedFloor, oceanHeightOffset, bedDepthOffset);
         }
