@@ -443,10 +443,10 @@ public class Presets {
 
 						new Lake(0.595F,
 								0.0F,
-								0.00F,
+								0.50F,
 								11,
 								63,
-								500,
+								100,
 								1,
 								6),
 
