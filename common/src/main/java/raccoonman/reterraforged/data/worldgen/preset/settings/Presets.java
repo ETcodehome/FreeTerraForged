@@ -279,44 +279,210 @@ public class Presets {
 
 	public static Preset makeRivers() {
 		return new Preset(
+
 				new WorldSettings(
-						new Continent(ContinentType.UPLIFT, DistanceFunction.EUCLIDEAN, 4029, 0.8F, 0.25F, 0.25F, 5, 0.26F, 4.33F),
-						new ControlPoints(-1.0F, -1.0F, 0.1F, 0.25F, 0.326F, 0.448F, 0.5F),
-						new Properties(SpawnType.CONTINENT_CENTER, 320, 64, 63, -54, 0,0)
+
+						new Continent(ContinentType.UPLIFT,
+								DistanceFunction.EUCLIDEAN,
+								2409,
+								1.0F,
+								0.0F,
+								0.6161F,
+								5,
+								0.2516F,
+								5.7262F),
+
+						new ControlPoints(-1.0F,
+								-1.0F,
+								0.1F,
+								0.13144F,
+								0.2210F,
+								0.3576F,
+								0.4717F),
+
+						new Properties(SpawnType.CONTINENT_CENTER,
+								640,
+								128,
+								63,
+								-109,
+								0,
+								0)
 				),
-				new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
-				new CaveSettings(0.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, true, false),
+				new SurfaceSettings(new SurfaceSettings.Erosion(30,
+						140,
+						40,
+						95,
+						0.65F,
+						0.475F,
+						0.4F)),
+
+				new CaveSettings(0.199F,
+						1.5625F,
+						1.0F,
+						1.0F,
+						1.0F,
+						0.4014F,
+						0.1997F,
+						0.0373F,
+						true,
+						false),
+
 				new ClimateSettings(
-						new RangeValue(0, 4, 2, 0.0F, 1.0F, 0.097F),
-						new RangeValue(0, 3, 1, 0.0F, 1.0F, 0.0F),
-						new BiomeShape(402, 5, 180, 110),
-						new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.PERLIN2, 24, 1, 0.5F, 2.65F, 60)
+
+						// temperature
+						new RangeValue(0,
+								2,
+								5,
+								0.1124F,
+								1.0F,
+								0.002F),
+
+						// moisture
+						new RangeValue(0,
+								4,
+								1,
+								0.0F,
+								1.0F,
+								0.006F),
+
+						new BiomeShape(586,
+								4,
+								38,
+								332),
+
+						new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.SIMPLEX,
+								137,
+								5,
+								1.601F,
+								10.5F,
+								300)
 				),
 				new TerrainSettings(
-						new General(0, 1507, 1.0F, 1.175F, true, true),
-						new Terrain(1.0F, 1.0F, 1.0F, 1.0F),
-						new Terrain(2.0F, 1.0F, 1.0F, 1.0F),
-						new Terrain(2.0F, 1.0F, 1.0F, 1.0F),
-						new Terrain(1.5F, 1.0F, 1.0F, 1.0F),
-						new Terrain(1.5F, 1.0F, 1.0F, 1.0F),
-						new Terrain(1.0F, 1.0F, 1.0F, 1.0F),
-						new Terrain(2.0F, 1.0F, 1.0F, 1.0F),
-						new Terrain(2.5F, 1.0F, 1.0F, 1.0F),
-						new Terrain(5.0F, 1.0F, 1.0F, 1.0F)
+
+						new General(0,
+								844,
+								0.6F,
+								1.0F,
+								true,
+								false),
+
+						// steppe
+						new Terrain(0.5734F,
+								2.0F,
+								4.4007F,
+								0.7538F),
+
+						// plains
+						new Terrain(10.0F,
+								2.0F,
+								6.7268F,
+								0.2513F),
+
+						// hills
+						new Terrain(0.8118F,
+								1.5889F,
+								2.7577F,
+								4.9291F),
+
+						// dales
+						new Terrain(1.184F,
+								1.3685F,
+								7.2745F,
+								5.5347F),
+
+						// plateau
+						new Terrain(2.576F,
+								1.0309F,
+								3.7371F,
+								3.1894F),
+
+						// badlands
+						new Terrain(5.3737F,
+								1.5940F,
+								2.8866F,
+								1.9329F),
+
+						// torridonian
+						new Terrain(6.9716F,
+								1.0F,
+								2.0F,
+								3.78221F),
+
+						// mountains
+						new Terrain(5.5347F,
+								2.0F,
+								0.88917524F,
+								0.29639176F),
+
+						// volcano
+						new Terrain(8.1443F,
+								1.1559F,
+								7.8479F,
+								3.447F)
 				),
 				new RiverSettings(
-						0, 13,
-						new River(5, 1, 5, 28, 9, 0.27F),
-						new River(3, 1, 3, 18, 3, 0.7F),
-						new Lake(0.595F, 0.0F, 0.028F, 10, 75, 150, 2, 10),
-						new Wetland(0.86F, 175, 225)
+
+						-807426906,
+						7,
+
+						//main rivers
+						new River(7,
+								1,
+								3,
+								48,
+								14,
+								0.885F),
+
+						//branch rivers
+						new River(3,
+								1,
+								2,
+								28,
+								4,
+								0.855F),
+
+						new Lake(0.595F,
+								0.0F,
+								0.00F,
+								11,
+								63,
+								500,
+								1,
+								6),
+
+						new Wetland(1.0F,
+								500,
+								500)
 				),
 				new FilterSettings(
-						new Erosion(165, 15, 0.612F, 0.652F, 0.5F, 0.5F),
-						new Smoothing(1, 1.799F, 0.898F)
+
+						new Erosion(250,
+								32,
+								0.901F,
+								0.901F,
+								0.8112F,
+								0.8112F),
+
+						new Smoothing(0,
+								0.0F,
+								0.0F)
 				),
+
 				new StructureSettings(),
-				new MiscellaneousSettings(true, 721, true, true, true, false, true, true, true, true, false, 0.902F, 0.945F)
+
+				new MiscellaneousSettings(true,
+						889,
+						true,
+						true,
+						true,
+						false,
+						true,
+						true,
+						true,
+						false,
+						false,
+						0.85438144F,
+						0.855F)
 		);
 	}
 	
