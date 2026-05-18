@@ -29,9 +29,9 @@ public record Network(RiverCarver riverCarver, Lake[] lakes, Wetland[] wetlands,
             z += PosUtil.unpackRightf(offset);
             t = Line.distanceOnLine(x, z, river.x1, river.z1, river.x2, river.z2);
         }
+        this.carveLakes(cell, x, z, nx, nz);
         this.carveRiver(cell, px, pz, pt, x, z, t);
         this.carveWetlands(cell, x, z, nx, nz);
-        this.carveLakes(cell, x, z, nx, nz);
         for (Network network : this.children) {
             network.carve(cell, x, z, nx, nz);
         }

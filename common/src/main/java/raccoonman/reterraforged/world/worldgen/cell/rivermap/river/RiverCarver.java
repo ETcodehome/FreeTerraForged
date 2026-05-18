@@ -171,7 +171,6 @@ public class RiverCarver implements Comparable<RiverCarver> {
         float bedInfluence = this.getDistanceAlpha(currT, distSqToCurr, this.bedWidth);
         cell.height = Math.min(cell.height, ContinentalHydrology.getWeightedWaterHeight(cell.continentUplift) - (bedDepthOffset * bedInfluence) + oceanHeightOffset);
         cell.moisture = 1.0F;
-        cell.terrain = TerrainType.RIVER;
         this.tag(cell, targetBedFloor);
     }
     
@@ -221,9 +220,20 @@ public class RiverCarver implements Comparable<RiverCarver> {
     }
 
     private void tag(Cell cell, float bedHeight) {
+
+        // don't update lake water
+        if (cell.terrain.isLake()){
+            return;
+        }
+
         cell.erosionMask = true;
         cell.terrain = TerrainType.RIVER;
-        cell.riverWaterLevel = Math.max(this.waterLine, bedHeight);
+
+        // don't carve down existing water at height.
+        float newMax = Math.max(this.waterLine, bedHeight);
+        if (newMax > cell.riverWaterLevel) {
+            cell.riverWaterLevel = Math.max(this.waterLine, bedHeight);
+        }
     }
     
     private static float getMouthModifier(Cell cell) {

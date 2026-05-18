@@ -78,12 +78,13 @@ public class Lake {
             this.applyValleyDepression(cell, distance2, bankHeight);
         }
 
-        // --- THE FIX ---
-        // Ensure that any chunk calculating terrain inside the lake bounds
-        // applies the unified fluid height metadata, preventing shoreline air gaps.
         if (!this.isLevelLocked) {
             this.lockCenterLevel(bankHeight);
         }
+
+        // Any cell that falls within the active footprint of this lake's
+        // bounding math must share the center-locked riverWaterLevel metadata.
+        // This prevents the pipeline from seeing a modified riverMask with an unassigned water height.
         cell.riverWaterLevel = this.mutableLakeLevel;
     }
 
@@ -136,19 +137,26 @@ public class Lake {
     }
 
     /**
-     * Handles the wider land depression, creating the slopes that transition down to the shore.
+     * Handles the wider land depression, creating the slopes down to the shore.
      */
     private void applyValleyDepression(Cell cell, float distance2, float bankHeight) {
-        if (cell.height < bankHeight) {
-            return;
-        }
 
         float valleyAlpha = 1.0F - (distance2 - this.lakeDistance2) / this.valleyDistance2;
         valleyAlpha = NoiseUtil.clamp(valleyAlpha, 0.0F, 1.0F);
-        valleyAlpha = valleyAlpha * valleyAlpha * (3.0F - 2.0F * valleyAlpha);
 
-        cell.height = NoiseUtil.lerp(cell.height, bankHeight, valleyAlpha);
-        cell.riverMask = Math.min(cell.riverMask, 1.0F - valleyAlpha);
+        // Standard smoothstep easing (3t^2 - 2t^3) to ensure a perfectly clean transition slope
+        float smoothAlpha = valleyAlpha * valleyAlpha * (3.0F - 2.0F * valleyAlpha);
+
+        // Blend the terrain smoothly down to the master center-based bank height
+        cell.height = NoiseUtil.lerp(cell.height, bankHeight, smoothAlpha);
+
+        // tiny offset to force terrain one block higher.
+        if (cell.height < bankHeight){
+            cell.height = bankHeight;
+        }
+
+        // Update the mask cleanly so it scales back up to 1.0 at the absolute outer edge
+        cell.riverMask = Math.min(cell.riverMask, 1.0F - smoothAlpha);
     }
 
     public void recordBounds(Boundsf.Builder builder) {
@@ -169,7 +177,7 @@ public class Lake {
 
     protected float getBankHeight(Cell cell) {
         if (this.flatBankHeight >= 0) {
-            return this.flatBankHeight;
+            return this.flatBankHeight + 0.01F;
         }
 
         float bias = (this.flatBankBias < 0) ? (cell.continentEdge * 0.45F) : this.flatBankBias;
