@@ -106,8 +106,8 @@ public class Lake {
             return; // Already initialized
         }
 
-        this.flatBankBias = ContinentalHydrology.getWeightedWaterHeight(cell.continentUplift);
-        this.flatWaterLevel = ContinentalHydrology.getWeightedWaterHeight(cell.continentUplift) + this.oceanLevel;
+        this.flatBankBias = ContinentalHydrology.getWeightedWaterHeight(cell.waterTable);
+        this.flatWaterLevel = ContinentalHydrology.getWeightedWaterHeight(cell.waterTable) + this.oceanLevel;
         this.flatFloorLevel = this.flatWaterLevel - this.depth;
 
         float bankHeightAlpha = NoiseUtil.map(cell.height, this.bankAlphaMin, this.bankAlphaMax, this.bankAlphaRange);

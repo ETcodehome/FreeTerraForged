@@ -159,9 +159,7 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
 
 						// Calculate OUR integer water height
 						float oceanLevel = levels.water;
-						int waterY = cell.terrain.isLake()
-								? levels.scale(cell.riverWaterLevel) // defer to lake water level that gets overridden
-								: levels.scale(ContinentalHydrology.getWeightedWaterHeight(cell.continentUplift) + oceanLevel);
+						int waterY = levels.scale(ContinentalHydrology.getWeightedWaterHeight(cell.waterTable) + oceanLevel);
 
 						if (waterY < levels.scale(levels.water)) waterY = levels.scale(levels.water);
 
@@ -181,12 +179,7 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
 								var neighborCell = neighborReader.getCell(nx & 0xF, nz & 0xF);
 
 								// Calculate the NEIGHBOR'S integer water height using their specific data
-								int nWaterY;
-								if (neighborCell.terrain.isLake()) {
-									nWaterY = levels.scale(neighborCell.riverWaterLevel); // defer to lake calculated water level
-								} else {
-									nWaterY = levels.scale(ContinentalHydrology.getWeightedWaterHeight(neighborCell.continentUplift) + levels.water);
-								}
+								int nWaterY = levels.scale(ContinentalHydrology.getWeightedWaterHeight(neighborCell.waterTable) + levels.water);
 
 								if (nWaterY < levels.scale(levels.water)) nWaterY = levels.scale(levels.water);
 

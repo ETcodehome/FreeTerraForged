@@ -51,7 +51,7 @@ public class Wetland {
 
     public void apply(Cell cell, float rx, float rz, float x, float z) {
 
-        float upliftOffset = (ContinentalHydrology.getWeightedWaterHeight(cell.continentUplift));
+        float upliftOffset = (ContinentalHydrology.getWeightedWaterHeight(cell.waterTable));
         float wetlandDepthOffset = levels.scale(3);
         float oceanHeightOffset = levels.scale(levels.waterLevel);
 

@@ -81,8 +81,8 @@ public class RiverCarver implements Comparable<RiverCarver> {
         // Base Elevations & Target Floor (Matches original depth definitions)
         float oceanHeightOffset = levels.water;
         float bedDepthOffset = oceanHeightOffset - config.bedHeight;
-        float targetBedFloor = ContinentalHydrology.getWeightedWaterHeight(cell.continentUplift) - bedDepthOffset + oceanHeightOffset;
-        float targetWaterLevel = ContinentalHydrology.getWeightedWaterHeight(cell.continentUplift) + oceanHeightOffset;
+        float targetBedFloor = ContinentalHydrology.getWeightedWaterHeight(cell.waterTable) - bedDepthOffset + oceanHeightOffset;
+        float targetWaterLevel = ContinentalHydrology.getWeightedWaterHeight(cell.waterTable) + oceanHeightOffset;
 
         // True Linear Distance System
         float currentLinearDist = (float) Math.sqrt(distSqToCurr);
@@ -169,7 +169,7 @@ public class RiverCarver implements Comparable<RiverCarver> {
         // as continental uplift zeroes out as we enter the ocean the uplift isn't applied so any existing cell height is correct
 
         float bedInfluence = this.getDistanceAlpha(currT, distSqToCurr, this.bedWidth);
-        cell.height = Math.min(cell.height, ContinentalHydrology.getWeightedWaterHeight(cell.continentUplift) - (bedDepthOffset * bedInfluence) + oceanHeightOffset);
+        cell.height = Math.min(cell.height, ContinentalHydrology.getWeightedWaterHeight(cell.waterTable) - (bedDepthOffset * bedInfluence) + oceanHeightOffset);
         cell.moisture = 1.0F;
         this.tag(cell, targetBedFloor);
     }
