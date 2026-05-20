@@ -29,6 +29,7 @@ public class Cell {
     public float continentId;
     public float continentEdge;
     public float continentUplift;
+    public float waterTable;
     public float smoothVoronoi;
     public float continentDistance;
     public float terrainRegionId;

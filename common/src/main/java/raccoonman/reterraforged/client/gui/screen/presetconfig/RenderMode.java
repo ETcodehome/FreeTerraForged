@@ -201,7 +201,7 @@ public enum RenderMode {
         public int getColor(Cell cell, Levels levels, float scale, float bias) {
 
             if (cell.terrain.isDeepOcean() || cell.terrain.isShallowOcean()) {
-                return rgba(17, 17, 17);
+                return RenderMode.getWaterColor();
             }
 
             // Ensure the value is clamped between 0.0 and 1.0
@@ -232,18 +232,10 @@ public enum RenderMode {
                 return rgba(17, 17, 17);
             }
 
-            // Ensure the value is clamped between 0.0 and 1.0
-            float edgeValue = NoiseUtil.clamp(cell.continentEdge, 0.0F, 1.0F);
-
-            // At 0.0: White (Saturation 0, Brightness 1)
-            // At 1.0: Pure Red (Hue 0, Saturation 1, Brightness 1)
-
-            float hue = 0.0F;              // Solid Red hue
-            float saturation = edgeValue;  // Increases from 0 (White) to 1 (Red)
-            float brightness = 1.0F;       // Maintain full brightness for "clean" look
-
+            float hue = 0.0F;
+            float saturation = 0.0F;
+            float brightness = cell.waterTable;
             return rgba(hue, saturation, brightness);
-
         }
     };
 

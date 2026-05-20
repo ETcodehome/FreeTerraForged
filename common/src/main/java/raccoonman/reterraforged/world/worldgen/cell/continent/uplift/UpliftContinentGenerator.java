@@ -24,6 +24,7 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
     protected float variance;
     protected int varianceSeed;
     protected Domain warp;
+    protected Domain cleanWarp;
     protected Noise cliffNoise;
     protected Noise bayNoise;
     protected Levels levels;
@@ -35,7 +36,8 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         this.frequency = 1.0F / tectonicScale;
         this.varianceSeed = seed.next();
         this.variance = settings.continent.continentSizeVariance;
-        this.warp = this.createWarp(seed, tectonicScale, settings.continent);
+        this.warp = this.createWarp(seed, tectonicScale, settings.continent, true);
+        this.cleanWarp = this.createWarp(seed, tectonicScale, settings.continent, false);
 
         float frequency = 1.0F / this.frequency;
 
@@ -129,6 +131,8 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         );
         cell.smoothVoronoi = cell.continentUplift; // store it before we perturb it.
 
+        cell.waterTable = shiftAndRemap(getCustomPeakVoronoiGradient(rawX, rawY), levels.water);
+
         // Truncate the uplift if we are in the coastal transition zone
         // This prevents the cliff/bay noise from 'eating' the 1.0 peak in the center.
         float offSetThreshold = this.levels.water + 0.05F;
@@ -139,6 +143,158 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         if (shorelineValue < 0.5F) {
             cell.continentUplift = Math.min(cell.continentUplift, shorelineValue);
         }
+    }
+
+    public float shiftAndRemap(float value, float threshold) {
+        if (value <= threshold) {
+            return 0.0F;
+        }
+        float remapped = (value - threshold) / (1.0F - threshold);
+        return NoiseUtil.clamp(remapped, 0.0F, 1.0F);
+    }
+
+    /**
+     * Generates a linear polygonal pyramid where the peak is centered exactly at
+     * the true average vertex (corner) location of the cell polygon.
+     *
+     * @param rawX The raw input X coordinate (e.g., world block X)
+     * @param rawZ The raw input Z coordinate (e.g., world block Z)
+     * @return A float from 0.0 (exact cell edge) to 1.0 (exact true centroid peak)
+     */
+    public float getCustomPeakVoronoiGradient(float rawX, float rawZ) {
+
+        float warpedX = this.cleanWarp.getX(rawX, rawZ, 0);
+        float warpedZ = this.cleanWarp.getZ(rawX, rawZ, 0);
+
+        float x = warpedX * this.frequency;
+        float y = warpedZ * this.frequency;
+
+        int xi = NoiseUtil.floor(x);
+        int yi = NoiseUtil.floor(y);
+
+        int cellX = xi;
+        int cellY = yi;
+        float cellPointX = x;
+        float cellPointY = y;
+        float nearestSq = Float.MAX_VALUE;
+
+        // Pass 1: Find the closest Voronoi cell seed (S0)
+        for (int cy = yi - 1; cy <= yi + 1; ++cy) {
+            for (int cx = xi - 1; cx <= xi + 1; ++cx) {
+                Vec2f vec = NoiseUtil.cell(this.seed, cx, cy);
+                float px = cx + vec.x() * this.jitter;
+                float py = cy + vec.y() * this.jitter;
+                float dist2 = Line.distSq(x, y, px, py);
+
+                if (dist2 < nearestSq) {
+                    nearestSq = dist2;
+                    cellPointX = px;
+                    cellPointY = py;
+                    cellX = cx;
+                    cellY = cy;
+                }
+            }
+        }
+
+        // Collect the 8 immediate neighboring seeds
+        float[] neighborX = new float[8];
+        float[] neighborY = new float[8];
+        int nIndex = 0;
+
+        for (int cy2 = cellY - 1; cy2 <= cellY + 1; ++cy2) {
+            for (int cx2 = cellX - 1; cx2 <= cellX + 1; ++cx2) {
+                if (cx2 != cellX || cy2 != cellY) {
+                    Vec2f vec2 = NoiseUtil.cell(this.seed, cx2, cy2);
+                    neighborX[nIndex] = cx2 + vec2.x() * this.jitter;
+                    neighborY[nIndex] = cy2 + vec2.y() * this.jitter;
+                    nIndex++;
+                }
+            }
+        }
+
+        // Pass 3: Find the true polygon vertices by intersecting perpendicular bisectors
+        float vertexSumX = 0.0F;
+        float vertexSumY = 0.0F;
+        int vertexCount = 0;
+        float s0Sq = cellPointX * cellPointX + cellPointY * cellPointY;
+
+        for (int i = 0; i < 8; i++) {
+            float x1 = neighborX[i];
+            float y1 = neighborY[i];
+            float dx1 = x1 - cellPointX;
+            float dy1 = y1 - cellPointY;
+            float b1 = 0.5F * ((x1 * x1 + y1 * y1) - s0Sq);
+
+            for (int j = i + 1; j < 8; j++) {
+                float x2 = neighborX[j];
+                float y2 = neighborY[j];
+                float dx2 = x2 - cellPointX;
+                float dy2 = y2 - cellPointY;
+                float b2 = 0.5F * ((x2 * x2 + y2 * y2) - s0Sq);
+
+                // Solve the linear system for the intersection of the two bisector lines
+                float det = dx1 * dy2 - dy1 * dx2;
+                if (Math.abs(det) < 0.00001F) continue; // Lines are parallel
+
+                float vx = (b1 * dy2 - b2 * dy1) / det;
+                float vy = (dx1 * b2 - dx2 * b1) / det;
+
+                // Validate the vertex: no other neighbor seed can be closer to it than S0
+                float d0Sq = (vx - cellPointX) * (vx - cellPointX) + (vy - cellPointY) * (vy - cellPointY);
+                boolean isValidVertex = true;
+
+                for (int k = 0; k < 8; k++) {
+                    if (k == i || k == j) continue;
+                    float xk = neighborX[k];
+                    float yk = neighborY[k];
+                    float dkSq = (vx - xk) * (vx - xk) + (vy - yk) * (vy - yk);
+
+                    if (dkSq < d0Sq - 0.0001F) { // Epsilon buffer for float precision
+                        isValidVertex = false;
+                        break;
+                    }
+                }
+
+                if (isValidVertex) {
+                    vertexSumX += vx;
+                    vertexSumY += vy;
+                    vertexCount++;
+                }
+            }
+        }
+
+        // Compute the true visual center (Centroid) of the cell's actual corners
+        float centerX = (vertexCount > 0) ? (vertexSumX / vertexCount) : cellPointX;
+        float centerY = (vertexCount > 0) ? (vertexSumY / vertexCount) : cellPointY;
+
+        // Pass 4: Render clean linear planes using our safe, verified centroid
+        float minGradient = 1.0F;
+
+        for (int i = 0; i < 8; i++) {
+            float px2 = neighborX[i];
+            float py2 = neighborY[i];
+
+            float dx = px2 - cellPointX;
+            float dy = py2 - cellPointY;
+            float lenSq = dx * dx + dy * dy;
+
+            if (lenSq > 0.00001F) {
+                float siSq = px2 * px2 + py2 * py2;
+                float baseHalfDiff = 0.5F * (siSq - s0Sq);
+
+                float h_x = baseHalfDiff - (x * dx + y * dy);
+                float h_c = baseHalfDiff - (centerX * dx + centerY * dy);
+
+                if (h_c > 0.00001F) {
+                    float planeValue = h_x / h_c;
+                    if (planeValue < minGradient) {
+                        minGradient = planeValue;
+                    }
+                }
+            }
+        }
+
+        return NoiseUtil.clamp(minGradient, 0.0F, 1.0F);
     }
 
     float getCellContinentUplift(float x, float y, float gridCenterX, float gridCenterZ,
@@ -217,12 +373,13 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         return this.riverCache.getRivers(x, z);
     }
 
-    protected Domain createWarp(Seed seed, int tectonicScale, WorldSettings.Continent continent) {
+    protected Domain createWarp(Seed seed, int tectonicScale, WorldSettings.Continent continent, boolean applyLacunarity) {
         int warpScale = NoiseUtil.round(tectonicScale * 0.225F);
         float strength = NoiseUtil.round(tectonicScale * 0.33F);
+        float lacunarity = applyLacunarity ? continent.continentNoiseLacunarity : 0.0F;
         return Domains.domain(
-                Noises.perlin2(seed.next(), warpScale, continent.continentNoiseOctaves, continent.continentNoiseLacunarity, continent.continentNoiseGain),
-                Noises.perlin2(seed.next(), warpScale, continent.continentNoiseOctaves, continent.continentNoiseLacunarity, continent.continentNoiseGain),
+                Noises.perlin2(seed.next(), warpScale, continent.continentNoiseOctaves, lacunarity, continent.continentNoiseGain),
+                Noises.perlin2(seed.next(), warpScale, continent.continentNoiseOctaves, lacunarity, continent.continentNoiseGain),
                 Noises.constant(strength)
         );
     }
