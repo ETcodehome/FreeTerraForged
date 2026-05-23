@@ -200,19 +200,21 @@ public enum RenderMode {
         @Override
         public int getColor(Cell cell, Levels levels, float scale, float bias) {
 
-            if (cell.terrain.isDeepOcean() || cell.terrain.isShallowOcean()) {
+            // highlight watery regions
+            if (cell.terrain.isWateryButNotOcean()) {
                 return RenderMode.getWaterColor();
             }
 
-            // Ensure the value is clamped between 0.0 and 1.0
+            // Grey the ocean to keep focus on landmasses
+            if (cell.height <= levels.water) {
+                return rgba(17, 17, 17);
+            }
+
             float edgeValue = NoiseUtil.clamp(cell.waterTable, 0.0F, 1.0F);
-
-            float hue = 0.0F;              // Solid Red hue
-            float saturation = edgeValue;  // Increases from 0 (White) to 1 (Red)
-            float brightness = 1.0F;       // Maintain full brightness for "clean" look
-
+            float hue = 0.0F;
+            float saturation = 0.0F;
+            float brightness = edgeValue;
             return rgba(hue, saturation, brightness);
-
         }
     },
     CONTINENT_EDGE {
@@ -224,14 +226,9 @@ public enum RenderMode {
 
         @Override
         public int getColor(Cell cell, Levels levels, float scale, float bias) {
-
-            if (cell.terrain.isDeepOcean() || cell.terrain.isShallowOcean()) {
-                return RenderMode.getWaterColor();
-            }
-
             float hue = 0.0F;
             float saturation = 0.0F;
-            float brightness = cell.waterTable;
+            float brightness = cell.continentEdge;
             return rgba(hue, saturation, brightness);
         }
     };

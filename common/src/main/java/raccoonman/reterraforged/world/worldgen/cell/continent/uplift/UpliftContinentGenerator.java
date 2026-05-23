@@ -112,19 +112,36 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
             }
         }
 
-        cell.continentDistance = NoiseUtil.sqrt(nearest);
-        cell.continentX = this.getCorrectedContinentCenter(cellPointX, sumX / 8.0F);
-        cell.continentZ = this.getCorrectedContinentCenter(cellPointY, sumY / 8.0F);
-
+        // dont process skipped continents
         if (this.shouldSkip(cellX, cellY)) {
             return;
         }
 
-        cell.continentId = AbstractContinent.getCellValue(this.seed, cellX, cellY);
+        // process regular continent masks
+        cell.continentDistance = NoiseUtil.sqrt(nearest);
         cell.continentEdge = this.getDistanceValue(x, y, cellX, cellY, nearest);
+        cell.continentId = AbstractContinent.getCellValue(this.seed, cellX, cellY);
 
-        // Calculate the perfectly smooth, aligned water table.
-        cell.waterTable = shiftAndRemap(getCustomPeakVoronoiGradient(rawX, rawY), levels.water);
+        // this updates continent centers to the voronoi centroid.
+        // we remap by the water level so the continent uplift is usefully placed above the water line
+        // then an additional 15ish percent insets from coastal boundaries
+        float upliftGradient = getSmoothVoronoiGradient(cell, rawX, rawY);
+        upliftGradient = shiftAndRemap(upliftGradient, levels.water);
+        upliftGradient = shiftAndRemap(upliftGradient, 0.15F);
+
+        // rescale the uplift to handle continental variance
+        cell.continentSizeModifier = getContinentSizeModifier(cellX, cellY);
+        if (cell.continentSizeModifier != 1.0F){
+            upliftGradient = shiftAndRemap(upliftGradient, (1.0F - cell.continentSizeModifier));
+        }
+
+        // use the continent edge values to guarantee we fall to the ocean near the ocean.
+        // sometimes this can look a little rough but havent found a more reliable way yet.
+        float customPeak = shiftAndRemap(cell.continentEdge, levels.water);
+        if (customPeak < 0.05F && customPeak < upliftGradient){
+            upliftGradient = customPeak;
+        }
+        cell.waterTable = upliftGradient;
     }
 
     public float shiftAndRemap(float value, float threshold) {
@@ -136,15 +153,24 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
     }
 
     /**
-     * Reverted to the structurally perfect geometric bisector math.
-     * The alignment is now handled securely in the generator constructor.
+     * Generates a linear polygonal pyramid where the peak is centered exactly at
+     * the true average vertex (corner) location of the cell polygon. Does not use warped coords for the gradient calculation.
+     * Warp is a one directional operation so we can't run an inverse to get back the real world peak coordinate in blocks.
+     *
+     * @param cell Output - updates the continent centroid values (avoids repeat calcs)
+     * @param rawX The raw input X coordinate (e.g., world block X)
+     * @param rawZ The raw input Z coordinate (e.g., world block Z)
+     * @return A float from 0.0 (exact cell edge) to 1.0 (exact true centroid peak)
      */
-    public float getCustomPeakVoronoiGradient(float rawX, float rawZ) {
-        float warpedX = this.cleanWarp.getX(rawX, rawZ, 0);
-        float warpedZ = this.cleanWarp.getZ(rawX, rawZ, 0);
+    public float getSmoothVoronoiGradient(Cell cell, float rawX, float rawZ) {
 
-        float x = warpedX * this.frequency;
-        float y = warpedZ * this.frequency;
+        // if we're at the ocean we're always at continent edge.
+        if (cell.terrain.isShallowOcean() || cell.terrain.isDeepOcean()){
+            return 0.0F;
+        }
+
+        float x = rawX * this.frequency;
+        float y = rawZ * this.frequency;
 
         int xi = NoiseUtil.floor(x);
         int yi = NoiseUtil.floor(y);
@@ -155,7 +181,7 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         float cellPointY = y;
         float nearestSq = Float.MAX_VALUE;
 
-        // Pass 1: Find closest Voronoi cell seed (S0)
+        // Find the closest Voronoi cell seed
         for (int cy = yi - 1; cy <= yi + 1; ++cy) {
             for (int cx = xi - 1; cx <= xi + 1; ++cx) {
                 Vec2f vec = NoiseUtil.cell(this.seed, cx, cy);
@@ -173,11 +199,10 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
             }
         }
 
-        // Collect neighbors
+        // Collect the 8 immediate neighboring seeds
         float[] neighborX = new float[8];
         float[] neighborY = new float[8];
         int nIndex = 0;
-
         for (int cy2 = cellY - 1; cy2 <= cellY + 1; ++cy2) {
             for (int cx2 = cellX - 1; cx2 <= cellX + 1; ++cx2) {
                 if (cx2 != cellX || cy2 != cellY) {
@@ -189,7 +214,7 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
             }
         }
 
-        // Pass 3: Find true polygon vertices by intersecting perpendicular bisectors
+        // Find the true polygon vertices
         float vertexSumX = 0.0F;
         float vertexSumY = 0.0F;
         int vertexCount = 0;
@@ -223,11 +248,7 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
                     float xk = neighborX[k];
                     float yk = neighborY[k];
                     float dkSq = (vx - xk) * (vx - xk) + (vy - yk) * (vy - yk);
-
-                    if (dkSq < d0Sq - 0.0001F) {
-                        isValidVertex = false;
-                        break;
-                    }
+                    if (dkSq < d0Sq - 0.0001F) { isValidVertex = false; break; }
                 }
 
                 if (isValidVertex) {
@@ -238,17 +259,19 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
             }
         }
 
-        // Compute pure visual centroid
         float centerX = (vertexCount > 0) ? (vertexSumX / vertexCount) : cellPointX;
         float centerY = (vertexCount > 0) ? (vertexSumY / vertexCount) : cellPointY;
 
-        // Pass 4: Render clean linear planes
-        float minGradient = 1.0F;
+        // Assign the centroid coordinates to the Cell object in world space
+        // We reverse the frequency scaling to get back to raw coordinate space
+        cell.continentX = Math.round(centerX / this.frequency);
+        cell.continentZ = Math.round(centerY / this.frequency);
 
+        // Render clean linear planes using unwarped logic
+        float minGradient = 1.0F;
         for (int i = 0; i < 8; i++) {
             float px2 = neighborX[i];
             float py2 = neighborY[i];
-
             float dx = px2 - cellPointX;
             float dy = py2 - cellPointY;
             float lenSq = dx * dx + dy * dy;
@@ -256,19 +279,14 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
             if (lenSq > 0.00001F) {
                 float siSq = px2 * px2 + py2 * py2;
                 float baseHalfDiff = 0.5F * (siSq - s0Sq);
-
                 float h_x = baseHalfDiff - (x * dx + y * dy);
                 float h_c = baseHalfDiff - (centerX * dx + centerY * dy);
-
                 if (h_c > 0.00001F) {
                     float planeValue = h_x / h_c;
-                    if (planeValue < minGradient) {
-                        minGradient = planeValue;
-                    }
+                    if (planeValue < minGradient) minGradient = planeValue;
                 }
             }
         }
-
         return NoiseUtil.clamp(minGradient, 0.0F, 1.0F);
     }
 
@@ -295,7 +313,6 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         return this.riverCache.getRivers(x, z);
     }
 
-    // Refactored to accept static seeds rather than mutating a single Seed object
     protected Domain createWarp(int seedX, int seedZ, int tectonicScale, WorldSettings.Continent continent, boolean applyLacunarity) {
         int warpScale = NoiseUtil.round(tectonicScale * 0.225F);
         float strength = NoiseUtil.round(tectonicScale * 0.33F);
@@ -305,6 +322,15 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
                 Noises.perlin2(seedZ, warpScale, continent.continentNoiseOctaves, lacunarity, continent.continentNoiseGain),
                 Noises.constant(strength)
         );
+    }
+
+    protected float getContinentSizeModifier(int cellX, int cellY){
+        if (this.variance > 0.0f && !this.isDefaultContinent(cellX, cellY)) {
+            float sizeValue = AbstractContinent.getCellValue(this.varianceSeed, cellX, cellY);
+            float sizeModifier = NoiseUtil.map(sizeValue, 0.0f, this.variance, this.variance);
+            return sizeModifier;
+        }
+        return 1.0F;
     }
 
     protected float getDistanceValue(float x, float y, int cellX, int cellY, float distance) {
@@ -337,11 +363,6 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
             }
         }
         return distance;
-    }
-
-    protected int getCorrectedContinentCenter(float point, float average) {
-        point = NoiseUtil.lerp(point, average, CENTER_CORRECTION) / this.frequency;
-        return (int)point;
     }
 
     protected static float midPoint(float a, float b) {

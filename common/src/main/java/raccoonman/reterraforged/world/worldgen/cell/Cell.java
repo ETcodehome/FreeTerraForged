@@ -27,6 +27,7 @@ public class Cell {
     public float regionMoisture;
     public float regionTemperature;
     public float continentId;
+    public float continentSizeModifier;
     public float continentEdge;
     public float waterTable;
     public float continentDistance;
@@ -59,6 +60,7 @@ public class Cell {
         this.terrain = TerrainType.NONE;
         this.biome = BiomeType.GRASSLAND;
         this.waterTable = 0.0F;
+        this.continentSizeModifier = 1.0F;
     }
     
     public void copyFrom(Cell other) {
@@ -87,6 +89,7 @@ public class Cell {
         this.temperature = other.temperature;
         this.moisture = other.moisture;
         this.beachNoise = other.beachNoise;
+        this.continentSizeModifier = other.continentSizeModifier;
     }
 
     public Cell reset() {
