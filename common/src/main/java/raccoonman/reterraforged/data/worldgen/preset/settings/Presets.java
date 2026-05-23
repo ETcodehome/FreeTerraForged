@@ -423,7 +423,7 @@ public class Presets {
 				new RiverSettings(
 
 						-807426906,
-						7,
+						16,
 
 						//main rivers
 						new River(7,
@@ -438,10 +438,10 @@ public class Presets {
 								1,
 								2,
 								28,
-								4,
+								8,
 								0.855F),
 
-						new Lake(0.595F,
+						new Lake(0.20F,
 								0.0F,
 								0.50F,
 								11,
@@ -450,9 +450,9 @@ public class Presets {
 								1,
 								6),
 
-						new Wetland(1.0F,
-								500,
-								500)
+						new Wetland(0.20F,
+								50,
+								150)
 				),
 				new FilterSettings(
 
