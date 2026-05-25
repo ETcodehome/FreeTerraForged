@@ -83,6 +83,50 @@ public class ContinentalHydrology {
     public static float getWeightedWaterHeight(float inlandPercentage) {
         return getTargetWaterHeight(inlandPercentage) * 0.50F;
     }
+
+    /**
+     * Determines if a sampling point is on a flat plateau (step).
+     * * @param x The input sampling coordinate (0.0 to 1.0)
+     * @return A float from 0.0 to 1.0. Returns 1.0 at the exact center of
+     * any plateau, fading down to 0.0 at or outside the plateau edges.
+     */
+    public static float getFlatnessFactor(double x) {
+        double val = Math.max(0.0, Math.min(1.0, x));
+
+        // Handle the initial plateau before the very first ramp
+        double firstRampStart = BOUNDARIES.x - TRANSITION_WIDTH;
+        if (val < firstRampStart) {
+            // The plateau goes from 0.0 to firstRampStart
+            double mid = firstRampStart / 2.0;
+            double radius = firstRampStart / 2.0;
+            double linearDist = 1.0 - (Math.abs(val - mid) / radius);
+            return (float) (linearDist * linearDist * (3.0 - 2.0 * linearDist)); // Smoothstep
+        }
+
+        for (int i = 0; i < BOUNDARIES.length; i++) {
+            double pStart = BOUNDARIES[i].x; // Top of current ramp
+            double pEnd = (i + 1 < BOUNDARIES.length) ?
+                    BOUNDARIES[i + 1].x - TRANSITION_WIDTH : 1.0; // Start of next ramp
+
+            // Check if x falls within this specific flat plateau
+            if (val >= pStart && val <= pEnd) {
+                double mid = (pStart + pEnd) / 2.0;
+                double radius = (pEnd - pStart) / 2.0;
+
+                // Safety check for extremely narrow plateaus to prevent division by zero
+                if (radius < 1e-6) return 0.0F;
+
+                // Linear weight: 1.0 at center, 0.0 at edges
+                double linearDist = 1.0 - (Math.abs(val - mid) / radius);
+
+                // Apply smoothstep shaping for an elegant fall-off curve
+                return (float) (linearDist * linearDist * (3.0 - 2.0 * linearDist));
+            }
+        }
+
+        // If x is currently inside a transition ramp, it's not on a step at all
+        return 0.0F;
+    }
 }
 
 
