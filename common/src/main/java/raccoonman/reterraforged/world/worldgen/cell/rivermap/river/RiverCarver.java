@@ -61,18 +61,21 @@ public class RiverCarver implements Comparable<RiverCarver> {
         return Integer.compare(this.config.order, o.config.order);
     }
 
-    public static float smoothStep(float value) {
-        if (value <= 0.0F) return 0.0F;
-        if (value >= 1.0F) return 1.0F;
-        return value * value * (3.0F - 2.0F * value);
-    }
-
     public void carve(Cell cell, float prevX, float prevZ, float prevT, float currX, float currZ, float currT) {
         float distSqToCurr = this.getDistance2(currX, currZ, currT);
         float distSqToPrev = this.getDistance2(prevX, prevZ, prevT);
 
-        // Valley Alpha (Metadata blending)
-        float valleyInfluence = this.getDistanceAlpha(currT, Math.min(distSqToCurr, distSqToPrev), this.valleyWidth);
+        // Calculate Flatness Factor from the Continental Hydrology profile
+        float flatnessFactor = ContinentalHydrology.getFlatnessFactor(cell.waterTable);
+        flatnessFactor = NoiseUtil.clamp(flatnessFactor, 0.0F, 1.0F);
+
+        // Compute the dynamic scale factors (Linear max width means squaring the linear scale)
+        float wideningMidStep = 0.75F;
+        float linearScale = 1.0F + (wideningMidStep * flatnessFactor);
+        float sqScaleFactor = linearScale * linearScale;
+
+        // Valley Alpha (Metadata blending) - Dynamically scaled by current flatness
+        float valleyInfluence = this.getDistanceAlpha(currT, Math.min(distSqToCurr, distSqToPrev), this.valleyWidth, sqScaleFactor);
         if (valleyInfluence > 0.0F) {
             valleyInfluence = this.valleyCurve.apply(valleyInfluence);
             cell.riverMask = Math.min(cell.riverMask, 1.0F - valleyInfluence);
@@ -86,13 +89,13 @@ public class RiverCarver implements Comparable<RiverCarver> {
 
         // True Linear Distance System
         float currentLinearDist = (float) Math.sqrt(distSqToCurr);
-        float maxBankSize = this.getScaledSize(currT, this.banksWidth);
+        float maxBankSize = this.getScaledSize(currT, this.banksWidth) * sqScaleFactor;
         float bankRadius = (float) Math.sqrt(maxBankSize);
 
-        float maxBedSize = this.getScaledSize(currT, this.bedWidth);
+        float maxBedSize = this.getScaledSize(currT, this.bedWidth) * sqScaleFactor;
         float bedRadius = (float) Math.sqrt(maxBedSize);
 
-        // Escape immediately if we are outside the 3x expanded erosion zone
+        // Escape immediately if we are outside the expanded erosion zone
         if (currentLinearDist >= bankRadius) return;
 
         // Track if we are inside the core water channel
@@ -107,6 +110,7 @@ public class RiverCarver implements Comparable<RiverCarver> {
 
             // High-frequency micro-perturbation to make bank borders jagged.
             float microNoise = (float) Math.sin(currX * 0.4F) * (float) Math.cos(currZ * 0.4F);
+
             // Multiply by (1.0F - bankProgress) so the distortion fades to zero at the river's edge,
             // preventing the distance field from compressing and creating steep walls.
             float lateralWarp = microNoise * 0.08F * (1.0F - bankProgress);
@@ -159,21 +163,17 @@ public class RiverCarver implements Comparable<RiverCarver> {
             }
 
         } else {
-            setHeightRiverInternals(cell, currT, distSqToCurr, targetBedFloor, oceanHeightOffset, bedDepthOffset);
+            setHeightRiverInternals(cell, currT, distSqToCurr, targetBedFloor, oceanHeightOffset, bedDepthOffset, sqScaleFactor);
         }
     }
 
-    public void setHeightRiverInternals(Cell cell, float currT, float distSqToCurr, float targetBedFloor, float oceanHeightOffset, float bedDepthOffset){
-
-        // we use a min with cell.height because this fixes river mouths generating bed uprise (wrongly).
-        // as continental uplift zeroes out as we enter the ocean the uplift isn't applied so any existing cell height is correct
-
-        float bedInfluence = this.getDistanceAlpha(currT, distSqToCurr, this.bedWidth);
+    public void setHeightRiverInternals(Cell cell, float currT, float distSqToCurr, float targetBedFloor, float oceanHeightOffset, float bedDepthOffset, float sqScaleFactor){
+        float bedInfluence = this.getDistanceAlpha(currT, distSqToCurr, this.bedWidth, sqScaleFactor);
         cell.height = Math.min(cell.height, ContinentalHydrology.getWeightedWaterHeight(cell.waterTable) - (bedDepthOffset * bedInfluence) + oceanHeightOffset);
         cell.moisture = 1.0F;
         this.tag(cell, targetBedFloor);
     }
-    
+
     public RiverConfig createForkConfig(float t, Levels levels) {
         int bedHeight = levels.scale(this.getScaledSize(t, this.bedDepth));
         int bedWidth = (int)Math.round(Math.sqrt(this.getScaledSize(t, this.bedWidth)) * 0.75);
@@ -182,7 +182,7 @@ public class RiverCarver implements Comparable<RiverCarver> {
         bankWidth = Math.max(bedWidth + 1, bankWidth);
         return this.config.createFork(bedHeight, bedWidth, bankWidth, levels);
     }
-    
+
     private float getDistance2(float x, float y, float t) {
         if (t <= 0.0F) {
             return Line.distSq(x, y, this.river.x1, this.river.z1);
@@ -194,15 +194,15 @@ public class RiverCarver implements Comparable<RiverCarver> {
         float py = this.river.z1 + t * this.river.dz;
         return Line.distSq(x, y, px, py);
     }
-    
-    private float getDistanceAlpha(float t, float dist2, Range range) {
-        float size2 = this.getScaledSize(t, range);
+
+    private float getDistanceAlpha(float t, float dist2, Range range, float sqScaleFactor) {
+        float size2 = this.getScaledSize(t, range) * sqScaleFactor;
         if (dist2 >= size2) {
             return 0.0F;
         }
         return 1.0F - dist2 / size2;
     }
-    
+
     private float getScaledSize(float t, Range range) {
         if (t < 0.0F) {
             return range.min();
@@ -220,8 +220,6 @@ public class RiverCarver implements Comparable<RiverCarver> {
     }
 
     private void tag(Cell cell, float bedHeight) {
-
-        // don't update lake water
         if (cell.terrain.isLake()){
             return;
         }
@@ -229,19 +227,12 @@ public class RiverCarver implements Comparable<RiverCarver> {
         cell.erosionMask = true;
         cell.terrain = TerrainType.RIVER;
 
-        // don't carve down existing water at height.
         float newMax = Math.max(this.waterLine, bedHeight);
         if (newMax > cell.riverWaterLevel) {
             cell.riverWaterLevel = Math.max(this.waterLine, bedHeight);
         }
     }
-    
-    private static float getMouthModifier(Cell cell) {
-        float modifier = NoiseUtil.map(cell.continentEdge, 0.0F, 0.5F, 0.5F);
-        modifier *= modifier;
-        return modifier;
-    }
-    
+
     public static CurveFunction getValleyType(Random random) {
         int value = random.nextInt(100);
         if (value < 5) {
@@ -255,7 +246,7 @@ public class RiverCarver implements Comparable<RiverCarver> {
         }
         return CurveFunctions.scurve(2.0F, -0.5F);
     }
-    
+
     public static RiverCarver create(float x1, float z1, float x2, float z2, RiverConfig config, Levels levels, Random random) {
         River river = new River(x1, z1, x2, z2);
         RiverWarp warp = RiverWarp.create(0.35F, random);
@@ -266,19 +257,19 @@ public class RiverCarver implements Comparable<RiverCarver> {
         settings.valleySize = valleyWidth;
         return new RiverCarver(river, warp, config, settings, levels);
     }
-    
+
     private static Settings creatSettings(Random random) {
         Settings settings = new Settings();
         settings.valleyCurve = getValleyType(random);
         return settings;
     }
-    
+
     public static class Settings {
         public float valleySize;
         public float fadeIn;
         public boolean connecting;
         public CurveFunction valleyCurve;
-        
+
         public Settings() {
             this.valleySize = 275.0F;
             this.fadeIn = 0.7F;

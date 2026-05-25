@@ -94,7 +94,7 @@ public class ContinentalHydrology {
         double val = Math.max(0.0, Math.min(1.0, x));
 
         // Handle the initial plateau before the very first ramp
-        double firstRampStart = BOUNDARIES.x - TRANSITION_WIDTH;
+        double firstRampStart = BOUNDARIES[0].x - TRANSITION_WIDTH;
         if (val < firstRampStart) {
             // The plateau goes from 0.0 to firstRampStart
             double mid = firstRampStart / 2.0;

@@ -19,15 +19,7 @@ public class Lake {
     private float bankMin;
     private float bankMax;
     private float oceanLevel;
-    private float mutableLakeLevel;
-    private boolean isLevelLocked;
     protected Vec2f center;
-
-    // Persistent fields to lock the lake's geometry across all cells in this instance
-    private float flatWaterLevel = -1.0F;
-    private float flatFloorLevel = -1.0F;
-    private float flatBankBias = -1.0F;
-    private float flatBankHeight = -1.0F;
 
     public Lake(Vec2f center, float radius, float multiplier, LakeConfig config) {
         float lake = radius * multiplier;
@@ -44,16 +36,12 @@ public class Lake {
         this.lakeDistance2 = lake * lake;
         this.valleyDistance2 = this.valley2 - this.lakeDistance2;
         this.oceanLevel = config.oceanLevel;
-
-        // Default fallback height until locked by the center evaluation context
-        this.mutableLakeLevel = 62.0F / 255.0F;
-        this.isLevelLocked = false;
     }
 
     public void apply(Cell cell, float x, float z) {
         float distance2 = this.getDistance2(x, z);
 
-        // rough up the lake surroundings
+        // Rough up the lake surroundings
         float hash = (float) (Math.sin(x * 0.123F + z * 0.456F) * Math.cos(z * 0.123F - x * 0.456F));
         float wallRuggednessFactor = 2.0F;
         distance2 += hash * wallRuggednessFactor * this.valley;
@@ -62,101 +50,102 @@ public class Lake {
             return;
         }
 
-        // Initialize and lock the master vertical calculations
-        this.updateWaterLevels(cell);
+        // 1. Core baseline flatness check
+        float rawFlatness = ContinentalHydrology.getFlatnessFactor(cell.waterTable);
+        rawFlatness = NoiseUtil.clamp(rawFlatness, 0.0F, 1.0F);
 
-        float bankHeight = this.getBankHeight(cell);
+        // 2. Continuous Domain Noise Perturbation
+        float noiseFreq = 0.02F;
+        float noiseSample = (float) Math.sin(x * noiseFreq + Math.cos(z * noiseFreq)) * (float) Math.cos(z * noiseFreq - Math.sin(x * noiseFreq));
 
-        // --- CENTER-POINT SELECTION LATCH ---
-        if (!this.isLevelLocked && distance2 < 4.0F) {
-            this.lockCenterLevel(bankHeight);
-        }
+        // 3. Modulate variation by raw flatness to protect step cliffs
+        float flatnessVariance = noiseSample * 0.18F * rawFlatness;
+        float flatnessFactor = NoiseUtil.clamp(rawFlatness + flatnessVariance, 0.0F, 1.0F);
 
-        if (distance2 <= this.lakeDistance2) {
-            this.applyLakeBasin(cell, distance2, bankHeight);
-        } else {
-            this.applyValleyDepression(cell, distance2, bankHeight);
-        }
+        // 4. CONTINUOUS PER-CELL HEIGHT EVALUATION
+        float localWaterLevel = ContinentalHydrology.getWeightedWaterHeight(cell.waterTable) + this.oceanLevel;
+        float localFloorLevel = localWaterLevel - this.depth;
 
-        if (!this.isLevelLocked) {
-            this.lockCenterLevel(bankHeight);
-        }
-
-        // Any cell that falls within the active footprint of this lake's
-        // bounding math must share the center-locked riverWaterLevel metadata.
-        // This prevents the pipeline from seeing a modified riverMask with an unassigned water height.
-        cell.riverWaterLevel = this.mutableLakeLevel;
-    }
-
-    /**
-     * Synchronized lock to cleanly capture the center height across processing worker threads.
-     */
-    private synchronized void lockCenterLevel(float centerBankHeight) {
-        if (!this.isLevelLocked) {
-            this.mutableLakeLevel = centerBankHeight;
-            this.isLevelLocked = true;
-        }
-    }
-
-    /**
-     * Initializes the static vertical levels for this lake instance to maintain uniform geometry.
-     */
-    private void updateWaterLevels(Cell cell) {
-        if (this.flatWaterLevel >= 0.0F) {
-            return; // Already initialized
-        }
-
-        this.flatBankBias = ContinentalHydrology.getWeightedWaterHeight(cell.waterTable);
-        this.flatWaterLevel = ContinentalHydrology.getWeightedWaterHeight(cell.waterTable) + this.oceanLevel;
-        this.flatFloorLevel = this.flatWaterLevel - this.depth;
-
+        // Compute the dynamic shore line limits for this specific spatial point
         float bankHeightAlpha = NoiseUtil.map(cell.height, this.bankAlphaMin, this.bankAlphaMax, this.bankAlphaRange);
-        float bankVariance = NoiseUtil.lerp(this.bankMin, this.bankMax, bankHeightAlpha);
-        float minimumClearance = 0.01F;
+        float bias = cell.continentEdge * 0.45F;
+        float bankHeight = NoiseUtil.lerp(this.bankMin, this.bankMax, bankHeightAlpha) + bias;
 
-        this.flatBankHeight = this.flatWaterLevel + minimumClearance + Math.max(0.0F, bankVariance) - this.oceanLevel;
+        // HARD CONTAINER RULE: The shoreline height must always sit above the local water plane
+        float minShorelineHeight = localWaterLevel + 0.015F;
+        if (bankHeight < minShorelineHeight) {
+            bankHeight = minShorelineHeight;
+        }
+
+        float carvedHeight = cell.height;
+
+        // Run continuous layout pass using localized spatial parameters
+        if (distance2 <= this.lakeDistance2 && flatnessFactor > 0.0F) {
+            carvedHeight = this.calculateLakeBasinHeight(cell, distance2, bankHeight, localFloorLevel, flatnessFactor);
+        } else {
+            carvedHeight = this.calculateValleyDepressionHeight(cell, distance2, bankHeight, minShorelineHeight);
+        }
+
+        // --- ADJACENT LAKE PROTECTION (MIN BLEND) ---
+        if (carvedHeight < cell.height) {
+            cell.height = carvedHeight;
+        }
+
+        // Apply metadata indicators if inside valid basin boundaries
+        if (distance2 <= this.lakeDistance2 && flatnessFactor > 0.0F && cell.height <= bankHeight + 0.001F) {
+            float depthAlpha = NoiseUtil.clamp(1.0F - distance2 / this.lakeDistance2, 0.0F, 1.0F);
+            cell.terrain = TerrainType.LAKE;
+            cell.riverMask = Math.min(cell.riverMask, 1.0F - (depthAlpha * flatnessFactor));
+        }
+
+        // --- SOLID LAND SHORE RING RE-ENFORCEMENT ---
+        // EXCLUSION ENFORCED: If this is an active river channel or river feature, do not push its height
+        // up to the shoreline level. This allows pre-existing or adjacent river networks to pass seamlessly
+        // into the lake basin without creating horizontal soil blockages/dams.
+        if (cell.terrain != TerrainType.LAKE && cell.terrain != TerrainType.RIVER && cell.riverMask >= 1.0F) {
+            if (cell.height < minShorelineHeight) {
+                cell.height = minShorelineHeight;
+            }
+        }
+
+        // Share water level context across the active footprint
+        if (cell.riverWaterLevel <= 0.0F || localWaterLevel < cell.riverWaterLevel) {
+            cell.riverWaterLevel = localWaterLevel;
+        }
     }
 
     /**
-     * Handles the water-filled center of the lake and shapes the underlying basin floor.
+     * Computes the basin floor profile using fully continuous spatial context parameterizations.
      */
-    private void applyLakeBasin(Cell cell, float distance2, float bankHeight) {
-        cell.height = Math.min(bankHeight, cell.height);
+    private float calculateLakeBasinHeight(Cell cell, float distance2, float bankHeight, float localFloorLevel, float flatnessFactor) {
+        float targetBase = Math.min(bankHeight, cell.height);
 
         if (distance2 < this.lakeDistance2) {
             float depthAlpha = 1.0F - distance2 / this.lakeDistance2;
             depthAlpha = NoiseUtil.clamp(depthAlpha, 0.0F, 1.0F);
 
-            // Carve the height down to the flat floor
-            cell.height = NoiseUtil.lerp(cell.height, this.flatFloorLevel, depthAlpha);
-
-            // Set metadata for StrataRule water injection and Biome selection
-            cell.terrain = TerrainType.LAKE;
-            cell.riverMask = Math.min(cell.riverMask, 1.0F - depthAlpha);
+            // Modulate depth seamlessly towards the local floor profile
+            float activeFloor = NoiseUtil.lerp(targetBase, localFloorLevel, flatnessFactor);
+            return NoiseUtil.lerp(targetBase, activeFloor, depthAlpha);
         }
+        return targetBase;
     }
 
     /**
-     * Handles the wider land depression, creating the slopes down to the shore.
+     * Calculates a continuous valley slope container that locks perfectly to the local minimum threshold.
      */
-    private void applyValleyDepression(Cell cell, float distance2, float bankHeight) {
-
+    private float calculateValleyDepressionHeight(Cell cell, float distance2, float bankHeight, float minShorelineHeight) {
         float valleyAlpha = 1.0F - (distance2 - this.lakeDistance2) / this.valleyDistance2;
         valleyAlpha = NoiseUtil.clamp(valleyAlpha, 0.0F, 1.0F);
 
-        // Standard smoothstep easing (3t^2 - 2t^3) to ensure a perfectly clean transition slope
         float smoothAlpha = valleyAlpha * valleyAlpha * (3.0F - 2.0F * valleyAlpha);
 
-        // Blend the terrain smoothly down to the master center-based bank height
-        cell.height = NoiseUtil.lerp(cell.height, bankHeight, smoothAlpha);
-
-        // tiny offset to force terrain one block higher.
-        if (cell.height < bankHeight){
-            cell.height = bankHeight;
+        if (cell.height > bankHeight) {
+            float blendedHeight = NoiseUtil.lerp(cell.height, bankHeight, smoothAlpha);
+            return Math.max(minShorelineHeight, blendedHeight);
         }
 
-        // Update the mask cleanly so it scales back up to 1.0 at the absolute outer edge
-        cell.riverMask = Math.min(cell.riverMask, 1.0F - smoothAlpha);
+        return cell.height;
     }
 
     public void recordBounds(Boundsf.Builder builder) {
@@ -173,15 +162,5 @@ public class Lake {
         float dx = this.center.x() - x;
         float dz = this.center.y() - z;
         return dx * dx + dz * dz;
-    }
-
-    protected float getBankHeight(Cell cell) {
-        if (this.flatBankHeight >= 0) {
-            return this.flatBankHeight + 0.01F;
-        }
-
-        float bias = (this.flatBankBias < 0) ? (cell.continentEdge * 0.45F) : this.flatBankBias;
-        float bankHeightAlpha = NoiseUtil.map(cell.height, this.bankAlphaMin, this.bankAlphaMax, this.bankAlphaRange);
-        return NoiseUtil.lerp(this.bankMin, this.bankMax, bankHeightAlpha) + bias;
     }
 }
