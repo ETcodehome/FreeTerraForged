@@ -72,12 +72,12 @@ public class Lake {
         float bankHeight = NoiseUtil.lerp(this.bankMin, this.bankMax, bankHeightAlpha) + bias;
 
         // HARD CONTAINER RULE: The shoreline height must always sit above the local water plane
-        float minShorelineHeight = localWaterLevel + 0.015F;
+        float minShorelineHeight = localWaterLevel + 0.002F;
         if (bankHeight < minShorelineHeight) {
             bankHeight = minShorelineHeight;
         }
 
-        float carvedHeight = cell.height;
+        float carvedHeight;
 
         // Run continuous layout pass using localized spatial parameters
         if (distance2 <= this.lakeDistance2 && flatnessFactor > 0.0F) {

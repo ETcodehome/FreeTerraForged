@@ -32,11 +32,10 @@ public class RiverCarver implements Comparable<RiverCarver> {
         this.fade = settings.fadeIn;
         this.fadeInv = 1.0F / settings.fadeIn;
 
-        // Hold the central water channel at original configuration size
         this.bedWidth = new Range(0.25F, (float)(config.bedWidth * config.bedWidth));
 
-        // Scale the erosion influence area out 3x wider (Radius * 3 means Width Sq * 9)
-        float erosionScale = 3.0F;
+        // Scale the erosion influence area out 3.5x wider to allow wide, rolling valley bowls
+        float erosionScale = 3.5F;
         float sqErosionScale = erosionScale * erosionScale;
 
         this.banksWidth = new Range(1.5625F * sqErosionScale, (float)(config.bankWidth * config.bankWidth) * sqErosionScale);
@@ -69,25 +68,25 @@ public class RiverCarver implements Comparable<RiverCarver> {
         float flatnessFactor = ContinentalHydrology.getFlatnessFactor(cell.waterTable);
         flatnessFactor = NoiseUtil.clamp(flatnessFactor, 0.0F, 1.0F);
 
-        // Compute the dynamic scale factors (Linear max width means squaring the linear scale)
+        // Compute the dynamic scale factors
         float wideningMidStep = 0.75F;
         float linearScale = 1.0F + (wideningMidStep * flatnessFactor);
         float sqScaleFactor = linearScale * linearScale;
 
-        // Valley Alpha (Metadata blending) - Dynamically scaled by current flatness
+        // Valley Alpha (Metadata blending only)
         float valleyInfluence = this.getDistanceAlpha(currT, Math.min(distSqToCurr, distSqToPrev), this.valleyWidth, sqScaleFactor);
         if (valleyInfluence > 0.0F) {
             valleyInfluence = this.valleyCurve.apply(valleyInfluence);
             cell.riverMask = Math.min(cell.riverMask, 1.0F - valleyInfluence);
         }
 
-        // Base Elevations & Target Floor (Matches original depth definitions)
+        // Base Elevations & Target Floor
         float oceanHeightOffset = levels.water;
         float bedDepthOffset = oceanHeightOffset - config.bedHeight;
         float targetBedFloor = ContinentalHydrology.getWeightedWaterHeight(cell.waterTable) - bedDepthOffset + oceanHeightOffset;
         float targetWaterLevel = ContinentalHydrology.getWeightedWaterHeight(cell.waterTable) + oceanHeightOffset;
 
-        // True Linear Distance System
+        // Core distance carving metrics
         float currentLinearDist = (float) Math.sqrt(distSqToCurr);
         float maxBankSize = this.getScaledSize(currT, this.banksWidth) * sqScaleFactor;
         float bankRadius = (float) Math.sqrt(maxBankSize);
@@ -95,28 +94,40 @@ public class RiverCarver implements Comparable<RiverCarver> {
         float maxBedSize = this.getScaledSize(currT, this.bedWidth) * sqScaleFactor;
         float bedRadius = (float) Math.sqrt(maxBedSize);
 
-        // Escape immediately if we are outside the expanded erosion zone
+        // --- EXPANDED ADAPTIVE LATERAL INFLUENCE FLOOR ---
+        // Dynamically scales the minimum bank run based on how deep the river cut is relative
+        // to the original terrain height. Massive mountain steps trigger a quadratic expansion
+        // component to guarantee a wide, sweeping horizontal transition ramp.
+        float heightDelta = Math.max(0.0F, cell.height - targetWaterLevel);
+        float baseMinBankRun = 4.0F;
+
+        float bankRunLinearScale = 200.0F;
+        float bankRunQuadraticScale = 150.0F;
+
+        float dynamicMinBankRun = baseMinBankRun
+                + (heightDelta * bankRunLinearScale)
+                + (heightDelta * heightDelta * bankRunQuadraticScale);
+
+        if (bankRadius < bedRadius + dynamicMinBankRun) {
+            bankRadius = bedRadius + dynamicMinBankRun;
+        }
+
+        // Escape immediately if we are outside the expanded erosion zone for this segment step
         if (currentLinearDist >= bankRadius) return;
 
-        // Track if we are inside the core water channel
         boolean isInsideChannel = currentLinearDist < bedRadius;
 
-        // Banks Stage (Only runs OUTSIDE the core water channel)
         if (!isInsideChannel) {
-
-            // How far inside the bank erosion zone are we? (0.0 at mountain edge, 1.0 at water's edge)
             float bankProgress = (bankRadius - currentLinearDist) / (bankRadius - bedRadius);
             bankProgress = NoiseUtil.clamp(bankProgress, 0.0F, 1.0F);
 
-            // High-frequency micro-perturbation to make bank borders jagged.
+            // High-frequency micro-perturbation
             float microNoise = (float) Math.sin(currX * 0.4F) * (float) Math.cos(currZ * 0.4F);
-
-            // Multiply by (1.0F - bankProgress) so the distortion fades to zero at the river's edge,
-            // preventing the distance field from compressing and creating steep walls.
-            float lateralWarp = microNoise * 0.08F * (1.0F - bankProgress);
+            // Multiplying by bankProgress * (1.0 - bankProgress) ensures the noise tapers
+            // perfectly to 0 at the outer edge, preventing boundary discontinuities.
+            float lateralWarp = microNoise * 0.12F * bankProgress * (1.0F - bankProgress);
             float roughBankProgress = NoiseUtil.clamp(bankProgress + lateralWarp, 0.0F, 1.0F);
 
-            // Cubic smoothstep using the roughened progress
             float smoothBankAlpha = roughBankProgress * roughBankProgress * (3.0F - 2.0F * roughBankProgress);
 
             // Runoff Gully Noise Component
@@ -125,41 +136,43 @@ public class RiverCarver implements Comparable<RiverCarver> {
             float nz = currZ * gullyFreq;
             float noiseSample = (float) Math.sin(nx + Math.cos(nz)) * (float) Math.cos(nz - Math.sin(nx));
             float gullyEffect = 1.0F - Math.abs(noiseSample);
-            gullyEffect = gullyEffect * gullyEffect; // Sharpen gully channels
+            gullyEffect = gullyEffect * gullyEffect;
 
-            // (Terracing / Micro-slopes)
-            // High frequency layered noise to add small ledge textures inside the valley walls
+            // Terracing / Micro-slopes
             float detailFreq = 0.25F;
             float detailSample = (float) Math.sin(currX * detailFreq) * (float) Math.sin(currZ * detailFreq);
-            // Modulate gully effect so it feels rocky and broken rather than a smooth slide
             float roughGullyEffect = NoiseUtil.lerp(gullyEffect, gullyEffect * (0.8F + detailSample * 0.2F), bankProgress);
 
-            // Shoreline Taper, fade out the noise completely as it approaches the water's edge
-            float noiseWeight = bankProgress * bankProgress;
-            float finalErosionInfluence = smoothBankAlpha * NoiseUtil.lerp(roughGullyEffect, 1.0F, noiseWeight);
+            // --- PROXIMITY HEIGHT CEILING ENVELOPE ---
+            float distanceWeight = 1.0F - bankProgress;
+            float maxSafeRise = 0.02F + (distanceWeight * distanceWeight * 0.4F);
+            float safeCeiling = targetWaterLevel + maxSafeRise;
 
-            // To protect water width, the bank interpolates toward the shoreline height not the deep river floor
-            float rawCarvedHeight = NoiseUtil.lerp(cell.height, targetWaterLevel, finalErosionInfluence);
+            float baselineHeight = cell.height;
+            if (baselineHeight > safeCeiling) {
+                float excess = baselineHeight - safeCeiling;
+                // Scale the envelope intensity by bankProgress so that at the outer edge (bankProgress = 0),
+                // the squashing effect is exactly 0, removing the vertical slump cliff entirely.
+                baselineHeight = baselineHeight - (excess * 0.6F * bankProgress);
+            }
 
-            // Calculate allowed drop relative to the uncarved mountain edge boundary using PURE physical distance
-            float horizontalDistanceFromBoundary = bankRadius - currentLinearDist;
+            float intermediateHeight = baselineHeight;
+            if (baselineHeight > targetWaterLevel) {
+                intermediateHeight = NoiseUtil.lerp(baselineHeight, targetWaterLevel, smoothBankAlpha);
+            }
 
-            // Lowered the base slope factor to push the valley walls back.
-            // We keep a tiny variation (0.05F) to keep it looking natural, but its maximum limit is heavily restricted.
-            float dynamicSlopeFactor = 0.55F + (detailSample * 0.05F);
-            float maxAllowableDrop = horizontalDistanceFromBoundary * dynamicSlopeFactor;
-            float slopeLimitedHeight = cell.height - maxAllowableDrop;
+            // Headroom-scale carving rule for structural gullies
+            if (roughGullyEffect > 0.0F && bankProgress > 0.0F) {
+                float maxGullyDepth = (intermediateHeight - targetWaterLevel) * 0.45F;
+                float gullyCut = roughGullyEffect * maxGullyDepth * bankProgress;
+                intermediateHeight -= gullyCut;
+            }
 
-            // Enforce the slope cap relative to the natural hill profile
-            float finalBankHeight = Math.max(rawCarvedHeight, slopeLimitedHeight);
+            float finalBankHeight = Math.max(targetWaterLevel, intermediateHeight);
 
+            // Blends naturally with lakes: the lower profile wins, preventing harsh seams
             if (finalBankHeight < cell.height) {
                 cell.height = finalBankHeight;
-
-                // If a deep gully dips below water level it should just use the min.
-                if (cell.height < targetWaterLevel) {
-                    cell.height = targetWaterLevel;
-                }
             }
 
         } else {
