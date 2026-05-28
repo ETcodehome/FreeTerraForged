@@ -232,21 +232,105 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	        int stroke = 2;
 	        int width = this.tile.getBlockSize().size();
 
-	        NativeImage pixels = this.texture.getPixels();
-	        this.tile.iterate((cell, x, z) -> {
-	            if (x < stroke || z < stroke || x >= width - stroke || z >= width - stroke) {
-	                pixels.setPixelRGBA(x, z, Color.BLACK.getRGB());
-	            } else {
-	                pixels.setPixelRGBA(x, z, renderMode.getColor(cell, levels));
-	            }
-	        });
-	        this.texture.upload();
-			this.legendValues[3] = getSpawnCoords();
-	    }
-	    
-	    public void close() throws Exception {
-	    	this.texture.close();
-	    	try {
+		// SAFE HARDWARE-AGNOSTIC CPU PIXEL BUILDER
+		private void rebuildTexture() {
+			if (this.tile == null) return;
+
+			// Free up old allocation to prevent native memory leaks
+			if (this.textureCache != null) {
+				this.textureCache.close();
+				Minecraft.getInstance().getTextureManager().release(this.cacheLocation);
+			}
+
+			if (this.width <= 0 || this.height <= 0) return;
+
+			// Allocate dynamic canvas on system RAM instead of VRAM stream
+			NativeImage img = new NativeImage(this.width, this.height, true);
+
+			// Background Clear Pass
+			for (int y = 0; y < img.getHeight(); y++) {
+				for (int x = 0; x < img.getWidth(); x++) {
+					img.setPixelRGBA(x, y, 0xFF000000); // Fully opaque black
+				}
+			}
+
+			RenderMode renderMode = PresetEditorPage.this.renderMode.getValue();
+			WorldSettings.Properties properties = preset.getPreset().world().properties;
+			Levels levels = new Levels(properties.terrainScaler(), properties.seaLevel);
+
+			int tileSize = this.tile.getBlockSize().size();
+			float blockW = (float) this.width / (float) tileSize * 0.85f;
+			float blockH = blockW * 0.5f;
+
+			// Render coordinates relative to the texture canvas origin (0,0)
+			float centerVisualX = (this.width / 2.0f);
+			float centerVisualY = (this.height / 2.5f);
+
+			for (int iz = 0; iz < tileSize; iz++) {
+				for (int ix = 0; ix < tileSize; ix++) {
+					Cell cell = this.tile.lookup(ix, iz);
+					int color = renderMode.getColor(cell, levels);
+
+					float isoX = centerVisualX + (ix - iz) * (blockW / 2.0f);
+					float isoY = centerVisualY + (ix + iz) * (blockH / 2.0f);
+					float renderY = isoY - (cell.height * getHeightScale(blockW));
+
+					int topColor = toNativeABGR(color);
+					int leftColor = toNativeABGR(darkenColor(color, 0.75f));
+					int rightColor = toNativeABGR(darkenColor(color, 0.60f));
+
+					// Draw flat composited slices simulating isometric projection steps onto the pixel map
+					fillPixelRect(img, (int)isoX, (int)renderY, (int)(isoX + blockW), (int)(renderY + blockH), topColor);
+					fillPixelRect(img, (int)isoX, (int)(renderY + blockH), (int)(isoX + blockW / 2), (int)(isoY + blockH), leftColor);
+					fillPixelRect(img, (int)(isoX + blockW / 2), (int)(renderY + blockH), (int)(isoX + blockW), (int)(isoY + blockH), rightColor);
+				}
+			}
+
+			// Upload the completed image map buffer to VRAM at once
+			this.textureCache = new DynamicTexture(img);
+			this.cacheLocation = Minecraft.getInstance().getTextureManager().register("rtf_preview_cache_" + this.hashCode(), this.textureCache);
+			this.needsTextureRefresh = false;
+		}
+
+		private void fillPixelRect(NativeImage img, int xStart, int yStart, int xEnd, int yEnd, int nativeColor) {
+			// Strict canvas boundaries to guarantee zero native heap write overflows
+			int startX = Math.max(0, xStart);
+			int endX = Math.min(img.getWidth(), xEnd);
+			int startY = Math.max(0, yStart);
+			int endY = Math.min(img.getHeight(), yEnd);
+
+			for (int y = startY; y < endY; y++) {
+				for (int x = startX; x < endX; x++) {
+					img.setPixelRGBA(x, y, nativeColor);
+				}
+			}
+		}
+
+		private int toNativeABGR(int argb) {
+			int a = (argb >> 24) & 0xFF;
+			int r = (argb >> 16) & 0xFF;
+			int g = (argb >> 8) & 0xFF;
+			int b = argb & 0xFF;
+			return (a << 24) | (b << 16) | (g << 8) | r;
+		}
+
+		private int darkenColor(int argb, float factor) {
+			int a = (argb >> 24) & 0xFF;
+			int r = Math.max(0, (int) (((argb >> 16) & 0xFF) * factor));
+			int g = Math.max(0, (int) (((argb >> 8) & 0xFF) * factor));
+			int b = Math.max(0, (int) ((argb & 0xFF) * factor));
+			return (a << 24) | (r << 16) | (g << 8) | b;
+		}
+
+		public void close() throws Exception {
+			// Free allocated native dynamic texture channels securely on lifecycle close-outs
+			if (this.textureCache != null) {
+				this.textureCache.close();
+				Minecraft.getInstance().getTextureManager().release(this.cacheLocation);
+				this.textureCache = null;
+				this.cacheLocation = null;
+			}
+			try {
 				CacheManager.clear();
 			} catch (Exception e) {
 				e.printStackTrace();
@@ -270,6 +354,19 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	    	this.renderLegend(guiGraphics, mx, my, this.legendLabels, this.legendValues, x, y + this.width + 40, 10, 0xFFFFFF);
 	    }
 
+		private float getHeightScale(float blockW) {
+			// 1.0 at max zoom in (slider=100), 0.0 at max zoom out (slider=1)
+			float zoomProgress = (float) (PresetEditorPage.this.zoom.getLerpedValue() - 1.0D) / 99.0f;
+
+			// Establish a base aspect ratio entirely dependent on block width.
+			float minBlockScale = 3.0f; // zoomed out (flattens down small)
+			float maxBlockScale = 35.0f; // zoomed in
+			float uniformScaleFactor = minBlockScale + (zoomProgress * (maxBlockScale - minBlockScale));
+
+			// Purely uniform vertical projection mapping
+			return blockW * uniformScaleFactor;
+		}
+
 		private void renderSpawnMarker(GuiGraphics guiGraphics) {
 			WorldSettings.Properties props = preset.getPreset().world().properties;
 
@@ -285,13 +382,21 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 				int markerX = this.getX() + (this.width / 2) + (int) (relX * this.width);
 				int markerY = this.getY() + (this.height / 2) + (int) (relZ * this.height);
 
-				// Bounds check to ensure the crosshair is inside the preview square
-				if (markerX >= this.getX() && markerX <= this.getX() + this.width &&
-						markerY >= this.getY() && markerY <= this.getY() + this.height) {
+					float blockW = (float) this.width / (float) tileSize * 0.85f;
+					float blockH = blockW * 0.5f;
 
-					int size = 5; // Length of each crosshair arm
-					int color = 0xFFFFFFFF; // White for better visibility on most biomes
-					int shadow = 0xFF000000; // Black shadow for contrast
+					float centerVisualX = this.getX() + (this.width / 2.0f);
+					float centerVisualY = this.getY() + (this.height / 2.5f);
+
+					float isoX = centerVisualX + (ix - iz) * (blockW / 2.0f);
+					float isoY = centerVisualY + (ix + iz) * (blockH / 2.0f) - (cell.height * getHeightScale(blockW));
+
+					int markerX = (int)(isoX + (blockW / 2.0f));
+					int markerY = (int)(isoY + (blockH / 2.0f));
+
+					int size = 6;
+					int color = 0xFFFF2222;
+					int shadow = 0xFF000000;
 
 					// Draw a horizontal line with a 1-pixel black shadow for better visibility
 					// Shadow (1px offset)
