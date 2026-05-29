@@ -206,14 +206,21 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 				e.printStackTrace();
 			}
 			PerformanceConfig config = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
-				.resultOrPartial(RTFCommon.LOGGER::error)
-				.orElseGet(PerformanceConfig::makeDefault);
-	        GeneratorContext generatorContext = GeneratorContext.makeUncached(preset, noises, (int) settings.options().seed(), FACTOR, 0, config.batchCount());
-	        
-	        this.centerX = 0;
-	        this.centerZ = 0;
-	        
-	        if(preset.world().properties.spawnType == SpawnType.CONTINENT_CENTER) {
+					.resultOrPartial(RTFCommon.LOGGER::error)
+					.orElseGet(PerformanceConfig::makeDefault);
+			GeneratorContext generatorContext = GeneratorContext.makeUncached(preset, noises, (int) settings.options().seed(), FACTOR, 0, config.batchCount());
+
+			/*
+			// single threaded diagnostic config
+			GeneratorContext generatorContext = GeneratorContext.makeUncached(
+					preset, noises, (int) settings.options().seed(), FACTOR, 0, 1
+			);
+			 */
+
+			this.centerX = 0;
+			this.centerZ = 0;
+
+			if(preset.world().properties.spawnType == SpawnType.CONTINENT_CENTER) {
 				long nearestContinentCenter = generatorContext.lookup.getHeightmap().continent().getNearestCenter(this.offsetX, this.offsetZ);
 				this.centerX = PosUtil.unpackLeft(nearestContinentCenter);
 				this.centerZ = PosUtil.unpackRight(nearestContinentCenter);
@@ -232,11 +239,9 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	        int stroke = 2;
 	        int width = this.tile.getBlockSize().size();
 
-		// SAFE HARDWARE-AGNOSTIC CPU PIXEL BUILDER
 		private void rebuildTexture() {
 			if (this.tile == null) return;
 
-			// Free up old allocation to prevent native memory leaks
 			if (this.textureCache != null) {
 				this.textureCache.close();
 				Minecraft.getInstance().getTextureManager().release(this.cacheLocation);
@@ -244,13 +249,11 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 
 			if (this.width <= 0 || this.height <= 0) return;
 
-			// Allocate dynamic canvas on system RAM instead of VRAM stream
 			NativeImage img = new NativeImage(this.width, this.height, true);
 
-			// Background Clear Pass
 			for (int y = 0; y < img.getHeight(); y++) {
 				for (int x = 0; x < img.getWidth(); x++) {
-					img.setPixelRGBA(x, y, 0xFF000000); // Fully opaque black
+					img.setPixelRGBA(x, y, 0xFF000000);
 				}
 			}
 
@@ -259,41 +262,71 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 			Levels levels = new Levels(properties.terrainScaler(), properties.seaLevel);
 
 			int tileSize = this.tile.getBlockSize().size();
-			float blockW = (float) this.width / (float) tileSize * 0.85f;
-			float blockH = blockW * 0.5f;
 
-			// Render coordinates relative to the texture canvas origin (0,0)
-			float centerVisualX = (this.width / 2.0f);
-			float centerVisualY = (this.height / 2.5f);
+			float rawBlockW = (float) this.width / (float) tileSize * 0.85f;
+			int halfW = Math.max(1, (int) (rawBlockW / 2.0f));
+			int halfH = Math.max(1, halfW / 2);
+
+			int blockW = halfW * 2;
+			int blockH = halfH * 2;
+
+			// MINIMAL UPDATE: True geometric center in local texture space
+			int centerVisualX = this.width / 2;
+			int centerVisualY = this.height / 2;
+
+			float heightScale = getHeightScale((float) blockW);
+
+			// Center the data indices around (0,0) to align the world center with centerVisualX/Y
+			int halfTile = tileSize / 2;
 
 			for (int iz = 0; iz < tileSize; iz++) {
 				for (int ix = 0; ix < tileSize; ix++) {
 					Cell cell = this.tile.lookup(ix, iz);
 					int color = renderMode.getColor(cell, levels);
 
-					float isoX = centerVisualX + (ix - iz) * (blockW / 2.0f);
-					float isoY = centerVisualY + (ix + iz) * (blockH / 2.0f);
-					float renderY = isoY - (cell.height * getHeightScale(blockW));
+					// Extract RGB components from ARGB format
+					int r = (color >> 16) & 0xFF;
+					int g = (color >> 8) & 0xFF;
+					int b = color & 0xFF;
 
-					int topColor = toNativeABGR(color);
-					int leftColor = toNativeABGR(darkenColor(color, 0.75f));
-					int rightColor = toNativeABGR(darkenColor(color, 0.60f));
+					// Convert to HSB space to isolate brightness
+					float[] hsb = Color.RGBtoHSB(r, g, b, null);
 
-					// Draw flat composited slices simulating isometric projection steps onto the pixel map
-					fillPixelRect(img, (int)isoX, (int)renderY, (int)(isoX + blockW), (int)(renderY + blockH), topColor);
-					fillPixelRect(img, (int)isoX, (int)(renderY + blockH), (int)(isoX + blockW / 2), (int)(isoY + blockH), leftColor);
-					fillPixelRect(img, (int)(isoX + blockW / 2), (int)(renderY + blockH), (int)(isoX + blockW), (int)(isoY + blockH), rightColor);
+					// Generate a stable, pseudo-random variation between -0.03 and +0.03 based on coordinates
+					int hash = ix * 31 + iz * 17;
+					float jitter = ((hash % 100) / 100.0f) * 0.06f - 0.03f;
+
+					// Apply variance to brightness and clamp strictly between 0.0f and 1.0f
+					hsb[2] = Math.max(0.0f, Math.min(1.0f, hsb[2] + jitter));
+
+					// Pack back into standard ARGB color space
+					int jitteredColor = (color & 0xFF000000) | (Color.HSBtoRGB(hsb[0], hsb[1], hsb[2]) & 0x00FFFFFF);
+
+					// Offset world loop indices relative to center index
+					int dx = ix - halfTile;
+					int dz = iz - halfTile;
+
+					int isoX = centerVisualX + (dx - dz) * halfW;
+					int isoY = centerVisualY + (dx + dz) * halfH;
+					int renderY = isoY - Math.round(cell.height * heightScale);
+
+					// Use the newly jittered color for the face calculations
+					int topColor = toNativeABGR(jitteredColor);
+					int leftColor = getSideColor(jitteredColor, 0.75f, true, ix, iz, tileSize);
+					int rightColor = getSideColor(jitteredColor, 0.60f, false, ix, iz, tileSize);
+
+					fillPixelRect(img, isoX, renderY, isoX + blockW, renderY + blockH, topColor);
+					fillPixelRect(img, isoX, renderY + blockH, isoX + halfW, isoY + blockH, leftColor);
+					fillPixelRect(img, isoX + halfW, renderY + blockH, isoX + blockW, isoY + blockH, rightColor);
 				}
 			}
 
-			// Upload the completed image map buffer to VRAM at once
 			this.textureCache = new DynamicTexture(img);
 			this.cacheLocation = Minecraft.getInstance().getTextureManager().register("rtf_preview_cache_" + this.hashCode(), this.textureCache);
 			this.needsTextureRefresh = false;
 		}
 
 		private void fillPixelRect(NativeImage img, int xStart, int yStart, int xEnd, int yEnd, int nativeColor) {
-			// Strict canvas boundaries to guarantee zero native heap write overflows
 			int startX = Math.max(0, xStart);
 			int endX = Math.min(img.getWidth(), xEnd);
 			int startY = Math.max(0, yStart);
@@ -323,7 +356,6 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		}
 
 		public void close() throws Exception {
-			// Free allocated native dynamic texture channels securely on lifecycle close-outs
 			if (this.textureCache != null) {
 				this.textureCache.close();
 				Minecraft.getInstance().getTextureManager().release(this.cacheLocation);
@@ -342,10 +374,15 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	    	int x = this.getX();
 	    	int y = this.getY();
 
-	        RenderSystem.enableBlend();
-	        RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA, GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
-	        RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
-	    	guiGraphics.blit(this.textureId, x, y, 0, 0, this.width, this.height, this.width, this.height);
+			if (this.needsTextureRefresh || this.textureCache == null) {
+				this.rebuildTexture();
+			}
+
+			if (this.cacheLocation != null) {
+				guiGraphics.blit(this.cacheLocation, x, y, 0.0F, 0.0F, this.width, this.height, this.width, this.height);
+			} else {
+				guiGraphics.fill(x, y, x + this.width, y + this.height, 0xFF000000);
+			}
 
 			renderSpawnMarker(guiGraphics);
 
@@ -355,16 +392,19 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	    }
 
 		private float getHeightScale(float blockW) {
-			// 1.0 at max zoom in (slider=100), 0.0 at max zoom out (slider=1)
 			float zoomProgress = (float) (PresetEditorPage.this.zoom.getLerpedValue() - 1.0D) / 99.0f;
+			float biasedProgress = zoomProgress * zoomProgress;
+			float minBlockScale = 3.0f;
+			float maxBlockScale = 35.0f;
+			return blockW * (minBlockScale + (biasedProgress * (maxBlockScale - minBlockScale)));
+		}
 
-			// Establish a base aspect ratio entirely dependent on block width.
-			float minBlockScale = 3.0f; // zoomed out (flattens down small)
-			float maxBlockScale = 35.0f; // zoomed in
-			float uniformScaleFactor = minBlockScale + (zoomProgress * (maxBlockScale - minBlockScale));
-
-			// Purely uniform vertical projection mapping
-			return blockW * uniformScaleFactor;
+		private int getSideColor(int cellColor, float shadeFactor, boolean isLeftFace, int ix, int iz, int tileSize) {
+			int baseColor = cellColor;
+			if ((isLeftFace && iz == tileSize - 1) || (!isLeftFace && ix == tileSize - 1)) {
+				baseColor = 0xFF4A3525;
+			}
+			return toNativeABGR(darkenColor(baseColor, shadeFactor));
 		}
 
 		private void renderSpawnMarker(GuiGraphics guiGraphics) {
@@ -382,17 +422,25 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 				int markerX = this.getX() + (this.width / 2) + (int) (relX * this.width);
 				int markerY = this.getY() + (this.height / 2) + (int) (relZ * this.height);
 
-					float blockW = (float) this.width / (float) tileSize * 0.85f;
-					float blockH = blockW * 0.5f;
+					float rawBlockW = (float) this.width / (float) tileSize * 0.85f;
+					int halfW = Math.max(1, (int) (rawBlockW / 2.0f));
+					int halfH = Math.max(1, halfW / 2);
 
-					float centerVisualX = this.getX() + (this.width / 2.0f);
-					float centerVisualY = this.getY() + (this.height / 2.5f);
+					int blockW = halfW * 2;
+					int blockH = halfH * 2;
 
-					float isoX = centerVisualX + (ix - iz) * (blockW / 2.0f);
-					float isoY = centerVisualY + (ix + iz) * (blockH / 2.0f) - (cell.height * getHeightScale(blockW));
+					// MINIMAL UPDATE: Calculate absolute widget coordinate space correctly
+					int centerVisualX = this.getX() + (this.width / 2);
+					int centerVisualY = this.getY() + (this.height / 2);
 
-					int markerX = (int)(isoX + (blockW / 2.0f));
-					int markerY = (int)(isoY + (blockH / 2.0f));
+					int dx = ix - (tileSize / 2);
+					int dz = iz - (tileSize / 2);
+
+					int isoX = centerVisualX + (dx - dz) * halfW;
+					int isoY = centerVisualY + (dx + dz) * halfH - Math.round(cell.height * getHeightScale((float) blockW));
+
+					int markerX = isoX + halfW;
+					int markerY = isoY + halfH;
 
 					int size = 6;
 					int color = 0xFFFF2222;
@@ -413,39 +461,55 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 			}
 		}
 
-	    private boolean updateLegend(int mx, int my) {
-	        if (this.tile != null) {
-	            int left = this.getX();
-	            int top = this.getY();
-	            float size = this.width;
-	
-	            int zoom = this.getZoom();
-	            int width = Math.max(1, this.tile.getBlockSize().size() * zoom);
-	            int height = Math.max(1, this.tile.getBlockSize().size() * zoom);
-	            this.legendValues[0] = width + "x" + height;
-	            if (mx >= left && mx <= left + size && my >= top && my <= top + size) {
-	                float fx = (mx - left) / size;
-	                float fz = (my - top) / size;
-	                int ix = NoiseUtil.round(fx * this.tile.getBlockSize().size());
-	                int iz = NoiseUtil.round(fz * this.tile.getBlockSize().size());
-	                Cell cell = this.tile.lookup(ix, iz);
-	                this.legendValues[1] = getTerrainName(cell);
-	                this.legendValues[2] = getBiomeName(cell);
+		private boolean updateLegend(int mx, int my) {
+			if (this.tile != null) {
+				int left = this.getX();
+				int top = this.getY();
+
+				int zoom = this.getZoom();
+				int tileSize = this.tile.getBlockSize().size();
+
+				int width = Math.max(1, tileSize * zoom);
+				int height = Math.max(1, tileSize * zoom);
+				this.legendValues[0] = width + "x" + height;
+
+				float rawBlockW = (float) this.width / (float) tileSize * 0.85f;
+				int halfW = Math.max(1, (int) (rawBlockW / 2.0f));
+				int halfH = Math.max(1, halfW / 2);
+
+				// MINIMAL UPDATE: Align absolute cursor metrics into local coordinate offsets
+				int centerVisualX = left + (this.width / 2);
+				int centerVisualY = top + (this.height / 2);
+
+				float relMouseX = mx - centerVisualX;
+				float relMouseY = my - centerVisualY;
+
+				// Invert isometric projection tracking with center offset adjustment
+				int dx = NoiseUtil.round((relMouseX / halfW + relMouseY / halfH) / 2.0f);
+				int dz = NoiseUtil.round((relMouseY / halfH - relMouseX / halfW) / 2.0f);
+
+				int ix = dx + (tileSize / 2);
+				int iz = dz + (tileSize / 2);
+
+				if (ix >= 0 && ix < tileSize && iz >= 0 && iz < tileSize) {
+					Cell cell = this.tile.lookup(ix, iz);
+					this.legendValues[1] = getTerrainName(cell);
+					this.legendValues[2] = getBiomeName(cell);
 					this.legendValues[3] = getSpawnCoords();
-	
-	                int dx = (ix - (this.tile.getBlockSize().size() / 2)) * zoom;
-	                int dz = (iz - (this.tile.getBlockSize().size() / 2)) * zoom;
-	
-	                this.hoveredCoords = (this.centerX + dx) + ":" + (this.centerZ + dz);
-					this.hoveredCoordX = this.centerX + dx;
-					this.hoveredCoordZ = this.centerZ + dz;
-	                return true;
-	            } else {
-	            	this.hoveredCoords = "";
-	            }
-	        }
-	        return false;
-	    }
+
+					int worldOffsetX = (ix - (tileSize / 2)) * zoom;
+					int worldOffsetZ = (iz - (tileSize / 2)) * zoom;
+
+					this.hoveredCoords = (this.centerX + worldOffsetX) + ":" + (this.centerZ + worldOffsetZ);
+					this.hoveredCoordX = this.centerX + worldOffsetX;
+					this.hoveredCoordZ = this.centerZ + worldOffsetZ;
+					return true;
+				} else {
+					this.hoveredCoords = "";
+				}
+			}
+			return false;
+		}
 
 	    private float getLegendScale() {
 	        int index = PresetEditorPage.this.screen.minecraft.options.guiScale().get() - 1;
