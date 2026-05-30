@@ -39,7 +39,7 @@ public class Preview2D extends Button {
     public static final int SIZE = (1 << 4) << FACTOR;
     private static final float[] LEGEND_SCALES = { 1, 0.9F, 0.75F, 0.6F };
 
-    private final PresetEditorPage parent;
+    private final PresetEditorPage page;
     private final DynamicTexture texture = new DynamicTexture(new NativeImage(SIZE, SIZE, false));
     private final ResourceLocation textureId = Minecraft.getInstance().getTextureManager().register(RTFCommon.MOD_ID + "-preview-framebuffer", this.texture);
 
@@ -67,29 +67,21 @@ public class Preview2D extends Button {
 
                 if (self.updateLegend((int) guiX, (int) guiY) && !self.hoveredCoords.isEmpty()) {
                     self.playDownSound(Minecraft.getInstance().getSoundManager());
-                    self.parent.getScreen().minecraft.keyboardHandler.setClipboard(self.hoveredCoords);
-
-                    WorldSettings.Properties props = self.parent.preset.getPreset().world().properties;
+                    WorldSettings.Properties props = self.page.preset.getPreset().world().properties;
                     props.spawnType = SpawnType.USER_SELECTED;
                     props.spawnX = self.hoveredCoordX;
                     props.spawnZ = self.hoveredCoordZ;
-
-                    if (self.parent instanceof WorldSettingsPage worldPage) {
-                        if (worldPage.spawnType != null) {
-                            worldPage.spawnType.setValue(SpawnType.USER_SELECTED);
-                            worldPage.regenerate();
-                        }
-                    }
+                    self.page.regenerate();
                 }
             }
         }, DEFAULT_NARRATION);
-        this.parent = parent;
+        this.page = parent;
     }
 
     public void regenerate() {
-        WorldCreationContext settings = this.parent.getScreen().getSettings();
+        WorldCreationContext settings = this.page.getScreen().getSettings();
         RegistryAccess.Frozen registries = settings.worldgenLoadContext();
-        HolderLookup.Provider provider = this.parent.preset.getPreset().buildPatch(registries);
+        HolderLookup.Provider provider = this.page.preset.getPreset().buildPatch(registries);
         HolderGetter<Preset> presets = provider.lookupOrThrow(RTFRegistries.PRESET);
         HolderGetter<Noise> noises = provider.lookupOrThrow(RTFRegistries.NOISE);
         Preset presetObj = presets.getOrThrow(Preset.KEY).value();
@@ -120,9 +112,10 @@ public class Preview2D extends Button {
             this.centerX = 0;
             this.centerZ = 0;
         }
+        this.legendValues[0] = getSpawnCoords();
 
         this.tile = generatorContext.generator.generateZoomed(this.centerX, this.centerZ, this.getZoom(), false).join();
-        RenderMode mode = this.parent.renderMode2D.getValue();
+        RenderMode mode = this.page.renderMode2D.getValue();
         Levels levels = new Levels(properties.terrainScaler(), properties.seaLevel);
 
         int stroke = 2;
@@ -137,7 +130,6 @@ public class Preview2D extends Button {
             }
         });
         this.texture.upload();
-        this.legendValues[0] = getSpawnCoords();
     }
 
     public void close() throws Exception {
@@ -165,7 +157,7 @@ public class Preview2D extends Button {
     }
 
     private void renderSpawnMarker(GuiGraphics guiGraphics) {
-        WorldSettings.Properties props = this.parent.preset.getPreset().world().properties;
+        WorldSettings.Properties props = this.page.preset.getPreset().world().properties;
 
         if (props.spawnType == SpawnType.USER_SELECTED || props.spawnType == SpawnType.CONTINENT_CENTER) {
             int currentZoom = this.getZoom();
@@ -227,7 +219,7 @@ public class Preview2D extends Button {
     }
 
     private float getLegendScale() {
-        int index = this.parent.getScreen().minecraft.options.guiScale().get() - 1;
+        int index = this.page.getScreen().minecraft.options.guiScale().get() - 1;
         if (index < 0 || index >= LEGEND_SCALES.length) {
             index = LEGEND_SCALES.length - 1;
         }
@@ -270,7 +262,7 @@ public class Preview2D extends Button {
     }
 
     private int getZoom() {
-        return NoiseUtil.round(1.5F * (101 - (float) this.parent.zoom2D.getLerpedValue()));
+        return NoiseUtil.round(1.5F * (101 - (float) this.page.zoom2D.getLerpedValue()));
     }
 
     private static String getTerrainName(Cell cell) {
@@ -281,7 +273,7 @@ public class Preview2D extends Button {
     }
 
     private String getSpawnCoords() {
-        WorldSettings.Properties props = this.parent.preset.getPreset().world().properties;
+        WorldSettings.Properties props = this.page.preset.getPreset().world().properties;
 
         if (props.spawnType == SpawnType.USER_SELECTED) {
             return "x" + props.spawnX + " z" + props.spawnZ;

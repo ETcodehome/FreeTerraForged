@@ -71,20 +71,11 @@ public class Preview3D extends Button {
 
                 if (self.updateLegend((int) guiX, (int) guiY) && !self.hoveredCoords.isEmpty()) {
                     self.playDownSound(Minecraft.getInstance().getSoundManager());
-                    self.page.getScreen().minecraft.keyboardHandler.setClipboard(self.hoveredCoords);
-
                     WorldSettings.Properties props = self.page.preset.getPreset().world().properties;
                     props.spawnType = SpawnType.USER_SELECTED;
                     props.spawnX = self.hoveredCoordX;
                     props.spawnZ = self.hoveredCoordZ;
-
-                    if (self.page instanceof WorldSettingsPage worldPage) {
-                        if (worldPage.spawnType != null) {
-                            worldPage.spawnType.setValue(SpawnType.USER_SELECTED);
-                            worldPage.regenerate();
-                        }
-                    }
-
+                    self.page.regenerate();
                 }
             }
         }, DEFAULT_NARRATION);
@@ -124,11 +115,8 @@ public class Preview3D extends Button {
             this.centerX = 0;
             this.centerZ = 0;
         }
-
-        this.tile = generatorContext.generator.generateZoomed(this.centerX, this.centerZ, this.getZoom(), false).join();
         this.legendValues[0] = getSpawnCoords();
-
-        // STABLE CPU CACHE: Signal that texture pixels need recalculation
+        this.tile = generatorContext.generator.generateZoomed(this.centerX, this.centerZ, this.getZoom(), false).join();
         this.needsTextureRefresh = true;
     }
 

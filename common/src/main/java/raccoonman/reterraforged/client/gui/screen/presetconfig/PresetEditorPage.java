@@ -37,8 +37,14 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	}
 	
 	protected void regenerate() {
-		if (this.preview3D != null) this.preview3D.regenerate();
-		if (this.preview2D != null) this.preview2D.regenerate();
+
+		if (this.preview3D != null) {
+			this.preview3D.regenerate();
+		}
+
+		if (this.preview2D != null) {
+			this.preview2D.regenerate();
+		}
 	}
 
 	PresetConfigScreen getScreen() {
@@ -54,10 +60,14 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		int totalWidth = (this.right.getX() + this.right.getWidth()) - startX;
 		int columnWidth = totalWidth / 3;
 
-		this.left.setX(startX);
+		// COLUMN 2 (CENTER): Move the settings list here so it keeps its background box
+		this.left.setX(startX + columnWidth);
 		this.left.setWidth(columnWidth);
-		this.right.setX(startX + columnWidth);
-		this.right.setWidth(columnWidth * 2);
+
+		// BACKGROUND REMOVAL: Push the right container off-screen so its background box isn't rendered
+		this.right.setX(-9999);
+		this.right.setWidth(0);
+		this.right.setHeight(0);
 
 		this.createControls();
 
@@ -65,11 +75,13 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		int paddingX = ((columnWidth - elementWidth) / 2);
 		int forceOffset = 2;
 
-		// Calculate baseline Y based on the first button row (aligns with Col 1)
 		int yButtonRow1 = this.left.getY();
 
-		this.initColumn2(startX + columnWidth, paddingX, forceOffset, elementWidth, yButtonRow1 + 24 + 5);
-		this.initColumn3(startX + columnWidth * 2, paddingX, forceOffset, elementWidth, yButtonRow1 + 0 + 5);
+		// 2D Viewport setup (No background container)
+		this.initLeftPreviewColumn(startX, paddingX, forceOffset, elementWidth, yButtonRow1 + 48 + 5);
+
+		// 3D Viewport setup (No background container)
+		this.initRightPreviewColumn(startX + columnWidth * 2, paddingX, forceOffset, elementWidth, yButtonRow1 + 24 + 5);
 	}
 
 	private void createControls() {
@@ -107,15 +119,8 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		});
 	}
 
-	private void initColumn2(int columnX, int padding, int offset, int width, int yBase) {
+	private void initLeftPreviewColumn(int columnX, int padding, int offset, int width, int yBase) {
 		int x = columnX + padding + offset;
-
-		// Header Label
-		AbstractWidget title2D = PresetWidgets.createLabel(RTFTranslationKeys.GUI_BUTTON_RENDER_MODE);
-		title2D.setX(x);
-		title2D.setY(yBase - 14);
-		title2D.setWidth(width);
-		this.screen.addWidgetToScreen(title2D);
 
 		// Controls
 		this.zoom2D.setX(x);
@@ -136,7 +141,7 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		this.screen.addWidgetToScreen(this.preview2D);
 	}
 
-	private void initColumn3(int columnX, int padding, int offset, int width, int yBase) {
+	private void initRightPreviewColumn(int columnX, int padding, int offset, int width, int yBase) {
 		int x = columnX + padding + offset;
 
 		// Controls
