@@ -209,7 +209,7 @@ public class Preview3D extends Button {
                 int renderY = isoY - Math.round(cell.height * heightScale);
 
                 // Use the newly jittered color for the face calculations
-                int topColor = toNativeABGR(jitteredColor);
+                int topColor = jitteredColor;
                 int leftColor = getSideColor(jitteredColor, 0.75f, true, ix, iz, tileSize);
                 int rightColor = getSideColor(jitteredColor, 0.60f, false, ix, iz, tileSize);
 
@@ -235,14 +235,6 @@ public class Preview3D extends Button {
                 img.setPixelRGBA(x, y, nativeColor);
             }
         }
-    }
-
-    private int toNativeABGR(int argb) {
-        int a = (argb >> 24) & 0xFF;
-        int r = (argb >> 16) & 0xFF;
-        int g = (argb >> 8) & 0xFF;
-        int b = argb & 0xFF;
-        return (a << 24) | (b << 16) | (g << 8) | r;
     }
 
     private int darkenColor(int argb, float factor) {
@@ -300,7 +292,7 @@ public class Preview3D extends Button {
         if ((isLeftFace && iz == tileSize - 1) || (!isLeftFace && ix == tileSize - 1)) {
             baseColor = 0xFF4A3525;
         }
-        return toNativeABGR(darkenColor(baseColor, shadeFactor));
+        return darkenColor(baseColor, shadeFactor);
     }
 
     private void renderSpawnMarker(GuiGraphics guiGraphics) {

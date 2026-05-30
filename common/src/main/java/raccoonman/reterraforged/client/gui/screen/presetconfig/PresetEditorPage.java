@@ -159,7 +159,7 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		this.screen.addWidgetToScreen(this.renderMode3D);
 
 		// Viewport
-		int y3D = yBase + 48 + 20 + 10;
+		int y3D = yBase + 48 + 24;
 		this.preview3D = new Preview3D(this, x, y3D, width, width);
 		this.preview3D.regenerate();
 		this.screen.addWidgetToScreen(this.preview3D);
