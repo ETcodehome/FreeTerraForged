@@ -6,6 +6,7 @@ import java.util.Optional;
 import com.google.common.collect.ImmutableList;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.CycleButton;
+import net.minecraft.network.chat.Component;
 import raccoonman.reterraforged.client.data.RTFTranslationKeys;
 import raccoonman.reterraforged.client.gui.screen.page.BisectedPage;
 import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
@@ -22,9 +23,9 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 
 	// Static persistent state containers
 	public static double staticZoom2D = 68.0D;
-	public static double staticZoom3D = 68.0D;
+	public static double staticZoom3D = 95.0D;
 	public static RenderMode staticMode2D = RenderMode.BIOME_TYPE;
-	public static RenderMode staticMode3D = RenderMode.BIOME_TYPE;
+	public static RenderMode staticMode3D = RenderMode.HYPSOMETRIC;
 
 	private ValueButton<Integer> seed;
 	public static Preview3D preview3D;
