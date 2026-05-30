@@ -7,6 +7,8 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
+import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetConfigScreen;
+import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetEditorPage;
 import raccoonman.reterraforged.client.gui.widget.Label;
 
 public abstract class LinkedPageScreen extends Screen {
@@ -57,8 +59,22 @@ public abstract class LinkedPageScreen extends Screen {
 		
 		this.currentPage.init();
 
-		// these must be overlayed onto the current page
-		this.addRenderableOnly(new Label(16, 10, 20, 20, this.currentPage.title()));
+		// Center PresetEditorPage
+		if ((this.currentPage instanceof PresetEditorPage)) {
+			// 1. Cast the page to grab the actual central column object
+			BisectedPage<?, ?, ?> bisectedPage = (BisectedPage<?, ?, ?>) this.currentPage;
+
+			// 2. Find the exact horizontal midpoint of that central box
+			int columnCenter = bisectedPage.left.getX() + (bisectedPage.left.getWidth() / 2);
+
+			// 3. Measure the text width and offset it so the string's center aligns with the column's center
+			int textWidth = this.font.width(this.currentPage.title());
+			int centeredX = columnCenter - (textWidth / 2);
+
+			this.addRenderableOnly(new Label(centeredX, 10, textWidth, 20, this.currentPage.title()));
+		} else {
+			this.addRenderableOnly(new Label(16, 10, 20, 20, this.currentPage.title()));
+		}
 
 		this.addRenderableWidget(this.cancelButton);
 		this.addRenderableWidget(this.doneButton);
