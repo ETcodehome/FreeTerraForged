@@ -72,6 +72,23 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 
 		this.createControls();
 
+		// 2. Dynamically fit the 3D preview inside the newly resized right column
+		if (this.preview3D != null) {
+			int padding = 10;
+
+			// Calculate a responsive width based on the column's new size
+			int dynamicWidth = this.right.getWidth() - (padding * 2);
+			int dynamicHeight = dynamicWidth; // Keep it a clean, un-stretched square
+
+			// Push the fresh coordinates and dimensions to the widget
+			this.preview3D.updateBounds(
+					this.right.getX() + padding,
+					this.right.getY() + padding,
+					dynamicWidth,
+					dynamicHeight
+			);
+		}
+
 		int elementWidth = this.left.getRowWidth();
 		int paddingX = ((columnWidth - elementWidth) / 2);
 		int forceOffset = 2;

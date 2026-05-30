@@ -328,6 +328,18 @@ public class Preview3D extends Button {
         }
     }
 
+    public void updateBounds(int x, int y, int width, int height) {
+        this.setX(x);
+        this.setY(y);
+
+        // Only flag a texture refresh if the dimensions physically changed
+        if (this.width != width || this.height != height) {
+            this.width = width;
+            this.height = height;
+            this.needsTextureRefresh = true; // Forces rebuildTexture() to run next frame
+        }
+    }
+
     private boolean updateLegend(int mx, int my) {
         if (this.tile != null) {
             int left = this.getX();
@@ -339,6 +351,11 @@ public class Preview3D extends Button {
             int totalWidth = Math.max(1, tileSize * zoomValue);
             int totalHeight = Math.max(1, tileSize * zoomValue);
             this.legendValues[0] = totalWidth + "x" + totalHeight;
+
+            if (mx < left || mx >= left + this.width || my < top || my >= top + this.height) {
+                this.hoveredCoords = ""; // Clear string so tooltip doesn't draw outside
+                return false;
+            }
 
             float rawBlockW = (float) this.width / (float) tileSize * 0.85f;
             int halfW = Math.max(1, (int) (rawBlockW / 2.0f));
