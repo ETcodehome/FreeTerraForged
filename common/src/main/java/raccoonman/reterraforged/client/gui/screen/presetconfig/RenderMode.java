@@ -157,7 +157,7 @@ public enum RenderMode {
             // Define color bands
             int contourSteps = 10;
 
-            // --- UNDERWATER LOGIC ---
+            // handles ocean water but not river water
             if (cell.height < levels.water) {
 
                 // Normalize depth relative to water level (0.0 at surface, 1.0 at floor)
@@ -170,6 +170,11 @@ public enum RenderMode {
                 float brightness = 0.6F - (depthStep * 0.4F); // Darker as it gets deeper
 
                 return rgba(hue, saturation, brightness);
+            }
+
+            // handles remaining water
+            if (cell.terrain.isWateryButNotOcean()) {
+                return RenderMode.getWaterColor();
             }
 
             // Normalize land height (0.0 at water level, 1.0 at peak)

@@ -1,57 +1,36 @@
 package raccoonman.reterraforged.client.gui.screen.presetconfig;
 
-import java.awt.Color;
 import java.io.IOException;
 import java.util.Optional;
 
 import com.google.common.collect.ImmutableList;
-import com.mojang.blaze3d.platform.GlStateManager;
-import com.mojang.blaze3d.platform.NativeImage;
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.PoseStack;
-
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.MouseHandler;
-import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.CycleButton;
-import net.minecraft.client.gui.screens.worldselection.WorldCreationContext;
-import net.minecraft.client.renderer.texture.DynamicTexture;
-import net.minecraft.core.HolderGetter;
-import net.minecraft.core.HolderLookup;
-import net.minecraft.core.RegistryAccess;
-import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
-import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.client.data.RTFTranslationKeys;
 import raccoonman.reterraforged.client.gui.screen.page.BisectedPage;
 import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
 import raccoonman.reterraforged.client.gui.widget.Slider;
 import raccoonman.reterraforged.client.gui.widget.ValueButton;
-import raccoonman.reterraforged.concurrent.cache.CacheManager;
-import raccoonman.reterraforged.config.PerformanceConfig;
-import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
-import raccoonman.reterraforged.data.worldgen.preset.settings.SpawnType;
-import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings;
-import raccoonman.reterraforged.registries.RTFRegistries;
-import raccoonman.reterraforged.world.worldgen.GeneratorContext;
-import raccoonman.reterraforged.world.worldgen.cell.Cell;
-import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
-import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
-import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
-import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
-import raccoonman.reterraforged.world.worldgen.util.PosUtil;
 
 public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, AbstractWidget, AbstractWidget> {
-	private Slider zoom;
-	private CycleButton<RenderMode> renderMode;
-	private ValueButton<Integer> seed;
-	private Preview preview;
+	// Independent control components
+	Slider zoom2D;
+	Slider zoom3D;
+	CycleButton<RenderMode> renderMode2D;
+	CycleButton<RenderMode> renderMode3D;
 	protected PresetEntry preset;
-	
+
+	// Static persistent state containers
+	public static double staticZoom2D = 68.0D;
+	public static double staticZoom3D = 95.0D;
+	public static RenderMode staticMode2D = RenderMode.BIOME_TYPE;
+	public static RenderMode staticMode3D = RenderMode.HYPSOMETRIC;
+
+	private ValueButton<Integer> seed;
+	public static Preview3D preview3D;
+	public static Preview2D preview2D;
+
 	public PresetEditorPage(PresetConfigScreen screen, PresetEntry preset) {
 		super(screen);
 		
@@ -59,30 +38,96 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	}
 	
 	protected void regenerate() {
-		this.preview.regenerate();
+
+		if (this.preview3D != null) {
+			this.preview3D.regenerate();
+		}
+
+		if (this.preview2D != null) {
+			this.preview2D.regenerate();
+		}
+	}
+
+	PresetConfigScreen getScreen() {
+		return this.screen;
 	}
 
 	@Override
 	public void init() {
 		super.init();
+		this.cleanupWidgets();
 
-		// Cleanup previous preview instance if it exists
-		if (this.preview != null) {
-			this.screen.removeWidgetFromScreen(this.preview);
-			try {
-				this.preview.close();
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
+		int startX = this.left.getX();
+		int totalWidth = (this.right.getX() + this.right.getWidth()) - startX;
+		int columnWidth = totalWidth / 3;
+
+		// COLUMN 2 (CENTER): Move the settings list here so it keeps its background box
+		this.left.setX(startX + columnWidth);
+		this.left.setWidth(columnWidth);
+
+		// BACKGROUND REMOVAL: Push the right container off-screen so its background box isn't rendered
+		this.right.setX(-9999);
+		this.right.setWidth(0);
+		this.right.setHeight(0);
+
+		this.createControls();
+
+		// 2. Dynamically fit the 3D preview inside the newly resized right column
+		if (this.preview3D != null) {
+			int padding = 10;
+
+			// Calculate a responsive width based on the column's new size
+			int dynamicWidth = this.right.getWidth() - (padding * 2);
+			int dynamicHeight = dynamicWidth; // Keep it a clean, un-stretched square
+
+			// Push the fresh coordinates and dimensions to the widget
+			this.preview3D.updateBounds(
+					this.right.getX() + padding,
+					this.right.getY() + padding,
+					dynamicWidth,
+					dynamicHeight
+			);
 		}
 
-		// Initialize controls
-		this.zoom = PresetWidgets.createIntSlider(Optional.ofNullable(this.zoom).map(Slider::getLerpedValue).orElse(68.0D).intValue(), 1, 100, RTFTranslationKeys.GUI_SLIDER_ZOOM, (slider, value) -> {
+		int elementWidth = this.left.getRowWidth();
+		int paddingX = ((columnWidth - elementWidth) / 2);
+		int forceOffset = 2;
+
+		int yButtonRow1 = this.left.getY();
+
+		// 2D Viewport setup (No background container)
+		this.initLeftPreviewColumn(startX, paddingX, forceOffset, elementWidth, yButtonRow1 + 48 + 5);
+
+		// 3D Viewport setup (No background container)
+		this.initRightPreviewColumn(startX + columnWidth * 2, paddingX, forceOffset, elementWidth, yButtonRow1 + 24 + 5);
+	}
+
+	private void createControls() {
+		// Zoom2D (High Precision)
+		double initZoom2D = Optional.ofNullable(this.zoom2D).map(Slider::getLerpedValue).orElse(staticZoom2D);
+		this.zoom2D = PresetWidgets.createIntSlider((int) Math.round(initZoom2D), 1, 100, RTFTranslationKeys.GUI_SLIDER_ZOOM, (slider, value) -> {
+			staticZoom2D = ((Slider) slider).getLerpedValue();
 			this.regenerate();
 			return value;
 		});
+		this.zoom2D.setValue((initZoom2D - 1.0D) / (100.0D - 1.0D));
 
-		this.renderMode = PresetWidgets.createCycle(ImmutableList.copyOf(RenderMode.values()), this.renderMode != null ? this.renderMode.getValue() : RenderMode.BIOME_TYPE, RTFTranslationKeys.GUI_BUTTON_RENDER_MODE, (button, value) -> {
+		// Zoom3D (High Precision)
+		double initZoom3D = Optional.ofNullable(this.zoom3D).map(Slider::getLerpedValue).orElse(staticZoom3D);
+		this.zoom3D = PresetWidgets.createIntSlider((int) Math.round(initZoom3D), 1, 100, RTFTranslationKeys.GUI_SLIDER_ZOOM, (slider, value) -> {
+			staticZoom3D = ((Slider) slider).getLerpedValue();
+			this.regenerate();
+			return value;
+		});
+		this.zoom3D.setValue((initZoom3D - 1.0D) / (100.0D - 1.0D));
+
+		this.renderMode2D = PresetWidgets.createCycle(ImmutableList.copyOf(RenderMode.values()), this.renderMode2D != null ? this.renderMode2D.getValue() : staticMode2D, RTFTranslationKeys.GUI_BUTTON_RENDER_MODE, (button, value) -> {
+			staticMode2D = value;
+			this.regenerate();
+		}, RenderMode::name);
+
+		this.renderMode3D = PresetWidgets.createCycle(ImmutableList.copyOf(RenderMode.values()), this.renderMode3D != null ? this.renderMode3D.getValue() : staticMode3D, RTFTranslationKeys.GUI_BUTTON_RENDER_MODE, (button, value) -> {
+			staticMode3D = value;
 			this.regenerate();
 		}, RenderMode::name);
 
@@ -90,351 +135,89 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 			this.screen.setSeed(i);
 			this.regenerate();
 		});
+	}
 
-		// Add control widgets to the list
-		this.right.addWidget(this.zoom);
-		this.right.addWidget(this.renderMode);
-		this.right.addWidget(this.seed);
+	private void initLeftPreviewColumn(int columnX, int padding, int offset, int width, int yBase) {
+		int x = columnX + padding + offset;
 
-		// Calculate dynamic layout values
-		int elementWidth = this.right.getRowWidth();
-		int paddingX = ((this.right.getWidth() - elementWidth) / 2);
-		int forceOffset = 2;
-		int x = this.right.getX() + paddingX + forceOffset;
+		// Controls
+		this.zoom2D.setX(x);
+		this.zoom2D.setY(yBase);
+		this.zoom2D.setWidth(width);
+		this.zoom2D.setHeight(20);
+		this.screen.addWidgetToScreen(this.zoom2D);
 
-		// Use BisectedPage's getTotalListHeight to determine how much vertical space buttons occupy
-		int gap = 10;
-		int y = this.right.getY() + this.getTotalListHeight(this.right) + gap;
+		this.renderMode2D.setX(x);
+		this.renderMode2D.setY(yBase + 24);
+		this.renderMode2D.setWidth(width);
+		this.renderMode2D.setHeight(20);
+		this.screen.addWidgetToScreen(this.renderMode2D);
 
-		// Initialize the Preview square
-		this.preview = new Preview(x, y, elementWidth, elementWidth);
-		this.preview.regenerate();
+		// Viewport
+		this.preview2D = new Preview2D(this, x, yBase + 48, width, width);
+		this.preview2D.regenerate();
+		this.screen.addWidgetToScreen(this.preview2D);
+	}
 
-		/*
-		 * Register the preview directly to the screen to bypass WidgetList's
-		 * slot-height clipping, ensuring the full square is clickable.
-		 */
-		this.screen.addWidgetToScreen(this.preview);
+	private void initRightPreviewColumn(int columnX, int padding, int offset, int width, int yBase) {
+		int x = columnX + padding + offset;
+
+		// Controls
+		this.seed.setX(x);
+		this.seed.setY(yBase);
+		this.seed.setWidth(width);
+		this.seed.setHeight(20);
+		this.screen.addWidgetToScreen(this.seed);
+
+		this.zoom3D.setX(x);
+		this.zoom3D.setY(yBase + 24);
+		this.zoom3D.setWidth(width);
+		this.zoom3D.setHeight(20);
+		this.screen.addWidgetToScreen(this.zoom3D);
+
+		this.renderMode3D.setX(x);
+		this.renderMode3D.setY(yBase + 48);
+		this.renderMode3D.setWidth(width);
+		this.renderMode3D.setHeight(20);
+		this.screen.addWidgetToScreen(this.renderMode3D);
+
+		// Viewport
+		int y3D = yBase + 48 + 24;
+		this.preview3D = new Preview3D(this, x, y3D, width, width);
+		this.preview3D.regenerate();
+		this.screen.addWidgetToScreen(this.preview3D);
+	}
+
+	private void cleanupWidgets() {
+		if (this.zoom2D != null) this.screen.removeWidgetFromScreen(this.zoom2D);
+		if (this.zoom3D != null) this.screen.removeWidgetFromScreen(this.zoom3D);
+		if (this.renderMode2D != null) this.screen.removeWidgetFromScreen(this.renderMode2D);
+		if (this.renderMode3D != null) this.screen.removeWidgetFromScreen(this.renderMode3D);
+		if (this.seed != null) this.screen.removeWidgetFromScreen(this.seed);
+
+		if (this.preview3D != null) {
+			this.screen.removeWidgetFromScreen(this.preview3D);
+			try { this.preview3D.close(); } catch (Exception e) { e.printStackTrace(); }
+		}
+		if (this.preview2D != null) {
+			this.screen.removeWidgetFromScreen(this.preview2D);
+			try { this.preview2D.close(); } catch (Exception e) { e.printStackTrace(); }
+		}
 	}
 	
 	@Override
 	public void onClose() {
 		super.onClose();
-	
 		try {
 			this.preset.save();
-			this.preview.close();
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
+			if (this.preview3D != null) this.preview3D.close();
+			if (this.preview2D != null) this.preview2D.close();
+		} catch (Exception e) { e.printStackTrace(); }
 	}
 	
 	@Override
 	public void onDone() {
 		super.onDone();
-		
-		try {
-			this.screen.applyPreset(this.preset);
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-	}
-	
-	public class Preview extends Button {
-	    private static final int FACTOR = 4;
-	    public static final int SIZE = (1 << 4) << FACTOR;
-	    private static final float[] LEGEND_SCALES = { 1, 0.9F, 0.75F, 0.6F };
-	    private DynamicTexture texture = new DynamicTexture(new NativeImage(SIZE, SIZE, false));
-	    private ResourceLocation textureId = Minecraft.getInstance().getTextureManager().register(RTFCommon.MOD_ID + "-preview-framebuffer", this.texture); 
-	    private Tile tile;
-	    private int centerX, centerZ;
-
-		private int hoveredCoordX = 0;
-		private int hoveredCoordZ = 0;
-	    private String hoveredCoords = "";
-	    //TODO maybe make this a map or something instead?
-	    private String[] legendValues = {"", "", "", ""};
-	    private Component[] legendLabels = { Component.translatable(RTFTranslationKeys.GUI_LABEL_PREVIEW_AREA), Component.translatable(RTFTranslationKeys.GUI_LABEL_PREVIEW_TERRAIN), Component.translatable(RTFTranslationKeys.GUI_LABEL_PREVIEW_BIOME), Component.translatable(RTFTranslationKeys.GUI_LABEL_PREVIEW_SPAWN) };
-
-	    private int offsetX, offsetZ;
-
-	    public Preview(int x, int y, int width, int height) {
-			super(x, y, width, height, CommonComponents.EMPTY, (b) -> {
-				if (b instanceof Preview self) {
-					Minecraft mc = Minecraft.getInstance();
-					// Convert raw mouse pixels to scaled GUI coordinates
-					double guiX = mc.mouseHandler.xpos() * (double) mc.getWindow().getGuiScaledWidth() / (double) mc.getWindow().getWidth();
-					double guiY = mc.mouseHandler.ypos() * (double) mc.getWindow().getGuiScaledHeight() / (double) mc.getWindow().getHeight();
-
-					if (self.updateLegend((int) guiX, (int) guiY) && !self.hoveredCoords.isEmpty()) {
-						// copy the coords to the clipboard and play click sound
-			            self.playDownSound(Minecraft.getInstance().getSoundManager());
-			            PresetEditorPage.this.screen.minecraft.keyboardHandler.setClipboard(self.hoveredCoords);
-
-						// set the spawn point by clicking
-						WorldSettings.Properties props = preset.getPreset().world().properties;
-						props.spawnType = SpawnType.USER_SELECTED;
-						props.spawnX = self.hoveredCoordX;
-						props.spawnZ = self.hoveredCoordZ;
-
-						// Synchronize the UI button if we are on the WorldSettingsPage
-						if (PresetEditorPage.this instanceof WorldSettingsPage worldPage) {
-							if (worldPage.spawnType != null) {
-								worldPage.spawnType.setValue(SpawnType.USER_SELECTED);
-							}
-						}
-
-						self.regenerate();
-			        }
-	        	}
-	        }, DEFAULT_NARRATION);
-	    }
-
-	    public void regenerate() {
-			WorldCreationContext settings = PresetEditorPage.this.screen.getSettings();
-	        RegistryAccess.Frozen registries = settings.worldgenLoadContext();
-	        HolderLookup.Provider provider = PresetEditorPage.this.preset.getPreset().buildPatch(registries);
-	        HolderGetter<Preset> presets = provider.lookupOrThrow(RTFRegistries.PRESET);
-	        HolderGetter<Noise> noises = provider.lookupOrThrow(RTFRegistries.NOISE);
-	        Preset preset = presets.getOrThrow(Preset.KEY).value();
-	        WorldSettings world = preset.world();
-	        WorldSettings.Properties properties = world.properties;
-	        
-	        try {
-				CacheManager.clear();
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
-			PerformanceConfig config = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
-				.resultOrPartial(RTFCommon.LOGGER::error)
-				.orElseGet(PerformanceConfig::makeDefault);
-	        GeneratorContext generatorContext = GeneratorContext.makeUncached(preset, noises, (int) settings.options().seed(), FACTOR, 0, config.batchCount());
-	        
-	        this.centerX = 0;
-	        this.centerZ = 0;
-	        
-	        if(preset.world().properties.spawnType == SpawnType.CONTINENT_CENTER) {
-				long nearestContinentCenter = generatorContext.lookup.getHeightmap().continent().getNearestCenter(this.offsetX, this.offsetZ);
-				this.centerX = PosUtil.unpackLeft(nearestContinentCenter);
-				this.centerZ = PosUtil.unpackRight(nearestContinentCenter);
-			} else if (preset.world().properties.spawnType == SpawnType.USER_SELECTED){
-				this.centerX = preset.world().properties.spawnX;
-				this.centerZ = preset.world().properties.spawnZ;
-	        } else {
-	        	this.centerX = 0;
-	        	this.centerZ = 0;
-	        }
-
-	        this.tile = generatorContext.generator.generateZoomed(this.centerX, this.centerZ, this.getZoom(), false).join();
-	        RenderMode renderMode = PresetEditorPage.this.renderMode.getValue();
-	        Levels levels = new Levels(properties.terrainScaler(), properties.seaLevel);
-
-	        int stroke = 2;
-	        int width = this.tile.getBlockSize().size();
-
-	        NativeImage pixels = this.texture.getPixels();
-	        this.tile.iterate((cell, x, z) -> {
-	            if (x < stroke || z < stroke || x >= width - stroke || z >= width - stroke) {
-	                pixels.setPixelRGBA(x, z, Color.BLACK.getRGB());
-	            } else {
-	                pixels.setPixelRGBA(x, z, renderMode.getColor(cell, levels));
-	            }
-	        });
-	        this.texture.upload();
-			this.legendValues[3] = getSpawnCoords();
-	    }
-	    
-	    public void close() throws Exception {
-	    	this.texture.close();
-	    	try {
-				CacheManager.clear();
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
-	    }
-
-	    @Override
-	    public void renderWidget(GuiGraphics guiGraphics, int mx, int my, float partialTicks) {
-	    	int x = this.getX();
-	    	int y = this.getY();
-
-	        RenderSystem.enableBlend();
-	        RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA, GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
-	        RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
-	    	guiGraphics.blit(this.textureId, x, y, 0, 0, this.width, this.height, this.width, this.height);
-
-			renderSpawnMarker(guiGraphics);
-
-	    	this.updateLegend(mx, my);
-
-	    	this.renderLegend(guiGraphics, mx, my, this.legendLabels, this.legendValues, x, y + this.width + 40, 10, 0xFFFFFF);
-	    }
-
-		private void renderSpawnMarker(GuiGraphics guiGraphics) {
-			WorldSettings.Properties props = preset.getPreset().world().properties;
-
-			// Check if the current spawn type should be displayed
-			if (props.spawnType == SpawnType.USER_SELECTED || props.spawnType == SpawnType.CONTINENT_CENTER) {
-				int zoom = this.getZoom();
-
-				// Map world coordinates to the tile's relative center
-				float relX = (float) (props.spawnX - this.centerX) / (this.tile.getBlockSize().size() * zoom);
-				float relZ = (float) (props.spawnZ - this.centerZ) / (this.tile.getBlockSize().size() * zoom);
-
-				// Convert relative ratio to screen pixel coordinates
-				int markerX = this.getX() + (this.width / 2) + (int) (relX * this.width);
-				int markerY = this.getY() + (this.height / 2) + (int) (relZ * this.height);
-
-				// Bounds check to ensure the crosshair is inside the preview square
-				if (markerX >= this.getX() && markerX <= this.getX() + this.width &&
-						markerY >= this.getY() && markerY <= this.getY() + this.height) {
-
-					int size = 5; // Length of each crosshair arm
-					int color = 0xFFFFFFFF; // White for better visibility on most biomes
-					int shadow = 0xFF000000; // Black shadow for contrast
-
-					// Draw a horizontal line with a 1-pixel black shadow for better visibility
-					// Shadow (1px offset)
-					guiGraphics.fill(markerX - size + 1, markerY + 1, markerX + size + 2, markerY + 2, shadow);
-					// Main Line
-					guiGraphics.fill(markerX - size, markerY, markerX + size + 1, markerY + 1, color);
-
-					// Draw a vertical line
-					// Shadow (1px offset)
-					guiGraphics.fill(markerX + 1, markerY - size + 1, markerX + 2, markerY + size + 2, shadow);
-					// Main Line
-					guiGraphics.fill(markerX, markerY - size, markerX + 1, markerY + size + 1, color);
-				}
-			}
-		}
-
-	    private boolean updateLegend(int mx, int my) {
-	        if (this.tile != null) {
-	            int left = this.getX();
-	            int top = this.getY();
-	            float size = this.width;
-	
-	            int zoom = this.getZoom();
-	            int width = Math.max(1, this.tile.getBlockSize().size() * zoom);
-	            int height = Math.max(1, this.tile.getBlockSize().size() * zoom);
-	            this.legendValues[0] = width + "x" + height;
-	            if (mx >= left && mx <= left + size && my >= top && my <= top + size) {
-	                float fx = (mx - left) / size;
-	                float fz = (my - top) / size;
-	                int ix = NoiseUtil.round(fx * this.tile.getBlockSize().size());
-	                int iz = NoiseUtil.round(fz * this.tile.getBlockSize().size());
-	                Cell cell = this.tile.lookup(ix, iz);
-	                this.legendValues[1] = getTerrainName(cell);
-	                this.legendValues[2] = getBiomeName(cell);
-					this.legendValues[3] = getSpawnCoords();
-	
-	                int dx = (ix - (this.tile.getBlockSize().size() / 2)) * zoom;
-	                int dz = (iz - (this.tile.getBlockSize().size() / 2)) * zoom;
-	
-	                this.hoveredCoords = (this.centerX + dx) + ":" + (this.centerZ + dz);
-					this.hoveredCoordX = this.centerX + dx;
-					this.hoveredCoordZ = this.centerZ + dz;
-	                return true;
-	            } else {
-	            	this.hoveredCoords = "";
-	            }
-	        }
-	        return false;
-	    }
-
-	    private float getLegendScale() {
-	        int index = PresetEditorPage.this.screen.minecraft.options.guiScale().get() - 1;
-	        if (index < 0 || index >= LEGEND_SCALES.length) {
-	            // index=-1 == GuiScale(AUTO) which is the same as GuiScale(4)
-	            // values above 4 don't exist but who knows what mods might try set it to
-	            // in both cases use the smallest acceptable scale
-	            index = LEGEND_SCALES.length - 1;
-	        }
-	        return LEGEND_SCALES[index];
-	    }
-
-	    private void renderLegend(GuiGraphics guiGraphics, int mx, int my, Component[] labels, String[] values, int left, int top, int lineHeight, int color) {
-	        float scale = this.getLegendScale();
-	        PoseStack pose = guiGraphics.pose();
-	        	
-	        pose.pushPose();
-	        pose.translate(left + 3.75F * scale, top - lineHeight * (3.2F * scale), 0);
-	        pose.scale(scale, scale, 1);
-	
-	        Minecraft mc = Minecraft.getInstance();
-	        Font renderer = mc.font;
-	        int spacing = 0;
-	        for (Component s : labels) {
-	            spacing = Math.max(spacing, renderer.width(s));
-	        }
-	
-	        float maxWidth = (this.width - 4) / scale;
-	        for (int i = 0; i < labels.length && i < values.length; i++) {
-	        	Component label = labels[i];
-	            String value = values[i];
-	
-	            while (value.length() > 0 && spacing + renderer.width(value) > maxWidth) {
-	                value = value.substring(0, value.length() - 1);
-	            }
-	
-	            guiGraphics.drawString(renderer, label, 0, i * lineHeight, color);
-	            guiGraphics.drawString(renderer, value, spacing, i * lineHeight, color);
-	        }
-	
-	        pose.popPose();
-	
-	        if (!this.hoveredCoords.isEmpty()) {
-	        	guiGraphics.drawCenteredString(renderer, this.hoveredCoords, mx, my - 10, 0xFFFFFF);
-	        }
-	    }
-	
-	    private int getZoom() {
-	        return NoiseUtil.round(1.5F * (101 - (float) PresetEditorPage.this.zoom.getLerpedValue()));
-	    }
-	
-	    private static String getTerrainName(Cell cell) {
-	        if (cell.terrain.isRiver()) {
-	            return "river";
-	        }
-	        return cell.terrain.getName().toLowerCase();
-	    }
-
-		private String getSpawnCoords() {
-
-			if (WorldSettings.Properties.spawnType == SpawnType.USER_SELECTED) {
-				return "x" + WorldSettings.Properties.spawnX + " z" + WorldSettings.Properties.spawnZ;
-			}
-
-			if (WorldSettings.Properties.spawnType == SpawnType.CONTINENT_CENTER) {
-				return "~x" + this.centerX + " ~z" + this.centerZ;
-			}
-
-			if (WorldSettings.Properties.spawnType == SpawnType.ISLANDS) {
-				return "~x" + this.centerX + " ~z" + this.centerZ;
-			}
-
-			if (WorldSettings.Properties.spawnType == SpawnType.WORLD_ORIGIN) {
-				return "x0 z0";
-			}
-
-			return "x0 z0";
-		}
-	
-	    private static String getBiomeName(Cell cell) {
-	        String terrain = cell.terrain.getName().toLowerCase();
-	        if (terrain.contains("ocean")) {
-	            if (cell.temperature < 0.3F) {
-	                return "cold_" + terrain;
-	            }
-	            if (cell.temperature > 0.6F) {
-	                return "warm_" + terrain;
-	            }
-	            return terrain;
-	        }
-	        if (terrain.contains("river")) {
-	            return "river";
-	        }
-	        return cell.biome.name().toLowerCase();
-	    }
+		try { this.screen.applyPreset(this.preset); } catch (IOException e) { e.printStackTrace(); }
 	}
 }
