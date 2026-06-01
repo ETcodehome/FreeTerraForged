@@ -1,6 +1,7 @@
 package raccoonman.reterraforged.client.gui.screen.presetconfig;
 
 import java.awt.Color;
+import java.util.concurrent.CompletableFuture;
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -58,6 +59,9 @@ public class Preview2D extends Button {
 
     private int offsetX, offsetZ;
 
+    // Performance improvement tracking field
+    private CompletableFuture<Tile> pendingGeneration = null;
+
     public Preview2D(PresetEditorPage parent, int x, int y, int width, int height) {
         super(x, y, width, height, CommonComponents.EMPTY, (b) -> {
             if (b instanceof Preview2D self) {
@@ -76,9 +80,21 @@ public class Preview2D extends Button {
             }
         }, DEFAULT_NARRATION);
         this.page = parent;
+
+        // INITIALIZATION FIX: Wipe raw memory junk inside allocated NativeImage immediately
+        NativeImage pixels = this.texture.getPixels();
+        if (pixels != null) {
+            pixels.fillRect(0, 0, SIZE, SIZE, 0xFF000000);
+            this.texture.upload();
+        }
     }
 
     public void regenerate() {
+        // Cancel any active out-of-date background computations before triggering a new one
+        if (this.pendingGeneration != null) {
+            this.pendingGeneration.cancel(true);
+        }
+
         WorldCreationContext settings = this.page.getScreen().getSettings();
         RegistryAccess.Frozen registries = settings.worldgenLoadContext();
         HolderLookup.Provider provider = this.page.preset.getPreset().buildPatch(registries);
@@ -112,27 +128,37 @@ public class Preview2D extends Button {
             this.centerX = 0;
             this.centerZ = 0;
         }
-        this.legendValues[0] = getSpawnCoords();
+        this.legendValues[3] = getSpawnCoords();
 
-        this.tile = generatorContext.generator.generateZoomed(this.centerX, this.centerZ, this.getZoom(), false).join();
         RenderMode mode = this.page.renderMode2D.getValue();
         Levels levels = new Levels(properties.terrainScaler(), properties.seaLevel);
+        int zoomLevel = this.getZoom();
 
-        int stroke = 2;
-        int width = this.tile.getBlockSize().size();
+        // THREADING FIX: Generate noise data AND compute pixel buffers asynchronously on background pool
+        this.pendingGeneration = generatorContext.generator.generateZoomed(this.centerX, this.centerZ, zoomLevel, false);
+        this.pendingGeneration.thenAccept(newTile -> {
+            this.tile = newTile;
+            int stroke = 2;
+            int tileWidth = this.tile.getBlockSize().size();
+            NativeImage pixels = this.texture.getPixels();
 
-        NativeImage pixels = this.texture.getPixels();
-        this.tile.iterate((cell, bx, bz) -> {
-            if (bx < stroke || bz < stroke || bx >= width - stroke || bz >= width - stroke) {
-                pixels.setPixelRGBA(bx, bz, Color.BLACK.getRGB());
-            } else {
-                pixels.setPixelRGBA(bx, bz, mode.getColor(cell, levels));
-            }
+            this.tile.iterate((cell, bx, bz) -> {
+                if (bx < stroke || bz < stroke || bx >= tileWidth - stroke || bz >= tileWidth - stroke) {
+                    pixels.setPixelRGBA(bx, bz, Color.BLACK.getRGB());
+                } else {
+                    pixels.setPixelRGBA(bx, bz, mode.getColor(cell, levels));
+                }
+            });
+
+            // Hand the finished native data back to the primary Minecraft render loop for its GL upload
+            Minecraft.getInstance().execute(this.texture::upload);
         });
-        this.texture.upload();
     }
 
     public void close() throws Exception {
+        if (this.pendingGeneration != null) {
+            this.pendingGeneration.cancel(true);
+        }
         this.texture.close();
         try {
             CacheManager.clear();
@@ -142,18 +168,55 @@ public class Preview2D extends Button {
     }
 
     @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean isMouseOver(double mouseX, double mouseY) {
+        return super.isMouseOver(mouseX, mouseY);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+
+        // Map mouse wheel actions over the preview image directly to the slider settings
+        if (this.isMouseOver(mouseX, mouseY)) {
+            if (this.page.zoom2D != null) {
+                // Adjust value limits assuming standard Slider configurations
+                double currentVal = this.page.zoom2D.getValue();
+                double step = 0.05;
+                if (scrollY > 0) {
+                    this.page.zoom2D.setValue(Math.min(1.0, currentVal + step));
+                } else if (scrollY < 0) {
+                    this.page.zoom2D.setValue(Math.max(0.0, currentVal - step));
+                }
+                this.regenerate();
+            }
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+    }
+
+    @Override
     public void renderWidget(GuiGraphics guiGraphics, int mx, int my, float partialTicks) {
+
         int xPos = this.getX();
         int yPos = this.getY();
 
-        RenderSystem.enableBlend();
-        RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA, GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
-        RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
-        guiGraphics.blit(this.textureId, xPos, yPos, 0, 0, this.width, this.height, this.width, this.height);
+        // RENDER GUARD FIX: Draw a safe uniform placeholder if background computation thread isn't finished
+        if (this.tile == null) {
+            guiGraphics.fill(xPos, yPos, xPos + this.width, yPos + this.height, 0xFF000000);
+        } else {
+            RenderSystem.enableBlend();
+            RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA, GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
+            RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
+            guiGraphics.blit(this.textureId, xPos, yPos, 0, 0, this.width, this.height, this.width, this.height);
+        }
 
         renderSpawnMarker(guiGraphics);
         this.updateLegend(mx, my);
-        this.renderLegend(guiGraphics, mx, my, this.legendLabels, this.legendValues, xPos, yPos + this.width + 40, 10, 0xFFFFFF);
+        this.renderLegend(guiGraphics, mx, my, this.legendLabels, this.legendValues, xPos, yPos + this.width + 30, 10, 0xFFFFFF);
     }
 
     private void renderSpawnMarker(GuiGraphics guiGraphics) {
@@ -162,24 +225,26 @@ public class Preview2D extends Button {
         if (props.spawnType == SpawnType.USER_SELECTED || props.spawnType == SpawnType.CONTINENT_CENTER) {
             int currentZoom = this.getZoom();
 
-            float relX = (float) (props.spawnX - this.centerX) / (this.tile.getBlockSize().size() * currentZoom);
-            float relZ = (float) (props.spawnZ - this.centerZ) / (this.tile.getBlockSize().size() * currentZoom);
+            if (this.tile != null) {
+                float relX = (float) (props.spawnX - this.centerX) / (this.tile.getBlockSize().size() * currentZoom);
+                float relZ = (float) (props.spawnZ - this.centerZ) / (this.tile.getBlockSize().size() * currentZoom);
 
-            int markerX = this.getX() + (this.width / 2) + (int) (relX * this.width);
-            int markerY = this.getY() + (this.height / 2) + (int) (relZ * this.height);
+                int markerX = this.getX() + (this.width / 2) + (int) (relX * this.width);
+                int markerY = this.getY() + (this.height / 2) + (int) (relZ * this.height);
 
-            if (markerX >= this.getX() && markerX <= this.getX() + this.width &&
-                    markerY >= this.getY() && markerY <= this.getY() + this.height) {
+                if (markerX >= this.getX() && markerX <= this.getX() + this.width &&
+                        markerY >= this.getY() && markerY <= this.getY() + this.height) {
 
-                int size = 5;
-                int color = 0xFFFFFFFF;
-                int shadow = 0xFF000000;
+                    int size = 5;
+                    int color = 0xFFFFFFFF;
+                    int shadow = 0xFF000000;
 
-                guiGraphics.fill(markerX - size + 1, markerY + 1, markerX + size + 2, markerY + 2, shadow);
-                guiGraphics.fill(markerX - size, markerY, markerX + size + 1, markerY + 1, color);
+                    guiGraphics.fill(markerX - size + 1, markerY + 1, markerX + size + 2, markerY + 2, shadow);
+                    guiGraphics.fill(markerX - size, markerY, markerX + size + 1, markerY + 1, color);
 
-                guiGraphics.fill(markerX + 1, markerY - size + 1, markerX + 2, markerY + size + 2, shadow);
-                guiGraphics.fill(markerX, markerY - size, markerX + 1, markerY + size + 1, color);
+                    guiGraphics.fill(markerX + 1, markerY - size + 1, markerX + 2, markerY + size + 2, shadow);
+                    guiGraphics.fill(markerX, markerY - size, markerX + 1, markerY + size + 1, color);
+                }
             }
         }
     }
@@ -236,22 +301,35 @@ public class Preview2D extends Button {
 
         Minecraft mc = Minecraft.getInstance();
         Font renderer = mc.font;
-        int spacing = 0;
-        for (Component s : labels) {
-            spacing = Math.max(spacing, renderer.width(s));
-        }
 
         float maxWidth = (this.width - 4) / scale;
+
+        // Render the lines left-aligned in their original array order
         for (int i = 0; i < labels.length && i < values.length; i++) {
             Component label = labels[i];
             String value = values[i];
 
-            while (value.length() > 0 && spacing + renderer.width(value) > maxWidth) {
-                value = value.substring(0, value.length() - 1);
+            // Clean up trailing ": " or ":" from the label component text
+            String labelStr = label.getString();
+            if (labelStr.endsWith(": ")) {
+                labelStr = labelStr.substring(0, labelStr.length() - 2);
+            } else if (labelStr.endsWith(":")) {
+                labelStr = labelStr.substring(0, labelStr.length() - 1);
             }
 
-            guiGraphics.drawString(renderer, label, 0, i * lineHeight, color);
-            guiGraphics.drawString(renderer, value, spacing, i * lineHeight, color);
+            // Combine into: "§7(Label)§r value" where brackets/label are gray, value resets to default
+            String line = "\u00a77(" + labelStr + ")\u00a7r " + value;
+
+            // Truncate from the right if the entire line exceeds the available width
+            while (line.length() > 0 && renderer.width(line) > maxWidth) {
+                line = line.substring(0, line.length() - 1);
+            }
+
+            // Left-aligned text starts at X = 0 relative to the translated PoseStack
+            int x = 0;
+
+            // Render using 'i' for vertical spacing so they stack properly
+            guiGraphics.drawString(renderer, line, x, i * lineHeight, color);
         }
 
         pose.popPose();
