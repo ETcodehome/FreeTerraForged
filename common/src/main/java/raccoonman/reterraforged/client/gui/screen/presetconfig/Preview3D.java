@@ -1,8 +1,6 @@
 package raccoonman.reterraforged.client.gui.screen.presetconfig;
 
 import java.awt.Color;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -59,20 +57,21 @@ public class Preview3D extends Button {
 
     private int offsetX, offsetZ;
 
-    // Optimized Texture Cache fields
     private DynamicTexture textureCache;
     private ResourceLocation cacheLocation;
     private boolean needsTextureRefresh = false;
 
-    // Optimization: Hover tracking to prevent redundant string allocations
     private int lastHoveredIx = -1;
     private int lastHoveredIz = -1;
 
-    // Optimization: Reuse a single float array for HSB calculations to prevent GC churn
     private final float[] hsbCache = new float[3];
 
-    // Threading Optimization: Track background computation state
-    private CompletableFuture<Tile> pendingGeneration = null;
+    private CompletableFuture<FrameResult> pendingGeneration = null;
+
+    // Concurrency Gates
+    private boolean isRunning = false;
+    private boolean isDirty = false;
+    private boolean closed = false;
 
     public Preview3D(PresetEditorPage page, int x, int y, int width, int height) {
         super(x, y, width, height, CommonComponents.EMPTY, (b) -> {
@@ -96,10 +95,19 @@ public class Preview3D extends Button {
     }
 
     public void regenerate() {
-        // Cancel active calculations before scheduling new work
-        if (this.pendingGeneration != null) {
-            this.pendingGeneration.cancel(true);
+        this.isDirty = true;
+
+        // If the worker is already running, it will automatically consume the dirty flag upon completion
+        if (!this.isRunning) {
+            this.executeRegenerate();
         }
+    }
+
+    private void executeRegenerate() {
+        if (this.closed) return;
+
+        this.isRunning = true;
+        this.isDirty = false;
 
         WorldCreationContext settings = this.page.getScreen().getSettings();
         RegistryAccess.Frozen registries = settings.worldgenLoadContext();
@@ -108,49 +116,73 @@ public class Preview3D extends Button {
         HolderGetter<Noise> noises = provider.lookupOrThrow(RTFRegistries.NOISE);
         Preset currentPreset = presets.getOrThrow(Preset.KEY).value();
 
-        try {
-            CacheManager.clear();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        PerformanceConfig config = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
-                .resultOrPartial(RTFCommon.LOGGER::error)
-                .orElseGet(PerformanceConfig::makeDefault);
-        GeneratorContext generatorContext = GeneratorContext.makeUncached(currentPreset, noises, (int) settings.options().seed(), FACTOR, 0, config.batchCount());
-
-        this.centerX = 0;
-        this.centerZ = 0;
-
-        if(currentPreset.world().properties.spawnType == SpawnType.CONTINENT_CENTER) {
-            long nearestContinentCenter = generatorContext.lookup.getHeightmap().continent().getNearestCenter(this.offsetX, this.offsetZ);
-            this.centerX = PosUtil.unpackLeft(nearestContinentCenter);
-            this.centerZ = PosUtil.unpackRight(nearestContinentCenter);
-        } else if (currentPreset.world().properties.spawnType == SpawnType.USER_SELECTED){
-            this.centerX = currentPreset.world().properties.spawnX;
-            this.centerZ = currentPreset.world().properties.spawnZ;
-        } else {
-            this.centerX = 0;
-            this.centerZ = 0;
-        }
-        this.legendValues[3] = getSpawnCoords();
+        int seed = (int) settings.options().seed();
         int zoomLevel = this.getZoom();
+        int localOffsetX = this.offsetX;
+        int localOffsetZ = this.offsetZ;
 
-        // THREADING FIX: Move calculation work off the client rendering loop
-        this.pendingGeneration = generatorContext.generator.generateZoomed(this.centerX, this.centerZ, zoomLevel, false);
-        this.pendingGeneration.thenAcceptAsync(newTile -> {
-            this.tile = newTile;
-            this.needsTextureRefresh = true;
+        // Step 1: Offload disk IO and heavy context calculations to background executor
+        CompletableFuture<PreGenContext> setupStage = CompletableFuture.supplyAsync(() -> {
+            try {
+                CacheManager.clear();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            PerformanceConfig config = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
+                    .resultOrPartial(RTFCommon.LOGGER::error)
+                    .orElseGet(PerformanceConfig::makeDefault);
 
-            // Reset hover cache safely on the main thread loop
-            this.lastHoveredIx = -1;
-            this.lastHoveredIz = -1;
+            GeneratorContext generatorContext = GeneratorContext.makeUncached(currentPreset, noises, seed, FACTOR, 0, config.batchCount());
+
+            int cx = 0;
+            int cz = 0;
+            if (currentPreset.world().properties.spawnType == SpawnType.CONTINENT_CENTER) {
+                long nearestContinentCenter = generatorContext.lookup.getHeightmap().continent().getNearestCenter(localOffsetX, localOffsetZ);
+                cx = PosUtil.unpackLeft(nearestContinentCenter);
+                cz = PosUtil.unpackRight(nearestContinentCenter);
+            } else if (currentPreset.world().properties.spawnType == SpawnType.USER_SELECTED) {
+                cx = currentPreset.world().properties.spawnX;
+                cz = currentPreset.world().properties.spawnZ;
+            }
+
+            return new PreGenContext(generatorContext, cx, cz, zoomLevel);
+        }, net.minecraft.Util.backgroundExecutor());
+
+        // Step 2: Compose into the chunk generator's pipeline
+        this.pendingGeneration = setupStage.thenCompose(preGen ->
+                preGen.context.generator.generateZoomed(preGen.cx, preGen.cz, preGen.zoomLevel, false)
+                        .thenApply(tile -> new FrameResult(tile, preGen.cx, preGen.cz))
+        );
+
+        // Step 3: Handle execution complete back on the client main render thread
+        this.pendingGeneration.whenCompleteAsync((result, throwable) -> {
+            this.isRunning = false;
+
+            if (this.closed) return;
+
+            if (throwable != null) {
+                RTFCommon.LOGGER.error("Failed handling 3D preview generation pipeline", throwable);
+            } else if (result != null && result.tile != null) {
+                this.tile = result.tile;
+                this.centerX = result.centerX;
+                this.centerZ = result.centerZ;
+                this.legendValues[3] = getSpawnCoords();
+                this.needsTextureRefresh = true;
+
+                this.lastHoveredIx = -1;
+                this.lastHoveredIz = -1;
+            }
+
+            // If the user modified values while this task was running, consume the change state immediately
+            if (this.isDirty) {
+                this.executeRegenerate();
+            }
         }, Minecraft.getInstance());
     }
 
     private void rebuildTexture() {
         if (this.tile == null || this.width <= 0 || this.height <= 0) return;
 
-        // Optimization: Allocate or resize texture ONLY when dimensions change
         if (this.textureCache == null || this.textureCache.getPixels().getWidth() != this.width || this.textureCache.getPixels().getHeight() != this.height) {
             if (this.textureCache != null) {
                 this.textureCache.close();
@@ -163,7 +195,6 @@ public class Preview3D extends Button {
 
         NativeImage img = this.textureCache.getPixels();
 
-        // Fast background clear
         for (int y = 0; y < img.getHeight(); y++) {
             for (int x = 0; x < img.getWidth(); x++) {
                 img.setPixelRGBA(x, y, 0xFF000000);
@@ -200,7 +231,6 @@ public class Preview3D extends Button {
                 int g = (color >> 8) & 0xFF;
                 int b = color & 0xFF;
 
-                // Optimization: Reusing pre-allocated hsbCache array eliminates thousands of allocations per frame
                 Color.RGBtoHSB(r, g, b, this.hsbCache);
 
                 int hash = ix * 31 + iz * 17;
@@ -227,7 +257,6 @@ public class Preview3D extends Button {
             }
         }
 
-        // Optimization: Upload changes directly to the GPU instead of rebuilding the DynamicTexture object wrapper
         this.textureCache.upload();
         this.needsTextureRefresh = false;
     }
@@ -254,6 +283,7 @@ public class Preview3D extends Button {
     }
 
     public void close() throws Exception {
+        this.closed = true;
         if (this.pendingGeneration != null) {
             this.pendingGeneration.cancel(true);
         }
@@ -282,8 +312,6 @@ public class Preview3D extends Button {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-
-        // SCROLL ZOOM FIX: Connect scrolling natively with zoom3D component configurations
         if (this.isMouseOver(mouseX, mouseY)) {
             if (this.page.zoom3D != null) {
                 double currentVal = this.page.zoom3D.getValue();
@@ -302,7 +330,6 @@ public class Preview3D extends Button {
 
     @Override
     public void renderWidget(GuiGraphics guiGraphics, int mx, int my, float partialTicks) {
-
         int x = this.getX();
         int y = this.getY();
 
@@ -390,7 +417,6 @@ public class Preview3D extends Button {
 
         if (this.width != width || this.height != height) {
             this.width = width;
-            this.height = height;
             this.needsTextureRefresh = true;
         }
     }
@@ -431,7 +457,6 @@ public class Preview3D extends Button {
             int iz = dz + (tileSize / 2);
 
             if (ix >= 0 && ix < tileSize && iz >= 0 && iz < tileSize) {
-                // Optimization: Only parse terrain/biome strings if the mouse actually transitioned to a new cell
                 if (ix != this.lastHoveredIx || iz != this.lastHoveredIz) {
                     this.lastHoveredIx = ix;
                     this.lastHoveredIz = iz;
@@ -479,12 +504,10 @@ public class Preview3D extends Button {
 
         float maxWidth = (this.width - 4) / scale;
 
-        // Render the lines in their original array order
         for (int i = 0; i < labels.length && i < values.length; i++) {
             Component label = labels[i];
             String value = values[i];
 
-            // Clean up trailing ": " or ":" from the label component text
             String labelStr = label.getString();
             if (labelStr.endsWith(": ")) {
                 labelStr = labelStr.substring(0, labelStr.length() - 2);
@@ -492,18 +515,13 @@ public class Preview3D extends Button {
                 labelStr = labelStr.substring(0, labelStr.length() - 1);
             }
 
-            // Combine into the clean "value (label)" format with light gray (§7) brackets
             String line = value + " \u00a77(" + labelStr + ")";
 
-            // Truncate from the right if the entire line exceeds the available width
             while (line.length() > 0 && renderer.width(line) > maxWidth) {
                 line = line.substring(0, line.length() - 1);
             }
 
-            // Calculate the X position to make the text flush with the right margin
             int x = (int) (maxWidth - renderer.width(line));
-
-            // Render using 'i' for vertical spacing so they stack properly
             guiGraphics.drawString(renderer, line, x, i * lineHeight, color);
         }
 
@@ -526,17 +544,12 @@ public class Preview3D extends Button {
     }
 
     private String getSpawnCoords() {
-        if (WorldSettings.Properties.spawnType == SpawnType.USER_SELECTED) {
-            return "x" + WorldSettings.Properties.spawnX + " z" + WorldSettings.Properties.spawnZ;
+        WorldSettings.Properties props = this.page.preset.getPreset().world().properties;
+        if (props.spawnType == SpawnType.USER_SELECTED) {
+            return "x" + props.spawnX + " z" + props.spawnZ;
         }
-        if (WorldSettings.Properties.spawnType == SpawnType.CONTINENT_CENTER) {
+        if (props.spawnType == SpawnType.CONTINENT_CENTER || props.spawnType == SpawnType.ISLANDS) {
             return "~x" + this.centerX + " ~z" + this.centerZ;
-        }
-        if (WorldSettings.Properties.spawnType == SpawnType.ISLANDS) {
-            return "~x" + this.centerX + " ~z" + this.centerZ;
-        }
-        if (WorldSettings.Properties.spawnType == SpawnType.WORLD_ORIGIN) {
-            return "x0 z0";
         }
         return "x0 z0";
     }
@@ -556,5 +569,31 @@ public class Preview3D extends Button {
             return "river";
         }
         return cell.biome.name().toLowerCase();
+    }
+
+    private static class PreGenContext {
+        final GeneratorContext context;
+        final int cx;
+        final int cz;
+        final int zoomLevel;
+
+        PreGenContext(GeneratorContext context, int cx, int cz, int zoomLevel) {
+            this.context = context;
+            this.cx = cx;
+            this.cz = cz;
+            this.zoomLevel = zoomLevel;
+        }
+    }
+
+    private static class FrameResult {
+        final Tile tile;
+        final int centerX;
+        final int centerZ;
+
+        FrameResult(Tile tile, int centerX, int centerZ) {
+            this.tile = tile;
+            this.centerX = centerX;
+            this.centerZ = centerZ;
+        }
     }
 }
