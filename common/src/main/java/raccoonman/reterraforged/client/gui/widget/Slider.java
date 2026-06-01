@@ -15,7 +15,7 @@ public class Slider extends AbstractSliderButton {
 	private Format format;
 	@Nullable
 	private Callback callback;
-    
+
     public Slider(int x, int y, int width, int height, float initialValue, float min, float max, Component name, Format format, @Nullable Callback callback) {
         super(x, y, width, height, CommonComponents.EMPTY, 0.0);
         this.name = name;
@@ -26,15 +26,16 @@ public class Slider extends AbstractSliderButton {
         this.callback = callback;
         this.updateMessage();
     }
-    
+
     public void setValue(double value) {
     	this.value = value;
+		this.updateMessage();
     }
-    
+
     public double getValue() {
     	return this.value;
     }
-    
+
 	public double getMin() {
 		return this.min;
 	}
@@ -42,23 +43,23 @@ public class Slider extends AbstractSliderButton {
 	public double getMax() {
 		return this.max;
 	}
-    
+
     public double getSliderValue(float value) {
     	return (Mth.clamp(value, this.min, this.max) - this.min) / (this.max - this.min);
     }
-    
+
     public double getLerpedValue() {
     	return this.lerpValue(this.value);
     }
-    
+
     public double lerpValue(double value) {
     	return Mth.lerp(value, this.min, this.max);
     }
-    
+
     public double scaleValue(double value) {
         return this.format.scale(this.lerpValue(value));
     }
-    
+
     @Override
     public void applyValue() {
     	if(this.callback != null) {
@@ -70,7 +71,7 @@ public class Slider extends AbstractSliderButton {
     protected void updateMessage() {
         this.setMessage(CommonComponents.optionNameValue(this.name, Component.literal(this.format.getMessage(this.scaleValue((float) this.value)))));
     }
-    
+
     public static enum Format {
     	INT {
 			@Override
@@ -94,12 +95,12 @@ public class Slider extends AbstractSliderButton {
 				return String.format("%.3f", input);
 			}
 		};
-    	
+
     	public abstract double scale(double input);
-    	
+
     	public abstract String getMessage(double input);
     }
-    
+
     public interface Callback {
     	double apply(Slider slider, double value);
     }

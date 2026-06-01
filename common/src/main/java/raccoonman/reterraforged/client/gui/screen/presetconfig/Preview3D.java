@@ -1,6 +1,9 @@
 package raccoonman.reterraforged.client.gui.screen.presetconfig;
 
 import java.awt.Color;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -37,10 +40,9 @@ public class Preview3D extends Button {
     public static final int SIZE = (1 << 4) << FACTOR;
     private static final float[] LEGEND_SCALES = { 1, 0.9F, 0.75F, 0.6F };
 
-    // STATIC PERSISTENT STATE
     public static RenderMode currentMode = RenderMode.BIOME_TYPE;
 
-    private final PresetEditorPage page;
+    private PresetEditorPage page;
     private Tile tile;
     private int centerX, centerZ;
 
@@ -48,7 +50,7 @@ public class Preview3D extends Button {
     private int hoveredCoordZ = 0;
     private String hoveredCoords = "";
     private String[] legendValues = {"", "", "", ""};
-    private Component[] legendLabels = {
+    private final Component[] legendLabels = {
             Component.translatable(RTFTranslationKeys.GUI_LABEL_PREVIEW_AREA),
             Component.translatable(RTFTranslationKeys.GUI_LABEL_PREVIEW_TERRAIN),
             Component.translatable(RTFTranslationKeys.GUI_LABEL_PREVIEW_BIOME),
@@ -57,10 +59,20 @@ public class Preview3D extends Button {
 
     private int offsetX, offsetZ;
 
-    // STABLE CPU CACHE MAP FIELDS
+    // Optimized Texture Cache fields
     private DynamicTexture textureCache;
     private ResourceLocation cacheLocation;
     private boolean needsTextureRefresh = false;
+
+    // Optimization: Hover tracking to prevent redundant string allocations
+    private int lastHoveredIx = -1;
+    private int lastHoveredIz = -1;
+
+    // Optimization: Reuse a single float array for HSB calculations to prevent GC churn
+    private final float[] hsbCache = new float[3];
+
+    // Threading Optimization: Track background computation state
+    private CompletableFuture<Tile> pendingGeneration = null;
 
     public Preview3D(PresetEditorPage page, int x, int y, int width, int height) {
         super(x, y, width, height, CommonComponents.EMPTY, (b) -> {
@@ -84,6 +96,11 @@ public class Preview3D extends Button {
     }
 
     public void regenerate() {
+        // Cancel active calculations before scheduling new work
+        if (this.pendingGeneration != null) {
+            this.pendingGeneration.cancel(true);
+        }
+
         WorldCreationContext settings = this.page.getScreen().getSettings();
         RegistryAccess.Frozen registries = settings.worldgenLoadContext();
         HolderLookup.Provider provider = this.page.preset.getPreset().buildPatch(registries);
@@ -115,30 +132,44 @@ public class Preview3D extends Button {
             this.centerX = 0;
             this.centerZ = 0;
         }
-        this.legendValues[0] = getSpawnCoords();
-        this.tile = generatorContext.generator.generateZoomed(this.centerX, this.centerZ, this.getZoom(), false).join();
-        this.needsTextureRefresh = true;
+        this.legendValues[3] = getSpawnCoords();
+        int zoomLevel = this.getZoom();
+
+        // THREADING FIX: Move calculation work off the client rendering loop
+        this.pendingGeneration = generatorContext.generator.generateZoomed(this.centerX, this.centerZ, zoomLevel, false);
+        this.pendingGeneration.thenAcceptAsync(newTile -> {
+            this.tile = newTile;
+            this.needsTextureRefresh = true;
+
+            // Reset hover cache safely on the main thread loop
+            this.lastHoveredIx = -1;
+            this.lastHoveredIz = -1;
+        }, Minecraft.getInstance());
     }
 
     private void rebuildTexture() {
-        if (this.tile == null) return;
+        if (this.tile == null || this.width <= 0 || this.height <= 0) return;
 
-        if (this.textureCache != null) {
-            this.textureCache.close();
-            Minecraft.getInstance().getTextureManager().release(this.cacheLocation);
+        // Optimization: Allocate or resize texture ONLY when dimensions change
+        if (this.textureCache == null || this.textureCache.getPixels().getWidth() != this.width || this.textureCache.getPixels().getHeight() != this.height) {
+            if (this.textureCache != null) {
+                this.textureCache.close();
+                Minecraft.getInstance().getTextureManager().release(this.cacheLocation);
+            }
+            NativeImage img = new NativeImage(this.width, this.height, true);
+            this.textureCache = new DynamicTexture(img);
+            this.cacheLocation = Minecraft.getInstance().getTextureManager().register("rtf_preview_cache_" + this.hashCode(), this.textureCache);
         }
 
-        if (this.width <= 0 || this.height <= 0) return;
+        NativeImage img = this.textureCache.getPixels();
 
-        NativeImage img = new NativeImage(this.width, this.height, true);
-
+        // Fast background clear
         for (int y = 0; y < img.getHeight(); y++) {
             for (int x = 0; x < img.getWidth(); x++) {
                 img.setPixelRGBA(x, y, 0xFF000000);
             }
         }
 
-        // Update tracking reference from current UI button state
         if (this.page.renderMode3D != null) {
             currentMode = this.page.renderMode3D.getValue();
         }
@@ -148,7 +179,6 @@ public class Preview3D extends Button {
         Levels levels = new Levels(properties.terrainScaler(), properties.seaLevel);
 
         int tileSize = this.tile.getBlockSize().size();
-
         float rawBlockW = (float) this.width / (float) tileSize * 0.85f;
         int halfW = Math.max(1, (int) (rawBlockW / 2.0f));
         int halfH = Math.max(1, halfW / 2);
@@ -156,13 +186,9 @@ public class Preview3D extends Button {
         int blockW = halfW * 2;
         int blockH = halfH * 2;
 
-        // MINIMAL UPDATE: True geometric center in local texture space
         int centerVisualX = this.width / 2;
         int centerVisualY = this.height / 2;
-
         float heightScale = getHeightScale((float) blockW);
-
-        // Center the data indices around (0,0) to align the world center with centerVisualX/Y
         int halfTile = tileSize / 2;
 
         for (int iz = 0; iz < tileSize; iz++) {
@@ -170,25 +196,20 @@ public class Preview3D extends Button {
                 Cell cell = this.tile.lookup(ix, iz);
                 int color = mode.getColor(cell, levels);
 
-                // Extract RGB components from ARGB format
                 int r = (color >> 16) & 0xFF;
                 int g = (color >> 8) & 0xFF;
                 int b = color & 0xFF;
 
-                // Convert to HSB space to isolate brightness
-                float[] hsb = Color.RGBtoHSB(r, g, b, null);
+                // Optimization: Reusing pre-allocated hsbCache array eliminates thousands of allocations per frame
+                Color.RGBtoHSB(r, g, b, this.hsbCache);
 
-                // Generate a stable, pseudo-random variation between -0.03 and +0.03 based on coordinates
                 int hash = ix * 31 + iz * 17;
                 float jitter = ((hash % 100) / 100.0f) * 0.06f - 0.03f;
 
-                // Apply variance to brightness and clamp strictly between 0.0f and 1.0f
-                hsb[2] = Math.max(0.0f, Math.min(1.0f, hsb[2] + jitter));
+                this.hsbCache[2] = Math.max(0.0f, Math.min(1.0f, this.hsbCache[2] + jitter));
 
-                // Pack back into standard ARGB color space
-                int jitteredColor = (color & 0xFF000000) | (Color.HSBtoRGB(hsb[0], hsb[1], hsb[2]) & 0x00FFFFFF);
+                int jitteredColor = (color & 0xFF000000) | (Color.HSBtoRGB(this.hsbCache[0], this.hsbCache[1], this.hsbCache[2]) & 0x00FFFFFF);
 
-                // Offset world loop indices relative to center index
                 int dx = ix - halfTile;
                 int dz = iz - halfTile;
 
@@ -196,7 +217,6 @@ public class Preview3D extends Button {
                 int isoY = centerVisualY + (dx + dz) * halfH;
                 int renderY = isoY - Math.round(cell.height * heightScale);
 
-                // Use the newly jittered color for the face calculations
                 int topColor = jitteredColor;
                 int leftColor = getSideColor(jitteredColor, 0.75f, true, ix, iz, tileSize);
                 int rightColor = getSideColor(jitteredColor, 0.60f, false, ix, iz, tileSize);
@@ -207,8 +227,8 @@ public class Preview3D extends Button {
             }
         }
 
-        this.textureCache = new DynamicTexture(img);
-        this.cacheLocation = Minecraft.getInstance().getTextureManager().register("rtf_preview_cache_" + this.hashCode(), this.textureCache);
+        // Optimization: Upload changes directly to the GPU instead of rebuilding the DynamicTexture object wrapper
+        this.textureCache.upload();
         this.needsTextureRefresh = false;
     }
 
@@ -234,6 +254,9 @@ public class Preview3D extends Button {
     }
 
     public void close() throws Exception {
+        if (this.pendingGeneration != null) {
+            this.pendingGeneration.cancel(true);
+        }
         if (this.textureCache != null) {
             this.textureCache.close();
             Minecraft.getInstance().getTextureManager().release(this.cacheLocation);
@@ -248,7 +271,38 @@ public class Preview3D extends Button {
     }
 
     @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean isMouseOver(double mouseX, double mouseY) {
+        return super.isMouseOver(mouseX, mouseY);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+
+        // SCROLL ZOOM FIX: Connect scrolling natively with zoom3D component configurations
+        if (this.isMouseOver(mouseX, mouseY)) {
+            if (this.page.zoom3D != null) {
+                double currentVal = this.page.zoom3D.getValue();
+                double step = 0.05;
+                if (scrollY > 0) {
+                    this.page.zoom3D.setValue(Math.min(1.0, currentVal + step));
+                } else if (scrollY < 0) {
+                    this.page.zoom3D.setValue(Math.max(0.0, currentVal - step));
+                }
+                this.regenerate();
+            }
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+    }
+
+    @Override
     public void renderWidget(GuiGraphics guiGraphics, int mx, int my, float partialTicks) {
+
         int x = this.getX();
         int y = this.getY();
 
@@ -264,7 +318,7 @@ public class Preview3D extends Button {
 
         renderSpawnMarker(guiGraphics);
         this.updateLegend(mx, my);
-        this.renderLegend(guiGraphics, mx, my, this.legendLabels, this.legendValues, x, y + this.width + 40, 10, 0xFFFFFF);
+        this.renderLegend(guiGraphics, mx, my, this.legendLabels, this.legendValues, x, y + this.width + 30, 10, 0xFFFFFF);
     }
 
     private float getHeightScale(float blockW) {
@@ -288,42 +342,44 @@ public class Preview3D extends Button {
 
         if (props.spawnType == SpawnType.USER_SELECTED || props.spawnType == SpawnType.CONTINENT_CENTER) {
             int zoomValue = this.getZoom();
-            int tileSize = this.tile.getBlockSize().size();
+            int tileSize = this.tile != null ? this.tile.getBlockSize().size() : 0;
 
-            int ix = NoiseUtil.round(((float)(props.spawnX - this.centerX) / zoomValue) + (tileSize / 2.0f));
-            int iz = NoiseUtil.round(((float)(props.spawnZ - this.centerZ) / zoomValue) + (tileSize / 2.0f));
+            if (tileSize > 0) {
+                int ix = NoiseUtil.round(((float)(props.spawnX - this.centerX) / zoomValue) + (tileSize / 2.0f));
+                int iz = NoiseUtil.round(((float)(props.spawnZ - this.centerZ) / zoomValue) + (tileSize / 2.0f));
 
-            if (ix >= 0 && ix < tileSize && iz >= 0 && iz < tileSize) {
-                Cell cell = this.tile.lookup(ix, iz);
+                if (ix >= 0 && ix < tileSize && iz >= 0 && iz < tileSize) {
+                    Cell cell = this.tile.lookup(ix, iz);
 
-                float rawBlockW = (float) this.width / (float) tileSize * 0.85f;
-                int halfW = Math.max(1, (int) (rawBlockW / 2.0f));
-                int halfH = Math.max(1, halfW / 2);
+                    float rawBlockW = (float) this.width / (float) tileSize * 0.85f;
+                    int halfW = Math.max(1, (int) (rawBlockW / 2.0f));
+                    int halfH = Math.max(1, halfW / 2);
 
-                int blockW = halfW * 2;
-                int blockH = halfH * 2;
+                    int blockW = halfW * 2;
+                    int blockH = halfH * 2;
 
-                int centerVisualX = this.getX() + (this.width / 2);
-                int centerVisualY = this.getY() + (this.height / 2);
+                    int centerVisualX = this.getX() + (this.width / 2);
+                    int centerVisualY = this.getY() + (this.height / 2);
 
-                int dx = ix - (tileSize / 2);
-                int dz = iz - (tileSize / 2);
+                    int dx = ix - (tileSize / 2);
+                    int dz = iz - (tileSize / 2);
 
-                int isoX = centerVisualX + (dx - dz) * halfW;
-                int isoY = centerVisualY + (dx + dz) * halfH - Math.round(cell.height * getHeightScale((float) blockW));
+                    int isoX = centerVisualX + (dx - dz) * halfW;
+                    int isoY = centerVisualY + (dx + dz) * halfH - Math.round(cell.height * getHeightScale((float) blockW));
 
-                int markerX = isoX + halfW;
-                int markerY = isoY + halfH;
+                    int markerX = isoX + halfW;
+                    int markerY = isoY + halfH;
 
-                int size = 6;
-                int color = 0xFFFF2222;
-                int shadow = 0xFF000000;
+                    int size = 6;
+                    int color = 0xFFFF2222;
+                    int shadow = 0xFF000000;
 
-                guiGraphics.fill(markerX - size + 1, markerY + 1, markerX + size + 2, markerY + 2, shadow);
-                guiGraphics.fill(markerX - size, markerY, markerX + size + 1, markerY + 1, color);
+                    guiGraphics.fill(markerX - size + 1, markerY + 1, markerX + size + 2, markerY + 2, shadow);
+                    guiGraphics.fill(markerX - size, markerY, markerX + size + 1, markerY + 1, color);
 
-                guiGraphics.fill(markerX + 1, markerY - size + 1, markerX + 2, markerY + size + 2, shadow);
-                guiGraphics.fill(markerX, markerY - size, markerX + 1, markerY + size + 1, color);
+                    guiGraphics.fill(markerX + 1, markerY - size + 1, markerX + 2, markerY + size + 2, shadow);
+                    guiGraphics.fill(markerX, markerY - size, markerX + 1, markerY + size + 1, color);
+                }
             }
         }
     }
@@ -332,11 +388,10 @@ public class Preview3D extends Button {
         this.setX(x);
         this.setY(y);
 
-        // Only flag a texture refresh if the dimensions physically changed
         if (this.width != width || this.height != height) {
             this.width = width;
             this.height = height;
-            this.needsTextureRefresh = true; // Forces rebuildTexture() to run next frame
+            this.needsTextureRefresh = true;
         }
     }
 
@@ -353,7 +408,9 @@ public class Preview3D extends Button {
             this.legendValues[0] = totalWidth + "x" + totalHeight;
 
             if (mx < left || mx >= left + this.width || my < top || my >= top + this.height) {
-                this.hoveredCoords = ""; // Clear string so tooltip doesn't draw outside
+                this.hoveredCoords = "";
+                this.lastHoveredIx = -1;
+                this.lastHoveredIz = -1;
                 return false;
             }
 
@@ -374,20 +431,28 @@ public class Preview3D extends Button {
             int iz = dz + (tileSize / 2);
 
             if (ix >= 0 && ix < tileSize && iz >= 0 && iz < tileSize) {
-                Cell cell = this.tile.lookup(ix, iz);
-                this.legendValues[1] = getTerrainName(cell);
-                this.legendValues[2] = getBiomeName(cell);
-                this.legendValues[3] = getSpawnCoords();
+                // Optimization: Only parse terrain/biome strings if the mouse actually transitioned to a new cell
+                if (ix != this.lastHoveredIx || iz != this.lastHoveredIz) {
+                    this.lastHoveredIx = ix;
+                    this.lastHoveredIz = iz;
 
-                int worldOffsetX = (ix - (tileSize / 2)) * zoomValue;
-                int worldOffsetZ = (iz - (tileSize / 2)) * zoomValue;
+                    Cell cell = this.tile.lookup(ix, iz);
+                    this.legendValues[1] = getTerrainName(cell);
+                    this.legendValues[2] = getBiomeName(cell);
+                    this.legendValues[3] = getSpawnCoords();
 
-                this.hoveredCoords = (this.centerX + worldOffsetX) + ":" + (this.centerZ + worldOffsetZ);
-                this.hoveredCoordX = this.centerX + worldOffsetX;
-                this.hoveredCoordZ = this.centerZ + worldOffsetZ;
+                    int worldOffsetX = (ix - (tileSize / 2)) * zoomValue;
+                    int worldOffsetZ = (iz - (tileSize / 2)) * zoomValue;
+
+                    this.hoveredCoords = (this.centerX + worldOffsetX) + ":" + (this.centerZ + worldOffsetZ);
+                    this.hoveredCoordX = this.centerX + worldOffsetX;
+                    this.hoveredCoordZ = this.centerZ + worldOffsetZ;
+                }
                 return true;
             } else {
                 this.hoveredCoords = "";
+                this.lastHoveredIx = -1;
+                this.lastHoveredIz = -1;
             }
         }
         return false;
@@ -411,22 +476,35 @@ public class Preview3D extends Button {
 
         Minecraft mc = Minecraft.getInstance();
         Font renderer = mc.font;
-        int spacing = 0;
-        for (Component s : labels) {
-            spacing = Math.max(spacing, renderer.width(s));
-        }
 
         float maxWidth = (this.width - 4) / scale;
+
+        // Render the lines in their original array order
         for (int i = 0; i < labels.length && i < values.length; i++) {
             Component label = labels[i];
             String value = values[i];
 
-            while (value.length() > 0 && spacing + renderer.width(value) > maxWidth) {
-                value = value.substring(0, value.length() - 1);
+            // Clean up trailing ": " or ":" from the label component text
+            String labelStr = label.getString();
+            if (labelStr.endsWith(": ")) {
+                labelStr = labelStr.substring(0, labelStr.length() - 2);
+            } else if (labelStr.endsWith(":")) {
+                labelStr = labelStr.substring(0, labelStr.length() - 1);
             }
 
-            guiGraphics.drawString(renderer, label, 0, i * lineHeight, color);
-            guiGraphics.drawString(renderer, value, spacing, i * lineHeight, color);
+            // Combine into the clean "value (label)" format with light gray (§7) brackets
+            String line = value + " \u00a77(" + labelStr + ")";
+
+            // Truncate from the right if the entire line exceeds the available width
+            while (line.length() > 0 && renderer.width(line) > maxWidth) {
+                line = line.substring(0, line.length() - 1);
+            }
+
+            // Calculate the X position to make the text flush with the right margin
+            int x = (int) (maxWidth - renderer.width(line));
+
+            // Render using 'i' for vertical spacing so they stack properly
+            guiGraphics.drawString(renderer, line, x, i * lineHeight, color);
         }
 
         pose.popPose();
