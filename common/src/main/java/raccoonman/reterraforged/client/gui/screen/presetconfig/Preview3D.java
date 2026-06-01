@@ -40,6 +40,11 @@ public class Preview3D extends Button {
 
     public static RenderMode currentMode = RenderMode.BIOME_TYPE;
 
+    // Static cache fields to bridge across instances during page preset updates
+    private static Tile LAST_GLOBAL_TILE = null;
+    private static int LAST_GLOBAL_CENTER_X = 0;
+    private static int LAST_GLOBAL_CENTER_Z = 0;
+
     private PresetEditorPage page;
     private Tile tile;
     private int centerX, centerZ;
@@ -166,6 +171,12 @@ public class Preview3D extends Button {
                 this.tile = result.tile;
                 this.centerX = result.centerX;
                 this.centerZ = result.centerZ;
+
+                // Sync context parameters out to global tracking pointers
+                LAST_GLOBAL_TILE = result.tile;
+                LAST_GLOBAL_CENTER_X = result.centerX;
+                LAST_GLOBAL_CENTER_Z = result.centerZ;
+
                 this.legendValues[3] = getSpawnCoords();
                 this.needsTextureRefresh = true;
 
@@ -181,7 +192,8 @@ public class Preview3D extends Button {
     }
 
     private void rebuildTexture() {
-        if (this.tile == null || this.width <= 0 || this.height <= 0) return;
+        Tile activeTile = this.tile != null ? this.tile : LAST_GLOBAL_TILE;
+        if (activeTile == null || this.width <= 0 || this.height <= 0) return;
 
         if (this.textureCache == null || this.textureCache.getPixels().getWidth() != this.width || this.textureCache.getPixels().getHeight() != this.height) {
             if (this.textureCache != null) {
@@ -209,7 +221,7 @@ public class Preview3D extends Button {
         WorldSettings.Properties properties = this.page.preset.getPreset().world().properties;
         Levels levels = new Levels(properties.terrainScaler(), properties.seaLevel);
 
-        int tileSize = this.tile.getBlockSize().size();
+        int tileSize = activeTile.getBlockSize().size();
         float rawBlockW = (float) this.width / (float) tileSize * 0.85f;
         int halfW = Math.max(1, (int) (rawBlockW / 2.0f));
         int halfH = Math.max(1, halfW / 2);
@@ -224,7 +236,7 @@ public class Preview3D extends Button {
 
         for (int iz = 0; iz < tileSize; iz++) {
             for (int ix = 0; ix < tileSize; ix++) {
-                Cell cell = this.tile.lookup(ix, iz);
+                Cell cell = activeTile.lookup(ix, iz);
                 int color = mode.getColor(cell, levels);
 
                 int r = (color >> 16) & 0xFF;
@@ -333,8 +345,11 @@ public class Preview3D extends Button {
         int x = this.getX();
         int y = this.getY();
 
-        if (this.needsTextureRefresh || this.textureCache == null) {
-            this.rebuildTexture();
+        // Check if either local tile or fallback history data exists to drive structural generation
+        if (this.tile != null || LAST_GLOBAL_TILE != null) {
+            if (this.needsTextureRefresh || this.textureCache == null) {
+                this.rebuildTexture();
+            }
         }
 
         if (this.cacheLocation != null) {
@@ -369,14 +384,18 @@ public class Preview3D extends Button {
 
         if (props.spawnType == SpawnType.USER_SELECTED || props.spawnType == SpawnType.CONTINENT_CENTER) {
             int zoomValue = this.getZoom();
-            int tileSize = this.tile != null ? this.tile.getBlockSize().size() : 0;
+            Tile activeTile = this.tile != null ? this.tile : LAST_GLOBAL_TILE;
+            int tileSize = activeTile != null ? activeTile.getBlockSize().size() : 0;
 
             if (tileSize > 0) {
-                int ix = NoiseUtil.round(((float)(props.spawnX - this.centerX) / zoomValue) + (tileSize / 2.0f));
-                int iz = NoiseUtil.round(((float)(props.spawnZ - this.centerZ) / zoomValue) + (tileSize / 2.0f));
+                int activeCX = this.tile != null ? this.centerX : LAST_GLOBAL_CENTER_X;
+                int activeCZ = this.tile != null ? this.centerZ : LAST_GLOBAL_CENTER_Z;
+
+                int ix = NoiseUtil.round(((float)(props.spawnX - activeCX) / zoomValue) + (tileSize / 2.0f));
+                int iz = NoiseUtil.round(((float)(props.spawnZ - activeCZ) / zoomValue) + (tileSize / 2.0f));
 
                 if (ix >= 0 && ix < tileSize && iz >= 0 && iz < tileSize) {
-                    Cell cell = this.tile.lookup(ix, iz);
+                    Cell cell = activeTile.lookup(ix, iz);
 
                     float rawBlockW = (float) this.width / (float) tileSize * 0.85f;
                     int halfW = Math.max(1, (int) (rawBlockW / 2.0f));
@@ -422,12 +441,13 @@ public class Preview3D extends Button {
     }
 
     private boolean updateLegend(int mx, int my) {
-        if (this.tile != null) {
+        Tile activeTile = this.tile != null ? this.tile : LAST_GLOBAL_TILE;
+        if (activeTile != null) {
             int left = this.getX();
             int top = this.getY();
 
             int zoomValue = this.getZoom();
-            int tileSize = this.tile.getBlockSize().size();
+            int tileSize = activeTile.getBlockSize().size();
 
             int totalWidth = Math.max(1, tileSize * zoomValue);
             int totalHeight = Math.max(1, tileSize * zoomValue);
@@ -461,17 +481,20 @@ public class Preview3D extends Button {
                     this.lastHoveredIx = ix;
                     this.lastHoveredIz = iz;
 
-                    Cell cell = this.tile.lookup(ix, iz);
+                    Cell cell = activeTile.lookup(ix, iz);
                     this.legendValues[1] = getTerrainName(cell);
                     this.legendValues[2] = getBiomeName(cell);
-                    this.legendValues[3] = getSpawnCoords();
+
+                    int activeCX = this.tile != null ? this.centerX : LAST_GLOBAL_CENTER_X;
+                    int activeCZ = this.tile != null ? this.centerZ : LAST_GLOBAL_CENTER_Z;
+                    this.legendValues[3] = getSpawnCoords(activeCX, activeCZ);
 
                     int worldOffsetX = (ix - (tileSize / 2)) * zoomValue;
                     int worldOffsetZ = (iz - (tileSize / 2)) * zoomValue;
 
-                    this.hoveredCoords = (this.centerX + worldOffsetX) + ":" + (this.centerZ + worldOffsetZ);
-                    this.hoveredCoordX = this.centerX + worldOffsetX;
-                    this.hoveredCoordZ = this.centerZ + worldOffsetZ;
+                    this.hoveredCoords = (activeCX + worldOffsetX) + ":" + (activeCZ + worldOffsetZ);
+                    this.hoveredCoordX = activeCX + worldOffsetX;
+                    this.hoveredCoordZ = activeCZ + worldOffsetZ;
                 }
                 return true;
             } else {
@@ -544,12 +567,18 @@ public class Preview3D extends Button {
     }
 
     private String getSpawnCoords() {
+        int activeCX = this.tile != null ? this.centerX : LAST_GLOBAL_CENTER_X;
+        int activeCZ = this.tile != null ? this.centerZ : LAST_GLOBAL_CENTER_Z;
+        return getSpawnCoords(activeCX, activeCZ);
+    }
+
+    private String getSpawnCoords(int cx, int cz) {
         WorldSettings.Properties props = this.page.preset.getPreset().world().properties;
         if (props.spawnType == SpawnType.USER_SELECTED) {
             return "x" + props.spawnX + " z" + props.spawnZ;
         }
         if (props.spawnType == SpawnType.CONTINENT_CENTER || props.spawnType == SpawnType.ISLANDS) {
-            return "~x" + this.centerX + " ~z" + this.centerZ;
+            return "~x" + cx + " ~z" + cz;
         }
         return "x0 z0";
     }

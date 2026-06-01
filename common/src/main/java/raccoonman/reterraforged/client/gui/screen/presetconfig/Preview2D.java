@@ -40,6 +40,9 @@ public class Preview2D extends Button {
     public static final int SIZE = (1 << 4) << FACTOR;
     private static final float[] LEGEND_SCALES = { 1, 0.9F, 0.75F, 0.6F };
 
+    // Static cache to hold pixels between UI page transitions to prevent black flickering
+    private static int[] LAST_SUCCESSFUL_PIXELS = null;
+
     private final PresetEditorPage page;
     private final DynamicTexture texture = new DynamicTexture(new NativeImage(SIZE, SIZE, false));
     private final ResourceLocation textureId = Minecraft.getInstance().getTextureManager().register(RTFCommon.MOD_ID + "-preview-framebuffer", this.texture);
@@ -87,7 +90,16 @@ public class Preview2D extends Button {
 
         NativeImage pixels = this.texture.getPixels();
         if (pixels != null) {
-            pixels.fillRect(0, 0, SIZE, SIZE, 0xFF000000);
+            // If we have cached pixels from a previous page view, populate immediately to hide the loading window
+            if (LAST_SUCCESSFUL_PIXELS != null && LAST_SUCCESSFUL_PIXELS.length == SIZE * SIZE) {
+                for (int bz = 0; bz < SIZE; bz++) {
+                    for (int bx = 0; bx < SIZE; bx++) {
+                        pixels.setPixelRGBA(bx, bz, LAST_SUCCESSFUL_PIXELS[bz * SIZE + bx]);
+                    }
+                }
+            } else {
+                pixels.fillRect(0, 0, SIZE, SIZE, 0xFF000000);
+            }
             this.texture.upload();
         }
     }
@@ -188,6 +200,13 @@ public class Preview2D extends Button {
                 NativeImage pixels = this.texture.getPixels();
                 if (pixels != null && result.pixelData != null) {
                     int tileWidth = this.tile.getBlockSize().size();
+
+                    // Maintain global static cache frame arrays
+                    if (LAST_SUCCESSFUL_PIXELS == null || LAST_SUCCESSFUL_PIXELS.length != result.pixelData.length) {
+                        LAST_SUCCESSFUL_PIXELS = new int[result.pixelData.length];
+                    }
+                    System.arraycopy(result.pixelData, 0, LAST_SUCCESSFUL_PIXELS, 0, result.pixelData.length);
+
                     for (int bz = 0; bz < tileWidth; bz++) {
                         for (int bx = 0; bx < tileWidth; bx++) {
                             pixels.setPixelRGBA(bx, bz, result.pixelData[bz * tileWidth + bx]);
@@ -250,7 +269,8 @@ public class Preview2D extends Button {
         int xPos = this.getX();
         int yPos = this.getY();
 
-        if (this.tile == null) {
+        // Render the image if we have local tile data OR static background frame history ready to display
+        if (this.tile == null && LAST_SUCCESSFUL_PIXELS == null) {
             guiGraphics.fill(xPos, yPos, xPos + this.width, yPos + this.height, 0xFF000000);
         } else {
             RenderSystem.enableBlend();
