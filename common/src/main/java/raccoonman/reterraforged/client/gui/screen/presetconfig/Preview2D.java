@@ -59,8 +59,12 @@ public class Preview2D extends Button {
 
     private int offsetX, offsetZ;
 
-    // Performance improvement tracking field
-    private CompletableFuture<Tile> pendingGeneration = null;
+    private CompletableFuture<FrameResult> pendingGeneration = null;
+
+    // State Gates
+    private boolean isRunning = false;
+    private boolean isDirty = false;
+    private boolean closed = false;
 
     public Preview2D(PresetEditorPage parent, int x, int y, int width, int height) {
         super(x, y, width, height, CommonComponents.EMPTY, (b) -> {
@@ -81,7 +85,6 @@ public class Preview2D extends Button {
         }, DEFAULT_NARRATION);
         this.page = parent;
 
-        // INITIALIZATION FIX: Wipe raw memory junk inside allocated NativeImage immediately
         NativeImage pixels = this.texture.getPixels();
         if (pixels != null) {
             pixels.fillRect(0, 0, SIZE, SIZE, 0xFF000000);
@@ -90,10 +93,18 @@ public class Preview2D extends Button {
     }
 
     public void regenerate() {
-        // Cancel any active out-of-date background computations before triggering a new one
-        if (this.pendingGeneration != null) {
-            this.pendingGeneration.cancel(true);
+        this.isDirty = true;
+
+        if (!this.isRunning) {
+            this.executeRegenerate();
         }
+    }
+
+    private void executeRegenerate() {
+        if (this.closed) return;
+
+        this.isRunning = true;
+        this.isDirty = false;
 
         WorldCreationContext settings = this.page.getScreen().getSettings();
         RegistryAccess.Frozen registries = settings.worldgenLoadContext();
@@ -101,61 +112,100 @@ public class Preview2D extends Button {
         HolderGetter<Preset> presets = provider.lookupOrThrow(RTFRegistries.PRESET);
         HolderGetter<Noise> noises = provider.lookupOrThrow(RTFRegistries.NOISE);
         Preset presetObj = presets.getOrThrow(Preset.KEY).value();
-        WorldSettings world = presetObj.world();
-        WorldSettings.Properties properties = world.properties;
+        WorldSettings.Properties properties = presetObj.world().properties;
 
-        try {
-            CacheManager.clear();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        PerformanceConfig config = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
-                .resultOrPartial(RTFCommon.LOGGER::error)
-                .orElseGet(PerformanceConfig::makeDefault);
-        GeneratorContext generatorContext = GeneratorContext.makeUncached(presetObj, noises, (int) settings.options().seed(), FACTOR, 0, config.batchCount());
-
-        this.centerX = 0;
-        this.centerZ = 0;
-
-        if (presetObj.world().properties.spawnType == SpawnType.CONTINENT_CENTER) {
-            long nearestContinentCenter = generatorContext.lookup.getHeightmap().continent().getNearestCenter(this.offsetX, this.offsetZ);
-            this.centerX = PosUtil.unpackLeft(nearestContinentCenter);
-            this.centerZ = PosUtil.unpackRight(nearestContinentCenter);
-        } else if (presetObj.world().properties.spawnType == SpawnType.USER_SELECTED) {
-            this.centerX = presetObj.world().properties.spawnX;
-            this.centerZ = presetObj.world().properties.spawnZ;
-        } else {
-            this.centerX = 0;
-            this.centerZ = 0;
-        }
-        this.legendValues[3] = getSpawnCoords();
-
+        int seed = (int) settings.options().seed();
+        int zoomLevel = this.getZoom();
+        int localOffsetX = this.offsetX;
+        int localOffsetZ = this.offsetZ;
         RenderMode mode = this.page.renderMode2D.getValue();
         Levels levels = new Levels(properties.terrainScaler(), properties.seaLevel);
-        int zoomLevel = this.getZoom();
 
-        // THREADING FIX: Generate noise data AND compute pixel buffers asynchronously on background pool
-        this.pendingGeneration = generatorContext.generator.generateZoomed(this.centerX, this.centerZ, zoomLevel, false);
-        this.pendingGeneration.thenAccept(newTile -> {
-            this.tile = newTile;
-            int stroke = 2;
-            int tileWidth = this.tile.getBlockSize().size();
-            NativeImage pixels = this.texture.getPixels();
+        // Stage 1: Run clear, config loading, and structure lookups off the main thread
+        CompletableFuture<PreGenContext> setupStage = CompletableFuture.supplyAsync(() -> {
+            try {
+                CacheManager.clear();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            PerformanceConfig config = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
+                    .resultOrPartial(RTFCommon.LOGGER::error)
+                    .orElseGet(PerformanceConfig::makeDefault);
 
-            this.tile.iterate((cell, bx, bz) -> {
-                if (bx < stroke || bz < stroke || bx >= tileWidth - stroke || bz >= tileWidth - stroke) {
-                    pixels.setPixelRGBA(bx, bz, Color.BLACK.getRGB());
-                } else {
-                    pixels.setPixelRGBA(bx, bz, mode.getColor(cell, levels));
+            GeneratorContext generatorContext = GeneratorContext.makeUncached(presetObj, noises, seed, FACTOR, 0, config.batchCount());
+
+            int cx = 0;
+            int cz = 0;
+            if (presetObj.world().properties.spawnType == SpawnType.CONTINENT_CENTER) {
+                long nearestContinentCenter = generatorContext.lookup.getHeightmap().continent().getNearestCenter(localOffsetX, localOffsetZ);
+                cx = PosUtil.unpackLeft(nearestContinentCenter);
+                cz = PosUtil.unpackRight(nearestContinentCenter);
+            } else if (presetObj.world().properties.spawnType == SpawnType.USER_SELECTED) {
+                cx = presetObj.world().properties.spawnX;
+                cz = presetObj.world().properties.spawnZ;
+            }
+
+            return new PreGenContext(generatorContext, cx, cz, zoomLevel);
+        }, net.minecraft.Util.backgroundExecutor());
+
+        // Stage 2: Handle calculation maps and evaluate visual color tables entirely on worker pool
+        this.pendingGeneration = setupStage.thenCompose(preGen ->
+                preGen.context.generator.generateZoomed(preGen.cx, preGen.cz, preGen.zoomLevel, false)
+                        .thenApply(newTile -> {
+                            int stroke = 2;
+                            int tileWidth = newTile.getBlockSize().size();
+                            int[] bufferedPixels = new int[tileWidth * tileWidth];
+
+                            newTile.iterate((cell, bx, bz) -> {
+                                int color;
+                                if (bx < stroke || bz < stroke || bx >= tileWidth - stroke || bz >= tileWidth - stroke) {
+                                    color = 0xFF000000; // Opaque Black
+                                } else {
+                                    color = mode.getColor(cell, levels);
+                                }
+                                bufferedPixels[bz * tileWidth + bx] = color;
+                            });
+
+                            return new FrameResult(newTile, preGen.cx, preGen.cz, bufferedPixels);
+                        })
+        );
+
+        // Stage 3: Return safely back onto the primary Minecraft render thread for GL transfers
+        this.pendingGeneration.whenCompleteAsync((result, throwable) -> {
+            this.isRunning = false;
+
+            if (this.closed) return;
+
+            if (throwable != null) {
+                RTFCommon.LOGGER.error("Failed handling 2D preview generation pipeline", throwable);
+            } else if (result != null && result.tile != null) {
+                this.tile = result.tile;
+                this.centerX = result.centerX;
+                this.centerZ = result.centerZ;
+                this.legendValues[3] = getSpawnCoords();
+
+                // Safe structural upload across to GPU
+                NativeImage pixels = this.texture.getPixels();
+                if (pixels != null && result.pixelData != null) {
+                    int tileWidth = this.tile.getBlockSize().size();
+                    for (int bz = 0; bz < tileWidth; bz++) {
+                        for (int bx = 0; bx < tileWidth; bx++) {
+                            pixels.setPixelRGBA(bx, bz, result.pixelData[bz * tileWidth + bx]);
+                        }
+                    }
+                    this.texture.upload();
                 }
-            });
+            }
 
-            // Hand the finished native data back to the primary Minecraft render loop for its GL upload
-            Minecraft.getInstance().execute(this.texture::upload);
-        });
+            // Consume trailing-edge loop calls if input shifted during calculations
+            if (this.isDirty) {
+                this.executeRegenerate();
+            }
+        }, Minecraft.getInstance());
     }
 
     public void close() throws Exception {
+        this.closed = true;
         if (this.pendingGeneration != null) {
             this.pendingGeneration.cancel(true);
         }
@@ -179,11 +229,8 @@ public class Preview2D extends Button {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-
-        // Map mouse wheel actions over the preview image directly to the slider settings
         if (this.isMouseOver(mouseX, mouseY)) {
             if (this.page.zoom2D != null) {
-                // Adjust value limits assuming standard Slider configurations
                 double currentVal = this.page.zoom2D.getValue();
                 double step = 0.05;
                 if (scrollY > 0) {
@@ -200,11 +247,9 @@ public class Preview2D extends Button {
 
     @Override
     public void renderWidget(GuiGraphics guiGraphics, int mx, int my, float partialTicks) {
-
         int xPos = this.getX();
         int yPos = this.getY();
 
-        // RENDER GUARD FIX: Draw a safe uniform placeholder if background computation thread isn't finished
         if (this.tile == null) {
             guiGraphics.fill(xPos, yPos, xPos + this.width, yPos + this.height, 0xFF000000);
         } else {
@@ -304,12 +349,10 @@ public class Preview2D extends Button {
 
         float maxWidth = (this.width - 4) / scale;
 
-        // Render the lines left-aligned in their original array order
         for (int i = 0; i < labels.length && i < values.length; i++) {
             Component label = labels[i];
             String value = values[i];
 
-            // Clean up trailing ": " or ":" from the label component text
             String labelStr = label.getString();
             if (labelStr.endsWith(": ")) {
                 labelStr = labelStr.substring(0, labelStr.length() - 2);
@@ -317,18 +360,13 @@ public class Preview2D extends Button {
                 labelStr = labelStr.substring(0, labelStr.length() - 1);
             }
 
-            // Combine into: "§7(Label)§r value" where brackets/label are gray, value resets to default
             String line = "\u00a77(" + labelStr + ")\u00a7r " + value;
 
-            // Truncate from the right if the entire line exceeds the available width
             while (line.length() > 0 && renderer.width(line) > maxWidth) {
                 line = line.substring(0, line.length() - 1);
             }
 
-            // Left-aligned text starts at X = 0 relative to the translated PoseStack
             int x = 0;
-
-            // Render using 'i' for vertical spacing so they stack properly
             guiGraphics.drawString(renderer, line, x, i * lineHeight, color);
         }
 
@@ -359,9 +397,6 @@ public class Preview2D extends Button {
         if (props.spawnType == SpawnType.CONTINENT_CENTER || props.spawnType == SpawnType.ISLANDS) {
             return "~x" + this.centerX + " ~z" + this.centerZ;
         }
-        if (props.spawnType == SpawnType.WORLD_ORIGIN) {
-            return "x0 z0";
-        }
         return "x0 z0";
     }
 
@@ -380,5 +415,33 @@ public class Preview2D extends Button {
             return "river";
         }
         return cell.biome.name().toLowerCase();
+    }
+
+    private static class PreGenContext {
+        final GeneratorContext context;
+        final int cx;
+        final int cz;
+        final int zoomLevel;
+
+        PreGenContext(GeneratorContext context, int cx, int cz, int zoomLevel) {
+            this.context = context;
+            this.cx = cx;
+            this.cz = cz;
+            this.zoomLevel = zoomLevel;
+        }
+    }
+
+    private static class FrameResult {
+        final Tile tile;
+        final int centerX;
+        final int centerZ;
+        final int[] pixelData;
+
+        FrameResult(Tile tile, int centerX, int centerZ, int[] pixelData) {
+            this.tile = tile;
+            this.centerX = centerX;
+            this.centerZ = centerZ;
+            this.pixelData = pixelData;
+        }
     }
 }
