@@ -6,7 +6,6 @@ import java.util.Optional;
 import com.google.common.collect.ImmutableList;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.CycleButton;
-import net.minecraft.network.chat.Component;
 import raccoonman.reterraforged.client.data.RTFTranslationKeys;
 import raccoonman.reterraforged.client.gui.screen.page.BisectedPage;
 import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
@@ -92,7 +91,6 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		}
 
 		int elementWidth = this.left.getRowWidth();
-		int paddingX = ((columnWidth - elementWidth) / 2);
 		int forceOffset = 2;
 
 		int yButtonRow1 = this.left.getY();
