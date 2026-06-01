@@ -6,7 +6,6 @@ import java.util.Optional;
 import com.google.common.collect.ImmutableList;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.CycleButton;
-import net.minecraft.network.chat.Component;
 import raccoonman.reterraforged.client.data.RTFTranslationKeys;
 import raccoonman.reterraforged.client.gui.screen.page.BisectedPage;
 import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
@@ -22,6 +21,8 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	protected PresetEntry preset;
 
 	// Static persistent state containers
+	public static int minZoom = 1;
+	public static int maxZoom = 100;
 	public static double staticZoom2D = 68.0D;
 	public static double staticZoom3D = 95.0D;
 	public static RenderMode staticMode2D = RenderMode.BIOME_TYPE;
@@ -33,10 +34,10 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 
 	public PresetEditorPage(PresetConfigScreen screen, PresetEntry preset) {
 		super(screen);
-		
+
 		this.preset = preset;
 	}
-	
+
 	protected void regenerate() {
 
 		if (this.preview3D != null) {
@@ -90,22 +91,25 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		}
 
 		int elementWidth = this.left.getRowWidth();
-		int paddingX = ((columnWidth - elementWidth) / 2);
 		int forceOffset = 2;
 
 		int yButtonRow1 = this.left.getY();
 
 		// 2D Viewport setup (No background container)
-		this.initLeftPreviewColumn(startX, paddingX, forceOffset, elementWidth, yButtonRow1 + 48 + 5);
+		this.initLeftPreviewColumn(0,4, forceOffset, elementWidth, yButtonRow1 + 5);
 
 		// 3D Viewport setup (No background container)
-		this.initRightPreviewColumn(startX + columnWidth * 2, paddingX, forceOffset, elementWidth, yButtonRow1 + 24 + 5);
+		this.initRightPreviewColumn(startX + columnWidth * 2 + 24, 4, forceOffset, elementWidth, yButtonRow1 - 24 + 5);
+
+		// fill out the remaining gap
+		this.left.setX(startX + columnWidth - 20);
+		this.left.setWidth(columnWidth + 44);
 	}
 
 	private void createControls() {
 		// Zoom2D (High Precision)
 		double initZoom2D = Optional.ofNullable(this.zoom2D).map(Slider::getLerpedValue).orElse(staticZoom2D);
-		this.zoom2D = PresetWidgets.createIntSlider((int) Math.round(initZoom2D), 1, 100, RTFTranslationKeys.GUI_SLIDER_ZOOM, (slider, value) -> {
+		this.zoom2D = PresetWidgets.createIntSlider((int) Math.round(initZoom2D), minZoom, maxZoom, RTFTranslationKeys.GUI_SLIDER_ZOOM, (slider, value) -> {
 			staticZoom2D = ((Slider) slider).getLerpedValue();
 			this.regenerate();
 			return value;
@@ -114,7 +118,7 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 
 		// Zoom3D (High Precision)
 		double initZoom3D = Optional.ofNullable(this.zoom3D).map(Slider::getLerpedValue).orElse(staticZoom3D);
-		this.zoom3D = PresetWidgets.createIntSlider((int) Math.round(initZoom3D), 1, 100, RTFTranslationKeys.GUI_SLIDER_ZOOM, (slider, value) -> {
+		this.zoom3D = PresetWidgets.createIntSlider((int) Math.round(initZoom3D), minZoom, maxZoom, RTFTranslationKeys.GUI_SLIDER_ZOOM, (slider, value) -> {
 			staticZoom3D = ((Slider) slider).getLerpedValue();
 			this.regenerate();
 			return value;
@@ -140,6 +144,11 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	private void initLeftPreviewColumn(int columnX, int padding, int offset, int width, int yBase) {
 		int x = columnX + padding + offset;
 
+		// Viewport, registered first so that dropdowns display over the top
+		this.preview2D = new Preview2D(this, x, yBase + 48, width, width);
+		this.preview2D.regenerate();
+		this.screen.addWidgetToScreen(this.preview2D);
+
 		// Controls
 		this.zoom2D.setX(x);
 		this.zoom2D.setY(yBase);
@@ -152,15 +161,16 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		this.renderMode2D.setWidth(width);
 		this.renderMode2D.setHeight(20);
 		this.screen.addWidgetToScreen(this.renderMode2D);
-
-		// Viewport
-		this.preview2D = new Preview2D(this, x, yBase + 48, width, width);
-		this.preview2D.regenerate();
-		this.screen.addWidgetToScreen(this.preview2D);
 	}
 
 	private void initRightPreviewColumn(int columnX, int padding, int offset, int width, int yBase) {
 		int x = columnX + padding + offset;
+
+		// Viewport, registered first so that dropdowns display over the top
+		int y3D = yBase + 48 + 24;
+		this.preview3D = new Preview3D(this, x, y3D, width, width);
+		this.preview3D.regenerate();
+		this.screen.addWidgetToScreen(this.preview3D);
 
 		// Controls
 		this.seed.setX(x);
@@ -180,12 +190,6 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		this.renderMode3D.setWidth(width);
 		this.renderMode3D.setHeight(20);
 		this.screen.addWidgetToScreen(this.renderMode3D);
-
-		// Viewport
-		int y3D = yBase + 48 + 24;
-		this.preview3D = new Preview3D(this, x, y3D, width, width);
-		this.preview3D.regenerate();
-		this.screen.addWidgetToScreen(this.preview3D);
 	}
 
 	private void cleanupWidgets() {
@@ -204,7 +208,7 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 			try { this.preview2D.close(); } catch (Exception e) { e.printStackTrace(); }
 		}
 	}
-	
+
 	@Override
 	public void onClose() {
 		super.onClose();
@@ -214,7 +218,7 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 			if (this.preview2D != null) this.preview2D.close();
 		} catch (Exception e) { e.printStackTrace(); }
 	}
-	
+
 	@Override
 	public void onDone() {
 		super.onDone();
