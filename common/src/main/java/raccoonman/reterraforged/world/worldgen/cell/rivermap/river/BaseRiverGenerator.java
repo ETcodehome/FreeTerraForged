@@ -92,7 +92,7 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
                         River river = new River(x2, z2, x1, z1);
                         if (!this.riverOverlaps(river, parent, rivers)) {
                             float valleyWidth = 275.0f * River.FORK_VALLEY.next(random);
-                            RiverCarver.Settings settings = creatSettings(random);
+                            RiverCarverSettings settings = new RiverCarverSettings(random);
                             settings.connecting = true;
                             settings.fadeIn = config.fade;
                             settings.valleySize = valleyWidth;
@@ -194,7 +194,7 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
         River river = new River(x1, z1, x2, z2);
         RiverWarp warp = RiverWarp.create(0.35f, random);
         float valleyWidth = 275.0f * River.MAIN_VALLEY.next(random);
-        RiverCarver.Settings settings = creatSettings(random);
+        RiverCarverSettings settings = new RiverCarverSettings(random);
         settings.connecting = false;
         settings.fadeIn = config.fade;
         settings.valleySize = valleyWidth;
@@ -204,16 +204,11 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
     public static RiverCarver createFork(float x1, float z1, float x2, float z2, float valleyWidth, RiverConfig config, Levels levels, Random random) {
         River river = new River(x1, z1, x2, z2);
         RiverWarp warp = RiverWarp.create(0.4f, random);
-        RiverCarver.Settings settings = creatSettings(random);
+        RiverCarverSettings settings = new RiverCarverSettings(random);
         settings.connecting = true;
         settings.fadeIn = config.fade;
         settings.valleySize = valleyWidth;
         return new RiverCarver(river, warp, config, settings, levels);
     }
-    
-    public static RiverCarver.Settings creatSettings(Random random) {
-        RiverCarver.Settings settings = new RiverCarver.Settings();
-        settings.valleyCurve = RiverCarver.getValleyType(random);
-        return settings;
-    }
+
 }

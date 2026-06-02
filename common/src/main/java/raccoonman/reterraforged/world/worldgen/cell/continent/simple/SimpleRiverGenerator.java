@@ -7,11 +7,7 @@ import java.util.Random;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.cell.continent.SimpleContinent;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.gen.GenWarp;
-import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.BaseRiverGenerator;
-import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.Network;
-import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.River;
-import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.RiverCarver;
-import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.RiverWarp;
+import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.*;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 
 public class SimpleRiverGenerator extends BaseRiverGenerator<SimpleContinent> {
@@ -41,7 +37,7 @@ public class SimpleRiverGenerator extends BaseRiverGenerator<SimpleContinent> {
 			float z3 = z + dz * length;
 			float valleyWidth = 275.0F * River.MAIN_VALLEY.next(random);
 			River river = new River((float) (int) x2, (float) (int) z2, (float) (int) x3, (float) (int) z3);
-			RiverCarver.Settings settings = BaseRiverGenerator.creatSettings(random);
+			RiverCarverSettings settings = new RiverCarverSettings(random);
 			settings.fadeIn = this.main.fade;
 			settings.valleySize = valleyWidth;
 			RiverWarp riverWarp = RiverWarp.create(0.1F, 0.85F, random);

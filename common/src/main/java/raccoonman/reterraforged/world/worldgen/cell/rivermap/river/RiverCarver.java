@@ -28,7 +28,7 @@ public class RiverCarver implements Comparable<RiverCarver> {
     public CurveFunction valleyCurve;
     private Levels levels;
 
-    public RiverCarver(River river, RiverWarp warp, RiverConfig config, Settings settings, Levels levels) {
+    public RiverCarver(River river, RiverWarp warp, RiverConfig config, RiverCarverSettings settings, Levels levels) {
         this.fade = settings.fadeIn;
         this.fadeInv = 1.0F / settings.fadeIn;
 
@@ -243,51 +243,6 @@ public class RiverCarver implements Comparable<RiverCarver> {
         float newMax = Math.max(this.waterLine, bedHeight);
         if (newMax > cell.riverWaterLevel) {
             cell.riverWaterLevel = Math.max(this.waterLine, bedHeight);
-        }
-    }
-
-    public static CurveFunction getValleyType(Random random) {
-        int value = random.nextInt(100);
-        if (value < 5) {
-            return CurveFunctions.scurve(0.4F, 1.0F);
-        }
-        if (value < 30) {
-            return CurveFunctions.scurve(4.0F, 5.0F);
-        }
-        if (value < 50) {
-            return CurveFunctions.scurve(3.0F, 0.25F);
-        }
-        return CurveFunctions.scurve(2.0F, -0.5F);
-    }
-
-    public static RiverCarver create(float x1, float z1, float x2, float z2, RiverConfig config, Levels levels, Random random) {
-        River river = new River(x1, z1, x2, z2);
-        RiverWarp warp = RiverWarp.create(0.35F, random);
-        float valleyWidth = 275.0F * River.MAIN_VALLEY.next(random);
-        Settings settings = creatSettings(random);
-        settings.connecting = false;
-        settings.fadeIn = config.fade;
-        settings.valleySize = valleyWidth;
-        return new RiverCarver(river, warp, config, settings, levels);
-    }
-
-    private static Settings creatSettings(Random random) {
-        Settings settings = new Settings();
-        settings.valleyCurve = getValleyType(random);
-        return settings;
-    }
-
-    public static class Settings {
-        public float valleySize;
-        public float fadeIn;
-        public boolean connecting;
-        public CurveFunction valleyCurve;
-
-        public Settings() {
-            this.valleySize = 275.0F;
-            this.fadeIn = 0.7F;
-            this.connecting = false;
-            this.valleyCurve = CurveFunctions.scurve(2.0F, -0.5F);
         }
     }
 }

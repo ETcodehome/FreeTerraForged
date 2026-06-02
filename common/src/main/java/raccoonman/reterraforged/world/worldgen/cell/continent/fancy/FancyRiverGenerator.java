@@ -7,12 +7,7 @@ import java.util.Random;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.Rivermap;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.gen.GenWarp;
-import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.BaseRiverGenerator;
-import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.Network;
-import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.River;
-import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.RiverCarver;
-import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.RiverConfig;
-import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.RiverWarp;
+import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.*;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil.Vec2f;
 import raccoonman.reterraforged.world.worldgen.util.PosUtil;
@@ -116,7 +111,7 @@ public class FancyRiverGenerator extends BaseRiverGenerator<FancyContinentGenera
 		if (this.riverOverlaps(river, null, roots)) {
 			return;
 		}
-		RiverCarver.Settings settings = BaseRiverGenerator.creatSettings(random);
+		RiverCarverSettings settings = new RiverCarverSettings(random);
 		settings.fadeIn = config.fade;
 		settings.valleySize = 275.0F * River.FORK_VALLEY.next(random);
 		RiverWarp riverWarp = RiverWarp.create(0.1F, 0.85F, random);
