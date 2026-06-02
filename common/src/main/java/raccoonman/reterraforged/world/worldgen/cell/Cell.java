@@ -44,8 +44,6 @@ public class Cell {
     public float weirdness;
     public float temperature;
     public float moisture;
-    
-    @Deprecated(forRemoval = true)
     public float beachNoise;
 
     public Cell() {
@@ -91,12 +89,9 @@ public class Cell {
         return this;
     }
 
-    @Deprecated(forRemoval = true)
     public boolean isAbsent() {
         return false;
     }
-
-    @Deprecated(forRemoval = true)
     public static Cell empty() {
         return Cell.EMPTY;
     }
