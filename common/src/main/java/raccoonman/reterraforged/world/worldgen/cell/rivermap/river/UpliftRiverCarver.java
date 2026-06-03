@@ -1,17 +1,14 @@
 package raccoonman.reterraforged.world.worldgen.cell.rivermap.river;
 
-import java.util.Random;
-
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainType;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 import raccoonman.reterraforged.world.worldgen.noise.function.CurveFunction;
-import raccoonman.reterraforged.world.worldgen.noise.function.CurveFunctions;
 import raccoonman.reterraforged.world.worldgen.noise.module.Line;
 
-public class RiverCarver implements Comparable<RiverCarver> {
+public class UpliftRiverCarver implements RTFRiverCarver {
     public boolean main;
     private boolean connecting;
     private float fade;
@@ -28,7 +25,7 @@ public class RiverCarver implements Comparable<RiverCarver> {
     public CurveFunction valleyCurve;
     private Levels levels;
 
-    public RiverCarver(River river, RiverWarp warp, RiverConfig config, RiverCarverSettings settings, Levels levels) {
+    public UpliftRiverCarver(River river, RiverWarp warp, RiverConfig config, RiverCarverSettings settings, Levels levels) {
         this.fade = settings.fadeIn;
         this.fadeInv = 1.0F / settings.fadeIn;
 
@@ -56,10 +53,6 @@ public class RiverCarver implements Comparable<RiverCarver> {
     }
 
     @Override
-    public int compareTo(RiverCarver o) {
-        return Integer.compare(this.config.order, o.config.order);
-    }
-
     public void carve(Cell cell, float prevX, float prevZ, float prevT, float currX, float currZ, float currT) {
         float distSqToCurr = this.getDistance2(currX, currZ, currT);
         float distSqToPrev = this.getDistance2(prevX, prevZ, prevT);
@@ -187,6 +180,7 @@ public class RiverCarver implements Comparable<RiverCarver> {
         this.tag(cell, targetBedFloor);
     }
 
+    @Override
     public RiverConfig createForkConfig(float t, Levels levels) {
         int bedHeight = levels.scale(this.getScaledSize(t, this.bedDepth));
         int bedWidth = (int)Math.round(Math.sqrt(this.getScaledSize(t, this.bedWidth)) * 0.75);
@@ -245,4 +239,25 @@ public class RiverCarver implements Comparable<RiverCarver> {
             cell.riverWaterLevel = Math.max(this.waterLine, bedHeight);
         }
     }
+
+    @Override
+    public boolean isMain() {
+        return this.main;
+    }
+
+    @Override
+    public River getRiver() {
+        return this.river;
+    }
+
+    @Override
+    public RiverWarp getWarp() {
+        return this.warp;
+    }
+
+    @Override
+    public RiverConfig getConfig() {
+        return this.config;
+    }
+
 }
