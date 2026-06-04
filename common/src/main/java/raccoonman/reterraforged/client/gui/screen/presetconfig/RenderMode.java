@@ -236,6 +236,37 @@ public enum RenderMode {
             float brightness = cell.continentEdge;
             return rgba(hue, saturation, brightness);
         }
+    },
+    RIVER_ZONE {
+
+        @Override
+        public boolean handlesWater() {
+            return true;
+        }
+
+        @Override
+        public int getColor(Cell cell, Levels levels, float scale, float bias) {
+
+            switch (cell.riverZone){
+
+                case None:
+                    return rgba(17, 17,17);
+
+                case Riverbed:
+                    return rgba(0, 0,200);
+
+                case Banks:
+                    return rgba(0, 75,0);
+
+                case ValleyFloor:
+                    return rgba(0, 150,0);
+
+                case ValleyFadeout:
+                    return rgba(0, 255,0);
+
+            }
+            return rgba(17, 17,17);
+        }
     };
 
     public int getColor(Cell cell, Levels levels) {

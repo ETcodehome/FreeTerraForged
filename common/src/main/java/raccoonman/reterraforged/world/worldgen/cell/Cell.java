@@ -4,6 +4,7 @@ import raccoonman.reterraforged.concurrent.Resource;
 import raccoonman.reterraforged.concurrent.SimpleResource;
 import raccoonman.reterraforged.concurrent.pool.ThreadLocalPool;
 import raccoonman.reterraforged.world.worldgen.cell.biome.type.BiomeType;
+import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.RiverCarverSettings;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.Terrain;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainType;
 
@@ -48,6 +49,7 @@ public class Cell {
     public float temperature;
     public float moisture;
     public float beachNoise;
+    public RiverCarverSettings.RiverZone riverZone = RiverCarverSettings.RiverZone.None;
 
     public Cell() {
         this.regionMoisture = 0.5F;

@@ -31,4 +31,12 @@ public class RiverCarverSettings {
         }
         return CurveFunctions.scurve(2.0F, -0.5F);
     }
+
+    public enum RiverZone{
+        Riverbed,
+        Banks,
+        ValleyFloor,
+        ValleyFadeout,
+        None
+    }
 }
