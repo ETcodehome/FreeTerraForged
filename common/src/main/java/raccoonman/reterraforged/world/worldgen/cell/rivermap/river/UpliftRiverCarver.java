@@ -33,6 +33,10 @@ public class UpliftRiverCarver implements RTFRiverCarver {
     private Noise terraceNoise;
     private Noise asymmetryNoise;
 
+    // New Drainage Noises
+    private Noise gullyNoise;
+    private Noise rivuletNoise;
+
     public UpliftRiverCarver(River river, RiverWarp warp, RiverConfig config, RiverCarverSettings settings, Levels levels) {
         this.fade = settings.fadeIn;
         this.fadeInv = 1.0F / settings.fadeIn;
@@ -60,11 +64,15 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         this.valleyCurve = settings.valleyCurve;
         this.levels = levels;
 
-        // Initialize seamless noise modules for organic variation
+        // Initialize seamless noise modules
         this.widthNoise = Noises.simplex(8241, 150, 2);
         this.depthNoise = Noises.simplex(3912, 100, 2);
         this.terraceNoise = Noises.simplex(5510, 200, 1);
         this.asymmetryNoise = Noises.simplex(1193, 250, 1);
+
+        // Drainage initialization (smaller scale for tighter, sharper cuts)
+        this.gullyNoise = Noises.simplex(9876, 65, 2);
+        this.rivuletNoise = Noises.simplex(5432, 20, 2);
     }
 
     @Override
@@ -77,16 +85,28 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float sqScaleFactor = scaleFactor * scaleFactor;
 
         // --- ENVIRONMENTAL VARIATION SAMPLES ---
-        // Range mostly from -1.0 to 1.0
         float widthVar = this.widthNoise.compute(currX, currZ, 8241);
         float depthVar = this.depthNoise.compute(currX, currZ, 3912);
         float terraceMask = this.terraceNoise.compute(currX, currZ, 5510);
         float asymmetry = this.asymmetryNoise.compute(currX, currZ, 1193);
 
-        // Apply variations
-        float dynamicWidthMult = 1.0F + (widthVar * 0.35F); // +/- 35% width variation
-        float dynamicDepthMult = 1.0F + (depthVar * 0.25F); // +/- 25% depth variation
-        float sideBias = 1.0F + (asymmetry * 0.4F); // Shifts width slightly based on which side of the river we are on
+        // --- DRAINAGE CALCULATION (Ridged Noise) ---
+        // 1.0 - abs(noise) creates sharp V-shapes instead of soft hills
+        float gullyRaw = this.gullyNoise.compute(currX, currZ, 9876);
+        float gullyShape = 1.0F - Math.abs(gullyRaw);
+        gullyShape *= gullyShape; // Square it to sharpen the ravine
+
+        float rivuletRaw = this.rivuletNoise.compute(currX, currZ, 5432);
+        float rivuletShape = 1.0F - Math.abs(rivuletRaw);
+        rivuletShape = rivuletShape * rivuletShape * rivuletShape; // Cube it for very sharp micro-cuts
+
+        // Combine broad gullies with fine rivulets
+        float drainageMask = (gullyShape * 0.7F) + (rivuletShape * 0.3F);
+
+        // Apply dynamic multipliers
+        float dynamicWidthMult = 1.0F + (widthVar * 0.35F);
+        float dynamicDepthMult = 1.0F + (depthVar * 0.25F);
+        float sideBias = 1.0F + (asymmetry * 0.4F);
 
         // --- 1. TARGET ELEVATIONS ---
         float oceanHeightOffset = levels.water;
@@ -100,7 +120,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float targetValleyFloor = targetWaterLevel + bankHeightOffset;
         float discrepencyScale = 1.0F + (levels.scale(cell.height - targetWaterLevel)) / 100.0F;
 
-        // --- 2. RADII BOUNDARIES (HORIZONTAL MEASUREMENTS) ---
+        // --- 2. RADII BOUNDARIES ---
         float biasedScale = sqScaleFactor * dynamicWidthMult * sideBias;
 
         float zone1Radius = (float) Math.sqrt(this.getScaledSize(currT, this.bedWidth) * biasedScale);
@@ -122,17 +142,17 @@ public class UpliftRiverCarver implements RTFRiverCarver {
             finalHeight = carveZone1Riverbed(cell, currT, distSqToCurr, targetBedFloor, bedDepthOffset, oceanHeightOffset, sqScaleFactor, targetWaterLevel);
             cell.riverZone = RiverCarverSettings.RiverZone.Riverbed;
         } else if (currentLinearDist < zone2Radius) {
-            finalHeight = carveZone2BankStep(currentLinearDist, zone1Radius, zone2Radius, targetWaterLevel, targetValleyFloor, terraceMask);
+            finalHeight = carveZone2BankStep(currentLinearDist, zone1Radius, zone2Radius, targetWaterLevel, targetValleyFloor, terraceMask, drainageMask);
             if (cell.riverZone != RiverCarverSettings.RiverZone.Riverbed) {
                 cell.riverZone = RiverCarverSettings.RiverZone.Banks;
             }
         } else if (currentLinearDist < zone3Radius) {
-            finalHeight = carveZone3ValleyFloor(targetValleyFloor, terraceMask, currentLinearDist, zone2Radius, zone3Radius);
+            finalHeight = carveZone3ValleyFloor(targetValleyFloor, terraceMask, drainageMask);
             if (cell.riverZone != RiverCarverSettings.RiverZone.Riverbed && cell.riverZone != RiverCarverSettings.RiverZone.Banks) {
                 cell.riverZone = RiverCarverSettings.RiverZone.ValleyFloor;
             }
         } else {
-            finalHeight = carveZone4Fadeout(cell.height, currentLinearDist, zone3Radius, zone4Radius, targetValleyFloor, currX, currZ, currT, terraceMask);
+            finalHeight = carveZone4Fadeout(cell.height, currentLinearDist, zone3Radius, zone4Radius, targetValleyFloor, terraceMask, drainageMask);
             if (cell.riverZone != RiverCarverSettings.RiverZone.Riverbed && cell.riverZone != RiverCarverSettings.RiverZone.Banks && cell.riverZone != RiverCarverSettings.RiverZone.ValleyFloor) {
                 cell.riverZone = RiverCarverSettings.RiverZone.ValleyFadeout;
             }
@@ -147,10 +167,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
 
     private float carveZone1Riverbed(Cell cell, float currT, float distSqToCurr, float targetBedFloor, float bedDepthOffset, float oceanHeightOffset, float sqScaleFactor, float targetWaterLevel) {
         float bedInfluence = this.getDistanceAlpha(currT, distSqToCurr, this.bedWidth, sqScaleFactor);
-
-        // Deepen the center of the channel slightly more than the edges
         bedInfluence = bedInfluence * bedInfluence * (3.0F - 2.0F * bedInfluence);
-
         float bedHeight = ContinentalHydrology.getWeightedWaterHeight(cell.waterTable) - (bedDepthOffset * bedInfluence) + oceanHeightOffset;
 
         cell.moisture = 1.0F;
@@ -158,62 +175,38 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         return bedHeight;
     }
 
-    private float carveZone2BankStep(float distance, float zone1Radius, float zone2Radius, float targetWaterLevel, float targetValleyFloor, float terraceMask) {
+    private float carveZone2BankStep(float distance, float zone1Radius, float zone2Radius, float targetWaterLevel, float targetValleyFloor, float terraceMask, float drainageMask) {
         float progress = (distance - zone1Radius) / (zone2Radius - zone1Radius);
         progress = NoiseUtil.clamp(progress, 0.0F, 1.0F);
 
-        // Apply terracing if the noise mask is high
-        progress = applyTerracing(progress, terraceMask, 3.0F);
+        // Apply terracing, but let drainage smooth out the terraces where water flows
+        progress = applyTerracing(progress, terraceMask, drainageMask, 3.0F);
+
+        // Dig the gullies into the bank (lowers the progress, moving it closer to water level)
+        // Multiply by an arc so gullies are deepest in the middle of the bank, not the very edges
+        float arc = progress * (1.0F - progress) * 4.0F;
+        progress = Math.max(0.0F, progress - (drainageMask * 0.3F * arc));
 
         float smoothProgress = progress * progress * (3.0F - 2.0F * progress);
         return NoiseUtil.lerp(targetWaterLevel, targetValleyFloor, smoothProgress);
     }
 
-    private float carveZone3ValleyFloor(float targetValleyFloor, float terraceMask, float distance, float zone2Radius, float zone3Radius) {
-        // Add very slight bumps and dips to the valley floor
-        float bumpiness = (terraceMask * 0.5F) * this.levels.unit;
-        return targetValleyFloor + bumpiness;
+    private float carveZone3ValleyFloor(float targetValleyFloor, float terraceMask, float drainageMask) {
+        // Valley floor gets slight bumps from terraces, but gullies cut subtle trenches
+        float bumpiness = (terraceMask * 0.4F) - (drainageMask * 0.6F);
+        return targetValleyFloor + (bumpiness * this.levels.unit);
     }
 
-    private float carveZone4Fadeout(float originalTerrainHeight, float distance, float zone3Radius, float zone4Radius, float targetValleyFloor, float currX, float currZ, float currT, float terraceMask) {
+    private float carveZone4Fadeout(float originalTerrainHeight, float distance, float zone3Radius, float zone4Radius, float targetValleyFloor, float terraceMask, float drainageMask) {
         float progress = (distance - zone3Radius) / (zone4Radius - zone3Radius);
         progress = NoiseUtil.clamp(progress, 0.0F, 1.0F);
 
-        float riverLength = (float) Math.sqrt(this.river.dx * this.river.dx + this.river.dz * this.river.dz);
-        float distanceAlongRiver = currT * riverLength;
-        float warpOffset = (float) (Math.cos(currX * 0.12F + currZ * 0.05F) * Math.sin(currZ * 0.12F - currX * 0.05F) * 3.5F);
+        // Apply terracing (destroyed by drainage)
+        float modifiedProgress = applyTerracing(progress, terraceMask, drainageMask, 5.0F);
 
-        float macroErosionNoise = (float) (Math.sin(distanceAlongRiver * 0.03F + currX * 0.01F) * Math.cos(currZ * 0.01F));
-        macroErosionNoise = NoiseUtil.clamp((macroErosionNoise + 1.0F) * 0.5F, 0.0F, 1.0F);
-
-        float maxAllowedDepth = 0.15F;
-        float dynamicGullyDepth = maxAllowedDepth * macroErosionNoise;
-
-        float primaryFreq = 0.35F;
-        float primaryWave = (float) Math.sin((distanceAlongRiver * primaryFreq) + warpOffset);
-        primaryWave = (primaryWave + 1.0F) * 0.5F;
-        primaryWave = primaryWave * primaryWave;
-
-        float detailFreq = 1.15F;
-        float detailWave = (float) Math.sin((distanceAlongRiver * detailFreq) - (warpOffset * 0.7F));
-        detailWave = (detailWave + 1.0F) * 0.5F;
-
-        float combinedGullyNoise = (primaryWave * 0.7F) + (detailWave * 0.3F * primaryWave);
+        // Dig the gullies into the surrounding terrain slope
         float slopeMask = progress * (1.0F - progress) * 4.0F;
-
-        float detailNoise = (float) (Math.sin(currX * 0.9F + currZ * 0.4F) * Math.cos(currZ * 0.9F - currX * 0.4F));
-        detailNoise = (detailNoise + 1.0F) * 0.5F;
-
-        float baseAccumulation = (1.0F - progress);
-        float rubbleMask = (combinedGullyNoise * 0.5F) + (baseAccumulation * 0.5F) * macroErosionNoise;
-        float rubbleAmplitude = 0.035F;
-        float roughness = detailNoise * rubbleMask * rubbleAmplitude;
-
-        float modifiedProgress = progress - (combinedGullyNoise * slopeMask * dynamicGullyDepth) + roughness;
-        modifiedProgress = NoiseUtil.clamp(modifiedProgress, 0.0F, 1.0F);
-
-        // Apply terracing to the fadeout slope as well
-        modifiedProgress = applyTerracing(modifiedProgress, terraceMask, 5.0F);
+        modifiedProgress = Math.max(0.0F, modifiedProgress - (drainageMask * 0.25F * slopeMask));
 
         float smoothProgress = modifiedProgress * modifiedProgress * (3.0F - 2.0F * modifiedProgress);
         return NoiseUtil.lerp(targetValleyFloor, originalTerrainHeight, smoothProgress);
@@ -221,13 +214,16 @@ public class UpliftRiverCarver implements RTFRiverCarver {
 
     /**
      * Helper to create stepped strata in the terrain.
+     * Now accepts drainageMask to destroy terraces where gullies flow.
      */
-    private float applyTerracing(float progress, float terraceMask, float steps) {
-        float terraceStrength = NoiseUtil.clamp(terraceMask * 1.5F, 0.0F, 1.0F);
+    private float applyTerracing(float progress, float terraceMask, float drainageMask, float steps) {
+        // Water flow destroys strata. Subtract drainage from terrace mask.
+        float intactTerrace = Math.max(0.0F, terraceMask - (drainageMask * 1.5F));
+
+        float terraceStrength = NoiseUtil.clamp(intactTerrace * 1.5F, 0.0F, 1.0F);
 
         if (terraceStrength > 0.0F) {
             float steppedProgress = (float) Math.round(progress * steps) / steps;
-            // Soften the step edge slightly so it's not a perfectly vertical block wall
             return NoiseUtil.lerp(progress, steppedProgress, terraceStrength * 0.85F);
         }
         return progress;
