@@ -131,7 +131,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float zone3Width = config.bankWidth * dynamicWidthMult;
         float zone3Radius = zone2Radius + zone3Width;
 
-        float zone4Radius = zone3Radius + (zone3Width * (3 + discrepencyScale));
+        float zone4Radius = zone3Radius + (zone3Width * (4 + discrepencyScale));
 
         if (currentLinearDist >= zone4Radius) return;
 
@@ -224,7 +224,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
 
         if (terraceStrength > 0.0F) {
             float steppedProgress = (float) Math.round(progress * steps) / steps;
-            return NoiseUtil.lerp(progress, steppedProgress, terraceStrength * 0.85F);
+            return NoiseUtil.lerp(progress, steppedProgress, terraceStrength * 0.65F);
         }
         return progress;
     }
