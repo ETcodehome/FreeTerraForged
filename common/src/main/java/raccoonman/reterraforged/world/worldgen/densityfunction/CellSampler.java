@@ -3,7 +3,6 @@ package raccoonman.reterraforged.world.worldgen.densityfunction;
 import java.util.function.Supplier;
 
 import com.mojang.serialization.MapCodec;
-import com.mojang.serialization.codecs.KeyDispatchCodec;
 import org.jetbrains.annotations.Nullable;
 
 import com.mojang.serialization.Codec;
@@ -15,6 +14,10 @@ import net.minecraft.util.KeyDispatchDataCodec;
 import net.minecraft.util.StringRepresentable;
 import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings.ControlPoints;
 import raccoonman.reterraforged.world.worldgen.biome.Continentalness;
+import raccoonman.reterraforged.world.worldgen.biome.Erosion;
+import raccoonman.reterraforged.world.worldgen.biome.Humidity;
+import raccoonman.reterraforged.world.worldgen.biome.Temperature;
+import raccoonman.reterraforged.world.worldgen.biome.Weirdness;
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.Heightmap;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
@@ -27,6 +30,10 @@ import raccoonman.reterraforged.world.worldgen.util.PosUtil;
 
 public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) implements MarkerFunction.Mapped {
 	private static final ThreadLocal<Cache2d> CELL = ThreadLocal.withInitial(Cache2d::new);
+	
+	public static void clearThreadLocalCache() {
+		CELL.remove();
+	}
 	
 	@Override
 	public double compute(FunctionContext ctx) {
@@ -57,6 +64,12 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 			if(this.lastPos != packedPos) {
 				lookup.applyCell(this.cell.reset(), blockX, blockZ, false, sampleClimate);
 				this.lastPos = packedPos;
+				if (this.cell.terrain == TerrainType.ISLAND_BEACH) {
+					this.cell.erosion = Erosion.LEVEL_4.mid();
+					this.cell.weirdness = Weirdness.MID_SLICE_NORMAL_DESCENDING.mid();
+					this.cell.temperature = Temperature.LEVEL_3.mid();
+					this.cell.moisture = Humidity.LEVEL_1.mid();
+				}
 			}
 			return this.cell;
 		}
@@ -148,6 +161,12 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 					return NoiseUtil.lerp(Continentalness.OCEAN.min(), Continentalness.OCEAN.max(), alpha);
 				}
 				
+				if(cell.terrain == TerrainType.ISLAND_BEACH) {
+					float alpha = NoiseUtil.clamp(cell.continentEdge, shallowOcean, beach);
+					alpha = NoiseUtil.lerp(alpha, shallowOcean, beach, 0.0F, 1.0F);
+					return NoiseUtil.lerp(Continentalness.COAST.min(), Continentalness.COAST.min() + (Continentalness.COAST.max() - Continentalness.COAST.min()) * 0.3F, alpha);
+				}
+				
 				if(cell.terrain.getDelegate() == TerrainCategory.BEACH && cell.height + cell.beachNoise < levels.water(5)) {
 					float alpha = NoiseUtil.clamp(cell.continentEdge, shallowOcean, beach);
 					alpha = NoiseUtil.lerp(alpha, shallowOcean, beach, 0.0F, 1.0F);
@@ -163,6 +182,9 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 			
 			@Override
 			public float read(Cell cell, Heightmap heightmap) {
+				if(cell.terrain == TerrainType.ISLAND_BEACH) {
+					return Erosion.LEVEL_4.mid();
+				}
 				return cell.erosion;
 			}
 		},
@@ -170,6 +192,9 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 			
 			@Override
 			public float read(Cell cell, Heightmap heightmap) {
+				if(cell.terrain == TerrainType.ISLAND_BEACH) {
+					return Weirdness.MID_SLICE_NORMAL_DESCENDING.mid();
+				}
 				return cell.weirdness;
 			}
 		},
@@ -184,6 +209,9 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 			
 			@Override
 			public float read(Cell cell, Heightmap heightmap) {
+				if(cell.terrain == TerrainType.ISLAND_BEACH) {
+					return Temperature.LEVEL_3.mid();
+				}
 				return cell.temperature;
 			}
 		},
@@ -191,6 +219,9 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 			
 			@Override
 			public float read(Cell cell, Heightmap heightmap) {
+				if(cell.terrain == TerrainType.ISLAND_BEACH) {
+					return Humidity.LEVEL_1.mid();
+				}
 				return cell.moisture;
 			}
 		},

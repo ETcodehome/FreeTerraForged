@@ -3,10 +3,13 @@ package raccoonman.reterraforged.world.worldgen.cell.climate;
 import raccoonman.reterraforged.data.worldgen.preset.settings.ClimateSettings;
 import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings;
 import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings.ControlPoints;
+import raccoonman.reterraforged.world.worldgen.biome.Humidity;
+import raccoonman.reterraforged.world.worldgen.biome.Temperature;
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.cell.biome.type.BiomeType;
 import raccoonman.reterraforged.world.worldgen.cell.continent.Continent;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
+import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainCategory;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainType;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil.Vec2f;
@@ -141,6 +144,37 @@ public class ClimateModule {
 
         cell.temperature = cell.biome.getTemperature(cell.biomeRegionId);
         cell.moisture = cell.biome.getMoisture(cell.biomeRegionId);
+
+		// Mountain biome override: sample existing climate at terrain region center
+		// This keeps mountains in their correct climate zone while ensuring all cells
+		// within the same terrain region get the same biome
+		if (cell.terrain != null && cell.terrain.getCategory() == TerrainCategory.HIGHLAND) {
+			// Convert terrain region center to biome-frequency space for correct climate sampling
+			float mtnFreqX = cell.terrainRegionCenterX * this.biomeFreq;
+			float mtnFreqZ = cell.terrainRegionCenterZ * this.biomeFreq;
+
+			float mtnTemp = this.temperature.compute(mtnFreqX, mtnFreqZ, 0);
+			float mtnMoist = this.moisture.compute(mtnFreqX, mtnFreqZ, 0);
+			cell.biome = BiomeType.get(mtnTemp, mtnMoist);
+
+			// Keep cell.temperature/moisture consistent with the overridden biome
+			cell.temperature = cell.biome.getTemperature(cell.biomeRegionId);
+			cell.moisture = cell.biome.getMoisture(cell.biomeRegionId);
+		}
+
+		// Island biome override: sample climate for island terrain so islands
+		// get land biomes instead of ocean/frozen_ocean
+		if (cell.terrain == TerrainType.ISLAND_BEACH) {
+			cell.biome = BiomeType.SAVANNA;
+			cell.temperature = Temperature.LEVEL_3.mid();
+			cell.moisture = Humidity.LEVEL_1.mid();
+		} else if (cell.terrain == TerrainType.ISLAND || cell.terrain == TerrainType.ISLAND_MOUNTAINS) {
+			float islTemp = this.temperature.compute(centerX, centerZ, 0);
+			float islMoist = this.moisture.compute(centerX, centerZ, 0);
+			cell.biome = BiomeType.get(islTemp, islMoist);
+			cell.temperature = cell.biome.getTemperature(cell.biomeRegionId);
+			cell.moisture = cell.biome.getMoisture(cell.biomeRegionId);
+		}
 	}
 
 	private float modifyTemp(float height, float temp, float x, float z) {
@@ -174,7 +208,8 @@ public class ClimateModule {
 	}
 
 	private void modifyTerrain(Cell cell, float continentEdge) {
-		if (cell.terrain.isOverground() && !cell.terrain.overridesCoast() && continentEdge <= this.controlPoints.coastMarker()) {
+		if (cell.terrain.isOverground() && !cell.terrain.overridesCoast() && continentEdge <= this.controlPoints.coastMarker()
+			&& cell.terrain != TerrainType.ISLAND && cell.terrain != TerrainType.ISLAND_BEACH && cell.terrain != TerrainType.ISLAND_MOUNTAINS) {
 			cell.terrain = TerrainType.COAST;
 		}
 	}

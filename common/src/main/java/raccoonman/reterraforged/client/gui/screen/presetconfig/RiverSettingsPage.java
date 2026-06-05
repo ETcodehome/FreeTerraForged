@@ -235,7 +235,7 @@ class RiverSettingsPage extends PresetEditorPage {
 
 	@Override
 	public Optional<Page> next() {
-		return Optional.of(new FilterSettingsPage(this.screen, this.preset));
+		return Optional.of(new IslandSettingsPage(this.screen, this.preset));
 	}
 
 }

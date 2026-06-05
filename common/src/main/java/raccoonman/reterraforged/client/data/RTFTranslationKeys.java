@@ -28,6 +28,7 @@ public final class RTFTranslationKeys {
 	public static final String GUI_FILTER_SETTINGS_TITLE = resolve("gui.filterSettings.title");
 	public static final String GUI_STRUCTURE_SETTINGS_TITLE = resolve("gui.structureSettings.title");
 	public static final String GUI_MISCELLANEOUS_SETTINGS_TITLE = resolve("gui.miscellaneousSettings.title");
+	public static final String GUI_ISLAND_SETTINGS_TITLE = resolve("gui.islandSettings.title");
 
 	public static final String GUI_BUTTON_TRUE = resolve("gui.button.true");
 	public static final String GUI_BUTTON_FALSE = resolve("gui.button.false");
@@ -63,7 +64,7 @@ public final class RTFTranslationKeys {
 	public static final String GUI_BUTTON_VANILLA_SPRINGS = resolve("gui.button.vanillaSprings");
 	public static final String GUI_BUTTON_VANILLA_LAVA_LAKES = resolve("gui.button.vanillaLavaLakes");
 	public static final String GUI_BUTTON_VANILLA_LAVA_SPRINGS = resolve("gui.button.vanillaLavaSprings");
-	
+	public static final String GUI_BUTTON_ENABLE_ARCHIPELAGO = resolve("gui.button.enableArchipelago");
 	public static final String GUI_SLIDER_ZOOM = resolve("gui.slider.zoom");
 	public static final String GUI_SLIDER_CONTINENT_SCALE = resolve("gui.slider.continentScale");
 	public static final String GUI_SLIDER_CONTINENT_JITTER = resolve("gui.slider.continentJitter");
@@ -156,7 +157,17 @@ public final class RTFTranslationKeys {
 	public static final String GUI_SLIDER_STRATA_REGION_SIZE = resolve("gui.slider.strataRegionSize");
 	public static final String GUI_SLIDER_MOUNTAIN_BIOME_USAGE = resolve("gui.slider.mountainBiomeUsage");
 	public static final String GUI_SLIDER_VOLCANO_BIOME_USAGE = resolve("gui.slider.volcanoBiomeUsage");
-
+	public static final String GUI_SLIDER_ISLAND_DENSITY = resolve("gui.slider.islandDensity");
+	public static final String GUI_SLIDER_ISLAND_SIZE = resolve("gui.slider.islandSize");
+	public static final String GUI_SLIDER_ISLAND_HEIGHT = resolve("gui.slider.islandHeight");
+	public static final String GUI_SLIDER_ISLAND_BASE_SCALE = resolve("gui.slider.islandBaseScale");
+	public static final String GUI_SLIDER_ISLAND_VERTICAL_SCALE = resolve("gui.slider.islandVerticalScale");
+	public static final String GUI_SLIDER_ISLAND_HORIZONTAL_SCALE = resolve("gui.slider.islandHorizontalScale");
+	public static final String GUI_SLIDER_ISLAND_MOUNTAIN_CHANCE = resolve("gui.slider.islandMountainChance");
+	public static final String GUI_SLIDER_ISLAND_VOLCANO_CHANCE = resolve("gui.slider.islandVolcanoChance");
+	public static final String GUI_SLIDER_ISLAND_OFFSHORE_DEPTH = resolve("gui.slider.islandOffshoreDepth");
+	public static final String GUI_SLIDER_ISLAND_BEACH_WIDTH = resolve("gui.slider.islandBeachWidth");
+	public static final String GUI_SLIDER_ISLAND_BEACH_COVERAGE = resolve("gui.slider.islandBeachCoverage");
 	public static final String GUI_LABEL_PREVIEW_AREA = resolve("gui.label.previewArea");
 	public static final String GUI_LABEL_PREVIEW_TERRAIN = resolve("gui.label.previewTerrain");
 	public static final String GUI_LABEL_PREVIEW_BIOME = resolve("gui.label.previewBiome");
@@ -187,6 +198,7 @@ public final class RTFTranslationKeys {
 	public static final String GUI_LABEL_WETLANDS = resolve("gui.label.wetlands");
 	public static final String GUI_LABEL_EROSION = resolve("gui.label.erosion");
 	public static final String GUI_LABEL_SMOOTHING = resolve("gui.label.smoothing");
+	public static final String GUI_LABEL_ISLAND = resolve("gui.label.island");
 	
 	private static String resolve(String key) {
 		return RTFCommon.MOD_ID + "." + key;

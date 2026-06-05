@@ -34,6 +34,8 @@ public class Cell {
     public float continentDistance;
     public float terrainRegionId;
     public float terrainRegionEdge;
+    public float terrainRegionCenterX;
+    public float terrainRegionCenterZ;
     public float biomeRegionId;
     public float biomeRegionEdge;
     public float macroBiomeId;
@@ -48,6 +50,7 @@ public class Cell {
     public float weirdness;
     public float temperature;
     public float moisture;
+
     public float beachNoise;
     public RiverCarverSettings.RiverZone riverZone = RiverCarverSettings.RiverZone.None;
 
@@ -75,6 +78,8 @@ public class Cell {
         this.continentDistance = other.continentDistance;
         this.terrainRegionId = other.terrainRegionId;
         this.terrainRegionEdge = other.terrainRegionEdge;
+        this.terrainRegionCenterX = other.terrainRegionCenterX;
+        this.terrainRegionCenterZ = other.terrainRegionCenterZ;
         this.biomeRegionId = other.biomeRegionId;
         this.biomeRegionEdge = other.biomeRegionEdge;
         this.macroBiomeId = other.macroBiomeId;
@@ -100,6 +105,7 @@ public class Cell {
     public boolean isAbsent() {
         return false;
     }
+
     public static Cell empty() {
         return Cell.EMPTY;
     }

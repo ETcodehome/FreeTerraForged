@@ -50,7 +50,8 @@ public class Presets {
 				new River(4, 1, 4, 14, 5, 0.975F), 
 				new Lake(0.3F, 0.0F, 0.03F, 10, 75, 150, 2, 10),
 				new Wetland(0.6F, 175, 225)
-			), 
+			),
+			new IslandSettings(true, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F),
 			new FilterSettings(
 				new Erosion(135, 12, 0.7F, 0.7F, 0.5F, 0.5F),
 				new Smoothing(1, 1.8F, 0.9F)
@@ -93,7 +94,8 @@ public class Presets {
 				new River(4, 1, 4, 14, 5, 0.975F), 
 				new Lake(0.3F, 0.0F, 0.03F, 10, 75, 150, 2, 10),
 				new Wetland(0.6F, 175, 225)
-			), 
+			),
+			new IslandSettings(true, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F),
 			new FilterSettings(
 				new Erosion(135, 12, 0.7F, 0.7F, 0.5F, 0.5F),
 				new Smoothing(1, 1.8F, 0.9F)
@@ -136,7 +138,8 @@ public class Presets {
 				new River(4, 1, 4, 14, 5, 0.493F), 
 				new Lake(0.462F, 0.0F, 0.028F, 10, 75, 150, 2, 10),
 				new Wetland(0.796F, 196, 255)
-			), 
+			),
+			new IslandSettings(true, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F),
 			new FilterSettings(
 				new Erosion(100, 12, 0.699F, 0.699F, 0.5F, 0.5F),
 				new Smoothing(2, 1.8F, 0.75F)
@@ -180,7 +183,8 @@ public class Presets {
 				new River(3, 1, 2, 12, 4, 0.5F), 
 				new Lake(0.671F, 0.0F, 0.028F, 8, 75, 150, 2, 7),
 				new Wetland(0.865F, 134, 201)
-			), 
+			),
+			new IslandSettings(true, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F),
 			new FilterSettings(
 				new Erosion(175, 12, 0.648F, 0.657F, 0.5F, 0.5F),
 				new Smoothing(1, 1.855F, 0.916F)
@@ -223,7 +227,8 @@ public class Presets {
 				new River(4, 1, 4, 14, 5, 0.493F), 
 				new Lake(0.462F, 0.0F, 0.028F, 10, 75, 150, 2, 10),
 				new Wetland(0.796F, 196, 255)
-			), 
+			),
+			new IslandSettings(true, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F),
 			new FilterSettings(
 				new Erosion(100, 12, 0.699F, 0.699F, 0.5F, 0.5F),
 				new Smoothing(2, 1.799F, 0.75F)
@@ -266,7 +271,8 @@ public class Presets {
 				new River(3, 1, 3, 18, 3, 0.7F), 
 				new Lake(0.595F, 0.0F, 0.028F, 10, 75, 150, 2, 10),
 				new Wetland(0.86F, 175, 225)
-			), 
+			),
+			new IslandSettings(true, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F),
 			new FilterSettings(
 				new Erosion(165, 15, 0.612F, 0.652F, 0.5F, 0.5F),
 				new Smoothing(1, 1.799F, 0.898F)
@@ -453,6 +459,7 @@ public class Presets {
 								50,
 								150)
 				),
+				new IslandSettings(true, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F, 0.5F),
 				new FilterSettings(
 
 						new Erosion(250,
