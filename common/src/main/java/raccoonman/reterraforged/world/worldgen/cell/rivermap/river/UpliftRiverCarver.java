@@ -43,6 +43,9 @@ public class UpliftRiverCarver implements RTFRiverCarver {
     private Noise lakeWarpNoise;
     public LakeConfig lakeConfig;
 
+    // --- PER-RIVER VARIANCE FIELDS ---
+    private final float riverValleyWidthModifier;
+
     public UpliftRiverCarver(River river, RiverWarp warp, RiverConfig config, RiverCarverSettings settings, Levels levels, LakeConfig lakeConfig) {
         this.fade = settings.fadeIn;
         this.fadeInv = 1.0F / settings.fadeIn;
@@ -84,6 +87,16 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         this.lakeWarpNoise = Noises.simplex(7439, 55, 3);
 
         this.lakeConfig = lakeConfig;
+
+        // --- INITIALIZE DETERMINISTIC PER-RIVER VALLEY VARIANCE ---
+        int rh1 = Float.floatToIntBits(river.x1);
+        int rh2 = Float.floatToIntBits(river.z1);
+        long uniqueRiverSeed = ((long) rh1 << 32) | (rh2 & 0xFFFFFFFFL);
+        uniqueRiverSeed ^= 0x4B3C2B1A5L; // Unique salt modifier for valley layout variance
+
+        Random riverVarRand = new Random(uniqueRiverSeed);
+        // Generates a scaling factor between 0.70 and 1.30 (+/- 30% total width deviation per river system)
+        this.riverValleyWidthModifier = 0.70F + riverVarRand.nextFloat() * 0.60F;
     }
 
     @Override
@@ -136,7 +149,6 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         int plateauIndex = ContinentalHydrology.getStepId(cell.waterTable);
         float widenMultiplier = 1.0F;
 
-        // Pass currT into the padded check
         if (this.shouldWidenOnPlateau(plateauIndex, lakeConfig, currT)) {
             float lakeScaleMin = lakeConfig.sizeMin / 100.0F;
             float lakeScaleMax = lakeConfig.sizeMax / 100.0F;
@@ -147,31 +159,29 @@ public class UpliftRiverCarver implements RTFRiverCarver {
 
             // --- SMOOTH DISTANCE FADE FACTOR ---
             float distanceMask = 1.0F;
-            float fadeWindow = 0.04F; // Must match the window used above
+            float fadeWindow = 0.04F;
 
             if (currT < lakeConfig.distanceMin) {
-                // Smoothly ramp up from 0.0 (at min - fadeWindow) to 1.0 (at min)
                 distanceMask = NoiseUtil.clamp((currT - (lakeConfig.distanceMin - fadeWindow)) / fadeWindow, 0.0F, 1.0F);
             } else if (currT > lakeConfig.distanceMax) {
-                // Smoothly ramp down from 1.0 (at max) to 0.0 (at max + fadeWindow)
                 distanceMask = NoiseUtil.clamp(((lakeConfig.distanceMax + fadeWindow) - currT) / fadeWindow, 0.0F, 1.0F);
             }
 
-            // Apply a cubic smoothstep function to eliminate harsh linear angularities
             distanceMask = distanceMask * distanceMask * (3.0F - 2.0F * distanceMask);
 
-            // Compound the distance mask directly into the warp factor
             widenMultiplier = 1.0F + (flatnessFactor * organicWarpFactor * distanceMask);
             zone1Radius *= widenMultiplier;
         }
 
-        // Additive chaining recalculates bank and valley layout perfectly inline with the organic variations
+        // Additive chaining recalculates layout bounds
         float zone2Width = (config.maxBankHeight - config.minBankHeight) / this.levels.unit * biasedScale;
         float zone2Radius = zone1Radius + zone2Width;
 
-        float zone3Width = config.bankWidth * dynamicWidthMult;
+        // --- APPLY PER-RIVER VARIANCE TO ZONE 3 VALLEY FLOOR ---
+        float zone3Width = config.bankWidth * dynamicWidthMult * this.riverValleyWidthModifier;
         float zone3Radius = zone2Radius + zone3Width;
 
+        // Zone 4 dynamically accommodates the changes automatically via the chain
         float zone4Radius = zone3Radius + (zone3Width * (4 + discrepancyScale));
 
         if (currentLinearDist >= zone4Radius) return;
