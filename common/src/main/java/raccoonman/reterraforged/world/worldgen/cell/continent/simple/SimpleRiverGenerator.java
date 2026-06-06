@@ -6,6 +6,7 @@ import java.util.Random;
 
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.cell.continent.SimpleContinent;
+import raccoonman.reterraforged.world.worldgen.cell.continent.uplift.UpliftContinentGenerator;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.gen.GenWarp;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.*;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
@@ -36,7 +37,7 @@ public class SimpleRiverGenerator extends BaseRiverGenerator<SimpleContinent> {
 			settings.fadeIn = this.main.fade;
 			settings.valleySize = valleyWidth;
 			RiverWarp riverWarp = RiverWarp.create(0.1F, 0.85F, random);
-			RTFRiverCarver carver = new UpliftRiverCarver(river, riverWarp, this.main, settings, this.levels, this.lake);
+			RTFRiverCarver carver = new UpliftRiverCarver(river, riverWarp, this.main, settings, this.levels, this.lake, this.continent instanceof UpliftContinentGenerator);
 			Network.Builder branch = Network.builder(carver);
 			roots.add(branch);
 		}

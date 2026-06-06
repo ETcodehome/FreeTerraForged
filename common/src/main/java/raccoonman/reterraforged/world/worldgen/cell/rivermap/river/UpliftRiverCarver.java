@@ -45,8 +45,9 @@ public class UpliftRiverCarver implements RTFRiverCarver {
 
     // --- PER-RIVER VARIANCE FIELDS ---
     private final float riverValleyWidthModifier;
+    private boolean isUpliftContinent;
 
-    public UpliftRiverCarver(River river, RiverWarp warp, RiverConfig config, RiverCarverSettings settings, Levels levels, LakeConfig lakeConfig) {
+    public UpliftRiverCarver(River river, RiverWarp warp, RiverConfig config, RiverCarverSettings settings, Levels levels, LakeConfig lakeConfig, boolean isUpliftContinent) {
         this.fade = settings.fadeIn;
         this.fadeInv = 1.0F / settings.fadeIn;
 
@@ -87,6 +88,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         this.lakeWarpNoise = Noises.simplex(7439, 55, 3);
 
         this.lakeConfig = lakeConfig;
+        this.isUpliftContinent = isUpliftContinent;
 
         // --- INITIALIZE DETERMINISTIC PER-RIVER VALLEY VARIANCE ---
         int rh1 = Float.floatToIntBits(river.x1);
@@ -104,7 +106,8 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float distSqToCurr = this.getDistance2(currX, currZ, currT);
         float currentLinearDist = (float) Math.sqrt(distSqToCurr);
 
-        float flatnessFactor = NoiseUtil.clamp(ContinentalHydrology.getFlatnessFactor(cell.waterTable), 0.0F, 1.0F);
+        float flatnessInput = isUpliftContinent ? cell.waterTable : currT;
+        float flatnessFactor = NoiseUtil.clamp(ContinentalHydrology.getFlatnessFactor(flatnessInput), 0.0F, 1.0F);
         float scaleFactor = 1.0F + 0.75F * flatnessFactor;
         float sqScaleFactor = scaleFactor * scaleFactor;
 
@@ -146,7 +149,8 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float zone1Radius = (float) Math.sqrt(this.getScaledSize(currT, this.bedWidth) * biasedScale);
 
         // --- ORGANIC LAKE SHORELINE WARPING MODULATION ---
-        int plateauIndex = ContinentalHydrology.getStepId(cell.waterTable);
+        float plateauInput = isUpliftContinent ? cell.waterTable : currT;
+        int plateauIndex = ContinentalHydrology.getStepId(plateauInput);
         float widenMultiplier = 1.0F;
 
         if (this.shouldWidenOnPlateau(plateauIndex, lakeConfig, currT)) {

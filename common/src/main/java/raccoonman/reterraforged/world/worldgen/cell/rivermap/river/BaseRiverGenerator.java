@@ -6,6 +6,7 @@ import java.util.Random;
 
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.cell.continent.Continent;
+import raccoonman.reterraforged.world.worldgen.cell.continent.uplift.UpliftContinentGenerator;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.RiverGenerator;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.Rivermap;
@@ -96,7 +97,7 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
                             settings.fadeIn = config.fade;
                             settings.valleySize = valleyWidth;
                             RiverWarp forkWarp = parent.carver.getWarp().createChild(0.15f, 0.75f, 0.65f, random);
-                            RTFRiverCarver fork = new UpliftRiverCarver(river, forkWarp, forkConfig, settings, this.levels, this.lake);
+                            RTFRiverCarver fork = new UpliftRiverCarver(river, forkWarp, forkConfig, settings, this.levels, this.lake, this.continent instanceof UpliftContinentGenerator);
                             Network.Builder builder = Network.builder(fork);
                             parent.children.add(builder);
                             this.generateForks(builder, River.FORK_SPACING, config, random, warp, rivers, depth + 1);
