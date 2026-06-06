@@ -18,14 +18,9 @@ public class SimpleRiverGenerator extends BaseRiverGenerator<SimpleContinent> {
 
 	@Override
 	public List<Network.Builder> generateRoots(int x, int z, Random random, GenWarp warp) {
-		float start = random.nextFloat();
-		float spacing = 6.2831855F / this.count;
-		float spaceVar = spacing * 0.75F;
-		float spaceBias = -spaceVar / 2.0F;
 		List<Network.Builder> roots = new ArrayList<>(this.count);
 		for (int i = 0; i < this.count; ++i) {
-			float variance = random.nextFloat() * spaceVar + spaceBias;
-			float angle = start + spacing * i + variance;
+			float angle = random.nextFloat() * 6.2831855F;
 			float dx = NoiseUtil.sin(angle);
 			float dz = NoiseUtil.cos(angle);
 			float startMod = 0.05F + random.nextFloat() * 0.45F;
