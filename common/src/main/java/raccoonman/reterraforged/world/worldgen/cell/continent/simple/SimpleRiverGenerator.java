@@ -41,10 +41,9 @@ public class SimpleRiverGenerator extends BaseRiverGenerator<SimpleContinent> {
 			settings.fadeIn = this.main.fade;
 			settings.valleySize = valleyWidth;
 			RiverWarp riverWarp = RiverWarp.create(0.1F, 0.85F, random);
-			RTFRiverCarver carver = new UpliftRiverCarver(river, riverWarp, this.main, settings, this.levels);
+			RTFRiverCarver carver = new UpliftRiverCarver(river, riverWarp, this.main, settings, this.levels, this.lake);
 			Network.Builder branch = Network.builder(carver);
 			roots.add(branch);
-			this.addLake(branch, random, warp);
 		}
 		return roots;
 	}

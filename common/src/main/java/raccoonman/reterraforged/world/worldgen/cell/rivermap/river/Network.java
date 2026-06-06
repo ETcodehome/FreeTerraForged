@@ -4,13 +4,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
-import raccoonman.reterraforged.world.worldgen.cell.rivermap.lake.Lake;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.wetland.Wetland;
 import raccoonman.reterraforged.world.worldgen.noise.module.Line;
 import raccoonman.reterraforged.world.worldgen.util.Boundsf;
 import raccoonman.reterraforged.world.worldgen.util.PosUtil;
 
-public record Network(RTFRiverCarver riverCarver, Lake[] lakes, Wetland[] wetlands, Network[] children, Boundsf bounds) {
+public record Network(RTFRiverCarver riverCarver, Wetland[] wetlands, Network[] children, Boundsf bounds) {
     
     public boolean contains(float x, float z) {
         return this.bounds.contains(x, z);
@@ -29,7 +28,6 @@ public record Network(RTFRiverCarver riverCarver, Lake[] lakes, Wetland[] wetlan
             z += PosUtil.unpackRightf(offset);
             t = Line.distanceOnLine(x, z, river.x1, river.z1, river.x2, river.z2);
         }
-        this.carveLakes(cell, x, z, nx, nz);
         this.carveRiver(cell, px, pz, pt, x, z, t);
         this.carveWetlands(cell, x, z, nx, nz);
         for (Network network : this.children) {
@@ -48,14 +46,6 @@ public record Network(RTFRiverCarver riverCarver, Lake[] lakes, Wetland[] wetlan
     private void carveWetlands(Cell cell, float x, float z, float nx, float nz) {
         for (Wetland wetland : this.wetlands) {
             wetland.apply(cell, x + nx, z + nz, x, z);
-        }
-    }
-    
-    private void carveLakes(Cell cell, float x, float z, float nx, float nz) {
-        float lx = x + nx;
-        float lz = z + nz;
-        for (Lake lake : this.lakes) {
-            lake.apply(cell, lx, lz);
         }
     }
     
@@ -78,7 +68,6 @@ public record Network(RTFRiverCarver riverCarver, Lake[] lakes, Wetland[] wetlan
     
     public static class Builder {
         public RTFRiverCarver carver;
-        public List<Lake> lakes;
         public List<Wetland> wetlands;
         public List<Builder> children;
         private float minX;
@@ -87,7 +76,6 @@ public record Network(RTFRiverCarver riverCarver, Lake[] lakes, Wetland[] wetlan
         private float maxZ;
         
         private Builder(RTFRiverCarver carver) {
-            this.lakes = new ArrayList<>();
             this.wetlands = new ArrayList<>();
             this.children = new ArrayList<>();
             this.carver = carver;
@@ -130,7 +118,7 @@ public record Network(RTFRiverCarver riverCarver, Lake[] lakes, Wetland[] wetlan
         }
         
         private Network build(Boundsf bounds) {
-            return new Network(this.carver, this.lakes.toArray(Lake[]::new), this.wetlands.toArray(Wetland[]::new), this.children.stream().map(child -> child.build(Boundsf.NONE)).toArray(Network[]::new), bounds);
+            return new Network(this.carver, this.wetlands.toArray(Wetland[]::new), this.children.stream().map(child -> child.build(Boundsf.NONE)).toArray(Network[]::new), bounds);
         }
         
         private Boundsf.Builder recordBounds(Boundsf.Builder builder) {
@@ -138,9 +126,6 @@ public record Network(RTFRiverCarver riverCarver, Lake[] lakes, Wetland[] wetlan
             builder.record(this.carver.getRiver().maxX, this.carver.getRiver().maxZ);
             for (Builder child : this.children) {
                 child.recordBounds(builder);
-            }
-            for (Lake lake : this.lakes) {
-                lake.recordBounds(builder);
             }
             for (Wetland wetland : this.wetlands) {
                 wetland.recordBounds(builder);
