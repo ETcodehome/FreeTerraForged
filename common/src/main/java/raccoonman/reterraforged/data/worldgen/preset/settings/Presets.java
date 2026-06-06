@@ -291,7 +291,7 @@ public class Presets {
 								DistanceFunction.EUCLIDEAN,
 								2409,
 								1.0F,
-								0.0F,
+								0.2F,
 								0.6161F,
 								5,
 								0.2516F,
