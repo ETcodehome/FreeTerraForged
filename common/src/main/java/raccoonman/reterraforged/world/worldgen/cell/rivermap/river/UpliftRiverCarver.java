@@ -38,6 +38,9 @@ public class UpliftRiverCarver implements RTFRiverCarver {
     // New Drainage Noises
     private Noise gullyNoise;
     private Noise rivuletNoise;
+
+    // Organic Lake Shoreline Distortion Noise
+    private Noise lakeWarpNoise;
     public LakeConfig lakeConfig;
 
     // --- STEP FUNCTION MIRROR FOR DETERMINISTIC PLATEAU SELECTION ---
@@ -47,7 +50,6 @@ public class UpliftRiverCarver implements RTFRiverCarver {
     private static final int NUM_STEPS = 15;
 
     static {
-        // Replicating the exact pseudo-random generation layout from ContinentalHydrology
         Random rand = new Random(42);
         BOUNDARIES = new Step[NUM_STEPS];
 
@@ -109,6 +111,9 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         this.gullyNoise = Noises.simplex(9876, 65, 2);
         this.rivuletNoise = Noises.simplex(5432, 20, 2);
 
+        // Multi-octave simplex noise for complex, jagged lake boundaries (Scale 55, 3 Octaves)
+        this.lakeWarpNoise = Noises.simplex(7439, 55, 3);
+
         this.lakeConfig = lakeConfig;
     }
 
@@ -158,20 +163,26 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float biasedScale = sqScaleFactor * dynamicWidthMult * sideBias;
         float zone1Radius = (float) Math.sqrt(this.getScaledSize(currT, this.bedWidth) * biasedScale);
 
-        // --- LAKE WIDENING MODULATION ---
+        // --- ORGANIC LAKE SHORELINE WARPING MODULATION ---
         int plateauIndex = this.getPlateauIndex(cell.waterTable);
         float widenMultiplier = 1.0F;
 
         if (this.shouldWidenOnPlateau(plateauIndex, lakeConfig)) {
-            // Smoothly swell up to 5x at the plateau center, gracefully narrowing back to 1x at the edges
-            float lakeScaleMin = lakeConfig.sizeMin / 0.0F;
             float lakeScaleMax = lakeConfig.sizeMax / 100.0F;
-            widenMultiplier = 1.0F + flatnessFactor * lakeScaleMax;
+
+            // Sample organic shoreline distortion noise (-1.0F to 1.0F range)
+            float shorelineWarp = this.lakeWarpNoise.compute(currX, currZ, 7439);
+
+            // Warp Factor: Blends a base scale with the warp noise.
+            // Multiplying the entire warp block by flatnessFactor guarantees that
+            // the shoreline distortions smoothly pinch out to 0.0 at the plateau edges.
+            float organicWarpFactor = lakeScaleMax * (1.0F + shorelineWarp * 0.45F);
+
+            widenMultiplier = 1.0F + (flatnessFactor * organicWarpFactor);
             zone1Radius *= widenMultiplier;
         }
 
-        // Since bank/valley boundaries are additively chained onto zone1Radius,
-        // the entire valley moves out seamlessly to accommodate the wider river bed.
+        // Additive chaining recalculates bank and valley layout perfectly inline with the organic variations
         float zone2Width = (config.maxBankHeight - config.minBankHeight) / this.levels.unit * biasedScale;
         float zone2Radius = zone1Radius + zone2Width;
 
@@ -213,7 +224,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
     }
 
     private float carveZone1Riverbed(Cell cell, float currT, float distSqToCurr, float targetBedFloor, float bedDepthOffset, float oceanHeightOffset, float sqScaleFactor, float targetWaterLevel, float widenMultiplier) {
-        // Expand the profile calculation scale concurrently so the channel bed matches the widened boundaries
+        // Compound the noise-modified widenMultiplier directly into the effectiveScaleFactor
         float effectiveScaleFactor = sqScaleFactor * (widenMultiplier * widenMultiplier);
         float bedInfluence = this.getDistanceAlpha(currT, distSqToCurr, this.bedWidth, effectiveScaleFactor);
         bedInfluence = bedInfluence * bedInfluence * (3.0F - 2.0F * bedInfluence);
@@ -277,14 +288,11 @@ public class UpliftRiverCarver implements RTFRiverCarver {
 
     // --- PLATEAU IDENTIFICATION & DETERMINISTIC SELECTION HELPER METHODS ---
 
-    /**
-     * Identifies which discrete step plateau index a cell's water table falls on.
-     */
     private int getPlateauIndex(float waterTable) {
         double val = Math.max(0.0, Math.min(1.0, waterTable));
         double firstRampStart = BOUNDARIES[0].x - TRANSITION_WIDTH;
         if (val < firstRampStart) {
-            return -1; // Ground floor/Initial plateau
+            return -1;
         }
         for (int i = 0; i < BOUNDARIES.length; i++) {
             double pStart = BOUNDARIES[i].x;
@@ -293,21 +301,16 @@ public class UpliftRiverCarver implements RTFRiverCarver {
                 return i;
             }
         }
-        return -2; // Not on a plateau (actively descending a transition ramp slope)
+        return -2;
     }
 
-    /**
-     * Determines if a river should widen on a given plateau index using a stateless, stable hash check.
-     */
     private boolean shouldWidenOnPlateau(int plateauIndex, LakeConfig config) {
         if (plateauIndex < -1) return false;
 
-        // Derive a stable unique identifier for this specific river instance using its node points
         int h1 = Float.floatToIntBits(this.river.x1);
         int h2 = Float.floatToIntBits(this.river.z1);
         long riverSeed = ((long) h1 << 32) | (h2 & 0xFFFFFFFFL);
 
-        // Mix the river instance with the specific step plateau crossing
         riverSeed ^= plateauIndex * 0x5DEECE66DL;
 
         Random selectionRand = new Random(riverSeed);
