@@ -43,37 +43,6 @@ public class UpliftRiverCarver implements RTFRiverCarver {
     private Noise lakeWarpNoise;
     public LakeConfig lakeConfig;
 
-    // --- STEP FUNCTION MIRROR FOR DETERMINISTIC PLATEAU SELECTION ---
-    private static record Step(double x, double y) {}
-    private static final Step[] BOUNDARIES;
-    private static final double TRANSITION_WIDTH = 0.02;
-    private static final int NUM_STEPS = 15;
-
-    static {
-        Random rand = new Random(42);
-        BOUNDARIES = new Step[NUM_STEPS];
-
-        double[] xDeltas = new double[NUM_STEPS];
-        double[] yDeltas = new double[NUM_STEPS];
-        double totalX = 0;
-        double totalY = 0;
-
-        for (int i = 0; i < NUM_STEPS; i++) {
-            xDeltas[i] = 0.5 + rand.nextDouble();
-            yDeltas[i] = 0.5 + rand.nextDouble();
-            totalX += xDeltas[i];
-            totalY += yDeltas[i];
-        }
-
-        double currX = 0;
-        double currY = 0;
-        for (int i = 0; i < NUM_STEPS; i++) {
-            currX += xDeltas[i];
-            currY += yDeltas[i];
-            BOUNDARIES[i] = new Step(currX / totalX, currY / totalY);
-        }
-    }
-
     public UpliftRiverCarver(River river, RiverWarp warp, RiverConfig config, RiverCarverSettings settings, Levels levels, LakeConfig lakeConfig) {
         this.fade = settings.fadeIn;
         this.fadeInv = 1.0F / settings.fadeIn;
@@ -164,7 +133,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float zone1Radius = (float) Math.sqrt(this.getScaledSize(currT, this.bedWidth) * biasedScale);
 
         // --- ORGANIC LAKE SHORELINE WARPING MODULATION ---
-        int plateauIndex = this.getPlateauIndex(cell.waterTable);
+        int plateauIndex = ContinentalHydrology.getStepId(cell.waterTable);
         float widenMultiplier = 1.0F;
 
         // Pass currT into the padded check
@@ -238,12 +207,10 @@ public class UpliftRiverCarver implements RTFRiverCarver {
     }
 
     private float carveZone1Riverbed(Cell cell, float currT, float distSqToCurr, float bedDepthOffset, float oceanHeightOffset, float sqScaleFactor, float targetWaterLevel, float widenMultiplier) {
-        // Compound the noise-modified widenMultiplier directly into the effectiveScaleFactor
         float effectiveScaleFactor = sqScaleFactor * (widenMultiplier * widenMultiplier);
         float bedInfluence = this.getDistanceAlpha(currT, distSqToCurr, this.bedWidth, effectiveScaleFactor);
         bedInfluence = bedInfluence * bedInfluence * (3.0F - 2.0F * bedInfluence);
 
-        // Scale depth dynamically with width and depth value (20 is max slider range, allows it to about double which is significantly deep.
         float lakeDepthMulti = 0.35F + (lakeConfig.depth / 50.0F);
         float dynamicDepthOffset = bedDepthOffset * (1.0F + (widenMultiplier - 1.0F) * lakeDepthMulti);
 
@@ -305,28 +272,11 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         }
     }
 
-    // --- PLATEAU IDENTIFICATION & DETERMINISTIC SELECTION HELPER METHODS ---
-
-    private int getPlateauIndex(float waterTable) {
-        double val = Math.max(0.0, Math.min(1.0, waterTable));
-        double firstRampStart = BOUNDARIES[0].x - TRANSITION_WIDTH;
-        if (val < firstRampStart) {
-            return -1;
-        }
-        for (int i = 0; i < BOUNDARIES.length; i++) {
-            double pStart = BOUNDARIES[i].x;
-            double pEnd = (i + 1 < BOUNDARIES.length) ? BOUNDARIES[i + 1].x - TRANSITION_WIDTH : 1.0;
-            if (val >= pStart && val <= pEnd) {
-                return i;
-            }
-        }
-        return -2;
-    }
+    // --- PLATEAU SELECTION HELPER METHODS ---
 
     private boolean shouldWidenOnPlateau(int plateauIndex, LakeConfig config, float currT) {
         if (plateauIndex < -1) return false;
 
-        // Pad the bounds slightly so the fade-out logic has room to blend smoothly
         float fadeWindow = 0.04F;
         if (currT < config.distanceMin - fadeWindow) return false;
         if (currT > config.distanceMax + fadeWindow) return false;
@@ -341,16 +291,11 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         return selectionRand.nextFloat() < config.chance;
     }
 
-    /**
-     * Generates a stable, deterministic size scale bounded by lakeConfig's min and max constraints
-     * unique to this river's intersection with a specific plateau step.
-     */
     private float getLakeScaleForPlateau(int plateauIndex, float minScale, float maxScale) {
         int h1 = Float.floatToIntBits(this.river.x1);
         int h2 = Float.floatToIntBits(this.river.z1);
         long riverSeed = ((long) h1 << 32) | (h2 & 0xFFFFFFFFL);
 
-        // Mix the seed with a secondary LCG prime modifier to remain independent of the boolean chance check
         riverSeed ^= plateauIndex * 0x2545F4914L;
 
         Random scaleRand = new Random(riverSeed);
