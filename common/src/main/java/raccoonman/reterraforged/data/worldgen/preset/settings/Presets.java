@@ -283,7 +283,7 @@ public class Presets {
 
 						new Continent(ContinentType.UPLIFT,
 								DistanceFunction.EUCLIDEAN,
-								2409,
+								4000,
 								1.0F,
 								0.0F,
 								0.6161F,
@@ -422,36 +422,36 @@ public class Presets {
 				new RiverSettings(
 
 						-807426906,
-						16,
+						15,
 
 						//main rivers
 						new River(7,
 								1,
 								3,
-								48,
-								14,
-								0.885F),
+								16,
+								10,
+								1.0F),
 
 						//branch rivers
-						new River(3,
+						new River(7,
 								1,
-								2,
-								28,
-								8,
-								0.855F),
+								3,
+								16,
+								10,
+								1.0F),
 
-						new Lake(0.20F,
+						new Lake(0.50F,
 								0.0F,
-								0.50F,
-								11,
-								63,
-								100,
+								1.00F,
+								10,
+								150,
+								500,
 								1,
-								6),
+								10),
 
-						new Wetland(0.20F,
+						new Wetland(0.50F,
 								50,
-								150)
+								500)
 				),
 				new FilterSettings(
 
