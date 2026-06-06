@@ -167,18 +167,32 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         int plateauIndex = this.getPlateauIndex(cell.waterTable);
         float widenMultiplier = 1.0F;
 
-        if (this.shouldWidenOnPlateau(plateauIndex, lakeConfig)) {
+        // Pass currT into the padded check
+        if (this.shouldWidenOnPlateau(plateauIndex, lakeConfig, currT)) {
+            float lakeScaleMin = lakeConfig.sizeMin / 100.0F;
             float lakeScaleMax = lakeConfig.sizeMax / 100.0F;
 
-            // Sample organic shoreline distortion noise (-1.0F to 1.0F range)
+            float baseStepScale = this.getLakeScaleForPlateau(plateauIndex, lakeScaleMin, lakeScaleMax);
             float shorelineWarp = this.lakeWarpNoise.compute(currX, currZ, 7439);
+            float organicWarpFactor = baseStepScale * (1.0F + shorelineWarp * 0.45F);
 
-            // Warp Factor: Blends a base scale with the warp noise.
-            // Multiplying the entire warp block by flatnessFactor guarantees that
-            // the shoreline distortions smoothly pinch out to 0.0 at the plateau edges.
-            float organicWarpFactor = lakeScaleMax * (1.0F + shorelineWarp * 0.45F);
+            // --- SMOOTH DISTANCE FADE FACTOR ---
+            float distanceMask = 1.0F;
+            float fadeWindow = 0.04F; // Must match the window used above
 
-            widenMultiplier = 1.0F + (flatnessFactor * organicWarpFactor);
+            if (currT < lakeConfig.distanceMin) {
+                // Smoothly ramp up from 0.0 (at min - fadeWindow) to 1.0 (at min)
+                distanceMask = NoiseUtil.clamp((currT - (lakeConfig.distanceMin - fadeWindow)) / fadeWindow, 0.0F, 1.0F);
+            } else if (currT > lakeConfig.distanceMax) {
+                // Smoothly ramp down from 1.0 (at max) to 0.0 (at max + fadeWindow)
+                distanceMask = NoiseUtil.clamp(((lakeConfig.distanceMax + fadeWindow) - currT) / fadeWindow, 0.0F, 1.0F);
+            }
+
+            // Apply a cubic smoothstep function to eliminate harsh linear angularities
+            distanceMask = distanceMask * distanceMask * (3.0F - 2.0F * distanceMask);
+
+            // Compound the distance mask directly into the warp factor
+            widenMultiplier = 1.0F + (flatnessFactor * organicWarpFactor * distanceMask);
             zone1Radius *= widenMultiplier;
         }
 
@@ -229,9 +243,8 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float bedInfluence = this.getDistanceAlpha(currT, distSqToCurr, this.bedWidth, effectiveScaleFactor);
         bedInfluence = bedInfluence * bedInfluence * (3.0F - 2.0F * bedInfluence);
 
-        // Scale depth dynamically with width
-        // Higher multi coefficient makes lakes deeper
-        float lakeDepthMulti =  0.35F;
+        // Scale depth dynamically with width and depth value (20 is max slider range, allows it to about double which is significantly deep.
+        float lakeDepthMulti = 0.35F + (lakeConfig.depth / 50.0F);
         float dynamicDepthOffset = bedDepthOffset * (1.0F + (widenMultiplier - 1.0F) * lakeDepthMulti);
 
         float bedHeight = ContinentalHydrology.getWeightedWaterHeight(cell.waterTable) - (dynamicDepthOffset * bedInfluence) + oceanHeightOffset;
@@ -310,8 +323,13 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         return -2;
     }
 
-    private boolean shouldWidenOnPlateau(int plateauIndex, LakeConfig config) {
+    private boolean shouldWidenOnPlateau(int plateauIndex, LakeConfig config, float currT) {
         if (plateauIndex < -1) return false;
+
+        // Pad the bounds slightly so the fade-out logic has room to blend smoothly
+        float fadeWindow = 0.04F;
+        if (currT < config.distanceMin - fadeWindow) return false;
+        if (currT > config.distanceMax + fadeWindow) return false;
 
         int h1 = Float.floatToIntBits(this.river.x1);
         int h2 = Float.floatToIntBits(this.river.z1);
@@ -321,6 +339,22 @@ public class UpliftRiverCarver implements RTFRiverCarver {
 
         Random selectionRand = new Random(riverSeed);
         return selectionRand.nextFloat() < config.chance;
+    }
+
+    /**
+     * Generates a stable, deterministic size scale bounded by lakeConfig's min and max constraints
+     * unique to this river's intersection with a specific plateau step.
+     */
+    private float getLakeScaleForPlateau(int plateauIndex, float minScale, float maxScale) {
+        int h1 = Float.floatToIntBits(this.river.x1);
+        int h2 = Float.floatToIntBits(this.river.z1);
+        long riverSeed = ((long) h1 << 32) | (h2 & 0xFFFFFFFFL);
+
+        // Mix the seed with a secondary LCG prime modifier to remain independent of the boolean chance check
+        riverSeed ^= plateauIndex * 0x2545F4914L;
+
+        Random scaleRand = new Random(riverSeed);
+        return minScale + scaleRand.nextFloat() * (maxScale - minScale);
     }
 
     @Override
