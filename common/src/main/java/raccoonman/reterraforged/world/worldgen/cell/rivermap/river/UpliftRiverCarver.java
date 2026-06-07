@@ -1,8 +1,10 @@
 package raccoonman.reterraforged.world.worldgen.cell.rivermap.river;
 
+import java.util.Random;
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
+import raccoonman.reterraforged.world.worldgen.cell.rivermap.lake.LakeConfig;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainType;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 import raccoonman.reterraforged.world.worldgen.noise.function.CurveFunction;
@@ -37,7 +39,15 @@ public class UpliftRiverCarver implements RTFRiverCarver {
     private Noise gullyNoise;
     private Noise rivuletNoise;
 
-    public UpliftRiverCarver(River river, RiverWarp warp, RiverConfig config, RiverCarverSettings settings, Levels levels) {
+    // Organic Lake Shoreline Distortion Noise
+    private Noise lakeWarpNoise;
+    public LakeConfig lakeConfig;
+
+    // --- PER-RIVER VARIANCE FIELDS ---
+    private final float riverValleyWidthModifier;
+    private boolean isUpliftContinent;
+
+    public UpliftRiverCarver(River river, RiverWarp warp, RiverConfig config, RiverCarverSettings settings, Levels levels, LakeConfig lakeConfig, boolean isUpliftContinent) {
         this.fade = settings.fadeIn;
         this.fadeInv = 1.0F / settings.fadeIn;
 
@@ -70,9 +80,25 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         this.terraceNoise = Noises.simplex(5510, 200, 1);
         this.asymmetryNoise = Noises.simplex(1193, 250, 1);
 
-        // Drainage initialization (smaller scale for tighter, sharper cuts)
+        // Drainage initialization
         this.gullyNoise = Noises.simplex(9876, 65, 2);
         this.rivuletNoise = Noises.simplex(5432, 20, 2);
+
+        // Multi-octave simplex noise for complex, jagged lake boundaries (Scale 55, 3 Octaves)
+        this.lakeWarpNoise = Noises.simplex(7439, 55, 3);
+
+        this.lakeConfig = lakeConfig;
+        this.isUpliftContinent = isUpliftContinent;
+
+        // --- INITIALIZE DETERMINISTIC PER-RIVER VALLEY VARIANCE ---
+        int rh1 = Float.floatToIntBits(river.x1);
+        int rh2 = Float.floatToIntBits(river.z1);
+        long uniqueRiverSeed = ((long) rh1 << 32) | (rh2 & 0xFFFFFFFFL);
+        uniqueRiverSeed ^= 0x4B3C2B1A5L; // Unique salt modifier for valley layout variance
+
+        Random riverVarRand = new Random(uniqueRiverSeed);
+        // Generates a scaling factor between 0.70 and 1.30 (+/- 30% total width deviation per river system)
+        this.riverValleyWidthModifier = 0.70F + riverVarRand.nextFloat() * 0.60F;
     }
 
     @Override
@@ -80,7 +106,8 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float distSqToCurr = this.getDistance2(currX, currZ, currT);
         float currentLinearDist = (float) Math.sqrt(distSqToCurr);
 
-        float flatnessFactor = NoiseUtil.clamp(ContinentalHydrology.getFlatnessFactor(cell.waterTable), 0.0F, 1.0F);
+        float flatnessInput = isUpliftContinent ? cell.waterTable : currT;
+        float flatnessFactor = NoiseUtil.clamp(ContinentalHydrology.getFlatnessFactor(flatnessInput), 0.0F, 1.0F);
         float scaleFactor = 1.0F + 0.75F * flatnessFactor;
         float sqScaleFactor = scaleFactor * scaleFactor;
 
@@ -91,19 +118,16 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float asymmetry = this.asymmetryNoise.compute(currX, currZ, 1193);
 
         // --- DRAINAGE CALCULATION (Ridged Noise) ---
-        // 1.0 - abs(noise) creates sharp V-shapes instead of soft hills
         float gullyRaw = this.gullyNoise.compute(currX, currZ, 9876);
         float gullyShape = 1.0F - Math.abs(gullyRaw);
-        gullyShape *= gullyShape; // Square it to sharpen the ravine
+        gullyShape *= gullyShape;
 
         float rivuletRaw = this.rivuletNoise.compute(currX, currZ, 5432);
         float rivuletShape = 1.0F - Math.abs(rivuletRaw);
-        rivuletShape = rivuletShape * rivuletShape * rivuletShape; // Cube it for very sharp micro-cuts
+        rivuletShape = rivuletShape * rivuletShape * rivuletShape;
 
-        // Combine broad gullies with fine rivulets
         float drainageMask = (gullyShape * 0.7F) + (rivuletShape * 0.3F);
 
-        // Apply dynamic multipliers
         float dynamicWidthMult = 1.0F + (widthVar * 0.35F);
         float dynamicDepthMult = 1.0F + (depthVar * 0.25F);
         float sideBias = 1.0F + (asymmetry * 0.4F);
@@ -118,20 +142,51 @@ public class UpliftRiverCarver implements RTFRiverCarver {
 
         float bankHeightOffset = (config.maxBankHeight - config.minBankHeight);
         float targetValleyFloor = targetWaterLevel + bankHeightOffset;
-        float discrepencyScale = 1.0F + (levels.scale(cell.height - targetWaterLevel)) / 100.0F;
+        float discrepancyScale = 1.0F + (levels.scale(cell.height - targetWaterLevel)) / 100.0F;
 
-        // --- 2. RADII BOUNDARIES ---
+        // --- RADII BOUNDARIES ---
         float biasedScale = sqScaleFactor * dynamicWidthMult * sideBias;
-
         float zone1Radius = (float) Math.sqrt(this.getScaledSize(currT, this.bedWidth) * biasedScale);
 
+        // --- ORGANIC LAKE SHORELINE WARPING MODULATION ---
+        float plateauInput = isUpliftContinent ? cell.waterTable : currT;
+        int plateauIndex = ContinentalHydrology.getStepId(plateauInput);
+        float widenMultiplier = 1.0F;
+
+        if (this.shouldWidenOnPlateau(plateauIndex, lakeConfig, currT)) {
+            float lakeScaleMin = lakeConfig.sizeMin / 100.0F;
+            float lakeScaleMax = lakeConfig.sizeMax / 100.0F;
+
+            float baseStepScale = this.getLakeScaleForPlateau(plateauIndex, lakeScaleMin, lakeScaleMax);
+            float shorelineWarp = this.lakeWarpNoise.compute(currX, currZ, 7439);
+            float organicWarpFactor = baseStepScale * (1.0F + shorelineWarp * 0.45F);
+
+            // --- SMOOTH DISTANCE FADE FACTOR ---
+            float distanceMask = 1.0F;
+            float fadeWindow = 0.04F;
+
+            if (currT < lakeConfig.distanceMin) {
+                distanceMask = NoiseUtil.clamp((currT - (lakeConfig.distanceMin - fadeWindow)) / fadeWindow, 0.0F, 1.0F);
+            } else if (currT > lakeConfig.distanceMax) {
+                distanceMask = NoiseUtil.clamp(((lakeConfig.distanceMax + fadeWindow) - currT) / fadeWindow, 0.0F, 1.0F);
+            }
+
+            distanceMask = distanceMask * distanceMask * (3.0F - 2.0F * distanceMask);
+
+            widenMultiplier = 1.0F + (flatnessFactor * organicWarpFactor * distanceMask);
+            zone1Radius *= widenMultiplier;
+        }
+
+        // Additive chaining recalculates layout bounds
         float zone2Width = (config.maxBankHeight - config.minBankHeight) / this.levels.unit * biasedScale;
         float zone2Radius = zone1Radius + zone2Width;
 
-        float zone3Width = config.bankWidth * dynamicWidthMult;
+        // --- APPLY PER-RIVER VARIANCE TO ZONE 3 VALLEY FLOOR ---
+        float zone3Width = config.bankWidth * dynamicWidthMult * this.riverValleyWidthModifier;
         float zone3Radius = zone2Radius + zone3Width;
 
-        float zone4Radius = zone3Radius + (zone3Width * (4 + discrepencyScale));
+        // Zone 4 dynamically accommodates the changes automatically via the chain
+        float zone4Radius = zone3Radius + (zone3Width * (4 + discrepancyScale));
 
         if (currentLinearDist >= zone4Radius) return;
 
@@ -139,7 +194,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float finalHeight = cell.height;
 
         if (currentLinearDist < zone1Radius) {
-            finalHeight = carveZone1Riverbed(cell, currT, distSqToCurr, targetBedFloor, bedDepthOffset, oceanHeightOffset, sqScaleFactor, targetWaterLevel);
+            finalHeight = carveZone1Riverbed(cell, currT, distSqToCurr, bedDepthOffset, oceanHeightOffset, sqScaleFactor, targetWaterLevel, widenMultiplier);
             cell.riverZone = RiverCarverSettings.RiverZone.Riverbed;
         } else if (currentLinearDist < zone2Radius) {
             finalHeight = carveZone2BankStep(currentLinearDist, zone1Radius, zone2Radius, targetWaterLevel, targetValleyFloor, terraceMask, drainageMask);
@@ -165,10 +220,15 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         updateValleyMask(prevX, prevZ, prevT, currX, currZ, currT, distSqToCurr, sqScaleFactor, targetBedFloor, cell);
     }
 
-    private float carveZone1Riverbed(Cell cell, float currT, float distSqToCurr, float targetBedFloor, float bedDepthOffset, float oceanHeightOffset, float sqScaleFactor, float targetWaterLevel) {
-        float bedInfluence = this.getDistanceAlpha(currT, distSqToCurr, this.bedWidth, sqScaleFactor);
+    private float carveZone1Riverbed(Cell cell, float currT, float distSqToCurr, float bedDepthOffset, float oceanHeightOffset, float sqScaleFactor, float targetWaterLevel, float widenMultiplier) {
+        float effectiveScaleFactor = sqScaleFactor * (widenMultiplier * widenMultiplier);
+        float bedInfluence = this.getDistanceAlpha(currT, distSqToCurr, this.bedWidth, effectiveScaleFactor);
         bedInfluence = bedInfluence * bedInfluence * (3.0F - 2.0F * bedInfluence);
-        float bedHeight = ContinentalHydrology.getWeightedWaterHeight(cell.waterTable) - (bedDepthOffset * bedInfluence) + oceanHeightOffset;
+
+        float lakeDepthMulti = 0.35F + (lakeConfig.depth / 50.0F);
+        float dynamicDepthOffset = bedDepthOffset * (1.0F + (widenMultiplier - 1.0F) * lakeDepthMulti);
+
+        float bedHeight = ContinentalHydrology.getWeightedWaterHeight(cell.waterTable) - (dynamicDepthOffset * bedInfluence) + oceanHeightOffset;
 
         cell.moisture = 1.0F;
         this.tag(cell, targetWaterLevel);
@@ -179,11 +239,8 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float progress = (distance - zone1Radius) / (zone2Radius - zone1Radius);
         progress = NoiseUtil.clamp(progress, 0.0F, 1.0F);
 
-        // Apply terracing, but let drainage smooth out the terraces where water flows
         progress = applyTerracing(progress, terraceMask, drainageMask, 3.0F);
 
-        // Dig the gullies into the bank (lowers the progress, moving it closer to water level)
-        // Multiply by an arc so gullies are deepest in the middle of the bank, not the very edges
         float arc = progress * (1.0F - progress) * 4.0F;
         progress = Math.max(0.0F, progress - (drainageMask * 0.3F * arc));
 
@@ -192,7 +249,6 @@ public class UpliftRiverCarver implements RTFRiverCarver {
     }
 
     private float carveZone3ValleyFloor(float targetValleyFloor, float terraceMask, float drainageMask) {
-        // Valley floor gets slight bumps from terraces, but gullies cut subtle trenches
         float bumpiness = (terraceMask * 0.4F) - (drainageMask * 0.6F);
         return targetValleyFloor + (bumpiness * this.levels.unit);
     }
@@ -201,10 +257,8 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float progress = (distance - zone3Radius) / (zone4Radius - zone3Radius);
         progress = NoiseUtil.clamp(progress, 0.0F, 1.0F);
 
-        // Apply terracing (destroyed by drainage)
         float modifiedProgress = applyTerracing(progress, terraceMask, drainageMask, 5.0F);
 
-        // Dig the gullies into the surrounding terrain slope
         float slopeMask = progress * (1.0F - progress) * 4.0F;
         modifiedProgress = Math.max(0.0F, modifiedProgress - (drainageMask * 0.25F * slopeMask));
 
@@ -212,14 +266,8 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         return NoiseUtil.lerp(targetValleyFloor, originalTerrainHeight, smoothProgress);
     }
 
-    /**
-     * Helper to create stepped strata in the terrain.
-     * Now accepts drainageMask to destroy terraces where gullies flow.
-     */
     private float applyTerracing(float progress, float terraceMask, float drainageMask, float steps) {
-        // Water flow destroys strata. Subtract drainage from terrace mask.
         float intactTerrace = Math.max(0.0F, terraceMask - (drainageMask * 1.5F));
-
         float terraceStrength = NoiseUtil.clamp(intactTerrace * 1.5F, 0.0F, 1.0F);
 
         if (terraceStrength > 0.0F) {
@@ -236,6 +284,36 @@ public class UpliftRiverCarver implements RTFRiverCarver {
             valleyInfluence = this.valleyCurve.apply(valleyInfluence);
             cell.riverMask = Math.min(cell.riverMask, 1.0F - valleyInfluence);
         }
+    }
+
+    // --- PLATEAU SELECTION HELPER METHODS ---
+
+    private boolean shouldWidenOnPlateau(int plateauIndex, LakeConfig config, float currT) {
+        if (plateauIndex < -1) return false;
+
+        float fadeWindow = 0.04F;
+        if (currT < config.distanceMin - fadeWindow) return false;
+        if (currT > config.distanceMax + fadeWindow) return false;
+
+        int h1 = Float.floatToIntBits(this.river.x1);
+        int h2 = Float.floatToIntBits(this.river.z1);
+        long riverSeed = ((long) h1 << 32) | (h2 & 0xFFFFFFFFL);
+
+        riverSeed ^= plateauIndex * 0x5DEECE66DL;
+
+        Random selectionRand = new Random(riverSeed);
+        return selectionRand.nextFloat() < config.chance;
+    }
+
+    private float getLakeScaleForPlateau(int plateauIndex, float minScale, float maxScale) {
+        int h1 = Float.floatToIntBits(this.river.x1);
+        int h2 = Float.floatToIntBits(this.river.z1);
+        long riverSeed = ((long) h1 << 32) | (h2 & 0xFFFFFFFFL);
+
+        riverSeed ^= plateauIndex * 0x2545F4914L;
+
+        Random scaleRand = new Random(riverSeed);
+        return minScale + scaleRand.nextFloat() * (maxScale - minScale);
     }
 
     @Override

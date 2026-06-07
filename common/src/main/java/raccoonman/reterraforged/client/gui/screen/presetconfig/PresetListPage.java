@@ -87,7 +87,7 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, PresetEntry, Abstr
 			this.input.setTextColor(isValid ? white : red);
 		}, Component.translatable(RTFTranslationKeys.GUI_INPUT_PROMPT).withStyle(ChatFormatting.DARK_GRAY));
 		this.createPreset = PresetWidgets.createThrowingButton(RTFTranslationKeys.GUI_BUTTON_CREATE, () -> {
-			new PresetEntry(Component.literal(this.input.getValue()), Presets.makeLegacyDefault(), false, this).save();
+			new PresetEntry(Component.literal(this.input.getValue()), Presets.makeRTFDefault(), false, this).save();
 			this.rebuildPresets();
 			this.input.setValue(StringUtil.EMPTY_STRING);
 		});
@@ -186,16 +186,20 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, PresetEntry, Abstr
 		this.selectPreset(null);
 		
 		List<PresetEntry> entries = new ArrayList<>();
+
+		// Populate list with legacy patterns
+		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_DEFAULT_LEGACY_PRESET_NAME).withStyle(ChatFormatting.DARK_GRAY), Presets.makeLegacyDefault(), true, this));
+		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_BEAUTIFUL_PRESET_NAME).withStyle(ChatFormatting.DARK_GRAY), Presets.makeLegacyBeautiful(), true, this));
+		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_HUGE_BIOMES_PRESET_NAME).withStyle(ChatFormatting.DARK_GRAY), Presets.makeLegacyHugeBiomes(), true, this));
+		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_LITE_PRESET_NAME).withStyle(ChatFormatting.DARK_GRAY), Presets.makeLegacyLite(), true, this));
+		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_VANILLAISH_PRESET_NAME).withStyle(ChatFormatting.DARK_GRAY), Presets.makeLegacyVanillaish(), true, this));
+
+		// Modern patterns
+		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_RIVERS_PRESET_NAME).withStyle(ChatFormatting.GREEN), Presets.makeRivers(), true, this));
+
 		entries.addAll(this.listPresets(PRESET_PATH));
 		entries.addAll(this.listPresets(LEGACY_PRESET_PATH));
 
-		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_DEFAULT_PRESET_NAME).withStyle(ChatFormatting.GRAY), Presets.makeRTFDefault(), true, this));
-		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_DEFAULT_LEGACY_PRESET_NAME).withStyle(ChatFormatting.GRAY), Presets.makeLegacyDefault(), true, this));
-		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_BEAUTIFUL_PRESET_NAME).withStyle(ChatFormatting.GRAY), Presets.makeLegacyBeautiful(), true, this));
-		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_HUGE_BIOMES_PRESET_NAME).withStyle(ChatFormatting.GRAY), Presets.makeLegacyHugeBiomes(), true, this));
-		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_LITE_PRESET_NAME).withStyle(ChatFormatting.GRAY), Presets.makeLegacyLite(), true, this));
-		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_VANILLAISH_PRESET_NAME).withStyle(ChatFormatting.GRAY), Presets.makeLegacyVanillaish(), true, this));
-		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_RIVERS_PRESET_NAME).withStyle(ChatFormatting.GRAY), Presets.makeRivers(), true, this));
 		this.left.replaceEntries(entries.stream().map(WidgetList.Entry::new).toList());
 	}
 	
@@ -225,7 +229,7 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, PresetEntry, Abstr
 						continue;
 					}
 					Preset preset = result.result().get();
-					presets.add(new PresetEntry(Component.literal(base), preset, false, this));
+					presets.add(new PresetEntry(Component.literal(base).withStyle(ChatFormatting.GOLD), preset, false, this));
 				}
 			}
 		}

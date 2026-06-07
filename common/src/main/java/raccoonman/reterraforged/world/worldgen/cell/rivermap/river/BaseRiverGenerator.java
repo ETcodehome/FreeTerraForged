@@ -6,11 +6,11 @@ import java.util.Random;
 
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.cell.continent.Continent;
+import raccoonman.reterraforged.world.worldgen.cell.continent.uplift.UpliftContinentGenerator;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.RiverGenerator;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.Rivermap;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.gen.GenWarp;
-import raccoonman.reterraforged.world.worldgen.cell.rivermap.lake.Lake;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.lake.LakeConfig;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.wetland.Wetland;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.wetland.WetlandConfig;
@@ -97,34 +97,13 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
                             settings.fadeIn = config.fade;
                             settings.valleySize = valleyWidth;
                             RiverWarp forkWarp = parent.carver.getWarp().createChild(0.15f, 0.75f, 0.65f, random);
-                            RTFRiverCarver fork = new UpliftRiverCarver(river, forkWarp, forkConfig, settings, this.levels);
+                            RTFRiverCarver fork = new UpliftRiverCarver(river, forkWarp, forkConfig, settings, this.levels, this.lake, this.continent instanceof UpliftContinentGenerator);
                             Network.Builder builder = Network.builder(fork);
                             parent.children.add(builder);
                             this.generateForks(builder, River.FORK_SPACING, config, random, warp, rivers, depth + 1);
                         }
                     }
                 }
-            }
-        }
-        this.addLake(parent, random, warp);
-    }
-    
-    public void generateAdditionalLakes(int x, int z, Random random, List<Network.Builder> roots, List<UpliftRiverCarver> rivers, List<Lake> lakes) {
-        float size = 150.0f;
-        Variance sizeVariance = Variance.of(1.0F, 0.25F);
-        Variance distanceVariance = Variance.of(0.6000000238418579F, 0.30000001192092896F);
-        for (int i = 1; i < roots.size(); ++i) {
-            Network.Builder a = roots.get(i - 1);
-            float angle = 0.0F;
-            float dx = NoiseUtil.sin(angle);
-            float dz = NoiseUtil.cos(angle);
-            float distance = distanceVariance.next(random);
-            float lx = x + dx * a.carver.getRiver().length * distance;
-            float lz = z + dz * a.carver.getRiver().length * distance;
-            float variance = sizeVariance.next(random);
-            Vec2f center = new Vec2f(lx, lz);
-            if (!this.lakeOverlaps(center, size, rivers)) {
-                lakes.add(new Lake(center, size, variance, this.lake));
             }
         }
     }
@@ -150,18 +129,6 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
         }
     }
     
-    public void addLake(Network.Builder branch, Random random, GenWarp warp) {
-        if (random.nextFloat() <= this.lake.chance) {
-            float lakeSize = this.lake.sizeMin + random.nextFloat() * this.lake.sizeRange;
-            float cx = branch.carver.getRiver().x1;
-            float cz = branch.carver.getRiver().z1;
-            if (this.lakeOverlapsOther(cx, cz, lakeSize, branch.lakes)) {
-                return;
-            }
-            branch.lakes.add(new Lake(new Vec2f(cx, cz), lakeSize, 1.0f, this.lake));
-        }
-    }
-    
     public boolean riverOverlaps(River river, Network.Builder parent, List<Network.Builder> rivers) {
         for (Network.Builder other : rivers) {
             if (other.overlaps(river, parent, 250.0f)) {
@@ -169,46 +136,6 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
             }
         }
         return false;
-    }
-    
-    public boolean lakeOverlaps(Vec2f lake, float size, List<UpliftRiverCarver> rivers) {
-        for (UpliftRiverCarver other : rivers) {
-            if (!other.main && other.river.overlaps(lake, size)) {
-                return true;
-            }
-        }
-        return false;
-    }
-    
-    public boolean lakeOverlapsOther(float x, float z, float size, List<Lake> lakes) {
-        float dist2 = size * size;
-        for (Lake other : lakes) {
-            if (other.overlaps(x, z, dist2)) {
-                return true;
-            }
-        }
-        return false;
-    }
-    
-    public static RTFRiverCarver create(float x1, float z1, float x2, float z2, RiverConfig config, Levels levels, Random random) {
-        River river = new River(x1, z1, x2, z2);
-        RiverWarp warp = RiverWarp.create(0.35f, random);
-        float valleyWidth = 275.0f * River.MAIN_VALLEY.next(random);
-        RiverCarverSettings settings = new RiverCarverSettings(random);
-        settings.connecting = false;
-        settings.fadeIn = config.fade;
-        settings.valleySize = valleyWidth;
-        return new UpliftRiverCarver(river, warp, config, settings, levels);
-    }
-    
-    public static RTFRiverCarver createFork(float x1, float z1, float x2, float z2, float valleyWidth, RiverConfig config, Levels levels, Random random) {
-        River river = new River(x1, z1, x2, z2);
-        RiverWarp warp = RiverWarp.create(0.4f, random);
-        RiverCarverSettings settings = new RiverCarverSettings(random);
-        settings.connecting = true;
-        settings.fadeIn = config.fade;
-        settings.valleySize = valleyWidth;
-        return new UpliftRiverCarver(river, warp, config, settings, levels);
     }
 
 }
