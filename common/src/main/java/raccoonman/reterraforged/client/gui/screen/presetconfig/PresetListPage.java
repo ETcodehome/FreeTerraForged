@@ -87,7 +87,7 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, PresetEntry, Abstr
 			this.input.setTextColor(isValid ? white : red);
 		}, Component.translatable(RTFTranslationKeys.GUI_INPUT_PROMPT).withStyle(ChatFormatting.DARK_GRAY));
 		this.createPreset = PresetWidgets.createThrowingButton(RTFTranslationKeys.GUI_BUTTON_CREATE, () -> {
-			new PresetEntry(Component.literal(this.input.getValue()), Presets.makeLegacyDefault(), false, this).save();
+			new PresetEntry(Component.literal(this.input.getValue()), Presets.makeRTFDefault(), false, this).save();
 			this.rebuildPresets();
 			this.input.setValue(StringUtil.EMPTY_STRING);
 		});

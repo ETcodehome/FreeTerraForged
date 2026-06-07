@@ -20,7 +20,7 @@ public class Presets {
 	public static Preset makeRTFDefault() {
 		return new Preset(
 			new WorldSettings(
-				new Continent(ContinentType.MULTI_IMPROVED, DistanceFunction.EUCLIDEAN, 3000, 0.7F, 0.25F, 0.25F, 5, 0.26F, 4.33F),
+				new Continent(ContinentType.UPLIFT, DistanceFunction.EUCLIDEAN, 3000, 0.7F, 0.25F, 0.25F, 5, 0.26F, 4.33F),
 				new ControlPoints(0.0F, 0.0F, 0.1F, 0.25F, 0.327F, 0.448F, 0.502F),
 				new Properties(SpawnType.CONTINENT_CENTER, 384, 64, 63, -54,0,0)
 			), 
@@ -33,9 +33,9 @@ public class Presets {
 				new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.SIMPLEX, 24, 2, 0.5F, 2.65F, 14)
 			), 
 			new TerrainSettings(
-				new General(0, 1200, 0.96F, 1.0F, true, false),
-				new Terrain(1.0F, 1.0F, 1.0F, 1.0F), 
-				new Terrain(2.0F, 1.0F, 1.0F, 1.0F), 
+				new General(0, 1200, 1.0F, 1.0F, true, false),
+				new Terrain(1.0F, 2.0F, 1.0F, 1.0F),
+				new Terrain(2.0F, 2.0F, 1.0F, 1.0F),
 				new Terrain(2.0F, 1.0F, 1.0F, 1.0F),
 				new Terrain(1.5F, 1.0F, 1.0F, 1.0F),
 				new Terrain(1.5F, 1.0F, 1.0F, 1.0F), 
