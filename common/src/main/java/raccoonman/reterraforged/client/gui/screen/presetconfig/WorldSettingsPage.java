@@ -65,7 +65,8 @@ public class WorldSettingsPage extends PresetEditorPage {
 			ImmutableList.of(
 				ContinentType.MULTI,
 				ContinentType.SINGLE,
-				ContinentType.MULTI_IMPROVED
+				ContinentType.MULTI_IMPROVED,
+				ContinentType.UPLIFT
 			),
 			continent.continentType, RTFTranslationKeys.GUI_BUTTON_CONTINENT_TYPE, 
 			(button, value) -> {
@@ -225,12 +226,26 @@ public class WorldSettingsPage extends PresetEditorPage {
 	private void applyContinentType(ContinentType type) {
 		this.continentShape.active = type == ContinentType.MULTI || type == ContinentType.SINGLE;
 		
-		boolean isMultiImproved = type == ContinentType.MULTI_IMPROVED;
+		boolean isMultiImproved = type == ContinentType.MULTI_IMPROVED || type == ContinentType.UPLIFT;
 		this.continentSkipping.active = isMultiImproved;
 		this.continentSizeVariance.active = isMultiImproved;
 		this.continentNoiseOctaves.active = isMultiImproved;
 		this.continentNoiseGain.active = isMultiImproved;
 		this.continentNoiseLacunarity.active = isMultiImproved;
+
+		// ensures that terrains never drop below continental uplift resulting in floating rivers
+		boolean isUpliftContinent = type == ContinentType.UPLIFT;
+		if(isUpliftContinent){
+			this.preset.getPreset().terrain().general.globalVerticalScale = Math.max(this.preset.getPreset().terrain().general.globalVerticalScale, 1.0F);
+			this.preset.getPreset().terrain().steppe.baseScale = Math.max(this.preset.getPreset().terrain().steppe.baseScale, 2.0F);
+			this.preset.getPreset().terrain().plains.baseScale = Math.max(this.preset.getPreset().terrain().plains.baseScale, 2.0F);
+			this.preset.getPreset().terrain().hills.baseScale = Math.max(this.preset.getPreset().terrain().hills.baseScale, 1.0F);
+			this.preset.getPreset().terrain().dales.baseScale = Math.max(this.preset.getPreset().terrain().dales.baseScale, 1.0F);
+			this.preset.getPreset().terrain().badlands.baseScale = Math.max(this.preset.getPreset().terrain().badlands.baseScale, 1.0F);
+			this.preset.getPreset().terrain().mountains.baseScale = Math.max(this.preset.getPreset().terrain().mountains.baseScale, 1.0F);
+			this.preset.getPreset().terrain().plateau.baseScale = Math.max(this.preset.getPreset().terrain().plateau.baseScale, 1.0F);
+			this.preset.getPreset().terrain().volcano.baseScale = Math.max(this.preset.getPreset().terrain().volcano.baseScale, 1.0F);
+		}
 	}
 	
 	private static int getNearestMultiple(Slider slider, float value, int multiple)  {

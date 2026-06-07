@@ -6,12 +6,9 @@ import java.util.Random;
 
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.cell.continent.SimpleContinent;
+import raccoonman.reterraforged.world.worldgen.cell.continent.uplift.UpliftContinentGenerator;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.gen.GenWarp;
-import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.BaseRiverGenerator;
-import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.Network;
-import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.River;
-import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.RiverCarver;
-import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.RiverWarp;
+import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.*;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 
 public class SimpleRiverGenerator extends BaseRiverGenerator<SimpleContinent> {
@@ -22,14 +19,9 @@ public class SimpleRiverGenerator extends BaseRiverGenerator<SimpleContinent> {
 
 	@Override
 	public List<Network.Builder> generateRoots(int x, int z, Random random, GenWarp warp) {
-		float start = random.nextFloat();
-		float spacing = 6.2831855F / this.count;
-		float spaceVar = spacing * 0.75F;
-		float spaceBias = -spaceVar / 2.0F;
 		List<Network.Builder> roots = new ArrayList<>(this.count);
 		for (int i = 0; i < this.count; ++i) {
-			float variance = random.nextFloat() * spaceVar + spaceBias;
-			float angle = start + spacing * i + variance;
+			float angle = random.nextFloat() * 6.2831855F;
 			float dx = NoiseUtil.sin(angle);
 			float dz = NoiseUtil.cos(angle);
 			float startMod = 0.05F + random.nextFloat() * 0.45F;
@@ -41,14 +33,13 @@ public class SimpleRiverGenerator extends BaseRiverGenerator<SimpleContinent> {
 			float z3 = z + dz * length;
 			float valleyWidth = 275.0F * River.MAIN_VALLEY.next(random);
 			River river = new River((float) (int) x2, (float) (int) z2, (float) (int) x3, (float) (int) z3);
-			RiverCarver.Settings settings = BaseRiverGenerator.creatSettings(random);
+			RiverCarverSettings settings = new RiverCarverSettings(random);
 			settings.fadeIn = this.main.fade;
 			settings.valleySize = valleyWidth;
 			RiverWarp riverWarp = RiverWarp.create(0.1F, 0.85F, random);
-			RiverCarver carver = new RiverCarver(river, riverWarp, this.main, settings, this.levels);
+			RTFRiverCarver carver = new UpliftRiverCarver(river, riverWarp, this.main, settings, this.levels, this.lake, this.continent instanceof UpliftContinentGenerator);
 			Network.Builder branch = Network.builder(carver);
 			roots.add(branch);
-			this.addLake(branch, random, warp);
 		}
 		return roots;
 	}

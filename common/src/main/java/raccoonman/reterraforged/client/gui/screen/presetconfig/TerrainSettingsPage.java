@@ -9,6 +9,7 @@ import raccoonman.reterraforged.client.gui.screen.page.LinkedPageScreen.Page;
 import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
 import raccoonman.reterraforged.client.gui.widget.Slider;
 import raccoonman.reterraforged.client.gui.widget.ValueButton;
+import raccoonman.reterraforged.data.worldgen.preset.settings.ContinentType;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.data.worldgen.preset.settings.TerrainSettings;
 import raccoonman.reterraforged.data.worldgen.preset.settings.TerrainSettings.General;
@@ -95,6 +96,8 @@ public class TerrainSettingsPage extends PresetEditorPage {
 			return value;
 		});
 		this.globalVerticalScale = PresetWidgets.createFloatSlider(general.globalVerticalScale, 0.01F, 1.0F, RTFTranslationKeys.GUI_SLIDER_GLOBAL_VERTICAL_SCALE, (slider, value) -> {
+			boolean isUpliftContinent = preset.world().continent.continentType == ContinentType.UPLIFT;
+			value = isUpliftContinent ? Math.max(slider.getSliderValue(1.0F), value) : value;
 			general.globalVerticalScale = (float) slider.scaleValue(value);
 			this.regenerate();
 			return value;
@@ -120,6 +123,8 @@ public class TerrainSettingsPage extends PresetEditorPage {
 			return value;
 		});
 		this.steppeBaseScale = PresetWidgets.createFloatSlider(steppe.baseScale, 0.0F, 2.0F, RTFTranslationKeys.GUI_SLIDER_TERRAIN_BASE_SCALE, (slider, value) -> {
+			boolean isUpliftContinent = preset.world().continent.continentType == ContinentType.UPLIFT;
+			value = isUpliftContinent ? Math.max(slider.getSliderValue(2.0F), value) : value;
 			steppe.baseScale = (float) slider.scaleValue(value);
 			this.regenerate();
 			return value;
@@ -142,6 +147,8 @@ public class TerrainSettingsPage extends PresetEditorPage {
 			return value;
 		});
 		this.plainsBaseScale = PresetWidgets.createFloatSlider(plains.baseScale, 0.0F, 2.0F, RTFTranslationKeys.GUI_SLIDER_TERRAIN_BASE_SCALE, (slider, value) -> {
+			boolean isUpliftContinent = preset.world().continent.continentType == ContinentType.UPLIFT;
+			value = isUpliftContinent ? Math.max(slider.getSliderValue(2.0F), value) : value;
 			plains.baseScale = (float) slider.scaleValue(value);
 			this.regenerate();
 			return value;
@@ -164,6 +171,8 @@ public class TerrainSettingsPage extends PresetEditorPage {
 			return value;
 		});
 		this.hillsBaseScale = PresetWidgets.createFloatSlider(hills.baseScale, 0.0F, 2.0F, RTFTranslationKeys.GUI_SLIDER_TERRAIN_BASE_SCALE, (slider, value) -> {
+			boolean isUpliftContinent = preset.world().continent.continentType == ContinentType.UPLIFT;
+			value = isUpliftContinent ? Math.max(slider.getSliderValue(1.0F), value) : value;
 			hills.baseScale = (float) slider.scaleValue(value);
 			this.regenerate();
 			return value;
@@ -186,6 +195,8 @@ public class TerrainSettingsPage extends PresetEditorPage {
 			return value;
 		});
 		this.dalesBaseScale = PresetWidgets.createFloatSlider(dales.baseScale, 0.0F, 2.0F, RTFTranslationKeys.GUI_SLIDER_TERRAIN_BASE_SCALE, (slider, value) -> {
+			boolean isUpliftContinent = preset.world().continent.continentType == ContinentType.UPLIFT;
+			value = isUpliftContinent ? Math.max(slider.getSliderValue(1.0F), value) : value;
 			dales.baseScale = (float) slider.scaleValue(value);
 			this.regenerate();
 			return value;
@@ -208,6 +219,8 @@ public class TerrainSettingsPage extends PresetEditorPage {
 			return value;
 		});
 		this.plateauBaseScale = PresetWidgets.createFloatSlider(plateau.baseScale, 0.0F, 2.0F, RTFTranslationKeys.GUI_SLIDER_TERRAIN_BASE_SCALE, (slider, value) -> {
+			boolean isUpliftContinent = preset.world().continent.continentType == ContinentType.UPLIFT;
+			value = isUpliftContinent ? Math.max(slider.getSliderValue(1.0F), value) : value;
 			plateau.baseScale = (float) slider.scaleValue(value);
 			this.regenerate();
 			return value;
@@ -230,6 +243,8 @@ public class TerrainSettingsPage extends PresetEditorPage {
 			return value;
 		});
 		this.badlandsBaseScale = PresetWidgets.createFloatSlider(badlands.baseScale, 0.0F, 2.0F, RTFTranslationKeys.GUI_SLIDER_TERRAIN_BASE_SCALE, (slider, value) -> {
+			boolean isUpliftContinent = preset.world().continent.continentType == ContinentType.UPLIFT;
+			value = isUpliftContinent ? Math.max(slider.getSliderValue(1.0F), value) : value;
 			badlands.baseScale = (float) slider.scaleValue(value);
 			this.regenerate();
 			return value;
@@ -269,6 +284,8 @@ public class TerrainSettingsPage extends PresetEditorPage {
 		
 		Terrain mountains = terrain.mountains;
 		this.mountainsWeight = PresetWidgets.createFloatSlider(mountains.weight, 0.0F, 10.0F, RTFTranslationKeys.GUI_SLIDER_TERRAIN_WEIGHT, (slider, value) -> {
+			boolean isUpliftContinent = preset.world().continent.continentType == ContinentType.UPLIFT;
+			value = isUpliftContinent ? Math.max(slider.getSliderValue(1.0F), value) : value;
 			mountains.weight = (float) slider.scaleValue(value);
 			this.regenerate();
 			return value;
@@ -296,6 +313,8 @@ public class TerrainSettingsPage extends PresetEditorPage {
 			return value;
 		});
 		this.volcanoBaseScale = PresetWidgets.createFloatSlider(volcano.baseScale, 0.0F, 2.0F, RTFTranslationKeys.GUI_SLIDER_TERRAIN_BASE_SCALE, (slider, value) -> {
+			boolean isUpliftContinent = preset.world().continent.continentType == ContinentType.UPLIFT;
+			value = isUpliftContinent ? Math.max(slider.getSliderValue(1.0F), value) : value;
 			volcano.baseScale = (float) slider.scaleValue(value);
 			this.regenerate();
 			return value;

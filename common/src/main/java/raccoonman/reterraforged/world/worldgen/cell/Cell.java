@@ -4,6 +4,7 @@ import raccoonman.reterraforged.concurrent.Resource;
 import raccoonman.reterraforged.concurrent.SimpleResource;
 import raccoonman.reterraforged.concurrent.pool.ThreadLocalPool;
 import raccoonman.reterraforged.world.worldgen.cell.biome.type.BiomeType;
+import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.RiverCarverSettings;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.Terrain;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainType;
 
@@ -27,7 +28,9 @@ public class Cell {
     public float regionMoisture;
     public float regionTemperature;
     public float continentId;
+    public float continentSizeModifier;
     public float continentEdge;
+    public float waterTable;
     public float continentDistance;
     public float terrainRegionId;
     public float terrainRegionEdge;
@@ -35,6 +38,7 @@ public class Cell {
     public float biomeRegionEdge;
     public float macroBiomeId;
     public float riverMask;
+    public float riverWaterLevel = 0.0F;
     public int continentX;
     public int continentZ;
     public boolean erosionMask;
@@ -45,6 +49,7 @@ public class Cell {
     public float temperature;
     public float moisture;
     public float beachNoise;
+    public RiverCarverSettings.RiverZone riverZone = RiverCarverSettings.RiverZone.None;
 
     public Cell() {
         this.regionMoisture = 0.5F;
@@ -54,6 +59,8 @@ public class Cell {
         this.erosionMask = false;
         this.terrain = TerrainType.NONE;
         this.biome = BiomeType.GRASSLAND;
+        this.waterTable = 0.0F;
+        this.continentSizeModifier = 1.0F;
     }
     
     public void copyFrom(Cell other) {
@@ -82,6 +89,7 @@ public class Cell {
         this.temperature = other.temperature;
         this.moisture = other.moisture;
         this.beachNoise = other.beachNoise;
+        this.continentSizeModifier = other.continentSizeModifier;
     }
 
     public Cell reset() {

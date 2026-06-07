@@ -24,6 +24,10 @@ public enum RenderMode {
                     return rgba(0.6F, 0.6F, 0.8F);
                 case BEACH:
                     return rgba(0.2F, 0.4F, 0.75F);
+                case RIVER:
+                case LAKE:
+                    return RenderMode.getWaterColor();
+
                 default:
                     if (cell.height < levels.water) {
                         return RenderMode.getWaterColor();
@@ -191,7 +195,7 @@ public enum RenderMode {
 
         }
     },
-    CONTINENT_EDGE {
+    CONTINENT_UPLIFT {
 
         @Override
         public boolean handlesWater() {
@@ -201,22 +205,67 @@ public enum RenderMode {
         @Override
         public int getColor(Cell cell, Levels levels, float scale, float bias) {
 
-            if (cell.terrain.isDeepOcean() || cell.terrain.isShallowOcean()) {
+            // highlight watery regions
+            if (cell.terrain.isWateryButNotOcean()) {
+                return RenderMode.getWaterColor();
+            }
+
+            // Grey the ocean to keep focus on landmasses
+            if (cell.height <= levels.water) {
                 return rgba(17, 17, 17);
             }
 
-            // Ensure the value is clamped between 0.0 and 1.0
-            float edgeValue = NoiseUtil.clamp(cell.continentEdge, 0.0F, 1.0F);
-
-            // At 0.0: White (Saturation 0, Brightness 1)
-            // At 1.0: Pure Red (Hue 0, Saturation 1, Brightness 1)
-
-            float hue = 0.0F;              // Solid Red hue
-            float saturation = edgeValue;  // Increases from 0 (White) to 1 (Red)
-            float brightness = 1.0F;       // Maintain full brightness for "clean" look
-
+            float edgeValue = NoiseUtil.clamp(cell.waterTable, 0.0F, 1.0F);
+            float hue = 0.0F;
+            float saturation = 0.0F;
+            float brightness = edgeValue;
             return rgba(hue, saturation, brightness);
+        }
+    },
+    CONTINENT_EDGE {
 
+        @Override
+        public boolean handlesWater() {
+            return true;
+        }
+
+        @Override
+        public int getColor(Cell cell, Levels levels, float scale, float bias) {
+            float hue = 0.0F;
+            float saturation = 0.0F;
+            float brightness = cell.continentEdge;
+            return rgba(hue, saturation, brightness);
+        }
+    },
+    RIVER_ZONE {
+
+        @Override
+        public boolean handlesWater() {
+            return true;
+        }
+
+        @Override
+        public int getColor(Cell cell, Levels levels, float scale, float bias) {
+
+            switch (cell.riverZone){
+
+                case None:
+                    return rgba(17, 17,17);
+
+                case Riverbed:
+                    return rgba(0, 0,200);
+
+                case Banks:
+                    return rgba(0, 75,0);
+
+                case ValleyFloor:
+                    return rgba(0, 150,0);
+
+                case ValleyFadeout:
+                    return rgba(0, 255,0);
+
+            }
+            return rgba(17, 17,17);
         }
     };
 

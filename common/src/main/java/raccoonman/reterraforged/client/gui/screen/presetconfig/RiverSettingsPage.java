@@ -156,7 +156,7 @@ class RiverSettingsPage extends PresetEditorPage {
 			this.regenerate();
 			return value;
 		});
-		this.lakeSizeMin = PresetWidgets.createIntSlider(lake.sizeMin, 1, 100, RTFTranslationKeys.GUI_SLIDER_LAKE_SIZE_MIN, (slider, value) -> {
+		this.lakeSizeMin = PresetWidgets.createIntSlider(lake.sizeMin, 1, 500, RTFTranslationKeys.GUI_SLIDER_LAKE_SIZE_MIN, (slider, value) -> {
 			lake.sizeMin = (int) slider.scaleValue(value);
 			this.regenerate();
 			return value;

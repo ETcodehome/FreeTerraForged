@@ -16,6 +16,7 @@ import raccoonman.reterraforged.world.worldgen.cell.climate.Climate;
 import raccoonman.reterraforged.world.worldgen.cell.continent.Continent;
 import raccoonman.reterraforged.world.worldgen.cell.continent.ContinentLerper2;
 import raccoonman.reterraforged.world.worldgen.cell.continent.ContinentLerper3;
+import raccoonman.reterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.Rivermap;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.Blender;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.Populators;
@@ -129,7 +130,10 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
         CellPopulator coast = Populators.makeCoast(ctx.levels);
 
         CellPopulator oceans = new ContinentLerper3(deepOcean, shallowOcean, coast, controlPoints.deepOcean, controlPoints.shallowOcean, controlPoints.coast);
-        CellPopulator terrain = new ContinentLerper2(oceans, land, controlPoints.shallowOcean, controlPoints.inland);
+        CellPopulator terrain = new ContinentLerper2(oceans, (cell, x, z) -> {
+            land.apply(cell, x, z);
+            cell.height += (ContinentalHydrology.getWeightedWaterHeight(cell.waterTable));
+        }, controlPoints.shallowOcean, controlPoints.inland);
 
         Noise beachNoise = Noises.perlin2(ctx.seed.next(), 20, 1);
         beachNoise = Noises.mul(beachNoise, ctx.levels.scale(5));

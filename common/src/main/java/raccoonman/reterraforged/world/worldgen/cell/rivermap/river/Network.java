@@ -4,21 +4,20 @@ import java.util.ArrayList;
 import java.util.List;
 
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
-import raccoonman.reterraforged.world.worldgen.cell.rivermap.lake.Lake;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.wetland.Wetland;
 import raccoonman.reterraforged.world.worldgen.noise.module.Line;
 import raccoonman.reterraforged.world.worldgen.util.Boundsf;
 import raccoonman.reterraforged.world.worldgen.util.PosUtil;
 
-public record Network(RiverCarver riverCarver, Lake[] lakes, Wetland[] wetlands, Network[] children, Boundsf bounds) {
+public record Network(RTFRiverCarver riverCarver, Wetland[] wetlands, Network[] children, Boundsf bounds) {
     
     public boolean contains(float x, float z) {
         return this.bounds.contains(x, z);
     }
     
     public void carve(Cell cell, float x, float z, float nx, float nz) {
-        River river = this.riverCarver.river;
-        RiverWarp warp = this.riverCarver.warp;
+        River river = this.riverCarver.getRiver();
+        RiverWarp warp = this.riverCarver.getWarp();
         float t = Line.distanceOnLine(x, z, river.x1, river.z1, river.x2, river.z2);
         float px = x;
         float pz = z;
@@ -31,7 +30,6 @@ public record Network(RiverCarver riverCarver, Lake[] lakes, Wetland[] wetlands,
         }
         this.carveRiver(cell, px, pz, pt, x, z, t);
         this.carveWetlands(cell, x, z, nx, nz);
-        this.carveLakes(cell, x, z, nx, nz);
         for (Network network : this.children) {
             network.carve(cell, x, z, nx, nz);
         }
@@ -51,16 +49,8 @@ public record Network(RiverCarver riverCarver, Lake[] lakes, Wetland[] wetlands,
         }
     }
     
-    private void carveLakes(Cell cell, float x, float z, float nx, float nz) {
-        float lx = x + nx;
-        float lz = z + nz;
-        for (Lake lake : this.lakes) {
-            lake.apply(cell, lx, lz);
-        }
-    }
-    
-    private static boolean overlaps(River river, RiverCarver riverCarver, float extend) {
-        return riverCarver.river.intersects(river, extend);
+    private static boolean overlaps(River river, RTFRiverCarver riverCarver, float extend) {
+        return riverCarver.getRiver().intersects(river, extend);
     }
     
     private static boolean overlaps(River river, Network[] networks, float extend) {
@@ -72,13 +62,12 @@ public record Network(RiverCarver riverCarver, Lake[] lakes, Wetland[] wetlands,
         return false;
     }
     
-    public static Builder builder(RiverCarver carver) {
+    public static Builder builder(RTFRiverCarver carver) {
         return new Builder(carver);
     }
     
     public static class Builder {
-        public RiverCarver carver;
-        public List<Lake> lakes;
+        public RTFRiverCarver carver;
         public List<Wetland> wetlands;
         public List<Builder> children;
         private float minX;
@@ -86,12 +75,11 @@ public record Network(RiverCarver riverCarver, Lake[] lakes, Wetland[] wetlands,
         private float maxX;
         private float maxZ;
         
-        private Builder(RiverCarver carver) {
-            this.lakes = new ArrayList<>();
+        private Builder(RTFRiverCarver carver) {
             this.wetlands = new ArrayList<>();
             this.children = new ArrayList<>();
             this.carver = carver;
-            this.addBounds(carver.river);
+            this.addBounds(carver.getRiver());
         }
         
         public void addBounds(River river) {
@@ -107,7 +95,7 @@ public record Network(RiverCarver riverCarver, Lake[] lakes, Wetland[] wetlands,
                 float z1 = river.z1 - river.ndz * extend;
                 float x2 = river.x1 + river.dx * 0.5F;
                 float z2 = river.z1 + river.dz * 0.5F;
-                River other = this.carver.river;
+                River other = this.carver.getRiver();
                 if (Line.intersect(x1, z1, x2, z2, other.x1, other.z1, other.x2, other.z2)) {
                     return true;
                 }
@@ -130,17 +118,14 @@ public record Network(RiverCarver riverCarver, Lake[] lakes, Wetland[] wetlands,
         }
         
         private Network build(Boundsf bounds) {
-            return new Network(this.carver, this.lakes.toArray(Lake[]::new), this.wetlands.toArray(Wetland[]::new), this.children.stream().map(child -> child.build(Boundsf.NONE)).toArray(Network[]::new), bounds);
+            return new Network(this.carver, this.wetlands.toArray(Wetland[]::new), this.children.stream().map(child -> child.build(Boundsf.NONE)).toArray(Network[]::new), bounds);
         }
         
         private Boundsf.Builder recordBounds(Boundsf.Builder builder) {
-            builder.record(this.carver.river.minX, this.carver.river.minZ);
-            builder.record(this.carver.river.maxX, this.carver.river.maxZ);
+            builder.record(this.carver.getRiver().minX, this.carver.getRiver().minZ);
+            builder.record(this.carver.getRiver().maxX, this.carver.getRiver().maxZ);
             for (Builder child : this.children) {
                 child.recordBounds(builder);
-            }
-            for (Lake lake : this.lakes) {
-                lake.recordBounds(builder);
             }
             for (Wetland wetland : this.wetlands) {
                 wetland.recordBounds(builder);

@@ -8,6 +8,7 @@ import raccoonman.reterraforged.world.worldgen.cell.continent.Continent;
 import raccoonman.reterraforged.world.worldgen.cell.continent.advanced.AdvancedContinentGenerator;
 import raccoonman.reterraforged.world.worldgen.cell.continent.simple.MultiContinentGenerator;
 import raccoonman.reterraforged.world.worldgen.cell.continent.simple.SingleContinentGenerator;
+import raccoonman.reterraforged.world.worldgen.cell.continent.uplift.UpliftContinentGenerator;
 import raccoonman.reterraforged.world.worldgen.util.Seed;
 
 public enum ContinentType implements StringRepresentable {
@@ -30,6 +31,13 @@ public enum ContinentType implements StringRepresentable {
     	@Override
         public AdvancedContinentGenerator create(Seed seed, GeneratorContext context) {
             return new AdvancedContinentGenerator(seed, context);
+        }
+    },
+    UPLIFT {
+
+        @Override
+        public UpliftContinentGenerator create(Seed seed, GeneratorContext context) {
+            return new UpliftContinentGenerator(seed, context);
         }
     };
 	
