@@ -232,6 +232,20 @@ public class WorldSettingsPage extends PresetEditorPage {
 		this.continentNoiseOctaves.active = isMultiImproved;
 		this.continentNoiseGain.active = isMultiImproved;
 		this.continentNoiseLacunarity.active = isMultiImproved;
+
+		// ensures that terrains never drop below continental uplift resulting in floating rivers
+		boolean isUpliftContinent = type == ContinentType.UPLIFT;
+		if(isUpliftContinent){
+			this.preset.getPreset().terrain().general.globalVerticalScale = Math.max(this.preset.getPreset().terrain().general.globalVerticalScale, 1.0F);
+			this.preset.getPreset().terrain().steppe.baseScale = Math.max(this.preset.getPreset().terrain().steppe.baseScale, 2.0F);
+			this.preset.getPreset().terrain().plains.baseScale = Math.max(this.preset.getPreset().terrain().plains.baseScale, 2.0F);
+			this.preset.getPreset().terrain().hills.baseScale = Math.max(this.preset.getPreset().terrain().hills.baseScale, 1.0F);
+			this.preset.getPreset().terrain().dales.baseScale = Math.max(this.preset.getPreset().terrain().dales.baseScale, 1.0F);
+			this.preset.getPreset().terrain().badlands.baseScale = Math.max(this.preset.getPreset().terrain().badlands.baseScale, 1.0F);
+			this.preset.getPreset().terrain().mountains.baseScale = Math.max(this.preset.getPreset().terrain().mountains.baseScale, 1.0F);
+			this.preset.getPreset().terrain().plateau.baseScale = Math.max(this.preset.getPreset().terrain().plateau.baseScale, 1.0F);
+			this.preset.getPreset().terrain().volcano.baseScale = Math.max(this.preset.getPreset().terrain().volcano.baseScale, 1.0F);
+		}
 	}
 	
 	private static int getNearestMultiple(Slider slider, float value, int multiple)  {
