@@ -37,7 +37,7 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 			ClimateSettings.CODEC.fieldOf("climate").forGetter(Preset::climate),
 			TerrainSettings.CODEC.fieldOf("terrain").forGetter(Preset::terrain),
 			RiverSettings.CODEC.fieldOf("rivers").forGetter(Preset::rivers),
-			IslandSettings.CODEC.fieldOf("island").forGetter(Preset::island),
+			IslandSettings.CODEC.optionalFieldOf("island", IslandSettings.makeDefault()).forGetter(Preset::island),
 			FilterSettings.CODEC.fieldOf("filters").forGetter(Preset::filters),
 			StructureSettings.CODEC.fieldOf("structures").forGetter(Preset::structures),
 			MiscellaneousSettings.CODEC.fieldOf("miscellaneous").forGetter(Preset::miscellaneous)
