@@ -92,7 +92,6 @@ public class ArchipelagoPopulator implements CellPopulator {
 
     @Override
     public void apply(Cell cell, float x, float z) {
-
         // Capture the continent edge value before it gets overridden
         float originalContinentEdge = cell.continentEdge;
 
@@ -119,10 +118,18 @@ public class ArchipelagoPopulator implements CellPopulator {
         float beachCoverage = NoiseUtil.clamp(this.settings.beachCoverage, 0.0F, 1.0F);
         float shelfEnd = NoiseUtil.clamp(beachWidth * 0.65F, 0.04F, 0.35F);
 
-        // Dynamic Beach Width
-        float bVariance = this.beachVariance.compute(x, z, 0) * 0.15F - 0.05F;
-        float baseBeachEnd = shelfEnd + beachWidth * (0.5F + beachCoverage * 1.5F);
-        float dynamicBeachEnd = NoiseUtil.clamp(baseBeachEnd + bVariance, shelfEnd + 0.05F, 0.85F);
+        // Dynamic Beach Ebb & Cliff Flow
+        float rawVariance = this.beachVariance.compute(x, z, 0);
+        // Map raw variance into a cliff tendency factor (0.0 = wide gentle beach, 1.0 = steep cliff face)
+        float cliffFactor = smoothStep(-0.2F, 0.6F, rawVariance);
+
+        // Dynamically compress the beach width down toward zero in cliff zones
+        float activeBeachWidth = NoiseUtil.lerp(beachWidth, 0.01F, cliffFactor);
+        float baseBeachEnd = shelfEnd + activeBeachWidth * (0.5F + beachCoverage * 1.5F);
+
+        // Retain normal organic beach variations only in non-cliff areas
+        float bVariance = rawVariance * 0.15F * (1.0F - cliffFactor) - 0.05F * (1.0F - cliffFactor);
+        float dynamicBeachEnd = NoiseUtil.clamp(baseBeachEnd + bVariance, shelfEnd + 0.005F, 0.85F);
 
         float oceanHeight = cell.height;
         int offshoreDepth = Math.max(2, Math.round(4.0F + this.settings.offshoreDepth * 10.0F));
@@ -133,8 +140,14 @@ public class ArchipelagoPopulator implements CellPopulator {
         float beachAlpha = smoothStep(shelfEnd, dynamicBeachEnd, islandAlpha);
         float beachHeight = NoiseUtil.lerp(shelfHeight, this.levels.ground, beachAlpha);
 
-        float mountainStart = NoiseUtil.clamp(dynamicBeachEnd + 0.08F, 0.22F, 0.9F);
-        float mountainEnd = Math.max(mountainStart + 0.08F, 0.72F);
+        // Push Mountain Onset Directly Into Water Line
+        // Pull the mountain start down to meet the compressed beach line when cliffFactor is active
+        float mountainGap = NoiseUtil.lerp(0.08F, 0.005F, cliffFactor);
+        float mountainStart = NoiseUtil.clamp(dynamicBeachEnd + mountainGap, shelfEnd + 0.01F, 0.9F);
+
+        // Sharpen the transition window to create steeper mountain slopes facing the water
+        float mountainTransition = NoiseUtil.lerp(0.08F, 0.04F, cliffFactor);
+        float mountainEnd = Math.max(mountainStart + mountainTransition, 0.72F * (1.0F - cliffFactor * 0.25F));
         float mountainAlpha = smoothStep(mountainStart, mountainEnd, islandAlpha);
 
         float mountainGate = chanceMask(this.mountainSelector, this.settings.mountainChance, x, z);
@@ -152,16 +165,19 @@ public class ArchipelagoPopulator implements CellPopulator {
         mountainValue = Math.max(0.0F, mountainValue - gullyErosion);
 
         // Apply Terracing to Mountains
-        float terraceSteps = 7.0F; // Number of steps
+        float terraceSteps = 7.0F;
         float terracedMountain = (float) Math.floor(mountainValue * terraceSteps) / terraceSteps;
-        // Blend between raw and terraced to keep it organic, not perfectly flat stairs
         mountainValue = NoiseUtil.lerp(mountainValue, terracedMountain, 0.55F);
 
         float baseHeight = this.settings.islandHeight * (0.015F + this.settings.islandBaseScale * 0.08F);
         float reliefHeight = mountainValue * mountainAlpha * this.settings.islandHeight * this.settings.islandVerticalScale * 0.3F;
 
+        // Land Alpha so Mountain Height isn't suppressed at the shore
+        // Instead of taking the whole island radius (1.0F), complete the blend quickly near cliffs
+        float landTransitionEnd = NoiseUtil.lerp(1.0F, dynamicBeachEnd + 0.12F, cliffFactor);
+        float landAlpha = smoothStep(dynamicBeachEnd, landTransitionEnd, islandAlpha);
+
         // Base Terrain Detailing (Rolling Hills)
-        float landAlpha = smoothStep(dynamicBeachEnd, 1.0F, islandAlpha);
         float landDetail = this.baseTerrainDetail.compute(x, z, 0) * this.settings.islandHeight * 0.08F * landAlpha;
 
         float targetHeight = this.levels.ground + baseHeight + reliefHeight + landDetail;
