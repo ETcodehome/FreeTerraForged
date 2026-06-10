@@ -55,7 +55,7 @@ public class IslandSettingsPage extends PresetEditorPage {
 			this.regenerate();
 			return value;
 		});
-		this.islandHeight = PresetWidgets.createFloatSlider(island.islandHeight, 0.1F, 1.0F, RTFTranslationKeys.GUI_SLIDER_ISLAND_HEIGHT, (slider, value) -> {
+		this.islandHeight = PresetWidgets.createFloatSlider(island.islandHeight, 0.1F, 3.0F, RTFTranslationKeys.GUI_SLIDER_ISLAND_HEIGHT, (slider, value) -> {
 			island.islandHeight = (float) slider.scaleValue(value);
 			this.regenerate();
 			return value;

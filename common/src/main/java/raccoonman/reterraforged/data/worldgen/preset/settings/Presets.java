@@ -51,7 +51,7 @@ public class Presets {
 				new Lake(0.3F, 0.0F, 0.03F, 10, 75, 150, 2, 10),
 				new Wetland(0.6F, 175, 225)
 			),
-			getDefaultIslandSettings(),
+			IslandSettings.makeDefault(),
 			new FilterSettings(
 				new Erosion(135, 12, 0.7F, 0.7F, 0.5F, 0.5F),
 				new Smoothing(1, 1.8F, 0.9F)
@@ -95,7 +95,7 @@ public class Presets {
 				new Lake(0.3F, 0.0F, 0.03F, 10, 75, 150, 2, 10),
 				new Wetland(0.6F, 175, 225)
 			),
-			getDefaultIslandSettings(),
+			IslandSettings.makeDefault(),
 			new FilterSettings(
 				new Erosion(135, 12, 0.7F, 0.7F, 0.5F, 0.5F),
 				new Smoothing(1, 1.8F, 0.9F)
@@ -139,7 +139,7 @@ public class Presets {
 				new Lake(0.462F, 0.0F, 0.028F, 10, 75, 150, 2, 10),
 				new Wetland(0.796F, 196, 255)
 			),
-			getDefaultIslandSettings(),
+			IslandSettings.makeDefault(),
 			new FilterSettings(
 				new Erosion(100, 12, 0.699F, 0.699F, 0.5F, 0.5F),
 				new Smoothing(2, 1.8F, 0.75F)
@@ -184,7 +184,7 @@ public class Presets {
 				new Lake(0.671F, 0.0F, 0.028F, 8, 75, 150, 2, 7),
 				new Wetland(0.865F, 134, 201)
 			),
-			getDefaultIslandSettings(),
+			IslandSettings.makeDefault(),
 			new FilterSettings(
 				new Erosion(175, 12, 0.648F, 0.657F, 0.5F, 0.5F),
 				new Smoothing(1, 1.855F, 0.916F)
@@ -228,7 +228,7 @@ public class Presets {
 				new Lake(0.462F, 0.0F, 0.028F, 10, 75, 150, 2, 10),
 				new Wetland(0.796F, 196, 255)
 			),
-			getDefaultIslandSettings(),
+			IslandSettings.makeDefault(),
 			new FilterSettings(
 				new Erosion(100, 12, 0.699F, 0.699F, 0.5F, 0.5F),
 				new Smoothing(2, 1.799F, 0.75F)
@@ -272,7 +272,7 @@ public class Presets {
 				new Lake(0.595F, 0.0F, 0.028F, 10, 75, 150, 2, 10),
 				new Wetland(0.86F, 175, 225)
 			),
-			getDefaultIslandSettings(),
+			IslandSettings.makeDefault(),
 			new FilterSettings(
 				new Erosion(165, 15, 0.612F, 0.652F, 0.5F, 0.5F),
 				new Smoothing(1, 1.799F, 0.898F)
@@ -297,9 +297,9 @@ public class Presets {
 								0.2516F,
 								5.7262F),
 
-						new ControlPoints(-1.0F,
-								-1.0F,
-								0.1F,
+						new ControlPoints(0.0F,
+								0.074F,
+								0.102F,
 								0.13144F,
 								0.2210F,
 								0.3576F,
@@ -459,7 +459,7 @@ public class Presets {
 								50,
 								500)
 				),
-				getDefaultIslandSettings(),
+				IslandSettings.makeDefault(),
 				new FilterSettings(
 
 						new Erosion(250,
@@ -488,23 +488,6 @@ public class Presets {
 						0.85438144F,
 						0.855F)
 		);
-	}
-
-	static IslandSettings getDefaultIslandSettings()
-	{
-		return new IslandSettings(
-				true,
-				0.5F,
-				185.0F,
-				0.75F,
-				2.0F,
-				3.0F,
-				0.3F,
-				0.4F,
-				0.6F,
-				0.5F,
-				0.125F,
-				0.125F);
 	}
 
 }

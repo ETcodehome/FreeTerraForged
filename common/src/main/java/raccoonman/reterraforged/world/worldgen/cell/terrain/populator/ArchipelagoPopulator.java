@@ -92,6 +92,10 @@ public class ArchipelagoPopulator implements CellPopulator {
 
     @Override
     public void apply(Cell cell, float x, float z) {
+
+        // Capture the continent edge value before it gets overridden
+        float originalContinentEdge = cell.continentEdge;
+
         float sizeValue = this.sizeNoise.compute(x, z, 0);
         float densityValue = this.densityNoise.compute(x, z, 0);
         float densityThreshold = NoiseUtil.clamp(1.0F - this.settings.islandDensity * 0.8F, 0.05F, 0.98F);
@@ -99,7 +103,14 @@ public class ArchipelagoPopulator implements CellPopulator {
         float shapeAlpha = smoothStep(0.5F, 1.0F, sizeValue);
         float densityFade = NoiseUtil.clamp((1.0F - densityThreshold) * 0.5F, 0.04F, 0.12F);
         float densityAlpha = smoothStep(densityThreshold, densityThreshold + densityFade, densityValue);
-        float islandAlpha = shapeAlpha * densityAlpha;
+
+        // Calculate a fade factor based on proximity to the main continent
+        float fadeStart = this.controlPoints.islandCoast;
+        float fadeEnd = this.controlPoints.deepOcean;
+        float continentFade = 1.0F - smoothStep(fadeStart, fadeEnd, originalContinentEdge);
+
+        // Multiply islandAlpha by the fade factor
+        float islandAlpha = shapeAlpha * densityAlpha * continentFade;
         if (islandAlpha <= 0.001F) {
             return;
         }
@@ -156,7 +167,7 @@ public class ArchipelagoPopulator implements CellPopulator {
         float targetHeight = this.levels.ground + baseHeight + reliefHeight + landDetail;
 
         cell.height = NoiseUtil.lerp(beachHeight, targetHeight, landAlpha);
-        cell.continentEdge = Math.max(cell.continentEdge, continentEdge(islandAlpha, shelfEnd, dynamicBeachEnd));
+        cell.continentEdge = Math.max(originalContinentEdge, continentEdge(islandAlpha, shelfEnd, dynamicBeachEnd));
 
         if (islandAlpha < shelfEnd) {
             cell.terrain = TerrainType.SHALLOW_OCEAN;
