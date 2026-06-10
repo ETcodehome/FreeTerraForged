@@ -123,13 +123,18 @@ public class ArchipelagoPopulator implements CellPopulator {
         // Map raw variance into a cliff tendency factor (0.0 = wide gentle beach, 1.0 = steep cliff face)
         float cliffFactor = smoothStep(-0.2F, 0.6F, rawVariance);
 
-        // Dynamically compress the beach width down toward zero in cliff zones
+        /// Dynamically compress the beach width down toward zero in cliff zones
         float activeBeachWidth = NoiseUtil.lerp(beachWidth, 0.01F, cliffFactor);
-        float baseBeachEnd = shelfEnd + activeBeachWidth * (0.5F + beachCoverage * 1.5F);
+
+        // NEW: Establish where the terrain actually emerges from the water (constant slope)
+        float coastEnd = NoiseUtil.clamp(shelfEnd + (activeBeachWidth * 0.5F), shelfEnd + 0.005F, 0.85F);
+
+        // NEW: Add the beach coverage to define how far inland the flat sandy area extends
+        float baseBeachEnd = coastEnd + (activeBeachWidth * beachCoverage * 1.5F);
 
         // Retain normal organic beach variations only in non-cliff areas
         float bVariance = rawVariance * 0.15F * (1.0F - cliffFactor) - 0.05F * (1.0F - cliffFactor);
-        float dynamicBeachEnd = NoiseUtil.clamp(baseBeachEnd + bVariance, shelfEnd + 0.005F, 0.85F);
+        float dynamicBeachEnd = NoiseUtil.clamp(baseBeachEnd + bVariance, coastEnd + 0.005F, 0.85F);
 
         float oceanHeight = cell.height;
         int offshoreDepth = Math.max(2, Math.round(4.0F + this.settings.offshoreDepth * 10.0F));
@@ -137,8 +142,10 @@ public class ArchipelagoPopulator implements CellPopulator {
         float shelfAlpha = smoothStep(0.0F, shelfEnd, islandAlpha);
         float shelfHeight = NoiseUtil.lerp(oceanHeight, shelfTarget, shelfAlpha);
 
-        float beachAlpha = smoothStep(shelfEnd, dynamicBeachEnd, islandAlpha);
-        float beachHeight = NoiseUtil.lerp(shelfHeight, this.levels.ground, beachAlpha);
+        // NEW: Interpolate height ONLY up to the coastline.
+        // This brings it out of the water consistently, leaving the rest of the beach flat.
+        float coastAlpha = smoothStep(shelfEnd, coastEnd, islandAlpha);
+        float beachHeight = NoiseUtil.lerp(shelfHeight, this.levels.ground, coastAlpha);
 
         // Push Mountain Onset Directly Into Water Line
         // Pull the mountain start down to meet the compressed beach line when cliffFactor is active
