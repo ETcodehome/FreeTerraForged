@@ -52,15 +52,24 @@ sourceSets {
     main {
         resources {
             srcDirs += [
-                "src/generated/resources"
+                "src/main/generated/resources"
             ]
         }
     }
 }
 
+evaluationDependsOn(':common')
+
 processResources {
+
+    from project(":common").file("src/main/resources")
+    from project(":common").file("src/main/generated/resources")
+
 	inputs.property "neoforgeVersion", "21.1.201"
     inputs.property "version", project.version
+
+    // Prevent duplicate file errors if files exist in multiple places
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
 
     filesMatching("META-INF/mods.toml") {
         expand "version": project.version
