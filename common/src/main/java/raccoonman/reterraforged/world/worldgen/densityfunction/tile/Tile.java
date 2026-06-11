@@ -61,7 +61,7 @@ public class Tile implements SafeCloseable, Filterable, CellLookup {
         int relChunkX = this.chunkSize.border() + this.chunkSize.mask(chunkX);
         int relChunkZ = this.chunkSize.border() + this.chunkSize.mask(chunkZ);
         int index = this.chunkSize.indexOf(relChunkX, relChunkZ);
-        return this.computeChunk(index, chunkX, chunkZ);
+        return this.computeChunk(index, relChunkX, relChunkZ);
 	}
 	
     public void iterate(Cell.Visitor visitor) {
