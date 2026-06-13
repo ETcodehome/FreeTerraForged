@@ -132,12 +132,8 @@ public class Wetland {
 
         // Hummocks with smooth slope encroachment
         if (cell.height >= bed && cell.height < localMoundMax) {
-            // Break up the rigid tree grid by domain-warping the mound coordinates
-            float mX = x + this.warpNoise.compute(x, z, 3) * 15.0F;
-            float mZ = z + this.warpNoise.compute(x, z, 4) * 15.0F;
-
-            float shapeAlpha = this.moundShape.compute(mX, mZ, 0) * totalAlpha;
-            float moundHeightNoise = this.moundHeight.compute(mX, mZ, 0);
+            float shapeAlpha = this.moundShape.compute(x,z, 0) * totalAlpha;
+            float moundHeightNoise = this.moundHeight.compute(x, z, 0);
             float mounds = localMoundMin + (moundHeightNoise * localMoundVariance);
 
             cell.height = NoiseUtil.lerp(cell.height, mounds, shapeAlpha * 0.8F);
