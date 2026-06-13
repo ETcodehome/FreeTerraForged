@@ -35,7 +35,7 @@ public class PresetConfiguredCarvers {
         HolderGetter<Block> blocks = ctx.lookup(Registries.BLOCK);
 
 		// We never want to carve water blocks (because air underwater is just nonsense and it cooks uplift based river model)
-		TagKey<Block> NO_WATER_TAG = TagKey.create(Registries.BLOCK, ResourceLocation.fromNamespaceAndPath("reterraforged", "waterless_overworld_carver_replaceables"));
+		TagKey<Block> NO_WATER_TAG = TagKey.create(Registries.BLOCK, ResourceLocation.fromNamespaceAndPath("minecraft", "overworld_carver_replaceables"));
 		HolderSet<Block> waterlessSet = blocks.getOrThrow(NO_WATER_TAG);
 
         ctx.register(
