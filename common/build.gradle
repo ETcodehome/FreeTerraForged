@@ -20,3 +20,21 @@ repositories {
 remapJar {
     archiveClassifier.set("${rootProject.minecraft_version}")
 }
+
+subprojects {
+    afterEvaluate {
+        if (plugins.hasPlugin("architectury-plugin")) {
+            loom {
+                runConfigs.configureEach {
+                    // Forces Log4j to output DEBUG level messages
+                    systemProperty "log4j2.debug", "true"
+                    systemProperty "fabric.development", "true"
+
+                    // Standard fix to prevent Loom from swallowing terminal colors/output
+                    vmArg "-Dterminal.jline=false"
+                    vmArg "-Dlog4j.skipJansi=true"
+                }
+            }
+        }
+    }
+}
