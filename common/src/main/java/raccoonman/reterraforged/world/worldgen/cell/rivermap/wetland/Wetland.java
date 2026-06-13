@@ -77,21 +77,52 @@ public class Wetland {
         float tStart = 0.4F;
         float tEnd = 0.7F;
         float totalAlpha = NoiseUtil.map(dist, 0.0F, tEnd, tEnd);
+
+        // Add ridges and rivulets to the otherwise featureless walls
+        float rivuletNoise = Math.abs(this.warpNoise.compute(x * 0.4F, z * 0.4F, 2));
+        float slopeMask = (float) Math.sin(totalAlpha * Math.PI); // Peaks at 1.0 midway down the wall
+
+        if (slopeMask > 0.0F) {
+            // Pushing totalAlpha higher carves down into the wall, creating rivulets
+            totalAlpha += rivuletNoise * 0.25F * slopeMask;
+        }
+
         totalAlpha = Math.max(0, Math.min(1, totalAlpha));
         totalAlpha = NoiseUtil.interpQuintic(totalAlpha);
 
         float internalAlpha = NoiseUtil.map(dist, tStart, tEnd, tEnd - tStart);
         internalAlpha = Math.max(0, Math.min(1, internalAlpha));
+        internalAlpha = NoiseUtil.interpQuintic(internalAlpha); // Smoothen the transition
 
+        // InternalAlpha to scale the carving so it tapers off
+        // entirely at the edge of the influence radius.
         float targetHeight = NoiseUtil.lerp(banks, bed, internalAlpha);
         if (cell.height > targetHeight) {
-            cell.height = NoiseUtil.lerp(cell.height, targetHeight, totalAlpha);
+            cell.height = NoiseUtil.lerp(banks, targetHeight, internalAlpha);
         }
 
+        // Restrict Biome and Water Level to the basin
         if (internalAlpha > 0.1F) {
-            cell.terrain = TerrainType.WETLAND;
             cell.riverWaterLevel = upliftOffset;
-            if (internalAlpha > 0.8F) cell.erosionMask = true;
+        }
+
+        if (dist >= tEnd) {
+            cell.terrain = TerrainType.WETLAND;
+            cell.erosionMask = true;
+        }
+
+        // Strict Biome Containment
+        // Ensure water level is set for the carved area so pools form correctly against the walls
+        if (internalAlpha > 0.0F) {
+            cell.riverWaterLevel = upliftOffset;
+        }
+
+        // Strictly restrict the Wetland biome to the flat bottom of the bowl.
+        // The walls (dist < tEnd) will retain their original biome, meaning the fade-out
+        // happens entirely in the surrounding biomes.
+        if (dist >= tEnd) {
+            cell.terrain = TerrainType.WETLAND;
+            cell.erosionMask = true;
         }
 
         // Dynamic island ranges relative to water level
