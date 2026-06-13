@@ -132,7 +132,7 @@ public class Wetland {
 
         // Hummocks with smooth slope encroachment
         if (cell.height >= bed && cell.height < localMoundMax) {
-            float shapeAlpha = this.moundShape.compute(x,z, 0) * totalAlpha;
+            float shapeAlpha = this.moundShape.compute(x, z, 0) * totalAlpha;
             float moundHeightNoise = this.moundHeight.compute(x, z, 0);
             float mounds = localMoundMin + (moundHeightNoise * localMoundVariance);
 
