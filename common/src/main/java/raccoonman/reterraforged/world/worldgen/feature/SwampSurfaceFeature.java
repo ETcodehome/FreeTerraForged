@@ -6,6 +6,7 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.QuartPos;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.block.Blocks;
@@ -34,42 +35,51 @@ public class SwampSurfaceFeature extends Feature<Config> {
 		Config config = ctx.config();
 		BlockPos origin = ctx.origin();
 		ChunkPos chunkPos = new ChunkPos(origin);
-		ChunkAccess chunk = ctx.level().getChunk(origin);
+		// Operate on the WorldGenRegion, not the raw ChunkAccess
+		WorldGenLevel level = ctx.level();
 		ChunkGenerator generator = ctx.chunkGenerator();
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 		int waterY = generator.getSeaLevel() - 1;
-		
+
 		for(int x = 0; x < 16; x++) {
 			for(int z = 0; z < 16; z++) {
+				// Calculate absolute world coordinates
 				int worldX = chunkPos.getBlockX(x);
 				int worldZ = chunkPos.getBlockZ(z);
-				int surfaceY = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, x, z);
+
+				// Level.getHeight uses absolute coordinates safely
+				int surfaceY = level.getHeight(Heightmap.Types.WORLD_SURFACE, worldX, worldZ);
 				double noise = Biome.BIOME_INFO_NOISE.getValue(worldX * 0.25D, worldZ * 0.25D, false);
 				BlockState filler = getMaterial(worldX, waterY, worldZ, waterY, config);
 
-				if(chunk.getNoiseBiome(QuartPos.fromBlock(x), QuartPos.fromBlock(surfaceY), QuartPos.fromBlock(z)).is(Biomes.SWAMP)) {
-			        if (noise > 0.0D) {
-			            for (int y = surfaceY; y >= surfaceY - 10; --y) {
-			                pos.set(x, y, z);
-			                if (chunk.getBlockState(pos).isAir()) {
-			                    continue;
-			                }
+				// Set our mutable pos to the absolute world coordinate before checking biome
+				pos.set(worldX, surfaceY, worldZ);
 
-			                if (y == waterY && !chunk.getFluidState(pos).isEmpty()) {
-			                    chunk.setBlockState(pos, filler, false);
-			                }
-			                break;
-			            }
-			        }
-			        
-			        int y = chunk.getHeight(Heightmap.Types.OCEAN_FLOOR_WG, x, z);
-			        if (y <= waterY) {
-			            chunk.setBlockState(pos.set(x, y, z), getMaterial(x, y, z, waterY, config), false);
-			        }					
+				if(level.getBiome(pos).is(Biomes.SWAMP)) {
+					if (noise > 0.0D) {
+						for (int y = surfaceY; y >= surfaceY - 10; --y) {
+							pos.set(worldX, y, worldZ); // Absolute positions
+							if (level.getBlockState(pos).isAir()) {
+								continue;
+							}
+
+							if (y == waterY && !level.getFluidState(pos).isEmpty()) {
+								// Flag '2' prevents block updates during generation to avoid cascading lag
+								level.setBlock(pos, filler, 2);
+							}
+							break;
+						}
+					}
+
+					int oceanFloorY = level.getHeight(Heightmap.Types.OCEAN_FLOOR_WG, worldX, worldZ);
+					if (oceanFloorY <= waterY) {
+						pos.set(worldX, oceanFloorY, worldZ);
+						level.setBlock(pos, getMaterial(worldX, oceanFloorY, worldZ, waterY, config), 2);
+					}
 				}
-			}	
+			}
 		}
-		return false;
+		return true; // Return true if the feature actually modified the world
 	}
 
     private static BlockState getMaterial(int x, int y, int z, int waterY, Config config) {
