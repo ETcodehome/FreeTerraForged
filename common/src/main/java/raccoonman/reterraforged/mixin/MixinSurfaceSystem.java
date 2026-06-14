@@ -33,6 +33,7 @@ import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
+import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.RiverCarverSettings;
 import raccoonman.reterraforged.world.worldgen.surface.RTFSurfaceSystem;
 import raccoonman.reterraforged.world.worldgen.surface.rule.StrataRule;
 
@@ -93,9 +94,10 @@ class MixinSurfaceSystem {
 				int globalZ = chunkPos.getMinBlockZ() + localZ;
 
 				raccoonman.reterraforged.world.worldgen.cell.Cell cell = reader.getCell(localX, localZ);
+				boolean isWaterCell = (cell.terrain.isRiver() || cell.terrain.isLake() || cell.terrain.isWetland()) && cell.riverWaterLevel > 0;
+				int scaledY = levels.scale(cell.height);
 
-				if ((cell.terrain.isRiver() || cell.terrain.isLake() || cell.terrain.isWetland()) && cell.riverWaterLevel > 0) {
-					int scaledY = levels.scale(cell.height);
+				if (isWaterCell) {
 					int waterY = levels.scale(ContinentalHydrology.getWeightedWaterHeight(cell.waterTable) + oceanLevel);
 
 					if (waterY < levels.scale(levels.water)) waterY = levels.scale(levels.water);
@@ -117,14 +119,18 @@ class MixinSurfaceSystem {
 							var neighborReader = neighborTile.getChunkReader(nx >> 4, nz >> 4);
 							var neighborCell = neighborReader.getCell(nx & 0xF, nz & 0xF);
 
-							int nWaterY = levels.scale(ContinentalHydrology.getWeightedWaterHeight(neighborCell.waterTable) + levels.water);
-							if (nWaterY < levels.scale(levels.water)) nWaterY = levels.scale(levels.water);
+							// Only consider the neighbor's water height if it is actually a water cell
+							boolean nIsWaterCell = (neighborCell.terrain.isRiver() || neighborCell.terrain.isLake() || neighborCell.terrain.isWetland()) && neighborCell.riverWaterLevel > 0;
+							if (nIsWaterCell) {
+								int nWaterY = levels.scale(ContinentalHydrology.getWeightedWaterHeight(neighborCell.waterTable) + levels.water);
+								if (nWaterY < levels.scale(levels.water)) nWaterY = levels.scale(levels.water);
 
-							if (nWaterY < waterY) {
-								isTransitionColumn = true;
-								lowestNeighborWaterY = Math.min(lowestNeighborWaterY, nWaterY);
-								if (waterY - nWaterY > 1) {
-									multiBlockDrop = true;
+								if (nWaterY < waterY) {
+									isTransitionColumn = true;
+									lowestNeighborWaterY = Math.min(lowestNeighborWaterY, nWaterY);
+									if (waterY - nWaterY > 1) {
+										multiBlockDrop = true;
+									}
 								}
 							}
 						}
@@ -162,11 +168,63 @@ class MixinSurfaceSystem {
 							}
 							else {
 								chunk.setBlockState(pos, water, false);
-								// Standard water in the middle of a lake doesn't usually need updates,
-								// but marking the top surface ensures edges flow cleanly if bordering air.
 								if (isTopBlock) {
 									chunk.markPosForPostprocessing(pos);
 								}
+							}
+						}
+					}
+				} else {
+
+					// GASKET LOGIC
+					int oceanY = levels.scale(levels.water);
+
+					// Only run gasket logic if this land cell is above ocean level
+					if (scaledY >= oceanY) {
+
+						// GASKET LOGIC: Soft fade using riverMask
+						int maxNeighborWaterY = scaledY;
+						float maxRiverMask = 0.0F;
+
+						// Check neighbors for water and record the strongest mask influence
+						int[] dx = {0, 0, 1, -1};
+						int[] dz = {-1, 1, 0, 0};
+						for (int i = 0; i < 4; i++) {
+							int nx = globalX + dx[i];
+							int nz = globalZ + dz[i];
+							var neighborTile = genCtx.cache.provideAtChunk(nx >> 4, nz >> 4);
+							var neighborReader = neighborTile.getChunkReader(nx >> 4, nz >> 4);
+							var neighborCell = neighborReader.getCell(nx & 0xF, nz & 0xF);
+
+							if ((neighborCell.terrain.isRiver() || neighborCell.terrain.isLake())) {
+								int nWaterY = levels.scale(ContinentalHydrology.getWeightedWaterHeight(neighborCell.waterTable) + oceanLevel);
+								if (nWaterY > maxNeighborWaterY) {
+									maxNeighborWaterY = nWaterY;
+									maxRiverMask = neighborCell.riverMask; // Capture the mask strength
+								}
+							}
+						}
+
+						// If in river zone and lower than water table, we shouldn't be.
+						int waterTableCeil = levels.scale(ContinentalHydrology.getWeightedWaterHeight(cell.waterTable) + oceanLevel);
+						boolean isInRiverZone = cell.riverZone == RiverCarverSettings.RiverZone.Banks
+								|| cell.riverZone == RiverCarverSettings.RiverZone.ValleyFloor
+								|| cell.riverZone == RiverCarverSettings.RiverZone.ValleyFadeout;
+						boolean isLowerThanWaterTable = scaledY < waterTableCeil;
+						boolean isAboveOcean = scaledY > oceanY;
+
+						if (isInRiverZone && isLowerThanWaterTable && isAboveOcean)  {
+							for (int wy = scaledY + 1; wy <= waterTableCeil; wy++) {
+								pos.set(globalX, wy, globalZ);
+								chunk.setBlockState(pos, stone, false);
+							}
+						}
+
+						// If a neighboring water block is higher than our terrain, build a stone pillar up to match it.
+						if (maxNeighborWaterY > scaledY) {
+							for (int wy = scaledY + 1; wy <= maxNeighborWaterY; wy++) {
+								pos.set(globalX, wy, globalZ);
+								chunk.setBlockState(pos, stone, false);
 							}
 						}
 					}
