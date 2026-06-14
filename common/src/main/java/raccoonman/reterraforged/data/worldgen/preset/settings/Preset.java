@@ -11,9 +11,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.RegistryDataLoader;
 
 import raccoonman.reterraforged.data.worldgen.compat.terrablender.TBNoiseRouterData;
-import raccoonman.reterraforged.data.worldgen.preset.PresetBiomeData;
 import raccoonman.reterraforged.data.worldgen.preset.PresetBiomeModifierData;
-import raccoonman.reterraforged.data.worldgen.preset.PresetConfiguredCarvers;
 import raccoonman.reterraforged.data.worldgen.preset.PresetConfiguredFeatures;
 import raccoonman.reterraforged.data.worldgen.preset.PresetDimensionTypes;
 import raccoonman.reterraforged.data.worldgen.preset.PresetNoiseData;
@@ -58,9 +56,7 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 		this.addPatch(builder, RTFRegistries.BIOME_MODIFIER, PresetBiomeModifierData::bootstrap);
 		this.addPatch(builder, RTFRegistries.STRUCTURE_RULE, PresetStructureRuleData::bootstrap);
 		this.addPatch(builder, Registries.CONFIGURED_FEATURE, PresetConfiguredFeatures::bootstrap);
-		this.addPatch(builder, Registries.CONFIGURED_CARVER, PresetConfiguredCarvers::bootstrap);
 		this.addPatch(builder, Registries.PLACED_FEATURE, PresetPlacedFeatures::bootstrap);
-		this.addPatch(builder, Registries.BIOME, PresetBiomeData::bootstrap);
 		this.addPatch(builder, Registries.DIMENSION_TYPE, PresetDimensionTypes::bootstrap);
 		this.addPatch(builder, Registries.DENSITY_FUNCTION, (preset, ctx) -> {
 			PresetNoiseRouterData.bootstrap(preset, ctx);
