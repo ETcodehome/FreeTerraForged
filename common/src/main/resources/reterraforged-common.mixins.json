@@ -4,7 +4,7 @@
   	"plugin": "raccoonman.reterraforged.mixin.plugin.MixinPlugin",
   	"package": "raccoonman.reterraforged.mixin",
   	"minVersion": "0.8",
-  	"compatibilityLevel": "JAVA_17",
+  	"compatibilityLevel": "JAVA_21",
   	"mixins": [
 		"MixinNoiseChunk",
 		"MixinRandomState",
@@ -17,6 +17,7 @@
 		"MixinRegistrySetBuilder$EmptyTagLookup",
 		"MixinSpawnFinder",
 		"MixinClimateSampler",
+		"MixinWorldCarver",
 		"terrablender.MixinParameterList",
 		"terrablender.MixinClimateSampler",
 		"terrablender.MixinTargetPoint",
