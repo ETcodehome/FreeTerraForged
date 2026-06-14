@@ -38,3 +38,9 @@ subprojects {
         }
     }
 }
+
+processResources {
+    filesMatching("pack.mcmeta") {
+        expand project.properties
+    }
+}
