@@ -22,6 +22,6 @@ public class RTFSurfaceRules {
 	}
 	
 	public static void register(String name, MapCodec<? extends SurfaceRules.RuleSource> value) {
-		RegistryUtil.register(BuiltInRegistries.MATERIAL_RULE, name, value); //TODO: Convert to MapCodec
+		RegistryUtil.register(BuiltInRegistries.MATERIAL_RULE, name, value);
 	}
 }
