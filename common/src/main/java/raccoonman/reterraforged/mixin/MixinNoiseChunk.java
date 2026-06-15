@@ -3,6 +3,7 @@ package raccoonman.reterraforged.mixin;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Mutable;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -21,7 +22,10 @@ import net.minecraft.world.level.levelgen.NoiseRouter;
 import net.minecraft.world.level.levelgen.NoiseSettings;
 import net.minecraft.world.level.levelgen.RandomState;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
+import raccoonman.reterraforged.world.worldgen.ActiveChunk;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
+import raccoonman.reterraforged.world.worldgen.MaxHeightUtil;
+import raccoonman.reterraforged.world.worldgen.RTFChunk;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
 import raccoonman.reterraforged.world.worldgen.densityfunction.CellSampler;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
@@ -33,6 +37,13 @@ class MixinNoiseChunk {
 	@Nullable
 	private Tile.Chunk chunk;
 	private CellSampler.Cache2d cache2d;
+	
+	@Shadow
+	@Mutable
+	private int cellCountY;
+	@Shadow
+    @Final
+    private int cellHeight;
 	@Shadow
     @Final
 	int firstNoiseX;
@@ -44,19 +55,23 @@ class MixinNoiseChunk {
 	private int cellCountXZ;
 	
 	@Redirect(
-		at = @At(
-			value = "INVOKE",
-			target = "Lnet/minecraft/world/level/levelgen/RandomState;router()Lnet/minecraft/world/level/levelgen/NoiseRouter;"
-		),
-		method = "<init>"
-	)
-	private NoiseRouter NoiseChunk(RandomState randomState1, int cellCountXZ, RandomState randomState2, int minBlockX, int minBlockZ) {
-		this.randomState = randomState1;
+			method = "<init>",
+			at = @At(
+				value = "INVOKE",
+				target = "Lnet/minecraft/world/level/levelgen/NoiseRouter;mapAll(Lnet/minecraft/world/level/levelgen/DensityFunction$Visitor;)Lnet/minecraft/world/level/levelgen/NoiseRouter;"
+			)
+		)
+	private NoiseRouter init(NoiseRouter noiseRouter, DensityFunction.Visitor visitor, int cellCountXZ, RandomState randomState, int minBlockX, int minBlockZ, NoiseSettings noiseSettings, DensityFunctions.BeardifierOrMarker beardifierOrMarker, NoiseGeneratorSettings generatorSettings) {
+		this.randomState = randomState;
 		this.chunkX = SectionPos.blockToSectionCoord(minBlockX);
 		this.chunkZ = SectionPos.blockToSectionCoord(minBlockZ);
 		GeneratorContext generatorContext;
 		if((Object) randomState instanceof RTFRandomState rtfRandomState && cellCountXZ > 1 && (generatorContext = rtfRandomState.generatorContext()) != null) {
 			this.chunk = generatorContext.cache.provideAtChunk(this.chunkX, this.chunkZ).getChunkReader(this.chunkX, this.chunkZ);
+
+			RTFChunk rtfChunk = (RTFChunk) ActiveChunk.get();
+			int maxHeight = Math.min(noiseSettings.height(), MaxHeightUtil.getMaxHeight(this.chunkX, this.chunkZ, rtfChunk.getMaxHeight().orElseGet(noiseSettings::height), generatorSettings, noiseSettings, beardifierOrMarker));
+			this.cellCountY = Math.min(this.cellCountY, maxHeight / this.cellHeight);
 		}
 		this.cache2d = new CellSampler.Cache2d();
 		return randomState.router();
