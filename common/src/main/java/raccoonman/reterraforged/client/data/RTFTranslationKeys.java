@@ -165,6 +165,8 @@ public final class RTFTranslationKeys {
 	public static final String GUI_SLIDER_ISLAND_HORIZONTAL_SCALE = resolve("gui.slider.islandHorizontalScale");
 	public static final String GUI_SLIDER_ISLAND_MOUNTAIN_CHANCE = resolve("gui.slider.islandMountainChance");
 	public static final String GUI_SLIDER_ISLAND_VOLCANO_CHANCE = resolve("gui.slider.islandVolcanoChance");
+	public static final String GUI_SLIDER_ISLAND_VOLCANISM_SCALE = resolve("gui.slider.islandVolcanismScale");
+	public static final String GUI_SLIDER_ISLAND_MOUNTAIN_SCALE = resolve("gui.slider.islandMountainScale");
 	public static final String GUI_SLIDER_ISLAND_OFFSHORE_DEPTH = resolve("gui.slider.islandOffshoreDepth");
 	public static final String GUI_SLIDER_ISLAND_BEACH_WIDTH = resolve("gui.slider.islandBeachWidth");
 	public static final String GUI_SLIDER_ISLAND_BEACH_COVERAGE = resolve("gui.slider.islandBeachCoverage");

@@ -120,16 +120,17 @@ public class ArchipelagoPopulator implements CellPopulator {
 
         // Dynamic Beach Ebb & Cliff Flow
         float rawVariance = this.beachVariance.compute(x, z, 0);
+
         // Map raw variance into a cliff tendency factor (0.0 = wide gentle beach, 1.0 = steep cliff face)
         float cliffFactor = smoothStep(-0.2F, 0.6F, rawVariance);
 
         /// Dynamically compress the beach width down toward zero in cliff zones
         float activeBeachWidth = NoiseUtil.lerp(beachWidth, 0.01F, cliffFactor);
 
-        // NEW: Establish where the terrain actually emerges from the water (constant slope)
+        // Establish where the terrain actually emerges from the water (constant slope)
         float coastEnd = NoiseUtil.clamp(shelfEnd + (activeBeachWidth * 0.5F), shelfEnd + 0.005F, 0.85F);
 
-        // NEW: Add the beach coverage to define how far inland the flat sandy area extends
+        // Add the beach coverage to define how far inland the flat sandy area extends
         float baseBeachEnd = coastEnd + (activeBeachWidth * beachCoverage * 1.5F);
 
         // Retain normal organic beach variations only in non-cliff areas
@@ -142,7 +143,7 @@ public class ArchipelagoPopulator implements CellPopulator {
         float shelfAlpha = smoothStep(0.0F, shelfEnd, islandAlpha);
         float shelfHeight = NoiseUtil.lerp(oceanHeight, shelfTarget, shelfAlpha);
 
-        // NEW: Interpolate height ONLY up to the coastline.
+        // Interpolate height ONLY up to the coastline.
         // This brings it out of the water consistently, leaving the rest of the beach flat.
         float coastAlpha = smoothStep(shelfEnd, coastEnd, islandAlpha);
         float beachHeight = NoiseUtil.lerp(shelfHeight, this.levels.ground, coastAlpha);
@@ -157,12 +158,23 @@ public class ArchipelagoPopulator implements CellPopulator {
         float mountainEnd = Math.max(mountainStart + mountainTransition, 0.72F * (1.0F - cliffFactor * 0.25F));
         float mountainAlpha = smoothStep(mountainStart, mountainEnd, islandAlpha);
 
-        float mountainGate = chanceMask(this.mountainSelector, this.settings.mountainChance, x, z);
-        float volcanoGate = chanceMask(this.volcanoSelector, this.settings.volcanoChance, x, z);
+        // Scale Calculations
+        // We invert the slider scale so that a higher scale (1.0) multiplies coordinates by a smaller number,
+        // making the noise features geographically larger.
+        // Slider 0.0 -> Multiplier 2.0 (Small, frequent features)
+        // Slider 0.5 -> Multiplier 1.0 (Default size)
+        // Slider 1.0 -> Multiplier 0.3 (Massive, wide features)
+        float mountainFreqMod = NoiseUtil.lerp(2.0F, 0.3F, this.settings.mountainScale);
+        float volcanoFreqMod = NoiseUtil.lerp(2.0F, 0.3F, this.settings.volcanismScale);
 
-        float hillValue = this.hillHeight.compute(x, z, 0) * (0.15F + mountainGate * 0.55F);
-        float ridgeValue = this.ridgeHeight.compute(x, z, 0) * mountainGate;
-        float volcanoValue = this.volcanoHeight.compute(x, z, 0) * volcanoGate;
+        // Apply the frequency scale adjustments to the noise lookup coordinates
+        float mountainGate = chanceMask(this.mountainSelector, this.settings.mountainChance, x * mountainFreqMod, z * mountainFreqMod);
+        float volcanoGate = chanceMask(this.volcanoSelector, this.settings.volcanoChance, x * volcanoFreqMod, z * volcanoFreqMod);
+
+        float hillValue = this.hillHeight.compute(x * mountainFreqMod, z * mountainFreqMod, 0) * (0.15F + mountainGate * 0.55F);
+        float ridgeValue = this.ridgeHeight.compute(x * mountainFreqMod, z * mountainFreqMod, 0) * mountainGate;
+        float volcanoValue = this.volcanoHeight.compute(x * volcanoFreqMod, z * volcanoFreqMod, 0) * volcanoGate;
+        // --------------------------------
 
         // Base Mountain Profile
         float mountainValue = NoiseUtil.clamp(hillValue * 0.35F + ridgeValue * 0.5F + volcanoValue * 0.75F, 0.0F, 1.0F);
@@ -186,7 +198,6 @@ public class ArchipelagoPopulator implements CellPopulator {
 
         // Base Terrain Detailing (Rolling Hills)
         float landDetail = this.baseTerrainDetail.compute(x, z, 0) * this.settings.islandHeight * 0.08F * landAlpha;
-
         float targetHeight = this.levels.ground + baseHeight + reliefHeight + landDetail;
 
         cell.height = NoiseUtil.lerp(beachHeight, targetHeight, landAlpha);

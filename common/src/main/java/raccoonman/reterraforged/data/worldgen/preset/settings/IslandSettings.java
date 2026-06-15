@@ -16,7 +16,9 @@ public class IslandSettings {
 		Codec.FLOAT.fieldOf("volcanoChance").forGetter((o) -> o.volcanoChance),
 		Codec.FLOAT.fieldOf("offshoreDepth").forGetter((o) -> o.offshoreDepth),
 		Codec.FLOAT.fieldOf("beachWidth").forGetter((o) -> o.beachWidth),
-		Codec.FLOAT.fieldOf("beachCoverage").forGetter((o) -> o.beachCoverage)
+		Codec.FLOAT.fieldOf("beachCoverage").forGetter((o) -> o.beachCoverage),
+		Codec.FLOAT.fieldOf("volcanismScale").forGetter((o) -> o.volcanismScale),
+		Codec.FLOAT.fieldOf("mountainScale").forGetter((o) -> o.mountainScale)
 	).apply(instance, IslandSettings::new));
 	
 	public boolean enableArchipelago;
@@ -27,12 +29,14 @@ public class IslandSettings {
 	public float islandVerticalScale;
 	public float islandHorizontalScale;
 	public float mountainChance;
+	public float mountainScale;
 	public float volcanoChance;
+	public float volcanismScale;
 	public float offshoreDepth;
 	public float beachWidth;
 	public float beachCoverage;
 	
-	public IslandSettings(boolean enableArchipelago, float islandDensity, float islandSize, float islandHeight, float islandBaseScale, float islandVerticalScale, float islandHorizontalScale, float mountainChance, float volcanoChance, float offshoreDepth, float beachWidth, float beachCoverage) {
+	public IslandSettings(boolean enableArchipelago, float islandDensity, float islandSize, float islandHeight, float islandBaseScale, float islandVerticalScale, float islandHorizontalScale, float mountainChance, float volcanoChance, float offshoreDepth, float beachWidth, float beachCoverage, float mountainScale, float volcanismScale) {
 		this.enableArchipelago = enableArchipelago;
 		this.islandDensity = islandDensity;
 		this.islandSize = islandSize;
@@ -41,14 +45,16 @@ public class IslandSettings {
 		this.islandVerticalScale = islandVerticalScale;
 		this.islandHorizontalScale = islandHorizontalScale;
 		this.mountainChance = mountainChance;
+		this.mountainScale = mountainScale;
 		this.volcanoChance = volcanoChance;
+		this.volcanismScale = volcanismScale;
 		this.offshoreDepth = offshoreDepth;
 		this.beachWidth = beachWidth;
 		this.beachCoverage = beachCoverage;
 	}
 	
 	public IslandSettings copy() {
-		return new IslandSettings(this.enableArchipelago, this.islandDensity, this.islandSize, this.islandHeight, this.islandBaseScale, this.islandVerticalScale, this.islandHorizontalScale, this.mountainChance, this.volcanoChance, this.offshoreDepth, this.beachWidth, this.beachCoverage);
+		return new IslandSettings(this.enableArchipelago, this.islandDensity, this.islandSize, this.islandHeight, this.islandBaseScale, this.islandVerticalScale, this.islandHorizontalScale, this.mountainChance, this.volcanoChance, this.offshoreDepth, this.beachWidth, this.beachCoverage, this.mountainScale, this.volcanismScale);
 	}
 	
 	public static IslandSettings makeDefault() {
@@ -63,6 +69,8 @@ public class IslandSettings {
 				0.5F,
 				0.1F,
 				0.125F,
-				0.125F);
+				0.125F,
+				0.5F,
+				0.5F);
 	}
 }

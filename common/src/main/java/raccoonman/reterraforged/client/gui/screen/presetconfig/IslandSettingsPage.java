@@ -20,7 +20,9 @@ public class IslandSettingsPage extends PresetEditorPage {
 	private Slider islandVerticalScale;
 	private Slider islandHorizontalScale;
 	private Slider mountainChance;
+	private Slider mountainScale;
 	private Slider volcanoChance;
+	private Slider volcanismScale;
 	private Slider offshoreDepth;
 	private Slider beachWidth;
 	private Slider beachCoverage;
@@ -80,8 +82,18 @@ public class IslandSettingsPage extends PresetEditorPage {
 			this.regenerate();
 			return value;
 		});
+		this.mountainScale = PresetWidgets.createFloatSlider(island.volcanoChance, 0.0F, 1.0F, RTFTranslationKeys.GUI_SLIDER_ISLAND_MOUNTAIN_SCALE, (slider, value) -> {
+			island.mountainScale = (float) slider.scaleValue(value);
+			this.regenerate();
+			return value;
+		});
 		this.volcanoChance = PresetWidgets.createFloatSlider(island.volcanoChance, 0.0F, 1.0F, RTFTranslationKeys.GUI_SLIDER_ISLAND_VOLCANO_CHANCE, (slider, value) -> {
 			island.volcanoChance = (float) slider.scaleValue(value);
+			this.regenerate();
+			return value;
+		});
+		this.volcanismScale = PresetWidgets.createFloatSlider(island.volcanoChance, 0.0F, 1.0F, RTFTranslationKeys.GUI_SLIDER_ISLAND_VOLCANISM_SCALE, (slider, value) -> {
+			island.volcanismScale = (float) slider.scaleValue(value);
 			this.regenerate();
 			return value;
 		});
@@ -110,7 +122,9 @@ public class IslandSettingsPage extends PresetEditorPage {
 		this.left.addWidget(this.islandVerticalScale);
 		this.left.addWidget(this.islandHorizontalScale);
 		this.left.addWidget(this.mountainChance);
+		this.left.addWidget(this.mountainScale);
 		this.left.addWidget(this.volcanoChance);
+		this.left.addWidget(this.volcanismScale);
 		this.left.addWidget(this.offshoreDepth);
 		this.left.addWidget(this.beachWidth);
 		this.left.addWidget(this.beachCoverage);
