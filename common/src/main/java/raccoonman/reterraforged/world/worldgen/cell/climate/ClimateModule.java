@@ -169,7 +169,7 @@ public class ClimateModule {
 			if (madeMushroomIslands(cell)){ return; }
 
 			if (cell.terrain == TerrainType.ISLAND_BEACH) {
-				cell.biome = BiomeType.SAVANNA; // Your existing logic
+				cell.biome = BiomeType.SAVANNA;
 				cell.temperature = Temperature.LEVEL_3.mid();
 				cell.moisture = Humidity.LEVEL_1.mid();
 			} else {
