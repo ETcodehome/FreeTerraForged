@@ -1,6 +1,8 @@
 package raccoonman.reterraforged.world.worldgen.cell.terrain.populator;
 
+import net.minecraft.client.Minecraft;
 import raccoonman.reterraforged.data.worldgen.preset.settings.IslandSettings;
+import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings;
 import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings.ControlPoints;
 import raccoonman.reterraforged.world.worldgen.biome.Erosion;
 import raccoonman.reterraforged.world.worldgen.biome.Weirdness;
@@ -11,6 +13,7 @@ import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainType;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noises;
+import raccoonman.reterraforged.world.worldgen.util.Seed;
 
 public class ArchipelagoPopulator implements CellPopulator {
     private IslandSettings settings;
@@ -35,54 +38,55 @@ public class ArchipelagoPopulator implements CellPopulator {
     private Noise beachErosion;
     private Noise beachWeirdness;
 
-    public ArchipelagoPopulator(IslandSettings settings, Levels levels, ControlPoints controlPoints) {
+    public ArchipelagoPopulator(IslandSettings settings, Levels levels, ControlPoints controlPoints, Seed seed) {
         this.settings = settings;
         this.levels = levels;
         this.controlPoints = controlPoints;
+        int salt = seed.get();
 
         int size = Math.round(settings.islandSize);
         float hScale = Math.max(0.1F, settings.islandHorizontalScale);
 
         // Coastline & Falloff Distortion
         // A high-frequency warp at the end to "ruffle" the edges, preventing smooth, perfect arcs.
-        Noise sizeN = Noises.simplex(1273, Math.max(1, Math.round(size * 3.5F / hScale)), 3);
-        sizeN = Noises.warpPerlin(sizeN, 1273, Math.max(1, Math.round(size * 2.0F / hScale)), 2, size * 0.5F / hScale);
-        sizeN = Noises.warpPerlin(sizeN, 4830, Math.max(1, Math.round(size * 0.5F / hScale)), 1, size * 0.3F / hScale);
-        sizeN = Noises.warpPerlin(sizeN, 8932, Math.max(1, Math.round(size * 0.08F / hScale)), 2, size * 0.15F / hScale);
+        Noise sizeN = Noises.simplex(1273 + salt, Math.max(1, Math.round(size * 3.5F / hScale)), 3);
+        sizeN = Noises.warpPerlin(sizeN, 1273 + salt, Math.max(1, Math.round(size * 2.0F / hScale)), 2, size * 0.5F / hScale);
+        sizeN = Noises.warpPerlin(sizeN, 4830 + salt, Math.max(1, Math.round(size * 0.5F / hScale)), 1, size * 0.3F / hScale);
+        sizeN = Noises.warpPerlin(sizeN, 8932 + salt, Math.max(1, Math.round(size * 0.08F / hScale)), 2, size * 0.15F / hScale);
         sizeN = Noises.clamp(sizeN, 0.0F, 1.0F);
         this.sizeNoise = sizeN;
 
-        Noise densityN = Noises.simplex(9735, 4000, 3);
-        densityN = Noises.warpPerlin(densityN, 9735, 2000, 2, 1000.0F);
+        Noise densityN = Noises.simplex(9735 + salt, 4000, 3);
+        densityN = Noises.warpPerlin(densityN, 9735 + salt, 2000, 2, 1000.0F);
         densityN = Noises.clamp(densityN, 0.0F, 1.0F);
         this.densityNoise = densityN;
 
-        Noise ridge = Noises.perlinRidge(4829, Math.max(1, Math.round(size * 1.6F / hScale)), 4, 2.1F, 0.82F);
-        ridge = Noises.warpPerlin(ridge, 4830, Math.max(1, Math.round(size * 0.9F / hScale)), 2, size * 0.35F / hScale);
+        Noise ridge = Noises.perlinRidge(4829 + salt, Math.max(1, Math.round(size * 1.6F / hScale)), 4, 2.1F, 0.82F);
+        ridge = Noises.warpPerlin(ridge, 4830 + salt, Math.max(1, Math.round(size * 0.9F / hScale)), 2, size * 0.35F / hScale);
         ridge = Noises.clamp(ridge, 0.0F, 1.0F);
         this.ridgeHeight = ridge;
 
-        Noise hills = Noises.billow(3811, Math.max(1, Math.round(size * 0.35F / hScale)), 3, 2.25F, 0.55F);
-        hills = Noises.warpPerlin(hills, 3812, Math.max(1, Math.round(size * 0.7F / hScale)), 1, size * 0.2F / hScale);
+        Noise hills = Noises.billow(3811 + salt, Math.max(1, Math.round(size * 0.35F / hScale)), 3, 2.25F, 0.55F);
+        hills = Noises.warpPerlin(hills, 3812 + salt, Math.max(1, Math.round(size * 0.7F / hScale)), 1, size * 0.2F / hScale);
         hills = Noises.clamp(hills, 0.0F, 1.0F);
         this.hillHeight = hills;
 
-        Noise volcano = Noises.perlinRidge(6721, Math.max(1, Math.round(size * 0.45F / hScale)), 3, 2.4F, 0.9F);
+        Noise volcano = Noises.perlinRidge(6721 + salt, Math.max(1, Math.round(size * 0.45F / hScale)), 3, 2.4F, 0.9F);
         volcano = Noises.powCurve(volcano, 1.8F);
         volcano = Noises.clamp(volcano, 0.0F, 1.0F);
         this.volcanoHeight = volcano;
 
         // Ebbing & Flowing Beaches
-        this.beachVariance = Noises.simplex(5541, Math.max(1, Math.round(size * 0.15F / hScale)), 2);
+        this.beachVariance = Noises.simplex(5541 + salt, Math.max(1, Math.round(size * 0.15F / hScale)), 2);
 
         // Rolling Base Terrain (breaks up flatness)
-        this.baseTerrainDetail = Noises.simplex(7712, Math.max(1, Math.round(size * 0.1F / hScale)), 3);
+        this.baseTerrainDetail = Noises.simplex(7712 + salt, Math.max(1, Math.round(size * 0.1F / hScale)), 3);
 
         // Mountain Gullies / Erosion (adds rivulets)
-        this.mountainGullies = Noises.perlinRidge(9912, Math.max(1, Math.round(size * 0.06F / hScale)), 3, 2.2F, 0.8F);
+        this.mountainGullies = Noises.perlinRidge(9912 + salt, Math.max(1, Math.round(size * 0.06F / hScale)), 3, 2.2F, 0.8F);
 
-        this.mountainSelector = Noises.clamp(Noises.simplex(11867, Math.max(1, Math.round(size * 1.25F / hScale)), 2), 0.0F, 1.0F);
-        this.volcanoSelector = Noises.clamp(Noises.simplex(22193, Math.max(1, Math.round(size * 1.75F / hScale)), 2), 0.0F, 1.0F);
+        this.mountainSelector = Noises.clamp(Noises.simplex(11867 + salt, Math.max(1, Math.round(size * 1.25F / hScale)), 2), 0.0F, 1.0F);
+        this.volcanoSelector = Noises.clamp(Noises.simplex(22193 + salt, Math.max(1, Math.round(size * 1.75F / hScale)), 2), 0.0F, 1.0F);
 
         this.islandErosion = Erosion.LEVEL_4.source();
         this.islandWeirdness = Weirdness.MID_SLICE_NORMAL_DESCENDING.source();
