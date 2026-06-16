@@ -308,11 +308,11 @@ public class Presets {
 								0)
 				),
 				new SurfaceSettings(new SurfaceSettings.Erosion(30,
-						140,
+						400,
 						40,
 						95,
-						0.65F,
-						0.475F,
+						0.95F,
+						0.68F,
 						0.4F)),
 
 				new CaveSettings(0.199F,
@@ -422,13 +422,13 @@ public class Presets {
 				new RiverSettings(
 
 						-807426906,
-						15,
+						10,
 
 						//main rivers
 						new River(7,
 								1,
 								3,
-								16,
+								24,
 								10,
 								1.0F),
 
@@ -462,9 +462,7 @@ public class Presets {
 								0.8112F,
 								0.8112F),
 
-						new Smoothing(0,
-								0.0F,
-								0.0F)
+						new Smoothing(1, 1.8F, 0.9F)
 				),
 
 				new StructureSettings(),
