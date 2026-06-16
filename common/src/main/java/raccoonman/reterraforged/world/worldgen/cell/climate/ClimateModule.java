@@ -164,17 +164,36 @@ public class ClimateModule {
 
 		// Island biome override: sample climate for island terrain so islands
 		// get land biomes instead of ocean/frozen_ocean
-		if (cell.terrain == TerrainType.ISLAND_BEACH) {
-			cell.biome = BiomeType.SAVANNA;
-			cell.temperature = Temperature.LEVEL_3.mid();
-			cell.moisture = Humidity.LEVEL_1.mid();
-		} else if (cell.terrain == TerrainType.ISLAND || cell.terrain == TerrainType.ISLAND_MOUNTAINS) {
-			float islTemp = this.temperature.compute(centerX, centerZ, 0);
-			float islMoist = this.moisture.compute(centerX, centerZ, 0);
-			cell.biome = BiomeType.get(islTemp, islMoist);
-			cell.temperature = cell.biome.getTemperature(cell.biomeRegionId);
-			cell.moisture = cell.biome.getMoisture(cell.biomeRegionId);
+		if (cell.terrain == TerrainType.ISLAND_BEACH || cell.terrain == TerrainType.ISLAND || cell.terrain == TerrainType.ISLAND_MOUNTAINS) {
+
+			if (madeMushroomIslands(cell)){ return; }
+
+			if (cell.terrain == TerrainType.ISLAND_BEACH) {
+				cell.biome = BiomeType.SAVANNA; // Your existing logic
+				cell.temperature = Temperature.LEVEL_3.mid();
+				cell.moisture = Humidity.LEVEL_1.mid();
+			} else {
+				float islTemp = this.temperature.compute(centerX, centerZ, 0);
+				float islMoist = this.moisture.compute(centerX, centerZ, 0);
+				cell.biome = BiomeType.get(islTemp, islMoist);
+				cell.temperature = cell.biome.getTemperature(cell.biomeRegionId);
+				cell.moisture = cell.biome.getMoisture(cell.biomeRegionId);
+			}
 		}
+	}
+
+	private boolean madeMushroomIslands(Cell cell)
+	{
+		// Check for a rare noise threshold (e.g., top 5% of macroBiomeId)
+		if (cell.macroBiomeId > 0.95F) {
+			cell.terrain = TerrainType.MUSHROOM_FIELDS;
+
+			// Set appropriate temperature and moisture for mushrooms/mycelium
+			cell.temperature = Temperature.LEVEL_2.mid(); // Moderate
+			cell.moisture = Humidity.LEVEL_4.mid();       // Wet
+			return true;
+		}
+		return false;
 	}
 
 	private float modifyTemp(float height, float temp, float x, float z) {

@@ -15,7 +15,6 @@ public class TerrainType {
     public static final Terrain COAST = register("coast", TerrainCategory.COAST);
     public static final Terrain BEACH = register("beach", TerrainCategory.BEACH);
     public static final Terrain RIVER = register("river", TerrainCategory.RIVER);
-    public static final Terrain LAKE = register("lake", TerrainCategory.LAKE);
     public static final Terrain WETLAND = registerWetlands("wetland", TerrainCategory.WETLAND);
     public static final Terrain FLATS = register("flats", TerrainCategory.FLATLAND);
     public static final Terrain BADLANDS = registerBadlands("badlands", TerrainCategory.FLATLAND);
@@ -27,35 +26,10 @@ public class TerrainType {
     public static final Terrain MOUNTAIN_CHAIN = registerMountain("mountain_chain", TerrainCategory.HIGHLAND);
     public static final Terrain VOLCANO = registerVolcano("volcano", TerrainCategory.HIGHLAND);
     public static final Terrain VOLCANO_PIPE = registerVolcano("volcano_pipe", TerrainCategory.HIGHLAND);
-
-    public static final Terrain REMOTE_ISLANDS = register("remote_islands", TerrainCategory.ISLAND);
     public static final Terrain ISLAND = register("island", TerrainCategory.ISLAND);
     public static final Terrain ISLAND_BEACH = register("island_beach", TerrainCategory.ISLAND);
     public static final Terrain ISLAND_MOUNTAINS = register("island_mountains", TerrainCategory.ISLAND);
-    public static final Terrain LAGOON = register("lagoon", TerrainCategory.ISLAND);
-    public static final Terrain DEEP_LAGOON = register("deep_lagoon", TerrainCategory.ISLAND);
-    public static final Terrain ARCHIPELAGO = register("archipelago", TerrainCategory.ISLAND);
-    public static final Terrain MUSHROOM_ARCHIPELAGO = register("mushroom_archipelago", TerrainCategory.ISLAND);
     public static final Terrain MUSHROOM_FIELDS = register("mushroom_fields", TerrainCategory.ISLAND);
-
-    public static void forEach(Consumer<Terrain> action) {
-        TerrainType.REGISTRY.forEach(action);
-    }
-    
-    public static Optional<Terrain> find(Predicate<Terrain> filter) {
-        return TerrainType.REGISTRY.stream().filter(filter).findFirst();
-    }
-    
-    public static Terrain getOrCreate(String name, Terrain parent) {
-        if (parent == null || parent == TerrainType.NONE) {
-            return TerrainType.NONE;
-        }
-        Terrain current = get(name);
-        if (current != null) {
-            return current;
-        }
-        return register(new Terrain(0, name, parent));
-    }
     
     public static Terrain get(String name) {
         for (Terrain terrain : TerrainType.REGISTRY) {
