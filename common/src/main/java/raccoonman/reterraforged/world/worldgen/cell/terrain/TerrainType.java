@@ -29,6 +29,9 @@ public class TerrainType {
     public static final Terrain VOLCANO_PIPE = registerVolcano("volcano_pipe", TerrainCategory.HIGHLAND);
 
     public static final Terrain REMOTE_ISLANDS = register("remote_islands", TerrainCategory.ISLAND);
+    public static final Terrain ISLAND = register("island", TerrainCategory.ISLAND);
+    public static final Terrain ISLAND_BEACH = register("island_beach", TerrainCategory.ISLAND);
+    public static final Terrain ISLAND_MOUNTAINS = register("island_mountains", TerrainCategory.ISLAND);
     public static final Terrain LAGOON = register("lagoon", TerrainCategory.ISLAND);
     public static final Terrain DEEP_LAGOON = register("deep_lagoon", TerrainCategory.ISLAND);
     public static final Terrain ARCHIPELAGO = register("archipelago", TerrainCategory.ISLAND);
