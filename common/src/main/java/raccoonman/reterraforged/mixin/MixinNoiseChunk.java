@@ -55,12 +55,12 @@ class MixinNoiseChunk {
 	private int cellCountXZ;
 	
 	@Redirect(
-			method = "<init>",
-			at = @At(
-				value = "INVOKE",
-				target = "Lnet/minecraft/world/level/levelgen/NoiseRouter;mapAll(Lnet/minecraft/world/level/levelgen/DensityFunction$Visitor;)Lnet/minecraft/world/level/levelgen/NoiseRouter;"
-			)
+		method = "<init>",
+		at = @At(
+			value = "INVOKE",
+			target = "Lnet/minecraft/world/level/levelgen/NoiseRouter;mapAll(Lnet/minecraft/world/level/levelgen/DensityFunction$Visitor;)Lnet/minecraft/world/level/levelgen/NoiseRouter;"
 		)
+	)
 	private NoiseRouter init(NoiseRouter noiseRouter, DensityFunction.Visitor visitor, int cellCountXZ, RandomState randomState, int minBlockX, int minBlockZ, NoiseSettings noiseSettings, DensityFunctions.BeardifierOrMarker beardifierOrMarker, NoiseGeneratorSettings generatorSettings) {
 		this.randomState = randomState;
 		this.chunkX = SectionPos.blockToSectionCoord(minBlockX);
