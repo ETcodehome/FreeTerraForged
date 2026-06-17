@@ -52,7 +52,6 @@ public class MaxHeightUtil {
         	highestY = Math.max(highestY, boundingBox.maxY());
         }
         pieces.back(Integer.MAX_VALUE);
-        // TODO calculate junction height
         return -noiseSettings.minY() + highestY;
 	}
 	
