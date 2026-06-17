@@ -96,20 +96,4 @@ abstract class MixinNoiseBasedChunkGenerator extends ChunkGenerator {
 		ActiveChunk.set(chunkAccess);
 	}
 
-//	TODO
-//	@Redirect(
-//		method = { "iterateNoiseColumn", "sampleHeightmap" },
-//		at = @At(
-//			value = "INVOKE",
-//			target = "Lnet/minecraft/world/level/levelgen/NoiseSettings;height()I"
-//		),
-//		require = 2
-//	)
-//    private int iterateNoiseColumn(NoiseSettings settings, LevelHeightAccessor levelHeightAccessor, RandomState randomState, int blockX, int blockZ, @Nullable MutableObject<NoiseColumn> mutableObject, @Nullable Predicate<BlockState> predicate) {
-////		int chunkX = SectionPos.blockToSectionCoord(blockX);
-////		int chunkZ = SectionPos.blockToSectionCoord(blockZ);
-////		TODO
-//		int maxHeight =  settings.height();//rtfChunk == null ? settings.height() : MaxHeightUtil.getMaxHeight(chunkX, chunkZ, rtfChunk.getMaxHeight(settings.height()), this.settings.value(), settings);
-//		return maxHeight;
-//    }
 }
