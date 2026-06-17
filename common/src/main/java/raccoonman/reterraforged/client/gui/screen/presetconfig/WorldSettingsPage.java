@@ -214,9 +214,7 @@ public class WorldSettingsPage extends PresetEditorPage {
 	}
 
 	@Override
-	public Optional<Page> previous() {
-		return Optional.of(new PresetListPage(this.screen));
-	}
+	public Optional<Page> previous() { return Optional.empty();	}
 
 	@Override
 	public Optional<Page> next() {

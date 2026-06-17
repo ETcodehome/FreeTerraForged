@@ -129,13 +129,12 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 				float deepOcean = controlPoints.deepOcean;
 				float shallowOcean = controlPoints.shallowOcean;
 				float beach = controlPoints.beach;
-				float coast = controlPoints.coast;
 				float inland = controlPoints.inland;
 				
 				if(cell.terrain == TerrainType.MUSHROOM_FIELDS) {
 					return Continentalness.MUSHROOM_FIELDS.mid();
 				}
-				
+
 				if(cell.terrain.isDeepOcean()) {
 					float alpha = NoiseUtil.clamp(cell.continentEdge, 0.0F, deepOcean);
 					alpha = NoiseUtil.lerp(alpha, 0.0F, deepOcean, 0.0F, 1.0F);
@@ -157,6 +156,7 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 				float alpha = NoiseUtil.clamp(cell.continentEdge, beach, inland);
 				alpha = NoiseUtil.lerp(alpha, beach, inland, 0.0F, 1.0F);
 				return NoiseUtil.lerp(Continentalness.NEAR_INLAND.mid(), Continentalness.FAR_INLAND.max(), alpha);
+
 			}
 		},
 		EROSION("erosion") {

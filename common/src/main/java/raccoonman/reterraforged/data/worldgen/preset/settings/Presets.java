@@ -50,7 +50,8 @@ public class Presets {
 				new River(4, 1, 4, 14, 5, 0.975F), 
 				new Lake(0.3F, 0.0F, 0.03F, 10, 75, 150, 2, 10),
 				new Wetland(0.6F, 175, 225)
-			), 
+			),
+			IslandSettings.makeDefault(),
 			new FilterSettings(
 				new Erosion(135, 12, 0.7F, 0.7F, 0.5F, 0.5F),
 				new Smoothing(1, 1.8F, 0.9F)
@@ -93,7 +94,8 @@ public class Presets {
 				new River(4, 1, 4, 14, 5, 0.975F), 
 				new Lake(0.3F, 0.0F, 0.03F, 10, 75, 150, 2, 10),
 				new Wetland(0.6F, 175, 225)
-			), 
+			),
+			IslandSettings.makeDefault(),
 			new FilterSettings(
 				new Erosion(135, 12, 0.7F, 0.7F, 0.5F, 0.5F),
 				new Smoothing(1, 1.8F, 0.9F)
@@ -136,7 +138,8 @@ public class Presets {
 				new River(4, 1, 4, 14, 5, 0.493F), 
 				new Lake(0.462F, 0.0F, 0.028F, 10, 75, 150, 2, 10),
 				new Wetland(0.796F, 196, 255)
-			), 
+			),
+			IslandSettings.makeDefault(),
 			new FilterSettings(
 				new Erosion(100, 12, 0.699F, 0.699F, 0.5F, 0.5F),
 				new Smoothing(2, 1.8F, 0.75F)
@@ -180,7 +183,8 @@ public class Presets {
 				new River(3, 1, 2, 12, 4, 0.5F), 
 				new Lake(0.671F, 0.0F, 0.028F, 8, 75, 150, 2, 7),
 				new Wetland(0.865F, 134, 201)
-			), 
+			),
+			IslandSettings.makeDefault(),
 			new FilterSettings(
 				new Erosion(175, 12, 0.648F, 0.657F, 0.5F, 0.5F),
 				new Smoothing(1, 1.855F, 0.916F)
@@ -223,7 +227,8 @@ public class Presets {
 				new River(4, 1, 4, 14, 5, 0.493F), 
 				new Lake(0.462F, 0.0F, 0.028F, 10, 75, 150, 2, 10),
 				new Wetland(0.796F, 196, 255)
-			), 
+			),
+			IslandSettings.makeDefault(),
 			new FilterSettings(
 				new Erosion(100, 12, 0.699F, 0.699F, 0.5F, 0.5F),
 				new Smoothing(2, 1.799F, 0.75F)
@@ -266,7 +271,8 @@ public class Presets {
 				new River(3, 1, 3, 18, 3, 0.7F), 
 				new Lake(0.595F, 0.0F, 0.028F, 10, 75, 150, 2, 10),
 				new Wetland(0.86F, 175, 225)
-			), 
+			),
+			IslandSettings.makeDefault(),
 			new FilterSettings(
 				new Erosion(165, 15, 0.612F, 0.652F, 0.5F, 0.5F),
 				new Smoothing(1, 1.799F, 0.898F)
@@ -285,15 +291,15 @@ public class Presets {
 								DistanceFunction.EUCLIDEAN,
 								4000,
 								1.0F,
-								0.0F,
+								0.2F,
 								0.6161F,
 								5,
 								0.2516F,
 								5.7262F),
 
-						new ControlPoints(-1.0F,
-								-1.0F,
-								0.1F,
+						new ControlPoints(0.0F,
+								0.074F,
+								0.102F,
 								0.13144F,
 								0.2210F,
 								0.3576F,
@@ -308,11 +314,11 @@ public class Presets {
 								0)
 				),
 				new SurfaceSettings(new SurfaceSettings.Erosion(30,
-						140,
+						400,
 						40,
 						95,
-						0.65F,
-						0.475F,
+						0.95F,
+						0.68F,
 						0.4F)),
 
 				new CaveSettings(0.199F,
@@ -422,13 +428,13 @@ public class Presets {
 				new RiverSettings(
 
 						-807426906,
-						15,
+						10,
 
 						//main rivers
 						new River(7,
 								1,
 								3,
-								16,
+								24,
 								10,
 								1.0F),
 
@@ -453,6 +459,7 @@ public class Presets {
 								50,
 								500)
 				),
+				IslandSettings.makeDefault(),
 				new FilterSettings(
 
 						new Erosion(250,
@@ -462,13 +469,9 @@ public class Presets {
 								0.8112F,
 								0.8112F),
 
-						new Smoothing(0,
-								0.0F,
-								0.0F)
+						new Smoothing(1, 1.8F, 0.9F)
 				),
-
 				new StructureSettings(),
-
 				new MiscellaneousSettings(true,
 						889,
 						true,

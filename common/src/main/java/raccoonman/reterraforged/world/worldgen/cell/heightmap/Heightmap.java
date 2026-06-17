@@ -19,8 +19,10 @@ import raccoonman.reterraforged.world.worldgen.cell.continent.ContinentLerper3;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.Rivermap;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.Blender;
+import raccoonman.reterraforged.world.worldgen.cell.terrain.IslandBlender;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.Populators;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainType;
+import raccoonman.reterraforged.world.worldgen.cell.terrain.populator.ArchipelagoPopulator;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.populator.VolcanoPopulator;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.provider.TerrainProvider;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.region.RegionLerper;
@@ -37,6 +39,9 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
 	
 	public void apply(Cell cell, float x, float z, boolean applyClimate) {
 		this.applyTerrain(cell, x, z);
+		if (cell.terrain == TerrainType.ISLAND_BEACH) {
+			cell.terrain = TerrainType.BEACH;
+		}
 		this.applyRivers(cell, x, z, this.continent.getRivermap(cell));
 		this.applyClimate(cell, x, z, applyClimate);
 	}
@@ -56,7 +61,7 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
 	
 	public void applyClimate(Cell cell, float x, float z, boolean applyClimate) {
 		float riverValleyThreshold = 0.675F;
-        if(cell.riverMask < riverValleyThreshold) {
+        if(cell.riverMask < riverValleyThreshold && !isIslandTerrain(cell)) {
         	cell.erosion = 0.445F;
         	cell.weirdness = 0.34F;
         }
@@ -130,13 +135,23 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
         CellPopulator coast = Populators.makeCoast(ctx.levels);
 
         CellPopulator oceans = new ContinentLerper3(deepOcean, shallowOcean, coast, controlPoints.deepOcean, controlPoints.shallowOcean, controlPoints.coast);
+
         CellPopulator terrain = new ContinentLerper2(oceans, (cell, x, z) -> {
             land.apply(cell, x, z);
             cell.height += (ContinentalHydrology.getWeightedWaterHeight(cell.waterTable));
         }, controlPoints.shallowOcean, controlPoints.inland);
+        
+        // Wrap with archipelago layer if enabled
+        if (ctx.preset.island().enableArchipelago) {
+            terrain = new IslandBlender(terrain, new ArchipelagoPopulator(ctx.preset.island(), ctx.levels, controlPoints, ctx.seed), ctx.levels);
+        }
 
         Noise beachNoise = Noises.perlin2(ctx.seed.next(), 20, 1);
         beachNoise = Noises.mul(beachNoise, ctx.levels.scale(5));
         return new Heightmap(terrain, region, continent, climate, levels, controlPoints, terrainFrequency, beachNoise);
+	}
+	
+	private static boolean isIslandTerrain(Cell cell) {
+	    return cell.terrain == TerrainType.ISLAND || cell.terrain == TerrainType.ISLAND_BEACH || cell.terrain == TerrainType.ISLAND_MOUNTAINS;
 	}
 }
