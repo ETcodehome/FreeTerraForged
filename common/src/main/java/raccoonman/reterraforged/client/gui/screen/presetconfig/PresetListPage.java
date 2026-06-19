@@ -270,8 +270,6 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, PresetEntry, Abstr
 		public void save() throws IOException {
 
 			RTFCommon.LOGGER.info("Encoding Preset - {}", this.getPath().getFileName().toString());
-			RTFCommon.LOGGER.info("Preset Object: {}", this.preset);
-			RTFCommon.LOGGER.info("Island Settings: {}", this.preset.island());
 
 			if (!this.builtin) {
 				Path path = this.getPath();
