@@ -14,11 +14,9 @@ import java.util.regex.Pattern;
 import org.apache.commons.compress.utils.FileNameUtils;
 import org.jetbrains.annotations.Nullable;
 
-import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.google.gson.stream.JsonWriter;
 import com.mojang.serialization.DataResult;
-import com.mojang.serialization.DataResult.Error;
 import com.mojang.serialization.JsonOps;
 
 import io.netty.util.internal.StringUtil;
@@ -29,7 +27,6 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.toasts.SystemToast.SystemToastId;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.Style;
 import net.minecraft.util.GsonHelper;
 import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.client.data.RTFTranslationKeys;
@@ -159,8 +156,8 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, PresetEntry, Abstr
 	}
 	
 	@Override
-	public void onDone() {
-		super.onDone();
+	public void onSave() {
+		super.onSave();
 		
 		Entry<PresetEntry> selected = this.left.getSelected();
 		if(selected != null) {
@@ -223,13 +220,10 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, PresetEntry, Abstr
 				try(Reader reader = Files.newBufferedReader(presetPath)) {
 					String base = FileNameUtils.getBaseName(presetPath.toString());
 					DataResult<Preset> result = Preset.DIRECT_CODEC.parse(JsonOps.INSTANCE, JsonParser.parseReader(reader));
-					Optional<Error<Preset>> error = result.error();
-					if(error.isPresent()) {
-						RTFCommon.LOGGER.error(error.get().message());
-						continue;
+					Preset preset = result.resultOrPartial(RTFCommon.LOGGER::error).orElse(null);
+					if(preset != null) {
+						presets.add(new PresetEntry(Component.literal(base).withStyle(ChatFormatting.GOLD), preset, false, this));
 					}
-					Preset preset = result.result().get();
-					presets.add(new PresetEntry(Component.literal(base).withStyle(ChatFormatting.GOLD), preset, false, this));
 				}
 			}
 		}
@@ -272,19 +266,32 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, PresetEntry, Abstr
 		public Path getPath() {
 			return PRESET_PATH.resolve(this.name.getString() + ".json");
 		}
-		
-		//FIXME delete old pack before save
+
 		public void save() throws IOException {
-			if(!this.builtin) {
-				try(
-					Writer writer = Files.newBufferedWriter(this.getPath());
-					JsonWriter jsonWriter = new JsonWriter(writer);
-				) {
-					JsonElement element = Preset.DIRECT_CODEC.encodeStart(JsonOps.INSTANCE, this.preset).result().orElseThrow();
-					jsonWriter.setSerializeNulls(false);
-					jsonWriter.setIndent("  ");
-					GsonHelper.writeValue(jsonWriter, element, null);
-				}
+
+			RTFCommon.LOGGER.info("Encoding Preset - {}", this.getPath().getFileName().toString());
+			RTFCommon.LOGGER.info("Preset Object: {}", this.preset);
+			RTFCommon.LOGGER.info("Island Settings: {}", this.preset.island());
+
+			if (!this.builtin) {
+				Path path = this.getPath();
+				Path tempPath = path.resolveSibling(path.getFileName().toString() + ".tmp");
+
+				Preset.DIRECT_CODEC.encodeStart(JsonOps.INSTANCE, this.preset)
+						.resultOrPartial(error -> RTFCommon.LOGGER.error("Failed to encode preset: {}", error))
+						.ifPresent(element -> {
+							try (Writer writer = Files.newBufferedWriter(tempPath);
+								 JsonWriter jsonWriter = new JsonWriter(writer)) {
+								jsonWriter.setSerializeNulls(false);
+								jsonWriter.setIndent("  ");
+								GsonHelper.writeValue(jsonWriter, element, null);
+
+								// Atomic move (if save succeeds, overwrite original)
+								java.nio.file.Files.move(tempPath, path, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+							} catch (IOException e) {
+								RTFCommon.LOGGER.error("Failed to write preset to disk", e);
+							}
+						});
 			}
 		}
 	}
