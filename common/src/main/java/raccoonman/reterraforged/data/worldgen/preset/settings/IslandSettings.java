@@ -45,16 +45,30 @@ public class IslandSettings {
 		this.islandVerticalScale = islandVerticalScale;
 		this.islandHorizontalScale = islandHorizontalScale;
 		this.mountainChance = mountainChance;
-		this.mountainScale = mountainScale;
 		this.volcanoChance = volcanoChance;
-		this.volcanismScale = volcanismScale;
 		this.offshoreDepth = offshoreDepth;
 		this.beachWidth = beachWidth;
 		this.beachCoverage = beachCoverage;
+		this.mountainScale = mountainScale;
+		this.volcanismScale = volcanismScale;
 	}
 	
 	public IslandSettings copy() {
-		return new IslandSettings(this.enableArchipelago, this.islandDensity, this.islandSize, this.islandHeight, this.islandBaseScale, this.islandVerticalScale, this.islandHorizontalScale, this.mountainChance, this.volcanoChance, this.offshoreDepth, this.beachWidth, this.beachCoverage, this.mountainScale, this.volcanismScale);
+		return new IslandSettings(
+				this.enableArchipelago,
+				this.islandDensity,
+				this.islandSize,
+				this.islandHeight,
+				this.islandBaseScale,
+				this.islandVerticalScale,
+				this.islandHorizontalScale,
+				this.mountainChance,
+				this.volcanoChance,
+				this.offshoreDepth,
+				this.beachWidth,
+				this.beachCoverage,
+				this.mountainScale,
+				this.volcanismScale);
 	}
 	
 	public static IslandSettings makeDefault() {
