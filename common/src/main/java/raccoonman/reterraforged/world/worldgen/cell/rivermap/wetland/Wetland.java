@@ -19,6 +19,7 @@ public class Wetland {
     private final Noise moundShape;
     private final Noise moundHeight;
     private final Noise warpNoise;
+    private final Noise bankRoughness;
     private final Levels levels;
 
     public Wetland(int seed, Vec2f a, Vec2f b, float radius, Levels levels) {
@@ -42,104 +43,98 @@ public class Wetland {
 
         // Warp noise - Distorts the wetland path so it's not a straight line
         this.warpNoise = Noises.perlin(++seed, 25, 2);
+        this.bankRoughness = Noises.simplex(++seed, 45, 2);
     }
 
     public void apply(Cell cell, float rx, float rz, float x, float z) {
 
-        // calculate the globally consistent water level at this cell
-        float upliftOffset = (ContinentalHydrology.getWeightedWaterHeight(cell.waterTable));
+        float upliftOffset = ContinentalHydrology.getWeightedWaterHeight(cell.waterTable);
         float oceanHeightOffset = levels.scale(levels.waterLevel);
         float localWaterSurface = oceanHeightOffset + upliftOffset;
 
-        // generate a single block height factor so we can offset heights by single layers easily
         float singleBlock = levels.ground(1) - levels.ground(0);
 
-        // Define the wetland bed. Mound builders will build up above the water level
-        // this value roughly equates to 2 block depressions below water level for pools
         float bed = localWaterSurface - (3.5F * singleBlock);
 
-        // early exit guard to prevent filling already carved surfaces
         if (cell.height < bed) return;
 
-        // calculate warp meandering
         float warpStrength = 8.0F;
         float wx = rx + this.warpNoise.compute(x, z, 0) * warpStrength;
         float wz = rz + this.warpNoise.compute(x, z, 1) * warpStrength;
         float t = Line.distanceOnLine(wx, wz, this.a.x(), this.a.y(), this.b.x(), this.b.y());
         float d2 = getDistance2(wx, wz, this.a.x(), this.a.y(), this.b.x(), this.b.y(), t);
 
-        // exit if we're outside the influence of the swamp
         if (d2 > this.radius2) return;
 
-        // We use a fixed range for thresholds, only varying the intensity by noise
         float dist = 1.0F - d2 / this.radius2;
         float banks = cell.height;
-        float tStart = 0.4F;
+
+        float edgeWarp = this.warpNoise.compute(x * 0.2F, z * 0.2F, 3) * 0.15F;
+        float warpedDist = dist + edgeWarp;
+        warpedDist = Math.clamp(warpedDist, 0.0F, 1.0F);
+
         float tEnd = 0.7F;
-        float totalAlpha = NoiseUtil.map(dist, 0.0F, tEnd, tEnd);
+        float rawAlpha = NoiseUtil.map(warpedDist, 0.0F, tEnd, tEnd);
+        rawAlpha = Math.clamp(rawAlpha, 0.0F, 1.0F);
 
-        // Add ridges and rivulets to the otherwise featureless walls
+        float internalAlpha = rawAlpha * rawAlpha * (3.0F - 2.0F * rawAlpha);
+
         float rivuletNoise = Math.abs(this.warpNoise.compute(x * 0.4F, z * 0.4F, 2));
-        float slopeMask = (float) Math.sin(totalAlpha * Math.PI); // Peaks at 1.0 midway down the wall
-
+        float slopeMask = (float) Math.sin(internalAlpha * Math.PI);
         if (slopeMask > 0.0F) {
-            // Pushing totalAlpha higher carves down into the wall, creating rivulets
-            totalAlpha += rivuletNoise * 0.25F * slopeMask;
+            internalAlpha += rivuletNoise * 0.25F * slopeMask;
         }
+        internalAlpha = Math.clamp(internalAlpha, 0.0F, 1.0F);
 
-        totalAlpha = Math.max(0, Math.min(1, totalAlpha));
-        totalAlpha = NoiseUtil.interpQuintic(totalAlpha);
+        float heightDiscrepancy = banks - bed;
+        float maxDiscrepancy = 30.0F * singleBlock;
+        float discrepancyFactor = NoiseUtil.clamp(heightDiscrepancy / maxDiscrepancy, 0.0F, 1.0F);
+        float blendedBed = NoiseUtil.lerp(bed, banks, 0.4F * discrepancyFactor);
 
-        float internalAlpha = NoiseUtil.map(dist, tStart, tEnd, tEnd - tStart);
-        internalAlpha = Math.max(0, Math.min(1, internalAlpha));
-        internalAlpha = NoiseUtil.interpQuintic(internalAlpha); // Smoothen the transition
+        float edgeDistance = (1.0F - warpedDist) * this.radius;
+        float maxWetlandSlope = 0.325f; //(float) Math.tan(Math.toRadians(18.0F));
+        float maxRise = edgeDistance * maxWetlandSlope;
+        float thresholdHeight = blendedBed + maxRise;
 
-        // InternalAlpha to scale the carving so it tapers off
-        // entirely at the edge of the influence radius.
-        float targetHeight = NoiseUtil.lerp(banks, bed, internalAlpha);
+        float smoothHeight = NoiseUtil.lerp(banks, blendedBed, internalAlpha);
+        float targetHeight = Math.min(smoothHeight, thresholdHeight);
+
+        float roughness = this.bankRoughness.compute(x, z, 0);
+        float wallMask = (1.0F - internalAlpha) * internalAlpha * 4.0F;
+        targetHeight += roughness * wallMask * 2.0F * singleBlock;
+
         if (cell.height > targetHeight) {
-            cell.height = NoiseUtil.lerp(banks, targetHeight, internalAlpha);
+            cell.height = targetHeight;
         }
 
-        // Restrict Biome and Water Level to the basin
-        if (internalAlpha > 0.1F) {
-            cell.riverWaterLevel = upliftOffset;
-        }
-
-        if (dist >= tEnd) {
-            cell.terrain = TerrainType.WETLAND;
-            cell.erosionMask = true;
-        }
-
-        // Strict Biome Containment
-        // Ensure water level is set for the carved area so pools form correctly against the walls
         if (internalAlpha > 0.0F) {
             cell.riverWaterLevel = upliftOffset;
         }
 
-        // Strictly restrict the Wetland biome to the flat bottom of the bowl.
-        // The walls (dist < tEnd) will retain their original biome, meaning the fade-out
-        // happens entirely in the surrounding biomes.
-        if (dist >= tEnd) {
-            cell.terrain = TerrainType.WETLAND;
-            cell.erosionMask = true;
-        }
+        float featureEdge = Math.min(dist, warpedDist);
 
-        // Dynamic island ranges relative to water level
         float localMoundMin = localWaterSurface + (1.0F * singleBlock);
         float localMoundMax = localWaterSurface + (2.0F * singleBlock);
         float localMoundVariance = localMoundMax - localMoundMin;
 
-        // Hummocks with smooth slope encroachment
         if (cell.height >= bed && cell.height < localMoundMax) {
-            float shapeAlpha = this.moundShape.compute(x, z, 0) * totalAlpha;
+            float moundMask = NoiseUtil.clamp((internalAlpha - 0.7F) / 0.3F, 0.0F, 1.0F);
+            float shapeAlpha = this.moundShape.compute(x, z, 0) * moundMask;
             float moundHeightNoise = this.moundHeight.compute(x, z, 0);
             float mounds = localMoundMin + (moundHeightNoise * localMoundVariance);
 
-            cell.height = NoiseUtil.lerp(cell.height, mounds, shapeAlpha * 0.8F);
+            float moundEdgeEnd = tEnd - 0.1F;
+            float moundEdgeFade = NoiseUtil.clamp((featureEdge - moundEdgeEnd)/(tEnd - moundEdgeEnd), 0.0F, 1.0F);
+
+            cell.height = NoiseUtil.lerp(cell.height, mounds, shapeAlpha * 0.8F * moundEdgeFade);
         }
 
-        cell.riverMask = Math.min(cell.riverMask, 1.0F - totalAlpha);
+        if (featureEdge > tEnd && cell.height < localWaterSurface + (5.0F * singleBlock)) {
+            cell.terrain = TerrainType.WETLAND;
+            cell.erosionMask = true;
+        }
+
+        cell.riverMask = Math.min(cell.riverMask, 1.0F - internalAlpha);
     }
 
     public void recordBounds(Boundsf.Builder builder) {
