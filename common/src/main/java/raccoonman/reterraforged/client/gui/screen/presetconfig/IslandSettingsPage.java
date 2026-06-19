@@ -82,7 +82,7 @@ public class IslandSettingsPage extends PresetEditorPage {
 			this.regenerate();
 			return value;
 		});
-		this.mountainScale = PresetWidgets.createFloatSlider(island.volcanoChance, 0.0F, 1.0F, RTFTranslationKeys.GUI_SLIDER_ISLAND_MOUNTAIN_SCALE, (slider, value) -> {
+		this.mountainScale = PresetWidgets.createFloatSlider(island.mountainScale, 0.0F, 1.0F, RTFTranslationKeys.GUI_SLIDER_ISLAND_MOUNTAIN_SCALE, (slider, value) -> {
 			island.mountainScale = (float) slider.scaleValue(value);
 			this.regenerate();
 			return value;
@@ -92,7 +92,7 @@ public class IslandSettingsPage extends PresetEditorPage {
 			this.regenerate();
 			return value;
 		});
-		this.volcanismScale = PresetWidgets.createFloatSlider(island.volcanoChance, 0.0F, 1.0F, RTFTranslationKeys.GUI_SLIDER_ISLAND_VOLCANISM_SCALE, (slider, value) -> {
+		this.volcanismScale = PresetWidgets.createFloatSlider(island.volcanismScale, 0.0F, 1.0F, RTFTranslationKeys.GUI_SLIDER_ISLAND_VOLCANISM_SCALE, (slider, value) -> {
 			island.volcanismScale = (float) slider.scaleValue(value);
 			this.regenerate();
 			return value;
