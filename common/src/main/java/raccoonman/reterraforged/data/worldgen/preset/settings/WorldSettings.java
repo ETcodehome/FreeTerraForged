@@ -5,6 +5,8 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import raccoonman.reterraforged.world.worldgen.noise.function.DistanceFunction;
 
+import java.util.Optional;
+
 public class WorldSettings {
 	public static final Codec<WorldSettings> CODEC = RecordCodecBuilder.create(instance -> instance.group(
 		Continent.CODEC.fieldOf("continent").forGetter((o) -> o.continent),
@@ -68,8 +70,8 @@ public class WorldSettings {
     
     public static class ControlPoints {
     	public static final Codec<ControlPoints> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-        	Codec.FLOAT.fieldOf("islandInland").forGetter((o) -> o.islandInland),
-        	Codec.FLOAT.fieldOf("islandCoast").forGetter((o) -> o.islandCoast),
+            Codec.FLOAT.optionalFieldOf("islandInland").xmap(opt -> opt.orElse(0.0F), Optional::of).forGetter((o) -> o.islandInland),
+            Codec.FLOAT.optionalFieldOf("islandCoast").xmap(opt -> opt.orElse(0.074F), Optional::of).forGetter((o) -> o.islandCoast),
     		Codec.FLOAT.fieldOf("deepOcean").forGetter((o) -> o.deepOcean),
     		Codec.FLOAT.fieldOf("shallowOcean").forGetter((o) -> o.shallowOcean),
     		Codec.FLOAT.fieldOf("beach").forGetter((o) -> o.beach),
