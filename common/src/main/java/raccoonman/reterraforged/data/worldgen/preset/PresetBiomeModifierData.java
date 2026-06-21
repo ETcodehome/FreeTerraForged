@@ -55,6 +55,7 @@ public class PresetBiomeModifierData {
 
 	public static final ResourceKey<BiomeModifier> ADD_FOREST_GRASS = createKey("add_forest_grass");
 	public static final ResourceKey<BiomeModifier> ADD_BIRCH_FOREST_GRASS = createKey("add_birch_forest_grass");
+	public static final ResourceKey<BiomeModifier> ADD_RIVER_GASKET = createKey("add_river_gasket");
 
 	public static void bootstrap(Preset preset, BootstrapContext<BiomeModifier> ctx) {
 		MiscellaneousSettings miscellaneous = preset.miscellaneous();
@@ -167,6 +168,8 @@ public class PresetBiomeModifierData {
 		}
 
 		ctx.register(ADD_SWAMP_SURFACE, prepend(GenerationStep.Decoration.RAW_GENERATION, Filter.Behavior.WHITELIST, swamps, placedFeatures.getOrThrow(PresetPlacedFeatures.SWAMP_SURFACE)));
+
+		ctx.register(ADD_RIVER_GASKET, prepend(GenerationStep.Decoration.RAW_GENERATION, placedFeatures.getOrThrow(PresetPlacedFeatures.RIVER_GASKET)));
 	}
 
 	@SafeVarargs

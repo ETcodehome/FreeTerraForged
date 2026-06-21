@@ -95,6 +95,9 @@ public class Cell {
         this.moisture = other.moisture;
         this.beachNoise = other.beachNoise;
         this.continentSizeModifier = other.continentSizeModifier;
+        this.riverWaterLevel = other.riverWaterLevel;
+        this.riverZone = other.riverZone;
+        this.waterTable = other.waterTable;
     }
 
     public Cell reset() {
