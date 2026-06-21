@@ -83,6 +83,7 @@ public class PresetPlacedFeatures {
 	public static final ResourceKey<PlacedFeature> REDWOOD_TREES = createKey("redwood_trees");
 	public static final ResourceKey<PlacedFeature> JUNGLE_TREES = createKey("jungle_trees");
 	public static final ResourceKey<PlacedFeature> JUNGLE_EDGE_TREES = createKey("jungle_edge_trees");
+	public static final ResourceKey<PlacedFeature> RIVER_GASKET = createKey("river_gasket");
     
 	public static void bootstrap(Preset preset, BootstrapContext<PlacedFeature> ctx) {
 		HolderGetter<ConfiguredFeature<?, ?>> features = ctx.lookup(Registries.CONFIGURED_FEATURE);
@@ -99,6 +100,7 @@ public class PresetPlacedFeatures {
 		}
 		
 		PlacementUtils.register(ctx, SWAMP_SURFACE, features.getOrThrow(PresetConfiguredFeatures.SWAMP_SURFACE));
+		PlacementUtils.register(ctx, RIVER_GASKET, features.getOrThrow(PresetConfiguredFeatures.RIVER_GASKET));
 		
         if(!miscellaneous.vanillaSprings) {
         	PlacementUtils.register(ctx, MiscOverworldPlacements.SPRING_WATER, features.getOrThrow(MiscOverworldFeatures.SPRING_WATER), blacklistOverworld);
