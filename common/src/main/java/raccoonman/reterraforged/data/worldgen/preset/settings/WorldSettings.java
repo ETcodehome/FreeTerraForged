@@ -71,7 +71,7 @@ public class WorldSettings {
     public static class ControlPoints {
     	public static final Codec<ControlPoints> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             Codec.FLOAT.optionalFieldOf("islandInland").xmap(opt -> opt.orElse(0.0F), Optional::of).forGetter((o) -> o.islandInland),
-            Codec.FLOAT.optionalFieldOf("islandCoast").xmap(opt -> opt.orElse(0.05F), Optional::of).forGetter((o) -> o.islandCoast),
+            Codec.FLOAT.optionalFieldOf("islandCoast").xmap(opt -> opt.orElse(0.074F), Optional::of).forGetter((o) -> o.islandCoast),
     		Codec.FLOAT.fieldOf("deepOcean").forGetter((o) -> o.deepOcean),
     		Codec.FLOAT.fieldOf("shallowOcean").forGetter((o) -> o.shallowOcean),
     		Codec.FLOAT.fieldOf("beach").forGetter((o) -> o.beach),
