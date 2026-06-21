@@ -28,13 +28,13 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
 
     @Override
     public boolean place(FeaturePlaceContext<NoneFeatureConfiguration> context) {
-        WorldGenLevel level = context.level();
 
-        // 1. Extract the ReTerraForged generator context from the server level state
+        // Extract the ReTerraForged generator context from the server level state
+        WorldGenLevel level = context.level();
         net.minecraft.server.level.ServerLevel serverLevel = level.getLevel();
         net.minecraft.world.level.levelgen.RandomState randomState = serverLevel.getChunkSource().randomState();
         if (!((Object) randomState instanceof raccoonman.reterraforged.world.worldgen.RTFRandomState rtfRandomState)) {
-            return false; // Skip if this chunk isn't being driven by RTF
+            return false;
         }
 
         GeneratorContext generatorContext = rtfRandomState.generatorContext();
@@ -42,7 +42,7 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
             return false;
         }
 
-        // 2. Initialize our localized lookup utilities
+        // Initialize localized lookup utilities
         WorldLookup worldLookup = new WorldLookup(generatorContext);
         Levels levels = worldLookup.getHeightmap().levels();
         BlockPos origin = context.origin();
@@ -51,67 +51,140 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
         int minBlockZ = SectionPos.sectionToBlockCoord(SectionPos.blockToSectionCoord(origin.getZ()));
 
         Cell cell = new Cell();
+        Cell neighborCell = new Cell();
+
         BlockPos.MutableBlockPos currentPos = new BlockPos.MutableBlockPos();
         BlockPos.MutableBlockPos neighborPos = new BlockPos.MutableBlockPos();
         BlockPos.MutableBlockPos belowNeighborPos = new BlockPos.MutableBlockPos();
+        BlockPos.MutableBlockPos samplePos = new BlockPos.MutableBlockPos();
 
-        BlockState stoneState = Blocks.REDSTONE_BLOCK.defaultBlockState();
+        // Extra mutables allocated for the surface decoration scanner to keep allocations at zero
+        BlockPos.MutableBlockPos testAbovePos = new BlockPos.MutableBlockPos();
+        BlockPos.MutableBlockPos testSidePos = new BlockPos.MutableBlockPos();
 
-        // 3. Process the 16x16 chunk grid
+
+        BlockState fallbackState = Blocks.STONE.defaultBlockState();
+
+        // We process the entire 16x16 chunk grid at once
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
                 int blockX = minBlockX + x;
                 int blockZ = minBlockZ + z;
 
-                // Query the hydrology/terrain profile for this exact column
                 worldLookup.applyCell(cell.reset(), blockX, blockZ, false, false);
 
-                // DYNAMIC BOUNDS CALCULATION
-                // Convert the cell's continuous noise values back into concrete world Y integers
+                // Calculate the region around water sources like rivers lakes and wetlands
                 float oceanHeightOffset = levels.water;
                 float targetWaterLevel = ContinentalHydrology.getWeightedWaterHeight(cell.waterTable) + oceanHeightOffset;
                 int localWaterY = levels.scale(targetWaterLevel);
                 int currentFloorHeight = levels.scale(cell.height);
 
-                // scanTopY tracks the absolute ceiling of where water or surface assets interact
                 int scanTopY = Math.max(localWaterY, currentFloorHeight);
-
-                // Scan down just slightly past the valley floor/riverbed to catch
-                // immediate subterranean cave punctures tearing open the bottom of the pool
                 int scanBottomY = Math.min(localWaterY, currentFloorHeight) - 8;
-                scanBottomY = Math.max(scanBottomY, level.getMinBuildHeight() + 16); // Absolute safety floor
+                scanBottomY = Math.max(scanBottomY, level.getMinBuildHeight() + 16);
 
-                // 4. Vertical scan loop within the column's precise hydrology envelope
+                // Vertical scan loop within the column's precise hydrology envelope
                 for (int y = scanTopY; y >= scanBottomY; y--) {
                     currentPos.set(blockX, y, blockZ);
                     BlockState currentState = level.getBlockState(currentPos);
 
                     if (currentState.is(Blocks.WATER)) {
 
-                        // ensure air below gets gasketed
+                        if (!currentState.getFluidState().isSource()) {
+                            continue;
+                        }
+
+                        // Dynamic replacement block sampling (Default structural block)
+                        BlockState structuralState = fallbackState;
+                        for (int sampleY = y - 1; sampleY >= level.getMinBuildHeight(); sampleY--) {
+                            samplePos.set(blockX, sampleY, blockZ);
+                            BlockState sampleState = level.getBlockState(samplePos);
+
+                            if (!sampleState.isAir() && !sampleState.is(Blocks.CAVE_AIR) && !sampleState.is(Blocks.WATER)) {
+                                structuralState = sampleState;
+                                break;
+                            }
+                        }
+
+                        // Ensure air directly below the current water block gets gasketed
                         belowNeighborPos.set(blockX, y - 1, blockZ);
                         BlockState belowState = level.getBlockState(belowNeighborPos);
                         if (belowState.isAir() || belowState.is(Blocks.CAVE_AIR)) {
-                            level.setBlock(belowNeighborPos, stoneState, 2);
+                            level.setBlock(belowNeighborPos, structuralState, 2);
                         }
 
-                        // Inspect horizontal neighbors for air exposure leaks
-                        for (Direction dir : HORIZONTAL_DIRECTIONS) {
-                            neighborPos.set(
-                                    blockX + dir.getStepX(),
-                                    y,
-                                    blockZ + dir.getStepZ()
-                            );
+                        // Circular brush setup
+                        int radius = context.random().nextInt(5) + 3; // Radius 3 to 7
+                        int radiusSq = radius * radius;
 
-                            BlockState neighborState = level.getBlockState(neighborPos);
+                        // Scan the 2D bounding box of the circle
+                        for (int dx = -radius; dx <= radius; dx++) {
+                            for (int dz = -radius; dz <= radius; dz++) {
 
-                            if (neighborState.isAir() || neighborState.is(Blocks.CAVE_AIR)) {
-                                belowNeighborPos.set(neighborPos.getX(), neighborPos.getY() - 1, neighborPos.getZ());
-                                BlockState belowNeighborState = level.getBlockState(belowNeighborPos);
+                                if (dx * dx + dz * dz <= radiusSq) {
 
-                                // If the air gap isn't a natural waterfall plunging into a lower body of water, plug it
-                                if (!belowNeighborState.is(Blocks.WATER)) {
-                                    level.setBlock(neighborPos, stoneState, 2);
+                                    int targetX = blockX + dx;
+                                    int targetZ = blockZ + dz;
+
+                                    worldLookup.applyCell(neighborCell.reset(), targetX, targetZ, false, false);
+
+                                    float neighbourTargetWaterLevel = ContinentalHydrology.getWeightedWaterHeight(neighborCell.waterTable) + oceanHeightOffset;
+                                    int neighbourWaterY = levels.scale(neighbourTargetWaterLevel);
+
+                                    if (y > neighbourWaterY) {
+                                        continue;
+                                    }
+
+                                    neighborPos.set(targetX, y, targetZ);
+                                    BlockState neighborState = level.getBlockState(neighborPos);
+
+                                    if (neighborState.isAir() || neighborState.is(Blocks.CAVE_AIR)) {
+                                        belowNeighborPos.set(neighborPos.getX(), neighborPos.getY() - 1, neighborPos.getZ());
+                                        BlockState belowNeighborState = level.getBlockState(belowNeighborPos);
+
+                                        if (belowNeighborState.is(Blocks.WATER)) {
+                                            continue;
+                                        }
+
+                                        // Perform contextual surface matching
+                                        // features are late in the minecraft world creation process.
+                                        // Surface decorators have run and density functions have carved caves
+                                        // if we leave it as abre stone here it stays as stone, so instead we try and draw on the surrounding terrain
+                                        // copying a nearby block finish to pretty up this column.
+                                        BlockState finalPlacementState = structuralState;
+
+                                        testAbovePos.set(targetX, y + 1, targetZ);
+                                        BlockState stateAbove = level.getBlockState(testAbovePos);
+
+                                        if (stateAbove.isAir() || stateAbove.is(Blocks.CAVE_AIR) || stateAbove.is(Blocks.WATER)) {
+
+                                            // Step outward progressively up to 4 blocks away to find valid terrain paint
+                                            searchLoop:
+                                            for (int dist = 1; dist <= 4; dist++) {
+                                                for (Direction dir : HORIZONTAL_DIRECTIONS) {
+                                                    testSidePos.set(
+                                                            targetX + (dir.getStepX() * dist),
+                                                            y,
+                                                            targetZ + (dir.getStepZ() * dist)
+                                                    );
+                                                    BlockState nearbyState = level.getBlockState(testSidePos);
+
+                                                    if (nearbyState.is(Blocks.GRASS_BLOCK)
+                                                            || nearbyState.is(Blocks.SAND)
+                                                            || nearbyState.is(Blocks.GRAVEL)
+                                                            || nearbyState.is(Blocks.MUD)
+                                                            || nearbyState.is(Blocks.PODZOL)
+                                                            || nearbyState.is(Blocks.MYCELIUM)) {
+
+                                                        finalPlacementState = nearbyState;
+                                                        break searchLoop; // Escapes both loops immediately upon match
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        level.setBlock(neighborPos, finalPlacementState, 2);
+                                    }
                                 }
                             }
                         }
