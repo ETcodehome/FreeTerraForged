@@ -46,9 +46,19 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
     
     @Override
     public Rivermap generateRivers(int x, int z, long id) {
-        Random random = new Random(id + this.seed);
+
+        // Generate the river warp to use
         GenWarp warp = GenWarp.make((int) id, this.continentScale);
+
+        // early exit guard to return if continent is skipped to prevent rivers spawning in the oceans
+        if (this.continent.getEdgeValue(x, z) < this.minEdgeValue) {
+            return new Rivermap(x, z, new Network[0], warp);
+        }
+
+        // seed the rivers uniquely per continent
+        Random random = new Random(id + this.seed);
         List<Network.Builder> rivers = this.generateRoots(x, z, random, warp);
+
         Collections.shuffle(rivers, random);
         for (Network.Builder root : rivers) {
             this.generateForks(root, River.MAIN_SPACING, this.fork, random, warp, rivers, 0);

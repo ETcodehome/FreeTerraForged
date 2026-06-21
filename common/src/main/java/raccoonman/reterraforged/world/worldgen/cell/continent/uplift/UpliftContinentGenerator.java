@@ -112,7 +112,14 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
             }
         }
 
-        // dont process skipped continents
+        // We always resolve a stable continent centre even for continents that get skipped.
+        // getRivermap()/getNearestCenter() rely on cell.continentX/continentZ so if we return early
+        // without setting them they keep whatever value this pooled Cell last held (often a leftover
+        // (0,0) from a previous tile), causing an unrelated continents rivers to be carved here instead.
+        cell.continentX = this.getCorrectedContinentCenter(cellPointX, sumX / 8.0F);
+        cell.continentZ = this.getCorrectedContinentCenter(cellPointY, sumY / 8.0F);
+
+        // early exit guard to avoid processing skipped continents
         if (this.shouldSkip(cellX, cellY)) {
             return;
         }
@@ -142,6 +149,11 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
             upliftGradient = customPeak;
         }
         cell.waterTable = upliftGradient;
+    }
+
+    protected int getCorrectedContinentCenter(float point, float average) {
+        float corrected = NoiseUtil.lerp(point, average, UpliftContinentGenerator.CENTER_CORRECTION) / this.frequency;
+        return Math.round(corrected);
     }
 
     public float shiftAndRemap(float value, float threshold) {
