@@ -19,6 +19,7 @@ public final class RTFTranslationKeys {
 	public static final String GUI_LITE_PRESET_NAME = resolve("gui.preset.lite.name");
 	public static final String GUI_VANILLAISH_PRESET_NAME = resolve("gui.preset.vanillaish.name");
 	public static final String GUI_RIVERS_PRESET_NAME = resolve("gui.preset.rivers.name");
+	public static final String GUI_COMMUNITY1_PRESET_NAME = resolve("gui.preset.community1.name");
 	public static final String GUI_WORLD_SETTINGS_TITLE = resolve("gui.worldSettings.title");
 	public static final String GUI_SURFACE_SETTINGS_TITLE = resolve("gui.surfaceSettings.title");
 	public static final String GUI_CAVE_SETTINGS_TITLE = resolve("gui.caveSettings.title");

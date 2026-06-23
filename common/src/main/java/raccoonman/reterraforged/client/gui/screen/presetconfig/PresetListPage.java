@@ -194,8 +194,12 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, PresetEntry, Abstr
 		// Modern patterns
 		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_RIVERS_PRESET_NAME).withStyle(ChatFormatting.GREEN), Presets.makeRivers(), true, this));
 
+		// User presets
 		entries.addAll(this.listPresets(PRESET_PATH));
 		entries.addAll(this.listPresets(LEGACY_PRESET_PATH));
+
+		// Community presets
+		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_COMMUNITY1_PRESET_NAME).withStyle(ChatFormatting.AQUA), Presets.makeCommunityPreset1(), true, this));
 
 		this.left.replaceEntries(entries.stream().map(WidgetList.Entry::new).toList());
 	}
