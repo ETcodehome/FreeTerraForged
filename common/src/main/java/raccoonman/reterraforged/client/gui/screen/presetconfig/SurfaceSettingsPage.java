@@ -65,7 +65,7 @@ public class SurfaceSettingsPage extends PresetEditorPage {
 			return value;
 		});
 		
-		this.left.addWidget(PresetWidgets.createLabel(RTFTranslationKeys.GUI_LABEL_SURFACE_EROSION));
+		this.left.addWidget(PresetWidgets.createLabel(RTFTranslationKeys.GUI_LABEL_TRANSITIONS));
 		this.left.addWidget(this.rockVariance);
 		this.left.addWidget(this.rockMin);
 		this.left.addWidget(this.dirtVariance);

@@ -177,7 +177,7 @@ public final class RTFTranslationKeys {
 	public static final String GUI_LABEL_CONTINENT = resolve("gui.label.continent");
 	public static final String GUI_LABEL_CONTROL_POINTS = resolve("gui.label.controlPoints");
 	public static final String GUI_LABEL_PROPERTIES = resolve("gui.label.properties");
-	public static final String GUI_LABEL_SURFACE_EROSION = resolve("gui.label.surfaceErosion");
+	public static final String GUI_LABEL_TRANSITIONS = resolve("gui.label.transitions");
 	public static final String GUI_LABEL_NOISE_CAVES = resolve("gui.label.noiseCaves");
 	public static final String GUI_LABEL_CARVERS = resolve("gui.label.carvers");
 	public static final String GUI_LABEL_TEMPERATURE = resolve("gui.label.temperature");

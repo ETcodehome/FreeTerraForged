@@ -176,7 +176,7 @@ public final class RTFLanguageProvider {
 			this.add(RTFTranslationKeys.GUI_LABEL_CONTINENT, "Continent");
 			this.add(RTFTranslationKeys.GUI_LABEL_CONTROL_POINTS, "Control Points");
 			this.add(RTFTranslationKeys.GUI_LABEL_PROPERTIES, "Properties");
-			this.add(RTFTranslationKeys.GUI_LABEL_SURFACE_EROSION, "Erosion");
+			this.add(RTFTranslationKeys.GUI_LABEL_TRANSITIONS, "Erosion");
 			this.add(RTFTranslationKeys.GUI_LABEL_NOISE_CAVES, "Noise Caves");
 			this.add(RTFTranslationKeys.GUI_LABEL_CARVERS, "Carvers");
 			this.add(RTFTranslationKeys.GUI_LABEL_TEMPERATURE, "Temperature");
