@@ -1,49 +1,45 @@
 # ReTerraForged
-- A Neoforge 1.21.1 release of https://github.com/TerraForged/TerraForged
-  Continues the substantial Neoforge port work completed by Equalizer32 for NeoTerraForged in https://github.com/equalizer32/NeoTerraForged/tree/1.21.1
-- Continued under the permissive MIT license as per the original repo.
-- This is not an official release, do not ask for help with it on official channels. They will throw rocks at you and tell you to go away.
-  This is me wanting a 1.21.1 Neoforge release and being willing to do the legwork to fix it up and compile it so it is stable enough for a 1.21.1 play through.
+A community driven fork of the Legendary ReTerraForged project for modern minecraft providing heavily customizable overworld terrain generation.
+Several novel features have been community contributed to the fork so far including 3D rivers, waterfalls and island generation.
+Additional feature contributions are welcomed via forking and raising a merge PR.
 
-# Behavior
-- Improved overworld terrain generation plugin with extremely customisable options
+### We stand on the shoulders of giants
+- Original project https://github.com/TerraForged/TerraForged
+- Builds on the substantial post v1.19+ work of Racoonman2 in https://github.com/racoonman2/ReTerraForged
+- Finishes the Neoforge port work started by Equalizer32 in https://github.com/equalizer32/NeoTerraForged/tree/1.21.1
 
-# Screenshots (full world gen stack not just bare noise)
-<img width="2579" height="1381" alt="image" src="https://github.com/user-attachments/assets/1ebbc7d0-4701-4176-8d52-f964577cdf37" />
-<img width="2301" height="942" alt="image" src="https://github.com/user-attachments/assets/9abae022-97bc-40c5-9b09-d2a37165e39c" />
-<img width="2301" height="942" alt="image" src="https://github.com/user-attachments/assets/35af9f15-8481-4afc-af06-7ab6925761d2" />
-<img width="2301" height="1799" alt="image" src="https://github.com/user-attachments/assets/ce9c453f-1b97-41bd-8b83-9a4ee186d974" />
-<img width="2301" height="1799" alt="image" src="https://github.com/user-attachments/assets/b062f60d-f03c-4bde-92d4-e13fe60ceda3" />
-<img width="2301" height="1799" alt="image" src="https://github.com/user-attachments/assets/f709fb91-ea64-473a-9354-181464cba558" />
-+ heaps more. proper worldgen customization.
+### Licensing 
+- Continued under the permissive MIT license as per all historic contributions.
+
+***
+
+# Getting started
+
+### Customize a new world
+<img width="856" height="526" alt="image" src="https://github.com/user-attachments/assets/941bc4b1-9334-4c08-9197-9ff729876369" />
+
+---
+
+### Select a preset 
+<img width="1186" height="754" alt="image" src="https://github.com/user-attachments/assets/65a8e11e-1d76-42ce-bfd5-9fd34c9adfda" />
+
+- Use existing settings directly via [Done]
+- Customize the selected preset via [>>]
+- Copy or create fresh presets using the right hand menu
+
+---
+
+### Customize your world
+<img width="3840" height="2100" alt="image" src="https://github.com/user-attachments/assets/0b053a98-c8ec-4b92-b6ad-8dfc41eacf8a" />
+
+- There are many pages of settings accessible via paging through using [<<] and [>>]
+- Click Done to save your edits.
+- Click Cancel to abandon your edits.
+
+Please note that default presets will never be overwritten, but your edits will impact the world you generate.
+To persist your edits between sessions please create or copy a preset to use as your base, then edit it.
+
+---
 
 # Bugs
-- Much more likely to be addressed if you raise an issue.
-
-# Worldgen Adjacent Compatibility
-- Newer versions of Lithostitched result in issues when loading, suspect they're trying a more aggressive registry intercept that RTF doesn't like so much. 
-  v 1.5.7 works, 1.7.2 didn't when tested.
-- Terralith is compatible if you get the datapack version, then extract it and delete the \data\minecraft\worldgen\density_function\overworld\sloped_cheese.json
-  Functionally, this says "don't use Terralith noise as the base terrain, use RTFs". Without this you will get blocky square ridges.
-  This change alone means you still get the nice Yellowstone biomes etc.
-  I recommend using Paxi so that this just loads by default into every world you create (dont need to remember to add datapacks)
-- Darker Depths works
-- Dawn Of Time works
-- Regions Unexplored works / RU Expansion works
-- Croptopia works
-- Biolith works
-- Biomes O Plenty works
-- No Mans Land works
-- Oh The Biomes You'll Go / Wev've Gone works
-- Create works
-- Regenerating blocks works
-- ThisIsStone works
-- Deeper Darker works
-- Hybrid Aquatic works
-- Yung's everything seems to work.
-
-Basically anything that doesn't aggressively intercept and override noise generation or density functions seems to play pretty nicely.
-
-# Dev notes
-- Biggest issues for a 1.21.1 release were many registries not including default cloners, and issues with the preset preview generator being cooked. Structure menu also went weird because of the registry issues. Otherwise actual generation is fine including old presets. Architectury is a huge pain in the arse causing issues with debug logging and language pack location. Could just be unfamiliarity.
-
+- Any issues encountered should be raised as Github issues with as much supporting documentation as you can provide, ideally latest.log and screenshots at a minimum.
