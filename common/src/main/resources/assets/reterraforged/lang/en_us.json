@@ -107,6 +107,7 @@
   "reterraforged.gui.preset.legacyDefault.name": "Legacy - TerraForged Default",
   "reterraforged.gui.preset.lite.name": "Legacy - TerraForged Lite",
   "reterraforged.gui.preset.rivers.name": "Modern Default with 3D Rivers",
+  "reterraforged.gui.preset.community1.name": "Community Preset - Modern Upscaled",
   "reterraforged.gui.preset.vanillaish.name": "Legacy - TerraForged Vanilla-ish",
   "reterraforged.gui.riverSettings.title": "River Settings",
   "reterraforged.gui.selectPreset.inputPrompt": "Type preset name",
