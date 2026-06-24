@@ -54,14 +54,14 @@ public class TerrainSettings {
     		Codec.BOOL.fieldOf("fancyMountains").forGetter((o) -> o.fancyMountains),
     		Codec.BOOL.optionalFieldOf("legacyMountainScaling", true).forGetter((o) -> o.legacyMountainScaling)
     	).apply(instance, General::new));
-    	
+
         public int terrainSeedOffset;
         public int terrainRegionSize;
         public float globalVerticalScale;
         public float globalHorizontalScale;
         public boolean fancyMountains;
         public boolean legacyMountainScaling;
-        
+
         public General(int terrainSeedOffset, int terrainRegionSize, float globalVerticalScale, float globalHorizontalScale, boolean fancyMountains, boolean legacyMountainScaling) {
         	this.terrainSeedOffset = terrainSeedOffset;
         	this.terrainRegionSize = terrainRegionSize;
@@ -70,7 +70,7 @@ public class TerrainSettings {
         	this.fancyMountains = fancyMountains;
         	this.legacyMountainScaling = legacyMountainScaling;
         }
-        
+
         public General copy() {
         	return new General(this.terrainSeedOffset, this.terrainRegionSize, this.globalVerticalScale, this.globalHorizontalScale, this.fancyMountains, this.legacyMountainScaling);
         }
@@ -83,19 +83,19 @@ public class TerrainSettings {
     		Codec.FLOAT.fieldOf("verticalScale").forGetter((o) -> o.verticalScale),
     		Codec.FLOAT.fieldOf("horizontalScale").forGetter((o) -> o.horizontalScale)
     	).apply(instance, Terrain::new));
-    	
+
         public float weight;
         public float baseScale;
         public float verticalScale;
         public float horizontalScale;
-        
+
         public Terrain(float weight, float baseScale, float verticalScale, float horizontalScale) {
             this.weight = weight;
             this.baseScale = baseScale;
             this.verticalScale = verticalScale;
             this.horizontalScale = horizontalScale;
         }
-        
+
         public Terrain copy() {
         	return new Terrain(this.weight, this.baseScale, this.verticalScale, this.horizontalScale);
         }

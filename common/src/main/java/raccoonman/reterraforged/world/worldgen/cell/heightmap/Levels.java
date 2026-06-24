@@ -18,7 +18,8 @@ public class Levels {
     public Levels(int height, int seaLevel) {
         this(height, 0, seaLevel);
     }
-    
+
+
     public Levels(int height, int depth, int seaLevel) {
         this.worldHeight = Math.max(1, height);
         this.worldDepth = Math.max(0, depth);

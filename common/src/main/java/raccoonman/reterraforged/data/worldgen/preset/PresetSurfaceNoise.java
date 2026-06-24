@@ -41,7 +41,7 @@ public class PresetSurfaceNoise {
 		
 		MiscellaneousSettings miscellaneousSettings = preset.miscellaneous();
 		
-		Scaling scaling = Scaling.make(properties.terrainScaler(), properties.seaLevel);
+		Scaling scaling = Scaling.make(properties.terrainModelHeight(), properties.seaLevel);
 		
 		ctx.register(DESERT, makeDesert(scaling));
 		ctx.register(SWAMP, makeSwamp());

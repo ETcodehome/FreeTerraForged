@@ -45,6 +45,7 @@ public class PresetNoiseRouterData {
         int worldDepth = properties.worldDepth;
         int terrainModelHeight = properties.terrainModelHeight();
 
+
         ctx.register(NoiseRouterData.CONTINENTS, RTFDensityFunctions.cell(CellSampler.Field.CONTINENT));
         ctx.register(NoiseRouterData.EROSION, RTFDensityFunctions.cell(CellSampler.Field.EROSION));
         ctx.register(NoiseRouterData.RIDGES, RTFDensityFunctions.cell(CellSampler.Field.WEIRDNESS));
@@ -122,6 +123,9 @@ public class PresetNoiseRouterData {
         int terrainModelHeight = properties.terrainModelHeight();
         double extension = properties.worldHeight / (double) terrainModelHeight;
 
+        // Two-segment concave projection: the steep lower segment fills vertical space quickly
+        // for the mountain body, while the gentle upper segment compresses the peak zone so
+        // that pointed noise ridges produce rounded summits instead of narrow cones.
         double shoulderHeight = WorldSettings.Properties.TALL_TERRAIN_SHOULDER_HEIGHT;
         double shoulderProjected = 1.0D + (extension - 1.0D) * WorldSettings.Properties.TALL_TERRAIN_SHOULDER_FRACTION;
 

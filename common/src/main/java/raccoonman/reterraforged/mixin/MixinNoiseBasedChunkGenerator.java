@@ -61,6 +61,12 @@ abstract class MixinNoiseBasedChunkGenerator extends ChunkGenerator {
 		Tile tile = generatorContext.cache.provideAtChunk(chunkPos.x, chunkPos.z);
 
 		Tile.Chunk tileChunk = tile.getChunkReader(chunkPos.x, chunkPos.z);
+		int dynamicHeightScale = generatorContext.preset.world().properties.worldHeight;
+		if(dynamicHeightScale > generatorContext.preset.world().properties.terrainModelHeight()) {
+			rtfChunk.setMaxHeight(dynamicHeightScale);
+			return;
+		}
+
 		float maxHeight = Float.MIN_VALUE;
 		for(int x = 0; x < 16; x++) {
 			for(int z = 0; z < 16; z++) {

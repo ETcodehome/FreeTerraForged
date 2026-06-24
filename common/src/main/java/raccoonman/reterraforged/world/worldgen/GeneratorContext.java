@@ -26,7 +26,7 @@ public class GeneratorContext {
         this.preset = preset;
         this.noiseLookup = noiseLookup;
         this.seed = new Seed(seed);
-        this.levels = new Levels(preset.world().properties.terrainScaler(), preset.world().properties.worldDepth, preset.world().properties.seaLevel);
+        this.levels = new Levels(preset.world().properties.terrainModelHeight(), preset.world().properties.worldDepth, preset.world().properties.seaLevel);
         this.generator = new TileGenerator(Heightmap.make(this), new WorldFilters(this), tileSize, tileBorder, batchCount);
         this.cache = cache;
         this.lookup = new WorldLookup(this);

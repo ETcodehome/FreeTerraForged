@@ -37,12 +37,12 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 
 	@Override
 	public double minValue() {
-		return 0.0F;
+		return this.field.minValue();
 	}
 
 	@Override
 	public double maxValue() {
-		return 1.0F;
+		return this.field.maxValue();
 	}
 
 	public static class Cache2d {
@@ -116,6 +116,11 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 			@Override
 			public float read(Cell cell, Heightmap heightmap) {
 				return cell.height;
+			}
+
+			@Override
+			public float maxValue() {
+				return 16.0F;
 			}
 		},
 		CONTINENT("continent") {
@@ -227,6 +232,14 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 		@Override
 		public String getSerializedName() {
 			return this.name;
+		}
+
+		public float minValue() {
+			return 0.0F;
+		}
+
+		public float maxValue() {
+			return 1.0F;
 		}
 		
 		public abstract float read(Cell cell, Heightmap heightmap);

@@ -153,6 +153,23 @@ public class WorldSettings {
             return Math.min(this.worldHeight, MAX_TERRAIN_MODEL_HEIGHT);
         }
 
+        public float terrainHeightRatio() {
+            int terrainModelHeight = this.terrainModelHeight();
+            return this.worldHeight > terrainModelHeight ? (float) this.worldHeight / terrainModelHeight : 1.0F;
+        }
+
+        public float tallTerrainHorizontalScale() {
+            float heightRatio = this.terrainHeightRatio();
+            if (heightRatio <= 1.0F) {
+                return 1.0F;
+            }
+
+            double shoulderRange = TALL_TERRAIN_SHOULDER_HEIGHT - 1.0D;
+            double bodyProjectionRange = (heightRatio - 1.0D) * TALL_TERRAIN_SHOULDER_FRACTION;
+            double bodyProjectionSlope = bodyProjectionRange / shoulderRange;
+            return (float) Math.max(heightRatio, bodyProjectionSlope);
+        }
+
         @Deprecated
         public int terrainScaler() {
             return this.terrainModelHeight();
