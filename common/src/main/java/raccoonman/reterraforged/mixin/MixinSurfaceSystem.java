@@ -93,6 +93,7 @@ class MixinSurfaceSystem {
 
 	@Unique
 	private void reterraforged$placeRiverWater(ChunkAccess chunk, BiomeManager biomeManager, GeneratorContext genCtx) {
+
 		var chunkPos = chunk.getPos();
 		var tile = genCtx.cache.provideAtChunk(chunkPos.x, chunkPos.z);
 		var reader = tile.getChunkReader(chunkPos.x, chunkPos.z);
