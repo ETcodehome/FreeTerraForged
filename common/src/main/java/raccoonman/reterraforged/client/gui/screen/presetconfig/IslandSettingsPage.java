@@ -8,8 +8,7 @@ import raccoonman.reterraforged.client.data.RTFTranslationKeys;
 import raccoonman.reterraforged.client.gui.screen.page.LinkedPageScreen.Page;
 import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
 import raccoonman.reterraforged.client.gui.widget.Slider;
-import raccoonman.reterraforged.data.worldgen.preset.settings.IslandSettings;
-import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
+import raccoonman.reterraforged.data.worldgen.preset.settings.*;
 
 public class IslandSettingsPage extends PresetEditorPage {
 	private CycleButton<Boolean> enableArchipelago;
@@ -42,12 +41,18 @@ public class IslandSettingsPage extends PresetEditorPage {
 
 		Preset preset = this.preset.getPreset();
 		IslandSettings island = preset.island();
-		
-		this.enableArchipelago = PresetWidgets.createToggle(island.enableArchipelago, RTFTranslationKeys.GUI_BUTTON_ENABLE_ARCHIPELAGO, (button, value) -> {
-			island.enableArchipelago = value;
+
+		SettingToken token = IslandSettings.ENABLE_ISLANDS;
+		String tk = PresetManager.getInstance().getDefinition(token).translationKey();
+		Boolean setting = PresetManager.getInstance().get(IslandSettings.ENABLE_ISLANDS);
+		this.enableArchipelago = PresetWidgets.createToggle(setting, tk, (button, value) -> {
+			PresetManager.getInstance().set(token, value);
+			island.enableArchipelago = value; // todo remove
 			this.regenerate();
+			PresetManager.getInstance().printState(); // todo remove
 		});
-		this.islandDensity = PresetWidgets.createFloatSlider(island.islandDensity, 0.0F, 1.0F, RTFTranslationKeys.GUI_SLIDER_ISLAND_DENSITY, (slider, value) -> {
+
+		this.islandDensity = PresetWidgets.createFloatSlider(PresetManager.getInstance().get(IslandSettings.DENSITY), 0.0F, 1.0F, RTFTranslationKeys.GUI_SLIDER_ISLAND_DENSITY, (slider, value) -> {
 			island.islandDensity = (float) slider.scaleValue(value);
 			this.regenerate();
 			return value;

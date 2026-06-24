@@ -65,7 +65,6 @@ public final class RTFTranslationKeys {
 	public static final String GUI_BUTTON_VANILLA_SPRINGS = resolve("gui.button.vanillaSprings");
 	public static final String GUI_BUTTON_VANILLA_LAVA_LAKES = resolve("gui.button.vanillaLavaLakes");
 	public static final String GUI_BUTTON_VANILLA_LAVA_SPRINGS = resolve("gui.button.vanillaLavaSprings");
-	public static final String GUI_BUTTON_ENABLE_ARCHIPELAGO = resolve("gui.button.enableArchipelago");
 	public static final String GUI_SLIDER_ZOOM = resolve("gui.slider.zoom");
 	public static final String GUI_SLIDER_CONTINENT_SCALE = resolve("gui.slider.continentScale");
 	public static final String GUI_SLIDER_CONTINENT_JITTER = resolve("gui.slider.continentJitter");

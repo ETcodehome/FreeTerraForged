@@ -38,6 +38,7 @@ import raccoonman.reterraforged.client.gui.widget.Label;
 import raccoonman.reterraforged.client.gui.widget.WidgetList;
 import raccoonman.reterraforged.client.gui.widget.WidgetList.Entry;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
+import raccoonman.reterraforged.data.worldgen.preset.settings.PresetManager;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Presets;
 import raccoonman.reterraforged.platform.ConfigUtil;
 
@@ -171,12 +172,25 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, PresetEntry, Abstr
 	
 	private void selectPreset(@Nullable PresetEntry entry) {
 		boolean active = entry != null;
-		
 		this.screen.doneButton.active = active;
 		this.copyPreset.active = active;
 		this.deletePreset.active = active && !entry.isBuiltin();
 		this.exportAsDatapack.active = active;
 		this.screen.nextButton.active = active;
+
+		if (active) {
+			try {
+				if (entry.isBuiltin()) {
+					PresetManager.getInstance().resetToDefaults();
+				} else {
+					PresetManager.getInstance().loadFromFile(entry.getPath());
+				}
+				RTFCommon.LOGGER.info("Swapped global preset memory context to: {}", entry.getName().getString());
+				RTFCommon.LOGGER.info(PresetManager.getInstance().toString());
+			} catch (IOException e) {
+				RTFCommon.LOGGER.error("Failed to load preset configuration into memory", e);
+			}
+		}
 	}
 	
 	private void rebuildPresets() throws IOException {
