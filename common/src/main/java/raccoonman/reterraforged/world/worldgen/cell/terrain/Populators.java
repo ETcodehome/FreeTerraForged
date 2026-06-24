@@ -1,6 +1,7 @@
 package raccoonman.reterraforged.world.worldgen.cell.terrain;
 
 import raccoonman.reterraforged.data.worldgen.preset.settings.TerrainSettings;
+import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings;
 import raccoonman.reterraforged.world.worldgen.biome.Erosion;
 import raccoonman.reterraforged.world.worldgen.biome.Weirdness;
 import raccoonman.reterraforged.world.worldgen.cell.CellPopulator;
@@ -24,34 +25,35 @@ public class Populators {
 	@Deprecated
 	public static final Noise DEFAULT_WEIRDNESS = Weirdness.MID_SLICE_NORMAL_DESCENDING.source();
 
-	public static CellPopulator makeDeepOcean(@Deprecated int seed, float seaLevel) {
-		Noise hills = Noises.perlin(++seed, 150, 3);
-		hills = Noises.mul(hills, seaLevel * 0.7F);
-
-		Noise hillBias = Noises.perlin(++seed, 200, 1);
-		hillBias = Noises.mul(hillBias, seaLevel * 0.2F);
+	public static CellPopulator makeDeepOcean(@Deprecated int seed, Levels levels, WorldSettings.Ocean ocean) {
+		int minDepth = Math.max(1, ocean.deepOceanMinDepth);
+		int maxDepth = Math.max(minDepth, ocean.deepOceanMaxDepth);
+		int canyonMinDepth = minDepth + Math.max(1, (maxDepth - minDepth) / 2);
+		int noiseScale = Math.max(1, ocean.oceanDepthNoiseScale);
 		
-		hills = Noises.add(hills, hillBias);
+		float lower = Math.max(levels.water(-maxDepth), levels.min);
+		float upper = Math.max(levels.water(-minDepth), lower);
+		float canyonUpper = Math.max(levels.water(-canyonMinDepth), lower);
 		
-		Noise canyons = Noises.perlin(++seed, 150, 4);
+		Noise hills = Noises.perlin(++seed, noiseScale, 3);
+		hills = Noises.map(hills, lower, upper);
+		
+		Noise canyons = Noises.perlin(++seed, noiseScale, 4);
 		canyons = Noises.powCurve(canyons, 0.2F);
 		canyons = Noises.invert(canyons);
-		canyons = Noises.mul(canyons, seaLevel * 0.7F);
+		canyons = Noises.map(canyons, lower, canyonUpper);
 		
-		Noise canyonBias = Noises.perlin(++seed, 170, 1);
-		canyonBias = Noises.mul(canyonBias, seaLevel * 0.15F);
-		
-		canyons = Noises.add(canyons, canyonBias);
-		
-		Noise selector = Noises.perlin(++seed, 500, 1);
+		Noise selector = Noises.perlin(++seed, noiseScale * 3, 1);
 		
 		Noise height = Noises.blend(selector, hills, canyons, 0.6F, 0.65F);
-		height = Noises.warpPerlin(height, ++seed, 50, 2, 50.0F);
-		return new OceanPopulator(TerrainType.DEEP_OCEAN, height);
+		height = Noises.warpPerlin(height, ++seed, Math.max(1, noiseScale / 3), 2, noiseScale / 3.0F);
+		height = Noises.clamp(height, lower, upper);
+		return new OceanPopulator(TerrainType.DEEP_OCEAN, height, levels.min);
 	}
     
-	public static CellPopulator makeShallowOcean(Levels levels) {
-		 return new OceanPopulator(TerrainType.SHALLOW_OCEAN, Noises.constant(levels.water(-7)));
+	public static CellPopulator makeShallowOcean(Levels levels, WorldSettings.Ocean ocean) {
+		float height = Math.max(levels.water(-Math.max(1, ocean.shallowOceanDepth)), levels.min);
+		return new OceanPopulator(TerrainType.SHALLOW_OCEAN, Noises.constant(height), levels.min);
 	}
 	
 	public static CellPopulator makeCoast(Levels levels) {

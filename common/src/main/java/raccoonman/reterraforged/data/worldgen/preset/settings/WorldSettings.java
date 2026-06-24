@@ -11,21 +11,28 @@ public class WorldSettings {
 	public static final Codec<WorldSettings> CODEC = RecordCodecBuilder.create(instance -> instance.group(
 		Continent.CODEC.fieldOf("continent").forGetter((o) -> o.continent),
 		ControlPoints.CODEC.fieldOf("controlPoints").forGetter((o) -> o.controlPoints),
-		Properties.CODEC.fieldOf("properties").forGetter((o) -> o.properties)
+		Properties.CODEC.fieldOf("properties").forGetter((o) -> o.properties),
+		Ocean.CODEC.optionalFieldOf("ocean", new Ocean(7, 32, 96, 150)).forGetter((o) -> o.ocean)
 	).apply(instance, WorldSettings::new));
-	
+
     public Continent continent;
     public ControlPoints controlPoints;
     public Properties properties;
-    
-    public WorldSettings(Continent continent, ControlPoints controlPoints, Properties properties) {
+    public Ocean ocean;
+
+    public WorldSettings(Continent continent, ControlPoints controlPoints, Properties properties, Ocean ocean) {
         this.continent = continent;
         this.controlPoints = controlPoints;
         this.properties = properties;
+        this.ocean = ocean;
     }
-    
+
+    public WorldSettings(Continent continent, ControlPoints controlPoints, Properties properties) {
+        this(continent, controlPoints, properties, new Ocean(7, 32, 96, 150));
+    }
+
     public WorldSettings copy() {
-    	return new WorldSettings(this.continent.copy(), this.controlPoints.copy(), this.properties.copy());
+    	return new WorldSettings(this.continent.copy(), this.controlPoints.copy(), this.properties.copy(), this.ocean.copy());
     }
     
     public static class Continent {
@@ -107,6 +114,9 @@ public class WorldSettings {
     }
     
     public static class Properties {
+        public static final int MAX_TERRAIN_MODEL_HEIGHT = 256;
+        public static final double TALL_TERRAIN_SHOULDER_HEIGHT = 1.3D;
+        public static final double TALL_TERRAIN_SHOULDER_FRACTION = 0.6D;
     	public static final Codec<Properties> CODEC = RecordCodecBuilder.create(instance -> instance.group(
     		SpawnType.CODEC.fieldOf("spawnType").forGetter((o) -> o.spawnType),
     		Codec.INT.fieldOf("worldHeight").forGetter((o) -> o.worldHeight),
@@ -139,9 +149,38 @@ public class WorldSettings {
         	return new Properties(this.spawnType, this.worldHeight, this.worldDepth, this.seaLevel, this.lavaLevel, this.spawnX, this.spawnZ);
         }
         
+        public int terrainModelHeight() {
+            return Math.min(this.worldHeight, MAX_TERRAIN_MODEL_HEIGHT);
+        }
+
         @Deprecated
         public int terrainScaler() {
-        	return Math.min(this.worldHeight, 256);
+            return this.terrainModelHeight();
+        }
+    }
+
+    public static class Ocean {
+        public static final Codec<Ocean> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+            Codec.INT.optionalFieldOf("shallowOceanDepth", 7).forGetter((o) -> o.shallowOceanDepth),
+            Codec.INT.optionalFieldOf("deepOceanMinDepth", 32).forGetter((o) -> o.deepOceanMinDepth),
+            Codec.INT.optionalFieldOf("deepOceanMaxDepth", 96).forGetter((o) -> o.deepOceanMaxDepth),
+            Codec.INT.optionalFieldOf("oceanDepthNoiseScale", 150).forGetter((o) -> o.oceanDepthNoiseScale)
+        ).apply(instance, Ocean::new));
+
+        public int shallowOceanDepth;
+        public int deepOceanMinDepth;
+        public int deepOceanMaxDepth;
+        public int oceanDepthNoiseScale;
+
+        public Ocean(int shallowOceanDepth, int deepOceanMinDepth, int deepOceanMaxDepth, int oceanDepthNoiseScale) {
+            this.shallowOceanDepth = shallowOceanDepth;
+            this.deepOceanMinDepth = deepOceanMinDepth;
+            this.deepOceanMaxDepth = deepOceanMaxDepth;
+            this.oceanDepthNoiseScale = oceanDepthNoiseScale;
+        }
+
+        public Ocean copy() {
+            return new Ocean(this.shallowOceanDepth, this.deepOceanMinDepth, this.deepOceanMaxDepth, this.oceanDepthNoiseScale);
         }
     }
 }

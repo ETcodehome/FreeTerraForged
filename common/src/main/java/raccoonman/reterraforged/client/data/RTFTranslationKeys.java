@@ -85,6 +85,10 @@ public final class RTFTranslationKeys {
 	public static final String GUI_SLIDER_WORLD_DEPTH = resolve("gui.slider.worldDepth");
 	public static final String GUI_SLIDER_SEA_LEVEL = resolve("gui.slider.seaLevel");
 	public static final String GUI_SLIDER_LAVA_LEVEL = resolve("gui.slider.lavaLevel");
+	public static final String GUI_SLIDER_SHALLOW_OCEAN_DEPTH = resolve("gui.slider.shallowOceanDepth");
+	public static final String GUI_SLIDER_DEEP_OCEAN_MIN_DEPTH = resolve("gui.slider.deepOceanMinDepth");
+	public static final String GUI_SLIDER_DEEP_OCEAN_MAX_DEPTH = resolve("gui.slider.deepOceanMaxDepth");
+	public static final String GUI_SLIDER_OCEAN_DEPTH_NOISE_SCALE = resolve("gui.slider.oceanDepthNoiseScale");
 	public static final String GUI_SLIDER_ROCK_VARIANCE = resolve("gui.slider.rockVariance");
 	public static final String GUI_SLIDER_ROCK_MIN = resolve("gui.slider.rockMin");
 	public static final String GUI_SLIDER_DIRT_VARIANCE = resolve("gui.slider.dirtVariance");
@@ -178,6 +182,7 @@ public final class RTFTranslationKeys {
 	public static final String GUI_LABEL_CONTINENT = resolve("gui.label.continent");
 	public static final String GUI_LABEL_CONTROL_POINTS = resolve("gui.label.controlPoints");
 	public static final String GUI_LABEL_PROPERTIES = resolve("gui.label.properties");
+	public static final String GUI_LABEL_OCEAN = resolve("gui.label.ocean");
 	public static final String GUI_LABEL_TRANSITIONS = resolve("gui.label.transitions");
 	public static final String GUI_LABEL_NOISE_CAVES = resolve("gui.label.noiseCaves");
 	public static final String GUI_LABEL_CARVERS = resolve("gui.label.carvers");

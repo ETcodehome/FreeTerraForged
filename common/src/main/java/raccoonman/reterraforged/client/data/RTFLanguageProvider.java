@@ -31,6 +31,7 @@ public final class RTFLanguageProvider {
 			this.add(RTFTranslationKeys.GUI_LITE_PRESET_NAME, "Legacy - TerraForged Lite");
 			this.add(RTFTranslationKeys.GUI_VANILLAISH_PRESET_NAME, "Legacy - TerraForged Vanilla-ish");
 			this.add(RTFTranslationKeys.GUI_RIVERS_PRESET_NAME, "Modern Default with 3D Rivers");
+			this.add(RTFTranslationKeys.GUI_COMMUNITY1_PRESET_NAME, "Community Preset - Modern Upscaled");
 			this.add(RTFTranslationKeys.GUI_WORLD_SETTINGS_TITLE, "World Settings");
 			this.add(RTFTranslationKeys.GUI_SURFACE_SETTINGS_TITLE, "Surface Settings (Experimental)");
 			this.add(RTFTranslationKeys.GUI_CAVE_SETTINGS_TITLE, "Cave Settings (Experimental)");
@@ -94,6 +95,10 @@ public final class RTFLanguageProvider {
 			this.add(RTFTranslationKeys.GUI_SLIDER_WORLD_DEPTH, "World Depth");
 			this.add(RTFTranslationKeys.GUI_SLIDER_SEA_LEVEL, "Sea Level");
 			this.add(RTFTranslationKeys.GUI_SLIDER_LAVA_LEVEL, "Lava Level");
+			this.add(RTFTranslationKeys.GUI_SLIDER_SHALLOW_OCEAN_DEPTH, "Shallow Ocean Depth");
+			this.add(RTFTranslationKeys.GUI_SLIDER_DEEP_OCEAN_MIN_DEPTH, "Deep Ocean Min Depth");
+			this.add(RTFTranslationKeys.GUI_SLIDER_DEEP_OCEAN_MAX_DEPTH, "Deep Ocean Max Depth");
+			this.add(RTFTranslationKeys.GUI_SLIDER_OCEAN_DEPTH_NOISE_SCALE, "Ocean Depth Noise Scale");
 			this.add(RTFTranslationKeys.GUI_SLIDER_ROCK_VARIANCE, "Rock Variance");
 			this.add(RTFTranslationKeys.GUI_SLIDER_ROCK_MIN, "Rock Min");
 			this.add(RTFTranslationKeys.GUI_SLIDER_DIRT_VARIANCE, "Dirt Variance");
@@ -176,6 +181,7 @@ public final class RTFLanguageProvider {
 			this.add(RTFTranslationKeys.GUI_LABEL_CONTINENT, "Continent");
 			this.add(RTFTranslationKeys.GUI_LABEL_CONTROL_POINTS, "Control Points");
 			this.add(RTFTranslationKeys.GUI_LABEL_PROPERTIES, "Properties");
+			this.add(RTFTranslationKeys.GUI_LABEL_OCEAN, "Ocean");
 			this.add(RTFTranslationKeys.GUI_LABEL_TRANSITIONS, "Erosion");
 			this.add(RTFTranslationKeys.GUI_LABEL_NOISE_CAVES, "Noise Caves");
 			this.add(RTFTranslationKeys.GUI_LABEL_CARVERS, "Carvers");
@@ -331,6 +337,10 @@ public final class RTFLanguageProvider {
 			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_SLIDER_MOUNTAIN_BIOME_USAGE), "The probability that mountainous terrain will be set to a mountain biome type.\nThis may help improve compatibility with mods that rely exclusively on mountain biomes.");
 			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_SLIDER_VOLCANO_BIOME_USAGE), "The probability that volcano terrain will be set to a volcano biome type.\nThis may help improve compatibility with mods that rely exclusively on volcano biomes.");
 			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_SLIDER_STRATA_REGION_SIZE), "Controls the size of strata regions");
+			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_SLIDER_SHALLOW_OCEAN_DEPTH), "Controls the shallow-ocean floor depth below sea level.");
+			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_SLIDER_DEEP_OCEAN_MIN_DEPTH), "Controls the shallowest generated deep-ocean floor depth below sea level.");
+			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_SLIDER_DEEP_OCEAN_MAX_DEPTH), "Controls the deepest generated deep-ocean floor depth below sea level.");
+			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_SLIDER_OCEAN_DEPTH_NOISE_SCALE), "Controls the horizontal scale of deep-ocean floor depth variation.");
 		}
 	}
 }

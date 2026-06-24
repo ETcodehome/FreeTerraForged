@@ -41,6 +41,10 @@ public class WorldSettingsPage extends PresetEditorPage {
 	private Slider worldDepth;
 	private Slider seaLevel;
 	private Slider lavaLevel;
+	private Slider shallowOceanDepth;
+	private Slider deepOceanMinDepth;
+	private Slider deepOceanMaxDepth;
+	private Slider oceanDepthNoiseScale;
 	
 	public WorldSettingsPage(PresetConfigScreen screen, PresetEntry preset) {
 		super(screen, preset);
@@ -60,6 +64,7 @@ public class WorldSettingsPage extends PresetEditorPage {
 		WorldSettings.Continent continent = world.continent;
 		WorldSettings.ControlPoints controlPoints = world.controlPoints;
 		WorldSettings.Properties properties = world.properties;
+		WorldSettings.Ocean ocean = world.ocean;
 		
 		this.continentType = PresetWidgets.createCycle(
 			ImmutableList.of(
@@ -184,6 +189,30 @@ public class WorldSettingsPage extends PresetEditorPage {
 			properties.lavaLevel = (int) slider.scaleValue(value);
 			return value;
 		});
+		this.shallowOceanDepth = PresetWidgets.createIntSlider(ocean.shallowOceanDepth, 1, 48, RTFTranslationKeys.GUI_SLIDER_SHALLOW_OCEAN_DEPTH, (slider, value) -> {
+			ocean.shallowOceanDepth = (int) slider.scaleValue(value);
+			this.regenerate();
+			return value;
+		});
+		this.deepOceanMinDepth = PresetWidgets.createIntSlider(ocean.deepOceanMinDepth, 8, 192, RTFTranslationKeys.GUI_SLIDER_DEEP_OCEAN_MIN_DEPTH, (slider, value) -> {
+			int depth = (int) slider.scaleValue(value);
+			depth = Math.min(depth, ocean.deepOceanMaxDepth);
+			ocean.deepOceanMinDepth = depth;
+			this.regenerate();
+			return slider.getSliderValue(depth);
+		});
+		this.deepOceanMaxDepth = PresetWidgets.createIntSlider(ocean.deepOceanMaxDepth, 16, 256, RTFTranslationKeys.GUI_SLIDER_DEEP_OCEAN_MAX_DEPTH, (slider, value) -> {
+			int depth = (int) slider.scaleValue(value);
+			depth = Math.max(depth, ocean.deepOceanMinDepth);
+			ocean.deepOceanMaxDepth = depth;
+			this.regenerate();
+			return slider.getSliderValue(depth);
+		});
+		this.oceanDepthNoiseScale = PresetWidgets.createIntSlider(ocean.oceanDepthNoiseScale, 16, 1024, RTFTranslationKeys.GUI_SLIDER_OCEAN_DEPTH_NOISE_SCALE, (slider, value) -> {
+			ocean.oceanDepthNoiseScale = (int) slider.scaleValue(value);
+			this.regenerate();
+			return value;
+		});
 		
 		this.left.addWidget(PresetWidgets.createLabel(RTFTranslationKeys.GUI_LABEL_CONTINENT));
 		this.left.addWidget(this.continentType);
@@ -211,6 +240,12 @@ public class WorldSettingsPage extends PresetEditorPage {
 		this.left.addWidget(this.worldDepth);
 		this.left.addWidget(this.seaLevel);
 		this.left.addWidget(this.lavaLevel);
+
+		this.left.addWidget(PresetWidgets.createLabel(RTFTranslationKeys.GUI_LABEL_OCEAN));
+		this.left.addWidget(this.shallowOceanDepth);
+		this.left.addWidget(this.deepOceanMinDepth);
+		this.left.addWidget(this.deepOceanMaxDepth);
+		this.left.addWidget(this.oceanDepthNoiseScale);
 	}
 
 	@Override

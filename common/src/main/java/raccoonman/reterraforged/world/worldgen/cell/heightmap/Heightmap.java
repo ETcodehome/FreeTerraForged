@@ -130,8 +130,8 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
         Climate climate = Climate.make(continent, ctx);
         CellPopulator land = new Blender(mountainShape, terrainBlend, mountains, 0.3F, 0.8F, 0.575F);
         
-        CellPopulator deepOcean = Populators.makeDeepOcean(ctx.seed.next(), levels.water);
-        CellPopulator shallowOcean = Populators.makeShallowOcean(ctx.levels);
+        CellPopulator deepOcean = Populators.makeDeepOcean(ctx.seed.next(), ctx.levels, world.ocean);
+        CellPopulator shallowOcean = Populators.makeShallowOcean(ctx.levels, world.ocean);
         CellPopulator coast = Populators.makeCoast(ctx.levels);
 
         CellPopulator oceans = new ContinentLerper3(deepOcean, shallowOcean, coast, controlPoints.deepOcean, controlPoints.shallowOcean, controlPoints.coast);
