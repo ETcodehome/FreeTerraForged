@@ -11,7 +11,7 @@ license="MIT"
 [[mods]]
     modId="reterraforged"
     displayName="ReTerraForged"
-    version="0.0.6004"
+    version="0.0.6004R1"
     authors="dags,Won-Ton,raccoonman,psiber"
     credits="dags,Won-Ton,raccoonman,psiber"
     logoFile="logo.png"
