@@ -43,7 +43,6 @@ class MixinSurfaceSystem {
 	private static final ResourceLocation GEOLOGY_RANDOM = RTFCommon.location("geology");
 	private RandomState randomState;
 	private Map<ResourceLocation, List<List<StrataRule.Layer>>> strata;
-	@Unique private boolean reterraforged$isRTFContext = false; // Guard flag to isolate dimensions
 
 	@Inject(
 			at = @At("TAIL"),
@@ -51,12 +50,7 @@ class MixinSurfaceSystem {
 	)
 	public void SurfaceSystem(RandomState randomState, BlockState blockState, int i, PositionalRandomFactory positionalRandomFactory, CallbackInfo callback) {
 		this.randomState = randomState;
-
-		// DIMENSION GUARD: Only allocate maps and mark active if this is an RTF world gen state (Overworld)
-		if ((Object) randomState instanceof RTFRandomState) {
-			this.strata = new ConcurrentHashMap<>();
-			this.reterraforged$isRTFContext = true;
-		}
+		this.strata = new ConcurrentHashMap<>();
 	}
 
 	// INJECT AT HEAD to carve out rivers and lakes before surface rules run
@@ -65,11 +59,6 @@ class MixinSurfaceSystem {
 			at = @At("HEAD")
 	)
 	private void onBuildSurface(RandomState randomState, BiomeManager biomeManager, Registry<Biome> biomes, boolean useLegacyRandom, WorldGenerationContext context, final ChunkAccess chunk, NoiseChunk noiseChunk, SurfaceRules.RuleSource ruleSource, CallbackInfo ci) {
-		// DIMENSION GUARD: Immediately abort if this SurfaceSystem instance isn't running for an RTF dimension
-		if (!this.reterraforged$isRTFContext) {
-			return;
-		}
-
 		if ((Object) randomState instanceof RTFRandomState rtfRandomState) {
 			GeneratorContext genCtx = rtfRandomState.generatorContext();
 			if (genCtx != null) {
@@ -79,12 +68,6 @@ class MixinSurfaceSystem {
 	}
 
 	public List<List<StrataRule.Layer>> reterraforged$RTFSurfaceSystem$getOrCreateStrata(ResourceLocation name, Function<RandomSource, List<List<StrataRule.Layer>>> strata) {
-		// Fallback structural safety in case a custom rule leaks sideways outside RTF context
-		if (this.strata == null) {
-			PositionalRandomFactory factory = this.randomState.getOrCreateRandomFactory(GEOLOGY_RANDOM);
-			return strata.apply(factory.fromHashOf(name));
-		}
-
 		return this.strata.computeIfAbsent(name, (k) -> {
 			PositionalRandomFactory factory = this.randomState.getOrCreateRandomFactory(GEOLOGY_RANDOM);
 			return strata.apply(factory.fromHashOf(k));
@@ -93,7 +76,6 @@ class MixinSurfaceSystem {
 
 	@Unique
 	private void reterraforged$placeRiverWater(ChunkAccess chunk, BiomeManager biomeManager, GeneratorContext genCtx) {
-
 		var chunkPos = chunk.getPos();
 		var tile = genCtx.cache.provideAtChunk(chunkPos.x, chunkPos.z);
 		var reader = tile.getChunkReader(chunkPos.x, chunkPos.z);
@@ -153,7 +135,7 @@ class MixinSurfaceSystem {
 							}
 						}
 
-						// Adjust this column to be averaged so it makes the waterfalls more natural like.
+						// adjust this column to be averaged so it makes the waterfalls more natural like.
 						if (isTransitionColumn && multiBlockDrop) {
 							scaledY = (scaledY + lowestNeighborWaterY) / 2;
 						}
@@ -202,6 +184,7 @@ class MixinSurfaceSystem {
 
 						// GASKET LOGIC: Soft fade using riverMask
 						int maxNeighborWaterY = scaledY;
+						float maxRiverMask = 0.0F;
 
 						// Check neighbors for water and record the strongest mask influence
 						int[] dx = {0, 0, 1, -1};
@@ -217,6 +200,7 @@ class MixinSurfaceSystem {
 								int nWaterY = levels.scale(ContinentalHydrology.getWeightedWaterHeight(neighborCell.waterTable) + oceanLevel);
 								if (nWaterY > maxNeighborWaterY) {
 									maxNeighborWaterY = nWaterY;
+									maxRiverMask = neighborCell.riverMask; // Capture the mask strength
 								}
 							}
 						}
