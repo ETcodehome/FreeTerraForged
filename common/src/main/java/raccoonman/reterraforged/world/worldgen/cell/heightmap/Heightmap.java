@@ -113,19 +113,27 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
         float terrainFrequency = 1.0F / terrainSettings.general.globalHorizontalScale;
         CellPopulator region = new RegionModule(regionConfig);
 
+        // Match the density projection's steepest tall-world segment so mountain bodies widen
+        // with their generated height instead of becoming narrow vertical walls.
+        float mountainHorizontalScale = world.properties.tallTerrainHorizontalScale();
+
         Seed mountainSeed = ctx.seed.offset(general.terrainSeedOffset);
-        Noise mountainShape = Noises.worleyEdge(mountainSeed.next(), general.legacyMountainScaling ? 1000 : Math.round(1000 * terrainSettings.mountains.horizontalScale * 2.25F), EdgeFunction.DISTANCE_2_ADD, DistanceFunction.EUCLIDEAN);
-        mountainShape = Noises.warpPerlin(mountainShape, mountainSeed.next(), 333, 2, 250.0F);
+        int worleyPeriod = general.legacyMountainScaling
+            ? Math.round(1000 * terrainSettings.mountains.horizontalScale * mountainHorizontalScale)
+            : Math.round(1000 * terrainSettings.mountains.horizontalScale * 2.25F * mountainHorizontalScale);
+        worleyPeriod = Math.max(1, worleyPeriod);
+        Noise mountainShape = Noises.worleyEdge(mountainSeed.next(), worleyPeriod, EdgeFunction.DISTANCE_2_ADD, DistanceFunction.EUCLIDEAN);
+        mountainShape = Noises.warpPerlin(mountainShape, mountainSeed.next(), Math.max(1, Math.round(333 * mountainHorizontalScale)), 2, 250.0F * mountainHorizontalScale);
         mountainShape = Noises.curve(mountainShape, Interpolation.CURVE3);
         mountainShape = Noises.clamp(mountainShape, 0.0F, 0.9F);
         mountainShape = Noises.map(mountainShape, 0.0F, 1.0F);
 
         Noise ground = PresetNoiseData.getNoise(noiseLookup, PresetTerrainTypeNoise.GROUND);
-        
-        CellPopulator terrainRegions = new RegionSelector(TerrainProvider.generateTerrain(ctx.seed, terrainSettings, regionConfig, levels, noiseLookup));
+
+        CellPopulator terrainRegions = new RegionSelector(TerrainProvider.generateTerrain(ctx.seed, terrainSettings, regionConfig, levels, noiseLookup, mountainHorizontalScale));
         CellPopulator terrainRegionBorders = Populators.makeBorder(ctx.seed, ground, terrainSettings.plains, terrainSettings.steppe, globalVerticalScale);
         CellPopulator terrainBlend = new RegionLerper(terrainRegionBorders, terrainRegions);
-        CellPopulator mountains = Populators.makeMountainChain(mountainSeed, ground, terrainSettings.mountains, terrainSettings.general.legacyMountainScaling ? 1.0F : terrainSettings.mountains.horizontalScale * 2.25F, terrainSettings.general.legacyMountainScaling ? globalVerticalScale : globalVerticalScale * terrainSettings.mountains.verticalScale, general.fancyMountains, general.legacyMountainScaling);
+        CellPopulator mountains = Populators.makeMountainChain(mountainSeed, ground, terrainSettings.mountains, mountainHorizontalScale, terrainSettings.general.legacyMountainScaling ? globalVerticalScale : globalVerticalScale * terrainSettings.mountains.verticalScale, general.fancyMountains, general.legacyMountainScaling);
         Continent continent = world.continent.continentType.create(ctx.seed, ctx);
         Climate climate = Climate.make(continent, ctx);
         CellPopulator land = new Blender(mountainShape, terrainBlend, mountains, 0.3F, 0.8F, 0.575F);

@@ -31,6 +31,7 @@ public final class RTFLanguageProvider {
 			this.add(RTFTranslationKeys.GUI_LITE_PRESET_NAME, "Legacy - TerraForged Lite");
 			this.add(RTFTranslationKeys.GUI_VANILLAISH_PRESET_NAME, "Legacy - TerraForged Vanilla-ish");
 			this.add(RTFTranslationKeys.GUI_RIVERS_PRESET_NAME, "Modern Default with 3D Rivers");
+			this.add(RTFTranslationKeys.GUI_COMMUNITY1_PRESET_NAME, "Community Preset 1");
 			this.add(RTFTranslationKeys.GUI_WORLD_SETTINGS_TITLE, "World Settings");
 			this.add(RTFTranslationKeys.GUI_SURFACE_SETTINGS_TITLE, "Surface Settings (Experimental)");
 			this.add(RTFTranslationKeys.GUI_CAVE_SETTINGS_TITLE, "Cave Settings (Experimental)");

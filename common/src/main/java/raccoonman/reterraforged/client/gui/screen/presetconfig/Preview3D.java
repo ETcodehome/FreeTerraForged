@@ -219,7 +219,7 @@ public class Preview3D extends Button {
         RenderMode mode = currentMode;
 
         WorldSettings.Properties properties = this.page.preset.getPreset().world().properties;
-        Levels levels = new Levels(properties.terrainScaler(), properties.seaLevel);
+        Levels levels = new Levels(properties.terrainModelHeight(), properties.worldDepth, properties.seaLevel);
 
         int tileSize = activeTile.getBlockSize().size();
         float rawBlockW = (float) this.width / (float) tileSize * 0.85f;

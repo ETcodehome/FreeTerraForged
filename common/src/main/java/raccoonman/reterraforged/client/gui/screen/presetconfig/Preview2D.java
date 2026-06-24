@@ -131,7 +131,7 @@ public class Preview2D extends Button {
         int localOffsetX = this.offsetX;
         int localOffsetZ = this.offsetZ;
         RenderMode mode = this.page.renderMode2D.getValue();
-        Levels levels = new Levels(properties.terrainScaler(), properties.seaLevel);
+        Levels levels = new Levels(properties.terrainModelHeight(), properties.worldDepth, properties.seaLevel);
 
         // Stage 1: Run clear, config loading, and structure lookups off the main thread
         CompletableFuture<PreGenContext> setupStage = CompletableFuture.supplyAsync(() -> {

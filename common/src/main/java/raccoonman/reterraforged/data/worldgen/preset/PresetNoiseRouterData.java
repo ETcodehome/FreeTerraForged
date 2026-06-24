@@ -43,13 +43,14 @@ public class PresetNoiseRouterData {
     	
         int worldHeight = properties.worldHeight;
         int worldDepth = properties.worldDepth;
+        int terrainModelHeight = properties.terrainModelHeight();
         
         ctx.register(NoiseRouterData.CONTINENTS, RTFDensityFunctions.cell(CellSampler.Field.CONTINENT));
         ctx.register(NoiseRouterData.EROSION, RTFDensityFunctions.cell(CellSampler.Field.EROSION));
         ctx.register(NoiseRouterData.RIDGES, RTFDensityFunctions.cell(CellSampler.Field.WEIRDNESS));
 
         DensityFunction height = NoiseRouterData.registerAndWrap(ctx, HEIGHT, RTFDensityFunctions.cell(CellSampler.Field.HEIGHT));
-        DensityFunction offset = NoiseRouterData.registerAndWrap(ctx, NoiseRouterData.OFFSET, DensityFunctions.add(DensityFunctions.constant(NoiseRouterData.GLOBAL_OFFSET - 0.5F), DensityFunctions.mul(RTFDensityFunctions.clampToNearestUnit(height, properties.terrainScaler()), DensityFunctions.constant(2.0D))));
+        DensityFunction offset = NoiseRouterData.registerAndWrap(ctx, NoiseRouterData.OFFSET, terrainModelOffset(height, terrainModelHeight));
         ctx.register(NoiseRouterData.DEPTH, DensityFunctions.add(DensityFunctions.yClampedGradient(-worldDepth, worldHeight, yGradientRange(-worldDepth), yGradientRange(worldHeight)), offset));
         ctx.register(NoiseRouterData.BASE_3D_NOISE_OVERWORLD, DensityFunctions.zero());
         ctx.register(NoiseRouterData.JAGGEDNESS, jaggednessPerformanceHack());
@@ -79,8 +80,10 @@ public class PresetNoiseRouterData {
         DensityFunction vegetation = RTFDensityFunctions.cell(CellSampler.Field.MOISTURE);
         DensityFunction factor = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.FACTOR);
         DensityFunction depth = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.DEPTH);
-        DensityFunction initialDensity = NoiseRouterData.noiseGradientDensity(DensityFunctions.cache2d(factor), depth);
-        DensityFunction slopedCheese = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.SLOPED_CHEESE);
+        DensityFunction height = NoiseRouterData.getFunction(densityFunctions, HEIGHT);
+        DensityFunction terrainDepth = tallTerrainDepth(height, properties);
+        DensityFunction initialDensity = NoiseRouterData.noiseGradientDensity(DensityFunctions.cache2d(factor), terrainDepth);
+        DensityFunction slopedCheese = initialDensity;
 //        DensityFunction entrances = DensityFunctions.min(slopedCheese, DensityFunctions.mul(DensityFunctions.constant(5.0), NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.ENTRANCES)));
 //        DensityFunction slopedCheeseCaves = DensityFunctions.rangeChoice(slopedCheese, -1000000.0, 1.5625, entrances, NoiseRouterData.underground(densityFunctions, noiseParams, slopedCheese));
 //        DensityFunction finalDensity = DensityFunctions.min(NoiseRouterData.postProcess(slideOverworld(slopedCheeseCaves, -worldDepth)), NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.NOODLE));
@@ -99,6 +102,51 @@ public class PresetNoiseRouterData {
         DensityFunction oreGap = DensityFunctions.noise(noiseParams.getOrThrow(Noises.ORE_GAP));
         return new NoiseRouter(aquiferBarrier, aquiferFluidLevelFloodedness, aquiferFluidLevelSpread, aquiferLava, temperature, vegetation, NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.CONTINENTS), NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.EROSION), DensityFunctions.add(depth, DensityFunctions.constant(-0.205D)), NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.RIDGES), slideOverworld(DensityFunctions.add(initialDensity, DensityFunctions.constant(UNIT * -90)).clamp(-64.0, 64.0), -worldDepth), finalDensity, oreVeininess, oreVein, oreGap);
 	}
+
+    private static DensityFunction tallTerrainDepth(DensityFunction height, WorldSettings.Properties properties) {
+        int worldHeight = properties.worldHeight;
+        int worldDepth = properties.worldDepth;
+        int terrainModelHeight = properties.terrainModelHeight();
+        DensityFunction offset = terrainModelHeight == worldHeight ? terrainModelOffset(height, terrainModelHeight) : tallTerrainOffset(height, properties);
+        return DensityFunctions.add(DensityFunctions.yClampedGradient(-worldDepth, worldHeight, yGradientRange(-worldDepth), yGradientRange(worldHeight)), offset);
+    }
+
+    private static DensityFunction terrainModelOffset(DensityFunction height, int terrainModelHeight) {
+        return DensityFunctions.add(
+            DensityFunctions.constant(NoiseRouterData.GLOBAL_OFFSET - 0.5F),
+            DensityFunctions.mul(RTFDensityFunctions.clampToNearestUnit(height, terrainModelHeight), DensityFunctions.constant(2.0D))
+        );
+    }
+
+    private static DensityFunction tallTerrainOffset(DensityFunction height, WorldSettings.Properties properties) {
+        int terrainModelHeight = properties.terrainModelHeight();
+        double extension = properties.worldHeight / (double) terrainModelHeight;
+
+        // Two-segment concave projection: the steep lower segment fills vertical space quickly
+        // for the mountain body, while the gentle upper segment compresses the peak zone so
+        // that pointed noise ridges produce rounded summits instead of narrow cones.
+        double shoulderHeight = WorldSettings.Properties.TALL_TERRAIN_SHOULDER_HEIGHT;
+        double shoulderProjected = 1.0D + (extension - 1.0D) * WorldSettings.Properties.TALL_TERRAIN_SHOULDER_FRACTION;
+
+        DensityFunction modelHeight = RTFDensityFunctions.clampToNearestUnit(height, terrainModelHeight);
+        DensityFunction bodySegment = linearHeight(height, 1.0D, shoulderHeight, 1.0D, shoulderProjected);
+        DensityFunction peakSegment = linearHeight(height, shoulderHeight, shoulderHeight + 1.0D, shoulderProjected, extension);
+        DensityFunction extendedHeight = DensityFunctions.rangeChoice(height, 1.0D, shoulderHeight, bodySegment, peakSegment);
+        DensityFunction projectedHeight = DensityFunctions.rangeChoice(height, -1000000.0D, 1.0D, modelHeight, extendedHeight).clamp(0.0D, extension);
+
+        return DensityFunctions.add(
+            DensityFunctions.constant(NoiseRouterData.GLOBAL_OFFSET - 0.5F),
+            DensityFunctions.mul(projectedHeight, DensityFunctions.constant(2.0D))
+        );
+    }
+
+    private static DensityFunction linearHeight(DensityFunction height, double inputMin, double inputMax, double outputMin, double outputMax) {
+        double slope = (outputMax - outputMin) / (inputMax - inputMin);
+        return DensityFunctions.add(
+            DensityFunctions.constant(outputMin),
+            DensityFunctions.mul(DensityFunctions.add(height, DensityFunctions.constant(-inputMin)), DensityFunctions.constant(slope))
+        );
+    }
 
     private static DensityFunction underground(float cheeseCaveProbability, HolderGetter<DensityFunction> densityFunctions, HolderGetter<NormalNoise.NoiseParameters> noiseParams, DensityFunction slopedCheese) {
         DensityFunction spaghetti2d = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.SPAGHETTI_2D);

@@ -107,6 +107,9 @@ public class WorldSettings {
     }
     
     public static class Properties {
+        public static final int MAX_TERRAIN_MODEL_HEIGHT = 256;
+        public static final double TALL_TERRAIN_SHOULDER_HEIGHT = 1.3D;
+        public static final double TALL_TERRAIN_SHOULDER_FRACTION = 0.6D;
     	public static final Codec<Properties> CODEC = RecordCodecBuilder.create(instance -> instance.group(
     		SpawnType.CODEC.fieldOf("spawnType").forGetter((o) -> o.spawnType),
     		Codec.INT.fieldOf("worldHeight").forGetter((o) -> o.worldHeight),
@@ -139,9 +142,30 @@ public class WorldSettings {
         	return new Properties(this.spawnType, this.worldHeight, this.worldDepth, this.seaLevel, this.lavaLevel, this.spawnX, this.spawnZ);
         }
         
+        public int terrainModelHeight() {
+            return Math.min(this.worldHeight, MAX_TERRAIN_MODEL_HEIGHT);
+        }
+
+        public float terrainHeightRatio() {
+            int terrainModelHeight = this.terrainModelHeight();
+            return this.worldHeight > terrainModelHeight ? (float) this.worldHeight / terrainModelHeight : 1.0F;
+        }
+
+        public float tallTerrainHorizontalScale() {
+            float heightRatio = this.terrainHeightRatio();
+            if (heightRatio <= 1.0F) {
+                return 1.0F;
+            }
+
+            double shoulderRange = TALL_TERRAIN_SHOULDER_HEIGHT - 1.0D;
+            double bodyProjectionRange = (heightRatio - 1.0D) * TALL_TERRAIN_SHOULDER_FRACTION;
+            double bodyProjectionSlope = bodyProjectionRange / shoulderRange;
+            return (float) Math.max(heightRatio, bodyProjectionSlope);
+        }
+
         @Deprecated
         public int terrainScaler() {
-        	return Math.min(this.worldHeight, 256);
+            return this.terrainModelHeight();
         }
     }
 }
