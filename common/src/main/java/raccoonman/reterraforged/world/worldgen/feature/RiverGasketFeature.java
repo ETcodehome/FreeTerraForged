@@ -42,6 +42,11 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
             return false;
         }
 
+        // Explicitly bail out if this isn't the Overworld
+        if (level.getLevel().dimension() != net.minecraft.world.level.Level.OVERWORLD) {
+            return false;
+        }
+
         // Initialize localized lookup utilities
         WorldLookup worldLookup = new WorldLookup(generatorContext);
         Levels levels = worldLookup.getHeightmap().levels();
