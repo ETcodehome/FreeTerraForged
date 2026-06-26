@@ -126,3 +126,6 @@ run/
 .project
 
 *.launch
+
+# Local agent reference docs
+agent-ref/
