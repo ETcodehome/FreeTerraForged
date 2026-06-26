@@ -73,7 +73,15 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
     public List<Network.Builder> generateRoots(int x, int z, Random random, GenWarp warp) {
         return Collections.emptyList();
     }
-    
+
+    protected float getWaterTable(float x, float z) {
+        if (this.continent instanceof UpliftContinentGenerator upliftGenerator) {
+            return upliftGenerator.getWaterTable(x, z);
+        }
+        // Fallback value for other continent types that don't utilize a custom water table property
+        return 0.0F;
+    }
+
     public void generateForks(Network.Builder parent, Variance spacing, RiverConfig config, Random random, GenWarp warp, List<Network.Builder> rivers, int depth) {
         if (depth > 2) {
             return;
@@ -107,7 +115,12 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
                             settings.fadeIn = config.fade;
                             settings.valleySize = valleyWidth;
                             RiverWarp forkWarp = parent.carver.getWarp().createChild(0.15f, 0.75f, 0.65f, random);
-                            RTFRiverCarver fork = new UpliftRiverCarver(river, forkWarp, forkConfig, settings, this.levels, this.lake, this.continent instanceof UpliftContinentGenerator);
+
+                            // Sample the water table exactly at the parent junction point (x1, z1)
+                            float junctionWaterTable = this.getWaterTable(x1, z1) + levels.water;
+
+                            // Pass junctionWaterTable as the final argument
+                            RTFRiverCarver fork = new UpliftRiverCarver(river, forkWarp, forkConfig, settings, this.levels, this.lake, this.continent instanceof UpliftContinentGenerator, junctionWaterTable);
                             Network.Builder builder = Network.builder(fork);
                             parent.children.add(builder);
                             this.generateForks(builder, River.FORK_SPACING, config, random, warp, rivers, depth + 1);
