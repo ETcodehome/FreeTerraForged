@@ -27,7 +27,7 @@ public class PresetBiomeModifierData {
 	public static final ResourceKey<BiomeModifier> ADD_EROSION = createKey("add_erosion");
 	public static final ResourceKey<BiomeModifier> ADD_SNOW_PROCESSING = createKey("add_snow_processing");
 	public static final ResourceKey<BiomeModifier> ADD_SWAMP_SURFACE = createKey("add_swamp_surface");
-	
+
 	public static final ResourceKey<BiomeModifier> REPLACE_PLAINS_TREES = createKey("replace_plains_trees");
 	public static final ResourceKey<BiomeModifier> REPLACE_FOREST_TREES = createKey("replace_forest_trees");
 	public static final ResourceKey<BiomeModifier> REPLACE_FLOWER_FOREST_TREES = createKey("replace_flower_forest_trees");
@@ -52,10 +52,11 @@ public class PresetBiomeModifierData {
 	public static final ResourceKey<BiomeModifier> ADD_STEPPE_BUSH = createKey("add_stepps_bush");
 	public static final ResourceKey<BiomeModifier> ADD_COLD_STEPPE_BUSH = createKey("add_cold_steppe_bush");
 	public static final ResourceKey<BiomeModifier> ADD_TAIGA_SCRUB_BUSH = createKey("add_taiga_scrub_bush");
-	
+
 	public static final ResourceKey<BiomeModifier> ADD_FOREST_GRASS = createKey("add_forest_grass");
 	public static final ResourceKey<BiomeModifier> ADD_BIRCH_FOREST_GRASS = createKey("add_birch_forest_grass");
-	
+	public static final ResourceKey<BiomeModifier> ADD_RIVER_GASKET = createKey("add_river_gasket");
+
 	public static void bootstrap(Preset preset, BootstrapContext<BiomeModifier> ctx) {
 		MiscellaneousSettings miscellaneous = preset.miscellaneous();
 		HolderGetter<PlacedFeature> placedFeatures = ctx.lookup(Registries.PLACED_FEATURE);
@@ -84,109 +85,93 @@ public class PresetBiomeModifierData {
 		HolderSet<Biome> steppeBushBiomes = HolderSet.direct(biomes.getOrThrow(Biomes.SAVANNA), biomes.getOrThrow(Biomes.WINDSWEPT_SAVANNA), biomes.getOrThrow(Biomes.SAVANNA_PLATEAU));
 		HolderSet<Biome> coldSteppeBiomes = HolderSet.direct();
 		HolderSet<Biome> taigaScrubBiomes = HolderSet.direct(biomes.getOrThrow(Biomes.SNOWY_PLAINS), biomes.getOrThrow(Biomes.TAIGA), biomes.getOrThrow(Biomes.WINDSWEPT_FOREST), biomes.getOrThrow(Biomes.WINDSWEPT_GRAVELLY_HILLS));
-		
+
 		HolderSet<Biome> forestsWithGrass = HolderSet.direct(biomes.getOrThrow(Biomes.FOREST), biomes.getOrThrow(Biomes.DARK_FOREST));
 
 		if(miscellaneous.customBiomeFeatures) {
-			Holder<PlacedFeature> plainsTrees = placedFeatures.getOrThrow(PresetPlacedFeatures.PLAINS_TREES);
-			Holder<PlacedFeature> forestTrees = placedFeatures.getOrThrow(PresetPlacedFeatures.FOREST_TREES);
-			Holder<PlacedFeature> flowerForestTrees = placedFeatures.getOrThrow(PresetPlacedFeatures.FLOWER_FOREST_TREES);
-			Holder<PlacedFeature> birchTrees = placedFeatures.getOrThrow(PresetPlacedFeatures.BIRCH_TREES);
-			Holder<PlacedFeature> darkForestTrees = placedFeatures.getOrThrow(PresetPlacedFeatures.DARK_FOREST_TREES);
-			Holder<PlacedFeature> savannaTrees = placedFeatures.getOrThrow(PresetPlacedFeatures.SAVANNA_TREES);
-			Holder<PlacedFeature> swampTrees = placedFeatures.getOrThrow(PresetPlacedFeatures.SWAMP_TREES);
-			Holder<PlacedFeature> meadowTrees = placedFeatures.getOrThrow(PresetPlacedFeatures.MEADOW_TREES);
-			Holder<PlacedFeature> firTrees = placedFeatures.getOrThrow(PresetPlacedFeatures.FIR_TREES);
-			Holder<PlacedFeature> windsweptHillsFirTrees = placedFeatures.getOrThrow(PresetPlacedFeatures.WINDSWEPT_HILLS_FIR_TREES);
-			Holder<PlacedFeature> pineTrees = placedFeatures.getOrThrow(PresetPlacedFeatures.PINE_TREES);
-			Holder<PlacedFeature> spruceTrees = placedFeatures.getOrThrow(PresetPlacedFeatures.SPRUCE_TREES);
-			Holder<PlacedFeature> spruceTundraTrees = placedFeatures.getOrThrow(PresetPlacedFeatures.SPRUCE_TUNDRA_TREES);
-			Holder<PlacedFeature> redwoodTrees = placedFeatures.getOrThrow(PresetPlacedFeatures.REDWOOD_TREES);
-			Holder<PlacedFeature> jungleTrees = placedFeatures.getOrThrow(PresetPlacedFeatures.JUNGLE_TREES);
-			Holder<PlacedFeature> jungleEdgeTrees = placedFeatures.getOrThrow(PresetPlacedFeatures.JUNGLE_EDGE_TREES);
-			Holder<PlacedFeature> badlandsTrees = placedFeatures.getOrThrow(PresetPlacedFeatures.BADLANDS_TREES);
-			Holder<PlacedFeature> woodedBadlandsTrees = placedFeatures.getOrThrow(PresetPlacedFeatures.WOODED_BADLANDS_TREES);
-			
 			ctx.register(REPLACE_PLAINS_TREES, BiomeModifiers.replace(GenerationStep.Decoration.VEGETAL_DECORATION, plains, Map.of(
-				VegetationPlacements.TREES_PLAINS, plainsTrees
+					VegetationPlacements.TREES_PLAINS, PresetPlacedFeatures.PLAINS_TREES
 			)));
 			ctx.register(REPLACE_FOREST_TREES, BiomeModifiers.replace(GenerationStep.Decoration.VEGETAL_DECORATION, forests, Map.of(
-				VegetationPlacements.TREES_BIRCH_AND_OAK, forestTrees
+					VegetationPlacements.TREES_BIRCH_AND_OAK, PresetPlacedFeatures.FOREST_TREES
 			)));
 			ctx.register(REPLACE_FLOWER_FOREST_TREES, BiomeModifiers.replace(GenerationStep.Decoration.VEGETAL_DECORATION, flowerForests, Map.of(
-				VegetationPlacements.TREES_FLOWER_FOREST, flowerForestTrees
+					VegetationPlacements.TREES_FLOWER_FOREST, PresetPlacedFeatures.FLOWER_FOREST_TREES
 			)));
 			ctx.register(REPLACE_BIRCH_TREES, BiomeModifiers.replace(GenerationStep.Decoration.VEGETAL_DECORATION, birchForests, Map.of(
-				VegetationPlacements.TREES_BIRCH, birchTrees,
-				VegetationPlacements.BIRCH_TALL, birchTrees
+					VegetationPlacements.TREES_BIRCH, PresetPlacedFeatures.BIRCH_TREES,
+					VegetationPlacements.BIRCH_TALL, PresetPlacedFeatures.BIRCH_TREES
 			)));
 			ctx.register(REPLACE_DARK_FOREST_TREES, BiomeModifiers.replace(GenerationStep.Decoration.VEGETAL_DECORATION, darkForests, Map.of(
-				VegetationPlacements.DARK_FOREST_VEGETATION, darkForestTrees
+					VegetationPlacements.DARK_FOREST_VEGETATION, PresetPlacedFeatures.DARK_FOREST_TREES
 			)));
 			ctx.register(REPLACE_SAVANNA_TREES, BiomeModifiers.replace(GenerationStep.Decoration.VEGETAL_DECORATION, savannas, Map.of(
-				VegetationPlacements.TREES_SAVANNA, savannaTrees
+					VegetationPlacements.TREES_SAVANNA, PresetPlacedFeatures.SAVANNA_TREES
 			)));
 			ctx.register(REPLACE_SWAMP_TREES, BiomeModifiers.replace(GenerationStep.Decoration.VEGETAL_DECORATION, swamps, Map.of(
-				VegetationPlacements.TREES_SWAMP, swampTrees
+					VegetationPlacements.TREES_SWAMP, PresetPlacedFeatures.SWAMP_TREES
 			)));
 			ctx.register(REPLACE_MEADOW_TREES, BiomeModifiers.replace(GenerationStep.Decoration.VEGETAL_DECORATION, meadows, Map.of(
-				VegetationPlacements.TREES_MEADOW, meadowTrees
+					VegetationPlacements.TREES_MEADOW, PresetPlacedFeatures.MEADOW_TREES
 			)));
 			ctx.register(REPLACE_FIR_TREES, BiomeModifiers.replace(GenerationStep.Decoration.VEGETAL_DECORATION, firForests, Map.of(
-				VegetationPlacements.TREES_GROVE, firTrees,
-				VegetationPlacements.TREES_WINDSWEPT_FOREST, firTrees
+					VegetationPlacements.TREES_GROVE, PresetPlacedFeatures.FIR_TREES,
+					VegetationPlacements.TREES_WINDSWEPT_FOREST, PresetPlacedFeatures.FIR_TREES
 			)));
 			ctx.register(REPLACE_WINDSWEPT_HILLS_FIR_TREES, BiomeModifiers.replace(GenerationStep.Decoration.VEGETAL_DECORATION, windsweptHills, Map.of(
-				VegetationPlacements.TREES_WINDSWEPT_HILLS, windsweptHillsFirTrees
+					VegetationPlacements.TREES_WINDSWEPT_HILLS, PresetPlacedFeatures.WINDSWEPT_HILLS_FIR_TREES
 			)));
 			ctx.register(REPLACE_PINE_TREES, BiomeModifiers.replace(GenerationStep.Decoration.VEGETAL_DECORATION, pineForests, Map.of(
-				VegetationPlacements.TREES_TAIGA, pineTrees,
-				VegetationPlacements.TREES_OLD_GROWTH_SPRUCE_TAIGA, pineTrees
+					VegetationPlacements.TREES_TAIGA, PresetPlacedFeatures.PINE_TREES,
+					VegetationPlacements.TREES_OLD_GROWTH_SPRUCE_TAIGA, PresetPlacedFeatures.PINE_TREES
 			)));
 			ctx.register(REPLACE_SPRUCE_TREES, BiomeModifiers.replace(GenerationStep.Decoration.VEGETAL_DECORATION, spruceForests, Map.of(
-				VegetationPlacements.TREES_TAIGA, spruceTrees
+					VegetationPlacements.TREES_TAIGA, PresetPlacedFeatures.SPRUCE_TREES
 			)));
 			ctx.register(REPLACE_SPRUCE_TUNDRA_TREES, BiomeModifiers.replace(GenerationStep.Decoration.VEGETAL_DECORATION, spruceTundras, Map.of(
-				VegetationPlacements.TREES_SNOWY, spruceTundraTrees
+					VegetationPlacements.TREES_SNOWY, PresetPlacedFeatures.SPRUCE_TUNDRA_TREES
 			)));
 			ctx.register(REPLACE_REDWOOD_TREES, BiomeModifiers.replace(GenerationStep.Decoration.VEGETAL_DECORATION, redwoodForests, Map.of(
-				VegetationPlacements.TREES_OLD_GROWTH_PINE_TAIGA, redwoodTrees
+					VegetationPlacements.TREES_OLD_GROWTH_PINE_TAIGA, PresetPlacedFeatures.REDWOOD_TREES
 			)));
 			ctx.register(REPLACE_JUNGLE_TREES, BiomeModifiers.replace(GenerationStep.Decoration.VEGETAL_DECORATION, jungles, Map.of(
-				VegetationPlacements.TREES_JUNGLE, jungleTrees,
-				VegetationPlacements.BAMBOO_VEGETATION, jungleTrees
+					VegetationPlacements.TREES_JUNGLE, PresetPlacedFeatures.JUNGLE_TREES,
+					VegetationPlacements.BAMBOO_VEGETATION, PresetPlacedFeatures.JUNGLE_TREES
 			)));
 			ctx.register(REPLACE_JUNGLE_EDGE_TREES, BiomeModifiers.replace(GenerationStep.Decoration.VEGETAL_DECORATION, jungleEdges, Map.of(
-				VegetationPlacements.TREES_SPARSE_JUNGLE, jungleEdgeTrees
+					VegetationPlacements.TREES_SPARSE_JUNGLE, PresetPlacedFeatures.JUNGLE_EDGE_TREES
 			)));
 			ctx.register(REPLACE_BADLANDS_TREES, BiomeModifiers.replace(GenerationStep.Decoration.VEGETAL_DECORATION, badlands, Map.of(
-				VegetationPlacements.TREES_BADLANDS, badlandsTrees,
-				VegetationPlacements.TREES_WINDSWEPT_SAVANNA, badlandsTrees
+					VegetationPlacements.TREES_BADLANDS, PresetPlacedFeatures.BADLANDS_TREES,
+					VegetationPlacements.TREES_WINDSWEPT_SAVANNA, PresetPlacedFeatures.BADLANDS_TREES
 			)));
 			ctx.register(REPLACE_WOODED_BADLANDS_TREES, BiomeModifiers.replace(GenerationStep.Decoration.VEGETAL_DECORATION, woodedBadlands, Map.of(
-				VegetationPlacements.TREES_BADLANDS, woodedBadlandsTrees
+					VegetationPlacements.TREES_BADLANDS, PresetPlacedFeatures.WOODED_BADLANDS_TREES
 			)));
 
+			// We keep these here because prepend/append still rely on Holders!
 			ctx.register(ADD_MARSH_BUSH, prepend(GenerationStep.Decoration.VEGETAL_DECORATION, Filter.Behavior.WHITELIST, marshBushBiomes, placedFeatures.getOrThrow(PresetPlacedFeatures.MARSH_BUSH)));
 			ctx.register(ADD_PLAINS_BUSH, prepend(GenerationStep.Decoration.VEGETAL_DECORATION, Filter.Behavior.WHITELIST, plainsBushBiomes, placedFeatures.getOrThrow(PresetPlacedFeatures.PLAINS_BUSH)));
 			ctx.register(ADD_STEPPE_BUSH, prepend(GenerationStep.Decoration.VEGETAL_DECORATION, Filter.Behavior.WHITELIST, steppeBushBiomes, placedFeatures.getOrThrow(PresetPlacedFeatures.STEPPE_BUSH)));
 			ctx.register(ADD_COLD_STEPPE_BUSH, prepend(GenerationStep.Decoration.VEGETAL_DECORATION, Filter.Behavior.WHITELIST, coldSteppeBiomes, placedFeatures.getOrThrow(PresetPlacedFeatures.COLD_STEPPE_BUSH)));
 			ctx.register(ADD_TAIGA_SCRUB_BUSH, prepend(GenerationStep.Decoration.VEGETAL_DECORATION, Filter.Behavior.WHITELIST, taigaScrubBiomes, placedFeatures.getOrThrow(PresetPlacedFeatures.TAIGA_SCRUB_BUSH)));
-			
+
 			ctx.register(ADD_FOREST_GRASS, prepend(GenerationStep.Decoration.VEGETAL_DECORATION, Filter.Behavior.WHITELIST, forestsWithGrass, placedFeatures.getOrThrow(PresetPlacedFeatures.FOREST_GRASS)));
 			ctx.register(ADD_BIRCH_FOREST_GRASS, prepend(GenerationStep.Decoration.VEGETAL_DECORATION, Filter.Behavior.WHITELIST, birchForests, placedFeatures.getOrThrow(PresetPlacedFeatures.BIRCH_FOREST_GRASS)));
 		}
-		
+
 		if(miscellaneous.erosionDecorator) {
 			ctx.register(ADD_EROSION, prepend(GenerationStep.Decoration.RAW_GENERATION, placedFeatures.getOrThrow(PresetPlacedFeatures.ERODE)));
 		}
 		if(miscellaneous.naturalSnowDecorator || miscellaneous.smoothLayerDecorator) {
 			ctx.register(ADD_SNOW_PROCESSING, append(GenerationStep.Decoration.TOP_LAYER_MODIFICATION, placedFeatures.getOrThrow(PresetPlacedFeatures.DECORATE_SNOW)));
 		}
-		
+
 		ctx.register(ADD_SWAMP_SURFACE, prepend(GenerationStep.Decoration.RAW_GENERATION, Filter.Behavior.WHITELIST, swamps, placedFeatures.getOrThrow(PresetPlacedFeatures.SWAMP_SURFACE)));
+
+		ctx.register(ADD_RIVER_GASKET, prepend(GenerationStep.Decoration.RAW_GENERATION, placedFeatures.getOrThrow(PresetPlacedFeatures.RIVER_GASKET)));
 	}
-	
+
 	@SafeVarargs
 	private static BiomeModifier prepend(GenerationStep.Decoration step, Holder<PlacedFeature>... features) {
 		return BiomeModifiers.add(Order.PREPEND, step, HolderSet.direct(features));
@@ -201,13 +186,13 @@ public class PresetBiomeModifierData {
 	private static BiomeModifier append(GenerationStep.Decoration step, Holder<PlacedFeature>... features) {
 		return BiomeModifiers.add(Order.APPEND, step, HolderSet.direct(features));
 	}
-	
+
 	@SafeVarargs
 	private static BiomeModifier append(GenerationStep.Decoration step, Filter.Behavior filterBehavior, HolderSet<Biome> biomes, Holder<PlacedFeature>... features) {
 		return BiomeModifiers.add(Order.APPEND, step, filterBehavior, biomes, HolderSet.direct(features));
 	}
-	
+
 	private static ResourceKey<BiomeModifier> createKey(String name) {
-        return ResourceKey.create(RTFRegistries.BIOME_MODIFIER, RTFCommon.location(name));
+		return ResourceKey.create(RTFRegistries.BIOME_MODIFIER, RTFCommon.location(name));
 	}
 }

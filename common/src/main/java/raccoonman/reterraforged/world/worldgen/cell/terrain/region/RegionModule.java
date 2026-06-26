@@ -64,6 +64,11 @@ public class RegionModule implements CellPopulator {
         }
         cell.terrainRegionId = this.cellValue(this.seed, cellX, cellY);
         cell.terrainRegionEdge = this.edgeValue(edgeDistance, edgeDistance2);
+        
+        // Store terrain Voronoi cell center in world coordinates for use in climate
+        Vec2f winningVec = NoiseUtil.cell(this.seed, cellX, cellY);
+        cell.terrainRegionCenterX = (cellX + winningVec.x() * 0.7F) / this.frequency;
+        cell.terrainRegionCenterZ = (cellY + winningVec.y() * 0.7F) / this.frequency;
     }
     
     private float cellValue(int seed, int cellX, int cellY) {

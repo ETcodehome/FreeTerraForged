@@ -83,6 +83,7 @@ public class PresetPlacedFeatures {
 	public static final ResourceKey<PlacedFeature> REDWOOD_TREES = createKey("redwood_trees");
 	public static final ResourceKey<PlacedFeature> JUNGLE_TREES = createKey("jungle_trees");
 	public static final ResourceKey<PlacedFeature> JUNGLE_EDGE_TREES = createKey("jungle_edge_trees");
+	public static final ResourceKey<PlacedFeature> RIVER_GASKET = createKey("river_gasket");
     
 	public static void bootstrap(Preset preset, BootstrapContext<PlacedFeature> ctx) {
 		HolderGetter<ConfiguredFeature<?, ?>> features = ctx.lookup(Registries.CONFIGURED_FEATURE);
@@ -99,6 +100,7 @@ public class PresetPlacedFeatures {
 		}
 		
 		PlacementUtils.register(ctx, SWAMP_SURFACE, features.getOrThrow(PresetConfiguredFeatures.SWAMP_SURFACE));
+		PlacementUtils.register(ctx, RIVER_GASKET, features.getOrThrow(PresetConfiguredFeatures.RIVER_GASKET));
 		
         if(!miscellaneous.vanillaSprings) {
         	PlacementUtils.register(ctx, MiscOverworldPlacements.SPRING_WATER, features.getOrThrow(MiscOverworldFeatures.SPRING_WATER), blacklistOverworld);
@@ -167,7 +169,7 @@ public class PresetPlacedFeatures {
         	PlacementUtils.register(ctx, SAVANNA_TREES, features.getOrThrow(PresetConfiguredFeatures.SAVANNA_TREES), PlacementUtils.HEIGHTMAP, RTFPlacementModifiers.countExtra(0, 0.1F, 1), BiomeFilter.biome());
         	PlacementUtils.register(ctx, BADLANDS_TREES, features.getOrThrow(PresetConfiguredFeatures.BADLANDS_TREES), PlacementUtils.HEIGHTMAP, RTFPlacementModifiers.countExtra(0, 0.02F, 3), BiomeFilter.biome());
         	PlacementUtils.register(ctx, WOODED_BADLANDS_TREES, features.getOrThrow(PresetConfiguredFeatures.WOODED_BADLANDS_TREES), RTFPlacementModifiers.poisson(8, 0.2F, 0.8F, 0.25F, 150, 0.75F), HeightmapPlacement.onHeightmap(Types.WORLD_SURFACE), BiomeFilter.biome());
-        	PlacementUtils.register(ctx, SWAMP_TREES, features.getOrThrow(PresetConfiguredFeatures.SWAMP_TREES), PlacementUtils.HEIGHTMAP, RTFPlacementModifiers.countExtra(3, 0.05F, 1), BiomeFilter.biome());
+        	PlacementUtils.register(ctx, SWAMP_TREES, features.getOrThrow(PresetConfiguredFeatures.SWAMP_TREES), InSquarePlacement.spread(), PlacementUtils.HEIGHTMAP, RTFPlacementModifiers.countExtra(5, 0.25F, 1), BiomeFilter.biome());
         	PlacementUtils.register(ctx, MEADOW_TREES, features.getOrThrow(PresetConfiguredFeatures.OAK_SMALL), RarityFilter.onAverageOnceEvery(30), HeightmapPlacement.onHeightmap(Types.WORLD_SURFACE), BiomeFilter.biome());
         	PlacementUtils.register(ctx, FIR_TREES, features.getOrThrow(PresetConfiguredFeatures.FIR_TREES), RTFPlacementModifiers.poisson(4, 0.25F, 0.3F, 300, 0.6F), HeightmapPlacement.onHeightmap(Types.WORLD_SURFACE), BiomeFilter.biome());
         	PlacementUtils.register(ctx, WINDSWEPT_HILLS_FIR_TREES, features.getOrThrow(PresetConfiguredFeatures.FIR_TREES), RarityFilter.onAverageOnceEvery(30), HeightmapPlacement.onHeightmap(Types.WORLD_SURFACE), BiomeFilter.biome());
