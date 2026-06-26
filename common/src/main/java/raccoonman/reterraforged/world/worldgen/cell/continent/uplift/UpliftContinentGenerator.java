@@ -159,6 +159,14 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         return Math.round(corrected);
     }
 
+    public float getWaterTable(float x, float z) {
+        try (Resource<Cell> resource = Cell.getResource()) {
+            Cell cell = resource.get();
+            this.apply(cell, x, z);
+            return cell.waterTable;
+        }
+    }
+
     public float shiftAndRemap(float value, float threshold) {
         if (value <= threshold) {
             return 0.0F;
