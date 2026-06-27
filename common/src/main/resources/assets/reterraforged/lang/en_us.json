@@ -247,6 +247,8 @@
   "reterraforged.gui.slider.mountainBiomeUsage.tooltip": "The probability that mountainous terrain will be set to a mountain biome type.\nThis may help improve compatibility with mods that rely exclusively on mountain biomes",
   "reterraforged.gui.slider.noodleCaveProbability": "Noodle Cave Chance",
   "reterraforged.gui.slider.noodleCaveProbability.tooltip": "Controls probability that a noodle cave will generate",
+  "reterraforged.gui.slider.oceanDepth": "Ocean Depth",
+  "reterraforged.gui.slider.oceanDepth.tooltip": "Controls how deep the ocean floor extends below sea level.",
   "reterraforged.gui.slider.ravineProbability": "Ravine Carver Probability",
   "reterraforged.gui.slider.ravineProbability.tooltip": "Controls the probability that a ravine carver will generate",
   "reterraforged.gui.slider.river.bankWidth": "Bank width",

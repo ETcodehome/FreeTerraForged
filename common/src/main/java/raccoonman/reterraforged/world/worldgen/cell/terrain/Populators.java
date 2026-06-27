@@ -24,34 +24,34 @@ public class Populators {
 	@Deprecated
 	public static final Noise DEFAULT_WEIRDNESS = Weirdness.MID_SLICE_NORMAL_DESCENDING.source();
 
-	public static CellPopulator makeDeepOcean(@Deprecated int seed, float seaLevel) {
-		Noise hills = Noises.perlin(++seed, 150, 3);
-		hills = Noises.mul(hills, seaLevel * 0.7F);
+	public static CellPopulator makeDeepOcean(@Deprecated int seed, Levels levels, int oceanDepth) {
+		int minDepth = Math.max(8, oceanDepth / 3);
+		int canyonMinDepth = minDepth + Math.max(1, (oceanDepth - minDepth) / 2);
 
-		Noise hillBias = Noises.perlin(++seed, 200, 1);
-		hillBias = Noises.mul(hillBias, seaLevel * 0.2F);
-		
-		hills = Noises.add(hills, hillBias);
-		
+		float lower = Math.max(levels.water(-oceanDepth), levels.min);
+		float upper = Math.max(levels.water(-minDepth), lower);
+		float canyonUpper = Math.max(levels.water(-canyonMinDepth), lower);
+
+		Noise hills = Noises.perlin(++seed, 150, 3);
+		hills = Noises.map(hills, lower, upper);
+
 		Noise canyons = Noises.perlin(++seed, 150, 4);
 		canyons = Noises.powCurve(canyons, 0.2F);
 		canyons = Noises.invert(canyons);
-		canyons = Noises.mul(canyons, seaLevel * 0.7F);
-		
-		Noise canyonBias = Noises.perlin(++seed, 170, 1);
-		canyonBias = Noises.mul(canyonBias, seaLevel * 0.15F);
-		
-		canyons = Noises.add(canyons, canyonBias);
-		
+		canyons = Noises.map(canyons, lower, canyonUpper);
+
 		Noise selector = Noises.perlin(++seed, 500, 1);
-		
+
 		Noise height = Noises.blend(selector, hills, canyons, 0.6F, 0.65F);
 		height = Noises.warpPerlin(height, ++seed, 50, 2, 50.0F);
-		return new OceanPopulator(TerrainType.DEEP_OCEAN, height);
+		height = Noises.clamp(height, lower, upper);
+		return new OceanPopulator(TerrainType.DEEP_OCEAN, height, levels.min);
 	}
-    
-	public static CellPopulator makeShallowOcean(Levels levels) {
-		 return new OceanPopulator(TerrainType.SHALLOW_OCEAN, Noises.constant(levels.water(-7)));
+
+	public static CellPopulator makeShallowOcean(Levels levels, int oceanDepth) {
+		int shallowDepth = Math.max(7, oceanDepth / 9);
+		float height = Math.max(levels.water(-shallowDepth), levels.min);
+		return new OceanPopulator(TerrainType.SHALLOW_OCEAN, Noises.constant(height), levels.min);
 	}
 	
 	public static CellPopulator makeCoast(Levels levels) {
