@@ -6,6 +6,9 @@
   	"minVersion": "0.8",
   	"compatibilityLevel": "JAVA_21",
   	"mixins": [
+		"UnmaskCrashMixin",
+		"BlockPosMixin",
+		"DimensionTypeMixin",
 		"MixinNoiseChunk",
 		"MixinRandomState",
 		"MixinChunkMap",
