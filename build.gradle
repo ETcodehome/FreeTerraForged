@@ -17,7 +17,6 @@ subprojects {
     dependencies {
         minecraft "com.mojang:minecraft:${rootProject.minecraft_version}"
         mappings loom.officialMojangMappings()
-        //annotationProcessor "org.spongepowered:mixin:0.8.5:processor"
     }
 }
 

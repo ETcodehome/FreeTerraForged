@@ -47,9 +47,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
     private final float riverValleyWidthModifier;
     private boolean isUpliftContinent;
 
-    private final float fixedWaterTable;
-
-    public UpliftRiverCarver(River river, RiverWarp warp, RiverConfig config, RiverCarverSettings settings, Levels levels, LakeConfig lakeConfig, boolean isUpliftContinent, float fixedWaterTable) {
+    public UpliftRiverCarver(River river, RiverWarp warp, RiverConfig config, RiverCarverSettings settings, Levels levels, LakeConfig lakeConfig, boolean isUpliftContinent) {
         this.fade = settings.fadeIn;
         this.fadeInv = 1.0F / settings.fadeIn;
 
@@ -91,7 +89,6 @@ public class UpliftRiverCarver implements RTFRiverCarver {
 
         this.lakeConfig = lakeConfig;
         this.isUpliftContinent = isUpliftContinent;
-        this.fixedWaterTable = fixedWaterTable;
 
         // --- INITIALIZE DETERMINISTIC PER-RIVER VALLEY VARIANCE ---
         int rh1 = Float.floatToIntBits(river.x1);
@@ -109,14 +106,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float distSqToCurr = this.getDistance2(currX, currZ, currT);
         float currentLinearDist = (float) Math.sqrt(distSqToCurr);
 
-        if (!this.main){
-            cell.waterTable = this.fixedWaterTable;
-        }
-
-        // Determine whether to use local block water table or the locked junction water table
-        float activeWaterTable = cell.waterTable;
-
-        float flatnessInput = isUpliftContinent ? activeWaterTable : currT;
+        float flatnessInput = isUpliftContinent ? cell.waterTable : currT;
         float flatnessFactor = NoiseUtil.clamp(ContinentalHydrology.getFlatnessFactor(flatnessInput), 0.0F, 1.0F);
         float scaleFactor = 1.0F + 0.75F * flatnessFactor;
         float sqScaleFactor = scaleFactor * scaleFactor;
@@ -144,7 +134,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
 
         // --- 1. TARGET ELEVATIONS ---
         float oceanHeightOffset = levels.water;
-        float targetWaterLevel = ContinentalHydrology.getWeightedWaterHeight(activeWaterTable) + oceanHeightOffset;
+        float targetWaterLevel = ContinentalHydrology.getWeightedWaterHeight(cell.waterTable) + oceanHeightOffset;
 
         float baseBedDepthOffset = oceanHeightOffset - config.bedHeight;
         float bedDepthOffset = baseBedDepthOffset * dynamicDepthMult;
@@ -159,7 +149,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float zone1Radius = (float) Math.sqrt(this.getScaledSize(currT, this.bedWidth) * biasedScale);
 
         // --- ORGANIC LAKE SHORELINE WARPING MODULATION ---
-        float plateauInput = isUpliftContinent ? activeWaterTable : currT;
+        float plateauInput = isUpliftContinent ? cell.waterTable : currT;
         int plateauIndex = ContinentalHydrology.getStepId(plateauInput);
         float widenMultiplier = 1.0F;
 
@@ -204,8 +194,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float finalHeight = cell.height;
 
         if (currentLinearDist < zone1Radius) {
-            // Pass the activeWaterTable down to target the correct locked riverbed height
-            finalHeight = carveZone1Riverbed(cell, currT, distSqToCurr, bedDepthOffset, oceanHeightOffset, sqScaleFactor, targetWaterLevel, widenMultiplier, activeWaterTable);
+            finalHeight = carveZone1Riverbed(cell, currT, distSqToCurr, bedDepthOffset, oceanHeightOffset, sqScaleFactor, targetWaterLevel, widenMultiplier);
             cell.riverZone = RiverCarverSettings.RiverZone.Riverbed;
         } else if (currentLinearDist < zone2Radius) {
             finalHeight = carveZone2BankStep(currentLinearDist, zone1Radius, zone2Radius, targetWaterLevel, targetValleyFloor, terraceMask, drainageMask);
@@ -231,7 +220,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         updateValleyMask(prevX, prevZ, prevT, currX, currZ, currT, distSqToCurr, sqScaleFactor, targetBedFloor, cell);
     }
 
-    private float carveZone1Riverbed(Cell cell, float currT, float distSqToCurr, float bedDepthOffset, float oceanHeightOffset, float sqScaleFactor, float targetWaterLevel, float widenMultiplier, float activeWaterTable) {
+    private float carveZone1Riverbed(Cell cell, float currT, float distSqToCurr, float bedDepthOffset, float oceanHeightOffset, float sqScaleFactor, float targetWaterLevel, float widenMultiplier) {
         float effectiveScaleFactor = sqScaleFactor * (widenMultiplier * widenMultiplier);
         float bedInfluence = this.getDistanceAlpha(currT, distSqToCurr, this.bedWidth, effectiveScaleFactor);
         bedInfluence = bedInfluence * bedInfluence * (3.0F - 2.0F * bedInfluence);
@@ -239,8 +228,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float lakeDepthMulti = 0.35F + (lakeConfig.depth / 50.0F);
         float dynamicDepthOffset = bedDepthOffset * (1.0F + (widenMultiplier - 1.0F) * lakeDepthMulti);
 
-        // Swapped cell.waterTable out for activeWaterTable
-        float bedHeight = ContinentalHydrology.getWeightedWaterHeight(activeWaterTable) - (dynamicDepthOffset * bedInfluence) + oceanHeightOffset;
+        float bedHeight = ContinentalHydrology.getWeightedWaterHeight(cell.waterTable) - (dynamicDepthOffset * bedInfluence) + oceanHeightOffset;
 
         cell.moisture = 1.0F;
         this.tag(cell, targetWaterLevel);
