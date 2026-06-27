@@ -164,15 +164,15 @@ public class WorldSettingsPage extends PresetEditorPage {
 			properties.spawnType = value;
 			this.regenerate();
 		});
-		this.worldHeight = PresetWidgets.createIntSlider(properties.worldHeight, 0, 1024, RTFTranslationKeys.GUI_SLIDER_WORLD_HEIGHT, (slider, value) -> {
+		this.worldHeight = PresetWidgets.createIntSlider(properties.worldHeight, 0, 2032, RTFTranslationKeys.GUI_SLIDER_WORLD_HEIGHT, (slider, value) -> {
 			int nearestMultiple = Math.max(getNearestMultiple(slider, (float) value, 16), 16);
 			properties.worldHeight = nearestMultiple;
-			this.regenerate();
 			return slider.getSliderValue(nearestMultiple);
 		});
-		this.worldDepth = PresetWidgets.createIntSlider(properties.worldDepth, 0, 1024, RTFTranslationKeys.GUI_SLIDER_WORLD_DEPTH, (slider, value) -> {
-			int nearestMultiple = getNearestMultiple(slider, (float) value, 16);
+		this.worldDepth = PresetWidgets.createIntSlider(properties.worldDepth, 0, 2032, RTFTranslationKeys.GUI_SLIDER_WORLD_DEPTH, (slider, value) -> {
+			int nearestMultiple = Math.max(getNearestMultiple(slider, (float) value, 16), 16);
 			properties.worldDepth = nearestMultiple;
+			this.regenerate();
 			return slider.getSliderValue(nearestMultiple);
 		});
 		this.seaLevel = PresetWidgets.createIntSlider(properties.seaLevel, 0, 255, RTFTranslationKeys.GUI_SLIDER_SEA_LEVEL, (slider, value) -> {
