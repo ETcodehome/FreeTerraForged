@@ -36,7 +36,7 @@ public class IslandSettings {
 	public float beachWidth;
 	public float beachCoverage;
 	
-	public IslandSettings(boolean enableArchipelago, float islandDensity, float islandSize, float islandHeight, float islandBaseScale, float islandVerticalScale, float islandHorizontalScale, float mountainChance, float volcanoChance, float offshoreDepth, float beachWidth, float beachCoverage, float mountainScale, float volcanismScale) {
+	public IslandSettings(boolean enableArchipelago, float islandDensity, float islandSize, float islandHeight, float islandBaseScale, float islandVerticalScale, float islandHorizontalScale, float mountainChance, float volcanoChance, float offshoreDepth, float beachWidth, float beachCoverage, float volcanismScale, float mountainScale) {
 		this.enableArchipelago = enableArchipelago;
 		this.islandDensity = islandDensity;
 		this.islandSize = islandSize;

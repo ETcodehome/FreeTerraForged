@@ -210,18 +210,22 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	}
 
 	@Override
-	public void onClose() {
-		super.onClose();
+	public void onCancel() {
+		super.onCancel();
 		try {
-			this.preset.save();
 			if (this.preview3D != null) this.preview3D.close();
 			if (this.preview2D != null) this.preview2D.close();
 		} catch (Exception e) { e.printStackTrace(); }
 	}
 
 	@Override
-	public void onDone() {
-		super.onDone();
-		try { this.screen.applyPreset(this.preset); } catch (IOException e) { e.printStackTrace(); }
+	public void onSave() {
+		super.onSave();
+		try {
+			this.screen.applyPreset(this.preset);
+			this.preset.save();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 }

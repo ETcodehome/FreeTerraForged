@@ -19,6 +19,7 @@ public final class RTFTranslationKeys {
 	public static final String GUI_LITE_PRESET_NAME = resolve("gui.preset.lite.name");
 	public static final String GUI_VANILLAISH_PRESET_NAME = resolve("gui.preset.vanillaish.name");
 	public static final String GUI_RIVERS_PRESET_NAME = resolve("gui.preset.rivers.name");
+	public static final String GUI_COMMUNITY1_PRESET_NAME = resolve("gui.preset.community1.name");
 	public static final String GUI_WORLD_SETTINGS_TITLE = resolve("gui.worldSettings.title");
 	public static final String GUI_SURFACE_SETTINGS_TITLE = resolve("gui.surfaceSettings.title");
 	public static final String GUI_CAVE_SETTINGS_TITLE = resolve("gui.caveSettings.title");
@@ -177,7 +178,7 @@ public final class RTFTranslationKeys {
 	public static final String GUI_LABEL_CONTINENT = resolve("gui.label.continent");
 	public static final String GUI_LABEL_CONTROL_POINTS = resolve("gui.label.controlPoints");
 	public static final String GUI_LABEL_PROPERTIES = resolve("gui.label.properties");
-	public static final String GUI_LABEL_SURFACE_EROSION = resolve("gui.label.surfaceErosion");
+	public static final String GUI_LABEL_TRANSITIONS = resolve("gui.label.transitions");
 	public static final String GUI_LABEL_NOISE_CAVES = resolve("gui.label.noiseCaves");
 	public static final String GUI_LABEL_CARVERS = resolve("gui.label.carvers");
 	public static final String GUI_LABEL_TEMPERATURE = resolve("gui.label.temperature");

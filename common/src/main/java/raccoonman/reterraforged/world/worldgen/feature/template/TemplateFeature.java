@@ -58,7 +58,13 @@ public class TemplateFeature extends Feature<Config<?>> {
 	        DecoratorConfig<T> decoratorConfig = config.decorator();
 	        
 	        ResourceLocation templateName = nextTemplate(config.templates, rand);
+
+			// safely load features and fail verbosely otherwise
 	        FeatureTemplate template = rtfMinecraftServer.getFeatureTemplateManager().load(templateName);
+			if (template == null) {
+				RTFCommon.LOGGER.error("Template failed to load: " + templateName);
+				return false;
+			}
 	        
 	        Dimensions dimensions = template.getDimensions(mirror, rotation);
 	        TemplatePlacement<T> placement = config.placement();

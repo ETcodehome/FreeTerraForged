@@ -89,7 +89,8 @@ public class ErodeFeature extends Feature<Config> {
 			}
 			return true;
 		} else {
-			throw new IllegalStateException();
+            // Gracefully abort generation if the active dimension context is missing or non-ReTerraForged
+            return false;
 		}
 	}
 	

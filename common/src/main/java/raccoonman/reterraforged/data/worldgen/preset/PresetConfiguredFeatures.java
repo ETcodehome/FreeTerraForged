@@ -103,6 +103,7 @@ public class PresetConfiguredFeatures {
 	public static final ResourceKey<ConfiguredFeature<?, ?>> REDWOOD_TREES = createKey("redwood_trees");
 	public static final ResourceKey<ConfiguredFeature<?, ?>> JUNGLE_TREES = createKey("jungle_trees");
 	public static final ResourceKey<ConfiguredFeature<?, ?>> JUNGLE_EDGE_TREES = createKey("jungle_edge_trees");
+	public static final ResourceKey<ConfiguredFeature<?, ?>> RIVER_GASKET = createKey("river_gasket");
 	
 	public static void bootstrap(Preset preset, BootstrapContext<ConfiguredFeature<?, ?>> ctx) {
 		MiscellaneousSettings miscellaneous = preset.miscellaneous();
@@ -119,6 +120,7 @@ public class PresetConfiguredFeatures {
 		}
 		
 		FeatureUtils.register(ctx, SWAMP_SURFACE, RTFFeatures.SWAMP_SURFACE, new SwampSurfaceFeature.Config(Blocks.CLAY.defaultBlockState(), Blocks.GRAVEL.defaultBlockState(), Blocks.DIRT.defaultBlockState()));
+		FeatureUtils.register(ctx, RIVER_GASKET, RTFFeatures.RIVER_GASKET, FeatureConfiguration.NONE);
 		
 		if(miscellaneous.customBiomeFeatures) {
 			HolderGetter<PlacedFeature> placedFeatures = ctx.lookup(Registries.PLACED_FEATURE);

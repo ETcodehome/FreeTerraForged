@@ -21,7 +21,7 @@ public class Presets {
 		return new Preset(
 			new WorldSettings(
 				new Continent(ContinentType.UPLIFT, DistanceFunction.EUCLIDEAN, 3000, 0.7F, 0.25F, 0.25F, 5, 0.26F, 4.33F),
-				new ControlPoints(0.0F, 0.0F, 0.1F, 0.25F, 0.327F, 0.448F, 0.502F),
+				new ControlPoints(0.0F, 0.074F, 0.1F, 0.25F, 0.327F, 0.448F, 0.502F),
 				new Properties(SpawnType.CONTINENT_CENTER, 384, 64, 63, -54,0,0)
 			), 
 			new SurfaceSettings(new SurfaceSettings.Erosion(30, 256, 40, 95, 0.65F, 0.475F, 0.4F)),
@@ -65,7 +65,7 @@ public class Presets {
 		return new Preset(
 			new WorldSettings(
 				new Continent(ContinentType.MULTI_IMPROVED, DistanceFunction.EUCLIDEAN, 3000, 0.7F, 0.25F, 0.25F, 5, 0.26F, 4.33F),
-				new ControlPoints(0.0F, 0.0F, 0.1F, 0.25F, 0.327F, 0.448F, 0.502F),
+				new ControlPoints(0.0F, 0.074F, 0.1F, 0.25F, 0.327F, 0.448F, 0.502F),
 				new Properties(SpawnType.CONTINENT_CENTER, 320, 64, 63, -54, 0,0)
 			), 
 			new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
@@ -109,7 +109,7 @@ public class Presets {
 		return new Preset(
 			new WorldSettings(
 				new Continent(ContinentType.MULTI, DistanceFunction.EUCLIDEAN, 2000, 0.763F, 0.25F, 0.25F, 5, 0.26F, 4.33F),
-				new ControlPoints(0.0F, 0.0F, 0.1F, 0.25F, 0.326F, 0.448F, 0.5F),
+				new ControlPoints(0.0F, 0.074F, 0.1F, 0.25F, 0.326F, 0.448F, 0.5F),
 				new Properties(SpawnType.WORLD_ORIGIN, 320, 64, 63, -54, 0, 0)
 			), 
 			new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
@@ -154,7 +154,7 @@ public class Presets {
 		return new Preset(
 			new WorldSettings(
 				new Continent(ContinentType.MULTI, DistanceFunction.EUCLIDEAN, 3000, 0.8F, 0.25F, 0.25F, 5, 0.26F, 4.33F),
-				new ControlPoints(0.0F, 0.0F, 0.1F, 0.25F, 0.326F, 0.448F, 0.5F),
+				new ControlPoints(0.0F, 0.074F, 0.1F, 0.25F, 0.326F, 0.448F, 0.5F),
 				new Properties(SpawnType.CONTINENT_CENTER, 320, 64, 63, -54, 0, 0)
 			), 
 			new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
@@ -198,7 +198,7 @@ public class Presets {
 		return new Preset(
 			new WorldSettings(
 				new Continent(ContinentType.MULTI, DistanceFunction.EUCLIDEAN, 2000, 0.765F, 0.25F, 0.25F, 5, 0.26F, 4.33F),
-				new ControlPoints(-1.0F, -1.0F, 0.1F, 0.25F, 0.326F, 0.448F, 0.5F), 
+				new ControlPoints(0.0F, 0.074F, 0.1F, 0.25F, 0.326F, 0.448F, 0.5F),
 				new Properties(SpawnType.CONTINENT_CENTER, 320, 64, 63, -54, 0,0)
 			),
 			new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
@@ -242,7 +242,7 @@ public class Presets {
 		return new Preset(
 			new WorldSettings(
 				new Continent(ContinentType.MULTI, DistanceFunction.EUCLIDEAN, 4029, 0.8F, 0.25F, 0.25F, 5, 0.26F, 4.33F),
-				new ControlPoints(-1.0F, -1.0F, 0.1F, 0.25F, 0.326F, 0.448F, 0.5F), 
+				new ControlPoints(0.0F, 0.074F, 0.1F, 0.25F, 0.326F, 0.448F, 0.5F),
 				new Properties(SpawnType.CONTINENT_CENTER, 320, 64, 63, -54, 0,0)
 			), 
 			new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
@@ -279,6 +279,228 @@ public class Presets {
 			), 
 			new StructureSettings(),
 			new MiscellaneousSettings(true, 721, true, true, true, false, true, true, true, true, false, 0.902F, 0.945F)
+		);
+	}
+
+	public static Preset makeCommunityPreset1() {
+		return new Preset(
+
+				new WorldSettings(
+
+						new Continent(ContinentType.UPLIFT,
+								DistanceFunction.NATURAL,
+								4000,
+								1.0F,
+								0.2F,
+								0.6161F,
+								5,
+								0.2516F,
+								5.7262F),
+
+						new ControlPoints(0.0019F,
+								0.0065F,
+								0.0157F,
+								0.121F,
+								0.298F,
+								0.347F,
+								0.376F),
+
+						new Properties(SpawnType.CONTINENT_CENTER,
+								912,
+								128,
+								63,
+								-109,
+								0,
+								0)
+				),
+				new SurfaceSettings(new SurfaceSettings.Erosion(30,
+						395,
+						40,
+						393,
+						0.65F,
+						0.475F,
+						0.0F)),
+
+				new CaveSettings(0.05578F,
+						1.5625F,
+						1.0F,
+						0.4914F,
+						0.4902F,
+						0.4014F,
+						0.1997F,
+						0.0373F,
+						true,
+						false),
+
+				new ClimateSettings(
+
+						// temperature
+						new RangeValue(0,
+								2,
+								7,
+								0.1124F,
+								1.0F,
+								0.002F),
+
+						// moisture
+						new RangeValue(0,
+								3,
+								2,
+								0.0F,
+								1.0F,
+								0.0103F),
+
+						new BiomeShape(586,
+								4,
+								38,
+								332),
+
+						new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.SIMPLEX,
+								137,
+								5,
+								1.601F,
+								10.5F,
+								300)
+				),
+				new TerrainSettings(
+
+						new General(0,
+								2246,
+								1.0F,
+								5.0F,
+								true,
+								false),
+
+						// steppe
+						new Terrain(2.0366F,
+								2.0F,
+								5.1088F,
+								0.6151F),
+
+						// plains
+						new Terrain(10.0F,
+								2.0F,
+								7.0577F,
+								0.3744F),
+
+						// hills
+						new Terrain(5.361F,
+								1.0F,
+								2.0939F,
+								4.5013F),
+
+						// dales
+						new Terrain(4.5816F,
+								1.5009F,
+								3.4237F,
+								5.3496F),
+
+						// plateau
+						new Terrain(10.0F,
+								2.0F,
+								4.3523F,
+								2.3346F),
+
+						// badlands
+						new Terrain(4.0084F,
+								1.8128F,
+								3.8479F,
+								2.174F),
+
+						// torridonian
+						new Terrain(10.0F,
+								2.0F,
+								2.35F,
+								4.066F),
+
+						// mountains
+						new Terrain(1.0F,
+								2.0F,
+								1.578F,
+								0.317F),
+
+						// volcano
+						new Terrain(0.785395F,
+								1.1559F,
+								2.69F,
+								3.286F)
+				),
+				new RiverSettings(
+
+						1709794330,
+						2,
+
+						//main rivers
+						new River(5,
+								2,
+								10,
+								50,
+								11,
+								0.4467F),
+
+						//branch rivers
+						new River(7,
+								1,
+								3,
+								16,
+								10,
+								1.0F),
+
+						new Lake(0.3206F,
+								0.0F,
+								0.4605F,
+								10,
+								105,
+								393,
+								2,
+								10),
+
+						new Wetland(0.303F,
+								50,
+								500)
+				),
+				new IslandSettings(
+						true,
+						0.5224F,
+						51.8871F,
+						0.7704F,
+						0.51745F,
+						1.8076F,
+						0.9067F,
+						0.6F,
+						0.3355F,
+						0.1F,
+						0.1561F,
+						1.0F,
+						0.5F,
+						0.355F
+
+				),
+				new FilterSettings(
+
+						new Erosion(250,
+								32,
+								0.901F,
+								0.9085F,
+								0.8112F,
+								0.8112F),
+
+						new Smoothing(0, 0.0F, 0.0F)
+				),
+				new StructureSettings(),
+				new MiscellaneousSettings(true,
+						1000,
+						true,
+						true,
+						true,
+						false,
+						true,
+						true,
+						false,
+						false,
+						false,
+						0.85438144F,
+						0.855F)
 		);
 	}
 

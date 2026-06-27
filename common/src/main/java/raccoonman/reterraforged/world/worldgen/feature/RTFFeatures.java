@@ -4,6 +4,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.feature.configurations.DiskConfiguration;
 import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfiguration;
+import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConfiguration;
 import raccoonman.reterraforged.platform.RegistryUtil;
 import raccoonman.reterraforged.world.worldgen.feature.chance.ChanceFeature;
 import raccoonman.reterraforged.world.worldgen.feature.template.TemplateFeature;
@@ -16,10 +17,12 @@ public class RTFFeatures {
 	public static final Feature<ErodeFeature.Config> ERODE = register("erode", new ErodeFeature(ErodeFeature.Config.CODEC));
 	public static final Feature<DecorateSnowFeature.Config> DECORATE_SNOW = register("decorate_snow", new DecorateSnowFeature(DecorateSnowFeature.Config.CODEC));
 	public static final Feature<SwampSurfaceFeature.Config> SWAMP_SURFACE = register("swamp_surface", new SwampSurfaceFeature(SwampSurfaceFeature.Config.CODEC));
-	
+	public static final Feature<NoneFeatureConfiguration> RIVER_GASKET = register("river_gasket", new RiverGasketFeature(NoneFeatureConfiguration.CODEC));
+
 	public static void bootstrap() {
+
 	}
-	
+
 	private static <T extends FeatureConfiguration> Feature<T> register(String name, Feature<T> feature) {
 		RegistryUtil.register(BuiltInRegistries.FEATURE, name, feature);
 		return feature;

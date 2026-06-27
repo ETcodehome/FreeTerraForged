@@ -7,7 +7,6 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
-import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetConfigScreen;
 import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetEditorPage;
 import raccoonman.reterraforged.client.gui.widget.Label;
 
@@ -23,7 +22,7 @@ public abstract class LinkedPageScreen extends Screen {
 	}
 	
 	public void setPage(Page page) {
-		this.currentPage.onClose();
+		this.currentPage.onCancel();
 		this.currentPage = page;
 		this.rebuildWidgets();
 	}
@@ -90,11 +89,11 @@ public abstract class LinkedPageScreen extends Screen {
 	
 	@Override
 	public void onClose() {
-		this.currentPage.onClose();
+		this.currentPage.onCancel();
 	}
 	
 	public void onDone() {
-		this.currentPage.onDone();
+		this.currentPage.onSave();
 	}
 	
 	public interface Page {
@@ -106,10 +105,10 @@ public abstract class LinkedPageScreen extends Screen {
 		
 		Optional<Page> next();
 		
-		default void onClose() {
+		default void onCancel() {
 		}
 		
-		default void onDone() {
+		default void onSave() {
 		}
 	}
 }
