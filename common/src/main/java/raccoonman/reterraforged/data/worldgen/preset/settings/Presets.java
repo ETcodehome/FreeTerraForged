@@ -33,7 +33,7 @@ public class Presets {
 				new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.SIMPLEX, 24, 2, 0.5F, 2.65F, 14)
 			), 
 			new TerrainSettings(
-				new General(0, 1200, 1.0F, 1.0F, true, false),
+				new General(0, 1200, 1.0F, 1.0F, true, false, 0.0F),
 				new Terrain(1.0F, 2.0F, 1.0F, 1.0F),
 				new Terrain(2.0F, 2.0F, 1.0F, 1.0F),
 				new Terrain(2.0F, 1.0F, 1.0F, 1.0F),
@@ -77,7 +77,7 @@ public class Presets {
 				new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.SIMPLEX, 24, 2, 0.5F, 2.65F, 14)
 			), 
 			new TerrainSettings(
-				new General(0, 1200, 0.98F, 1.0F, true, true),
+				new General(0, 1200, 0.98F, 1.0F, true, true, 0.0F),
 				new Terrain(1.0F, 1.0F, 1.0F, 1.0F), 
 				new Terrain(2.0F, 1.0F, 1.0F, 1.0F), 
 				new Terrain(2.0F, 1.0F, 1.0F, 1.0F),
@@ -121,7 +121,7 @@ public class Presets {
 				new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.SIMPLEX, 24, 2, 0.5F, 2.65F, 14)
 			), 
 			new TerrainSettings(
-				new General(0, 690, 0.629F, 0.629F, false, true),
+				new General(0, 690, 0.629F, 0.629F, false, true, 0.0F),
 				new Terrain(1.0F, 1.0F, 1.0F, 1.0F), 
 				new Terrain(1.25F, 1.0F, 1.0F, 1.0F), 
 				new Terrain(2.5F, 1.0F, 1.0F, 1.0F),
@@ -166,7 +166,7 @@ public class Presets {
 				new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.SIMPLEX, 24, 2, 0.5F, 2.65F, 14)
 			), 
 			new TerrainSettings(
-				new General(0, 1356, 1.0F, 1.175F, true, true),
+				new General(0, 1356, 1.0F, 1.175F, true, true, 0.0F),
 				new Terrain(1.519F, 1.0F, 1.0F, 1.0F), 
 				new Terrain(2.164F, 1.0F, 1.0F, 1.0F), 
 				new Terrain(2.706F, 1.0F, 1.0F, 1.0F),
@@ -210,7 +210,7 @@ public class Presets {
 				new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.SIMPLEX, 24, 2, 0.5F, 2.65F, 14)
 			), 
 			new TerrainSettings(
-				new General(0, 690, 0.629F, 0.629F, false, true),
+				new General(0, 690, 0.629F, 0.629F, false, true, 0.0F),
 				new Terrain(1.0F, 1.0F, 1.0F, 1.0F), 
 				new Terrain(1.25F, 1.0F, 1.0F, 1.0F), 
 				new Terrain(2.5F, 1.0F, 1.0F, 1.0F),
@@ -254,7 +254,7 @@ public class Presets {
 				new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.PERLIN2, 24, 1, 0.5F, 2.65F, 60)
 			), 
 			new TerrainSettings(
-				new General(0, 1507, 1.0F, 1.175F, true, true),
+				new General(0, 1507, 1.0F, 1.175F, true, true, 0.0F),
 				new Terrain(1.0F, 1.0F, 1.0F, 1.0F), 
 				new Terrain(2.0F, 1.0F, 1.0F, 1.0F), 
 				new Terrain(2.0F, 1.0F, 1.0F, 1.0F),
@@ -370,7 +370,8 @@ public class Presets {
 								1.0F,
 								5.0F,
 								true,
-								false),
+								false,
+								0.0F),
 
 						// steppe
 						new Terrain(2.0366F,
@@ -593,7 +594,8 @@ public class Presets {
 								0.6F,
 								1.0F,
 								true,
-								false),
+								false,
+								0.0F),
 
 						// steppe
 						new Terrain(0.5734F,
