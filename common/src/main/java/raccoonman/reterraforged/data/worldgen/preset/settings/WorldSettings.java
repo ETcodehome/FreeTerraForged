@@ -133,7 +133,7 @@ public class WorldSettings {
         	this.worldDepth = worldDepth;
         	this.seaLevel = seaLevel;
         	this.lavaLevel = lavaLevel;
-        	this.oceanDepth = oceanDepth;
+        	this.oceanDepth = Math.max(10, oceanDepth);
             this.spawnX = spawnX;
             this.spawnZ = spawnZ;
         }
