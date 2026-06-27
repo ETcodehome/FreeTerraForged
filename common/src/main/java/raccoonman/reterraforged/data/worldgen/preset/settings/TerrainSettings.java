@@ -71,7 +71,7 @@ public class TerrainSettings {
         	this.globalHorizontalScale = globalHorizontalScale;
         	this.fancyMountains = fancyMountains;
         	this.legacyMountainScaling = legacyMountainScaling;
-        	this.mountainVariety = mountainVariety;
+        	this.mountainVariety = Math.max(0.0F, Math.min(1.0F, mountainVariety));
         }
 
         public General copy() {
