@@ -4,7 +4,9 @@
   "package": "raccoonman.reterraforged.fabric.mixin",
   "minVersion": "0.8",
   "compatibilityLevel": "JAVA_21",
-  "client": [],
+  "client": [
+    "MixinPresetEditor"
+  ],
   "mixins": [
   	"MixinChunkStatusTasks",
   	"MixinMinecraftServer",
