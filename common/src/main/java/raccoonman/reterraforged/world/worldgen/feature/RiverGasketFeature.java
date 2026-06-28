@@ -32,10 +32,8 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
     @Override
     public boolean place(FeaturePlaceContext<NoneFeatureConfiguration> context) {
         WorldGenLevel level = context.level();
-        net.minecraft.server.level.ServerLevel serverLevel = level.getLevel();
-        net.minecraft.world.level.levelgen.RandomState randomState = serverLevel.getChunkSource().randomState();
 
-        if (!((Object) randomState instanceof raccoonman.reterraforged.world.worldgen.RTFRandomState rtfRandomState)) {
+        if ( !((Object) level.getLevel().getChunkSource().randomState() instanceof raccoonman.reterraforged.world.worldgen.RTFRandomState rtfRandomState)) {
             return false;
         }
 
@@ -64,11 +62,11 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
         BlockState fallbackState = Blocks.STONE.defaultBlockState();
         float oceanHeightOffset = levels.water;
 
-        // CACHE 1: 2D Cache for water cell evaluations (Padding: 16 chunk + 11 max radius/search on both sides = ~40x40 grid)
+        // CACHE 1: 2D Cache for water cell evaluations
         int[] neighborWaterYCache = new int[40 * 40];
         Arrays.fill(neighborWaterYCache, Integer.MIN_VALUE);
 
-        // CACHE 2: Fast 3D Cache for the horizontal terrain paint lookups to avoid redundant world queries
+        // CACHE 2: Fast 3D Cache for the horizontal terrain paint lookups
         Long2ObjectOpenHashMap<BlockState> paintCache = new Long2ObjectOpenHashMap<>();
 
         for (int x = 0; x < 16; x++) {
@@ -86,28 +84,28 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
                 int scanBottomY = Math.min(localWaterY, currentFloorHeight) - 8;
                 scanBottomY = Math.max(scanBottomY, level.getMinBuildHeight() + 16);
 
-                // CACHE 3: Only find the structural state once per X/Z column instead of per water block
+                // CACHE 3: structural state once per X/Z column using heightmap
                 BlockState structuralState = null;
+                int columnTopY = level.getChunk(origin).getHeight(
+                        net.minecraft.world.level.levelgen.Heightmap.Types.OCEAN_FLOOR_WG,
+                        blockX, blockZ
+                );
+                if (columnTopY >= level.getMinBuildHeight()) {
+                    samplePos.set(blockX, columnTopY, blockZ);
+                    BlockState topState = level.getBlockState(samplePos);
+                    if (!topState.isAir() && !topState.is(Blocks.CAVE_AIR) && !topState.is(Blocks.WATER)) {
+                        structuralState = topState;
+                    }
+                }
+                if (structuralState == null) {
+                    structuralState = fallbackState;
+                }
 
                 for (int y = scanTopY; y >= scanBottomY; y--) {
                     currentPos.set(blockX, y, blockZ);
                     BlockState currentState = level.getBlockState(currentPos);
 
                     if (currentState.is(Blocks.WATER) && currentState.getFluidState().isSource()) {
-
-                        // Populate structural state lazily once per column
-                        if (structuralState == null) {
-                            structuralState = fallbackState;
-                            for (int sampleY = y - 1; sampleY >= level.getMinBuildHeight(); sampleY--) {
-                                samplePos.set(blockX, sampleY, blockZ);
-                                BlockState sampleState = level.getBlockState(samplePos);
-
-                                if (!sampleState.isAir() && !sampleState.is(Blocks.CAVE_AIR) && !sampleState.is(Blocks.WATER)) {
-                                    structuralState = sampleState;
-                                    break;
-                                }
-                            }
-                        }
 
                         // Ensure air directly below the current water block gets gasketed
                         belowNeighborPos.set(blockX, y - 1, blockZ);
@@ -126,12 +124,10 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
                                     int targetX = blockX + dx;
                                     int targetZ = blockZ + dz;
 
-                                    // Map to a 0-39 index grid for the 2D array cache
                                     int cacheX = (targetX - minBlockX) + 12;
                                     int cacheZ = (targetZ - minBlockZ) + 12;
                                     int cacheIndex = cacheX + (cacheZ * 40);
 
-                                    // Check 2D cache instead of recalculating noise
                                     int neighbourWaterY = neighborWaterYCache[cacheIndex];
                                     if (neighbourWaterY == Integer.MIN_VALUE) {
                                         worldLookup.applyCell(neighborCell.reset(), targetX, targetZ, false, false);
@@ -162,7 +158,6 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
                                         if (stateAbove.isAir() || stateAbove.is(Blocks.CAVE_AIR) || stateAbove.is(Blocks.WATER)) {
                                             long posHash = BlockPos.asLong(targetX, y, targetZ);
 
-                                            // Check Paint Cache before scanning the world horizontally
                                             if (paintCache.containsKey(posHash)) {
                                                 finalPlacementState = paintCache.get(posHash);
                                             } else {
@@ -171,7 +166,11 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
                                                 searchLoop:
                                                 for (int dist = 1; dist <= 4; dist++) {
                                                     for (Direction dir : HORIZONTAL_DIRECTIONS) {
-                                                        testSidePos.set(targetX + (dir.getStepX() * dist), y, targetZ + (dir.getStepZ() * dist));
+                                                        testSidePos.set(
+                                                                targetX + (dir.getStepX() * dist),
+                                                                y,
+                                                                targetZ + (dir.getStepZ() * dist)
+                                                        );
                                                         BlockState nearbyState = level.getBlockState(testSidePos);
 
                                                         if (isTerrainPaint(nearbyState)) {
@@ -197,7 +196,6 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
         return true;
     }
 
-    // Extracted logic to keep the main loops cleaner
     private static boolean isTerrainPaint(BlockState state) {
         return state.is(Blocks.GRASS_BLOCK) ||
                 state.is(Blocks.SAND) ||
