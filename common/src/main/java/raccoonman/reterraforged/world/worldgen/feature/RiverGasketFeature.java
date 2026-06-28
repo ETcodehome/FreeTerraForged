@@ -64,7 +64,31 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
 
         // CACHE 1: 2D Cache for water cell evaluations
         int[] neighborWaterYCache = new int[40 * 40];
-        Arrays.fill(neighborWaterYCache, Integer.MIN_VALUE);
+
+        for (int dz = -12; dz < 28; dz++) {
+            for (int dx = -12; dx < 28; dx++) {
+
+                int worldX = minBlockX + dx;
+                int worldZ = minBlockZ + dz;
+
+                worldLookup.applyCell(
+                        neighborCell.reset(),
+                        worldX,
+                        worldZ,
+                        false,
+                        false
+                );
+
+                float water =
+                        ContinentalHydrology.getWeightedWaterHeight(neighborCell.waterTable)
+                                + oceanHeightOffset;
+
+                int waterY = levels.scale(water);
+
+                int cacheIndex = (dx + 12) + ((dz + 12) * 40);
+                neighborWaterYCache[cacheIndex] = waterY;
+            }
+        }
 
         // CACHE 2: Fast 3D Cache for the horizontal terrain paint lookups
         Long2ObjectOpenHashMap<BlockState> paintCache = new Long2ObjectOpenHashMap<>();
@@ -129,12 +153,6 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
                                     int cacheIndex = cacheX + (cacheZ * 40);
 
                                     int neighbourWaterY = neighborWaterYCache[cacheIndex];
-                                    if (neighbourWaterY == Integer.MIN_VALUE) {
-                                        worldLookup.applyCell(neighborCell.reset(), targetX, targetZ, false, false);
-                                        float neighbourTargetWaterLevel = ContinentalHydrology.getWeightedWaterHeight(neighborCell.waterTable) + oceanHeightOffset;
-                                        neighbourWaterY = levels.scale(neighbourTargetWaterLevel);
-                                        neighborWaterYCache[cacheIndex] = neighbourWaterY;
-                                    }
 
                                     if (y > neighbourWaterY) {
                                         continue;
