@@ -35,6 +35,9 @@ public class UpliftRiverCarver implements RTFRiverCarver {
     private Noise terraceNoise;
     private Noise asymmetryNoise;
 
+    // Broad-scale "pinch & flare" noise driving zone 3 valley floor width along the river path
+    private Noise valleyPinchNoise;
+
     // New Drainage Noises
     private Noise gullyNoise;
     private Noise rivuletNoise;
@@ -44,7 +47,6 @@ public class UpliftRiverCarver implements RTFRiverCarver {
     public LakeConfig lakeConfig;
 
     // --- PER-RIVER VARIANCE FIELDS ---
-    private final float riverValleyWidthModifier;
     private boolean isUpliftContinent;
 
     public UpliftRiverCarver(River river, RiverWarp warp, RiverConfig config, RiverCarverSettings settings, Levels levels, LakeConfig lakeConfig, boolean isUpliftContinent) {
@@ -80,6 +82,10 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         this.terraceNoise = Noises.simplex(5510, 200, 1);
         this.asymmetryNoise = Noises.simplex(1193, 250, 1);
 
+        // Broad spatial period (~360 blocks) so the valley floor gradually pinches
+        // narrow then flares wide as the river travels through the world
+        this.valleyPinchNoise = Noises.simplex(6204, 360, 2);
+
         // Drainage initialization
         this.gullyNoise = Noises.simplex(9876, 65, 2);
         this.rivuletNoise = Noises.simplex(5432, 20, 2);
@@ -89,16 +95,6 @@ public class UpliftRiverCarver implements RTFRiverCarver {
 
         this.lakeConfig = lakeConfig;
         this.isUpliftContinent = isUpliftContinent;
-
-        // --- INITIALIZE DETERMINISTIC PER-RIVER VALLEY VARIANCE ---
-        int rh1 = Float.floatToIntBits(river.x1);
-        int rh2 = Float.floatToIntBits(river.z1);
-        long uniqueRiverSeed = ((long) rh1 << 32) | (rh2 & 0xFFFFFFFFL);
-        uniqueRiverSeed ^= 0x4B3C2B1A5L; // Unique salt modifier for valley layout variance
-
-        Random riverVarRand = new Random(uniqueRiverSeed);
-        // Generates a scaling factor between 0.70 and 1.30 (+/- 30% total width deviation per river system)
-        this.riverValleyWidthModifier = 0.70F + riverVarRand.nextFloat() * 0.60F;
     }
 
     @Override
@@ -116,6 +112,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float depthVar = this.depthNoise.compute(currX, currZ, 3912);
         float terraceMask = this.terraceNoise.compute(currX, currZ, 5510);
         float asymmetry = this.asymmetryNoise.compute(currX, currZ, 1193);
+        float valleyPinchVar = this.valleyPinchNoise.compute(currX, currZ, 6204);
 
         // --- DRAINAGE CALCULATION (Ridged Noise) ---
         float gullyRaw = this.gullyNoise.compute(currX, currZ, 9876);
@@ -131,6 +128,10 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float dynamicWidthMult = 1.0F + (widthVar * 0.35F);
         float dynamicDepthMult = 1.0F + (depthVar * 0.25F);
         float sideBias = 1.0F + (asymmetry * 0.4F);
+
+        // Zone 3 pinch/flare: noise output (~-1 to 1) maps to ~0.05x (pinched) through
+        // ~1.95x (flared) so the valley floor narrows and widens as the river runs
+        float valleyPinchMultiplier = NoiseUtil.clamp(1.0F + valleyPinchVar, 0.05F, 1.95F);
 
         // --- 1. TARGET ELEVATIONS ---
         float oceanHeightOffset = levels.water;
@@ -181,8 +182,8 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float zone2Width = (config.maxBankHeight - config.minBankHeight) / this.levels.unit * biasedScale;
         float zone2Radius = zone1Radius + zone2Width;
 
-        // --- APPLY PER-RIVER VARIANCE TO ZONE 3 VALLEY FLOOR ---
-        float zone3Width = config.bankWidth * dynamicWidthMult * this.riverValleyWidthModifier;
+        // --- APPLY PATH-BASED PINCH/FLARE TO ZONE 3 VALLEY FLOOR ---
+        float zone3Width = config.bankWidth * dynamicWidthMult * valleyPinchMultiplier;
         float zone3Radius = zone2Radius + zone3Width;
 
         // Zone 4 dynamically accommodates the changes automatically via the chain
