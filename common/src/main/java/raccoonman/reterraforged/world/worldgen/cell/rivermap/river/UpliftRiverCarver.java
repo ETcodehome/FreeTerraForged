@@ -112,7 +112,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float depthVar = this.depthNoise.compute(currX, currZ, 3912);
         float terraceMask = this.terraceNoise.compute(currX, currZ, 5510);
         float asymmetry = this.asymmetryNoise.compute(currX, currZ, 1193);
-        float valleyPinchVar = this.valleyPinchNoise.compute(currX, currZ, 6204);
+        float valleyPinchVar = this.valleyPinchNoise.compute(currX, currZ, 6204) * 2.0F;
 
         // --- DRAINAGE CALCULATION (Ridged Noise) ---
         float gullyRaw = this.gullyNoise.compute(currX, currZ, 9876);
