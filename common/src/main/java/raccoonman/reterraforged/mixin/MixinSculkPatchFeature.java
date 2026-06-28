@@ -25,7 +25,7 @@ public class MixinSculkPatchFeature {
 
     @Unique
     private static final Simplex RTF_SCULK_NOISE = new Simplex(
-            0.04F,                 // FIX: Lower frequency (0.08 -> 0.04) makes patches 2x larger
+            0.04F,
             3,
             0.5F,
             0.45F,
@@ -35,11 +35,7 @@ public class MixinSculkPatchFeature {
     @Unique private static final int CONFIG_RADIUS = 12;
     @Unique private static final float CONFIG_THRESHOLD = 0.42F;
     @Unique private static final float VEIN_WINDOW = 0.05F;
-
-    // FIX: Set vertical coherence resolution. Blending every 6 blocks eliminates flat sheets.
     @Unique private static final int VERTICAL_SCALE_STEPS = 6;
-
-    // FIX: Restrict face placement to 25% chance to reduce vein clusters by 4x
     @Unique private static final float VEIN_CHANCE_PER_FACE = 0.25F;
 
     @Inject(method = "place", at = @At("HEAD"), cancellable = true)
@@ -72,7 +68,7 @@ public class MixinSculkPatchFeature {
                     if (state.is(BlockTags.SCULK_REPLACEABLE)) {
                         if (rtf$isAdjacentToAir(level, mutablePos)) {
 
-                            // FIX: Pseudo-3D Noise Sampling via Vertical Layer Lerping
+                            // Pseudo-3D Noise Sampling via Vertical Layer Lerping
                             // Handles negative Y coordinates cleanly using floorDiv
                             int yFloor = Math.floorDiv(absoluteY, VERTICAL_SCALE_STEPS);
                             float yAlpha = (float) (absoluteY - (yFloor * VERTICAL_SCALE_STEPS)) / (float) VERTICAL_SCALE_STEPS;
@@ -98,7 +94,6 @@ public class MixinSculkPatchFeature {
                                     rtf$placeDecorations(level, mutablePos, random);
                                 }
                             } else if (combinedScore > (CONFIG_THRESHOLD - VEIN_WINDOW)) {
-                                // Pass random down to execute the 4x reduction roll
                                 rtf$tryPlaceVeinOnExposedFaces(level, mutablePos, random);
                                 placedAnything = true;
                             }
