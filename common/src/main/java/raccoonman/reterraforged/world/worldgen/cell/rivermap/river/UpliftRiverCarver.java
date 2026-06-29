@@ -101,7 +101,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
     public void carve(Cell cell, float prevX, float prevZ, float prevT, float currX, float currZ, float currT) {
         float distSqToCurr = this.getDistance2(currX, currZ, currT);
         float currentLinearDist = (float) Math.sqrt(distSqToCurr);
-
+        float shrinkFactor = this.fade * currT;
         float flatnessInput = isUpliftContinent ? cell.waterTable : currT;
         float flatnessFactor = NoiseUtil.clamp(ContinentalHydrology.getFlatnessFactor(flatnessInput), 0.0F, 1.0F);
         float scaleFactor = 1.0F + 0.75F * flatnessFactor;
@@ -152,7 +152,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         // --- ORGANIC LAKE SHORELINE WARPING MODULATION ---
         float plateauInput = isUpliftContinent ? cell.waterTable : currT;
         int plateauIndex = ContinentalHydrology.getStepId(plateauInput);
-        float widenMultiplier = 1.0F;
+        float widenMultiplier = 0.25F + 0.75F * shrinkFactor;
 
         if (this.shouldWidenOnPlateau(plateauIndex, lakeConfig, currT)) {
             float lakeScaleMin = lakeConfig.sizeMin / 100.0F;
@@ -183,11 +183,18 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float zone2Radius = zone1Radius + zone2Width;
 
         // --- APPLY PATH-BASED PINCH/FLARE TO ZONE 3 VALLEY FLOOR ---
-        float zone3Width = config.bankWidth * dynamicWidthMult * valleyPinchMultiplier;
+
+        // The full, unshrunk base width (ignoring shrinkFactor)
+        float unshrunkZone3BaseWidth = config.bankWidth * dynamicWidthMult * valleyPinchMultiplier;
+
+        // Apply only to Zone 3 so the valley floor still pinches out
+        float zone3BaseWidth = unshrunkZone3BaseWidth * shrinkFactor;
+        float zone3Width = zone3BaseWidth * shrinkFactor;
         float zone3Radius = zone2Radius + zone3Width;
 
-        // Zone 4 dynamically accommodates the changes automatically via the chain
-        float zone4Radius = zone3Radius + (zone3Width * (4 + discrepancyScale));
+        // Calculate Zone 4 using the base width
+        // This ensures the fadeout distance remains broad and constant all the way to the river head
+        float zone4Radius = zone3Radius + (unshrunkZone3BaseWidth * (4 + discrepancyScale));
 
         if (currentLinearDist >= zone4Radius) return;
 
