@@ -109,68 +109,37 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         // always run mask logic to ensure clean falloffs
         updateValleyMask(prevX, prevZ, prevT, currT, distSqToCurr, sqScaleFactor, cell);
 
-        // --- DRAINAGE CALCULATION ---
+        // drainage falloffs
         float gullyRaw = this.gullyNoise.compute(currX, currZ, 9876);
         float gullyShape = 1.0F - Math.abs(gullyRaw);
         gullyShape *= gullyShape;
-
         float rivuletRaw = this.rivuletNoise.compute(currX, currZ, 5432);
         float rivuletShape = 1.0F - Math.abs(rivuletRaw);
         rivuletShape = rivuletShape * rivuletShape * rivuletShape;
-
         float drainageMask = (gullyShape * 0.7F) + (rivuletShape * 0.3F);
 
+        // width falloffs
         float dynamicWidthMult = 1.0F + (widthVar * 0.35F);
         float dynamicDepthMult = 1.0F + (depthVar * 0.25F);
         float sideBias = 1.0F + (asymmetry * 0.4F);
         float valleyPinchMultiplier = NoiseUtil.clamp(1.0F + valleyPinchVar, 0.05F, 1.95F);
 
-        // --- TARGET ELEVATIONS ---
+        // target elevations
         float oceanHeightOffset = levels.water;
         float targetWaterLevel = ContinentalHydrology.getWeightedWaterHeight(cell.waterTable) + oceanHeightOffset;
-
         float baseBedDepthOffset = oceanHeightOffset - config.bedHeight;
         float bedDepthOffset = baseBedDepthOffset * dynamicDepthMult;
-
         float bankHeightOffset = (config.maxBankHeight - config.minBankHeight);
         float targetValleyFloor = targetWaterLevel + bankHeightOffset;
         float discrepancyScale = 1.0F + (levels.scale(cell.height - targetWaterLevel)) / 100.0F;
-
-        // --- PRE-CALCULATE UNIFIED VALLEY FLOOR HEIGHT (Fix #2) ---
         float valleyFloorBumpiness = ((terraceMask * 0.4F) - (drainageMask * 0.6F)) * this.levels.unit;
         float actualValleyFloorHeight = targetValleyFloor + valleyFloorBumpiness;
 
-        // --- RADII BOUNDARIES ---
+        // Zone calculations
         float biasedScale = sqScaleFactor * dynamicWidthMult * sideBias;
         float zone1Radius = (float) Math.sqrt(this.getScaledSize(currT, this.bedWidth) * biasedScale);
-
-        // --- ORGANIC LAKE SHORELINE WARPING ---
-        float plateauInput = isUpliftContinent ? cell.waterTable : currT;
-        int plateauIndex = ContinentalHydrology.getStepId(plateauInput);
-        float widenMultiplier = 1.0F;
-
-        if (this.shouldWidenOnPlateau(plateauIndex, lakeConfig, currT)) {
-            float lakeScaleMin = lakeConfig.sizeMin / 100.0F;
-            float lakeScaleMax = lakeConfig.sizeMax / 100.0F;
-
-            float baseStepScale = this.getLakeScaleForPlateau(plateauIndex, lakeScaleMin, lakeScaleMax);
-            float shorelineWarp = this.lakeWarpNoise.compute(currX, currZ, 7439);
-            float organicWarpFactor = baseStepScale * (1.0F + shorelineWarp * 0.45F);
-
-            float distanceMask = 1.0F;
-            float fadeWindow = 0.04F;
-
-            if (currT < lakeConfig.distanceMin) {
-                distanceMask = NoiseUtil.clamp((currT - (lakeConfig.distanceMin - fadeWindow)) / fadeWindow, 0.0F, 1.0F);
-            } else if (currT > lakeConfig.distanceMax) {
-                distanceMask = NoiseUtil.clamp(((lakeConfig.distanceMax + fadeWindow) - currT) / fadeWindow, 0.0F, 1.0F);
-            }
-
-            distanceMask = distanceMask * distanceMask * (3.0F - 2.0F * distanceMask);
-            widenMultiplier = 1.0F + (flatnessFactor * organicWarpFactor * distanceMask);
-            zone1Radius *= widenMultiplier;
-        }
-
+        float lakeMultiplier = getLakeMultiplier(cell, currT, currX, currZ, flatnessFactor);
+        zone1Radius *= lakeMultiplier;
         float zone2Width = (config.maxBankHeight - config.minBankHeight) / this.levels.unit * biasedScale;
         float zone2Radius = zone1Radius + zone2Width;
         float unshrunkZone3BaseWidth = config.bankWidth * dynamicWidthMult * valleyPinchMultiplier;
@@ -185,7 +154,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         RiverCarverSettings.RiverZone prospectiveZone = cell.riverZone;
 
         if (currentLinearDist < zone1Radius) {
-            finalHeight = carveZone1Riverbed(cell, currT, distSqToCurr, bedDepthOffset, oceanHeightOffset, sqScaleFactor, targetWaterLevel, widenMultiplier);
+            finalHeight = carveZone1Riverbed(cell, currT, distSqToCurr, bedDepthOffset, oceanHeightOffset, sqScaleFactor, targetWaterLevel, lakeMultiplier);
             prospectiveZone = RiverCarverSettings.RiverZone.Riverbed;
         } else if (currentLinearDist < zone2Radius) {
             // Banks scale smoothly into our unified actualValleyFloorHeight instead of the flat targetValleyFloor
@@ -211,6 +180,33 @@ public class UpliftRiverCarver implements RTFRiverCarver {
             cell.height = finalHeight;
             cell.riverZone = prospectiveZone;
         }
+    }
+
+    private float getLakeMultiplier(Cell cell, float currT, float currX, float currZ, float flatnessFactor) {
+        float plateauInput = isUpliftContinent ? cell.waterTable : currT;
+        float widenMultiplier = 1.0F;
+        int plateauIndex = ContinentalHydrology.getStepId(plateauInput);
+        if (this.shouldWidenOnPlateau(plateauIndex, lakeConfig, currT)) {
+            float lakeScaleMin = lakeConfig.sizeMin / 100.0F;
+            float lakeScaleMax = lakeConfig.sizeMax / 100.0F;
+
+            float baseStepScale = this.getLakeScaleForPlateau(plateauIndex, lakeScaleMin, lakeScaleMax);
+            float shorelineWarp = this.lakeWarpNoise.compute(currX, currZ, 7439);
+            float organicWarpFactor = baseStepScale * (1.0F + shorelineWarp * 0.45F);
+
+            float distanceMask = 1.0F;
+            float fadeWindow = 0.04F;
+
+            if (currT < lakeConfig.distanceMin) {
+                distanceMask = NoiseUtil.clamp((currT - (lakeConfig.distanceMin - fadeWindow)) / fadeWindow, 0.0F, 1.0F);
+            } else if (currT > lakeConfig.distanceMax) {
+                distanceMask = NoiseUtil.clamp(((lakeConfig.distanceMax + fadeWindow) - currT) / fadeWindow, 0.0F, 1.0F);
+            }
+
+            distanceMask = distanceMask * distanceMask * (3.0F - 2.0F * distanceMask);
+            widenMultiplier = 1.0F + (flatnessFactor * organicWarpFactor * distanceMask);
+        }
+        return widenMultiplier; // no op
     }
 
     private float carveZone1Riverbed(Cell cell, float currT, float distSqToCurr, float bedDepthOffset, float oceanHeightOffset, float sqScaleFactor, float targetWaterLevel, float widenMultiplier) {
