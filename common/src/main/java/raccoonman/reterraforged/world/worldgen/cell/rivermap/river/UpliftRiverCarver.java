@@ -101,7 +101,10 @@ public class UpliftRiverCarver implements RTFRiverCarver {
     public void carve(Cell cell, float prevX, float prevZ, float prevT, float currX, float currZ, float currT) {
         float distSqToCurr = this.getDistance2(currX, currZ, currT);
         float currentLinearDist = (float) Math.sqrt(distSqToCurr);
-        float shrinkFactor = this.fade * currT;
+
+        // FIX: Calculate proper river progression scale clamped between 0.0 and 1.0
+        float shrinkFactor = NoiseUtil.clamp(currT * this.fadeInv, 0.0F, 1.0F);
+
         float flatnessInput = isUpliftContinent ? cell.waterTable : currT;
         float flatnessFactor = NoiseUtil.clamp(ContinentalHydrology.getFlatnessFactor(flatnessInput), 0.0F, 1.0F);
         float scaleFactor = 1.0F + 0.75F * flatnessFactor;
@@ -206,17 +209,17 @@ public class UpliftRiverCarver implements RTFRiverCarver {
             cell.riverZone = RiverCarverSettings.RiverZone.Riverbed;
         } else if (currentLinearDist < zone2Radius) {
             finalHeight = carveZone2BankStep(currentLinearDist, zone1Radius, zone2Radius, targetWaterLevel, targetValleyFloor, terraceMask, drainageMask);
-            if (cell.riverZone != RiverCarverSettings.RiverZone.Riverbed) {
+            if (finalHeight < cell.height && cell.riverZone != RiverCarverSettings.RiverZone.Riverbed) {
                 cell.riverZone = RiverCarverSettings.RiverZone.Banks;
             }
         } else if (currentLinearDist < zone3Radius) {
             finalHeight = carveZone3ValleyFloor(targetValleyFloor, terraceMask, drainageMask);
-            if (cell.riverZone != RiverCarverSettings.RiverZone.Riverbed && cell.riverZone != RiverCarverSettings.RiverZone.Banks) {
+            if (finalHeight < cell.height && cell.riverZone != RiverCarverSettings.RiverZone.Riverbed && cell.riverZone != RiverCarverSettings.RiverZone.Banks) {
                 cell.riverZone = RiverCarverSettings.RiverZone.ValleyFloor;
             }
         } else {
             finalHeight = carveZone4Fadeout(cell.height, currentLinearDist, zone3Radius, zone4Radius, targetValleyFloor, terraceMask, drainageMask);
-            if (cell.riverZone != RiverCarverSettings.RiverZone.Riverbed && cell.riverZone != RiverCarverSettings.RiverZone.Banks && cell.riverZone != RiverCarverSettings.RiverZone.ValleyFloor) {
+            if (finalHeight < cell.height && cell.riverZone != RiverCarverSettings.RiverZone.Riverbed && cell.riverZone != RiverCarverSettings.RiverZone.Banks && cell.riverZone != RiverCarverSettings.RiverZone.ValleyFloor) {
                 cell.riverZone = RiverCarverSettings.RiverZone.ValleyFadeout;
             }
         }
