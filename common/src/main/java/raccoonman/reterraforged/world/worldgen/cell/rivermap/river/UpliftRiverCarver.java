@@ -148,38 +148,48 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float zone3Radius = zone2Radius + zone3Width;
         float zone4Radius = zone3Radius + (unshrunkZone3BaseWidth * (4 + discrepancyScale));
 
+        // early exit guard if we're a cell outside the river influence
         if (currentLinearDist >= zone4Radius) return;
 
+        // calculate the final cell heights
         float finalHeight = cell.height;
-        RiverCarverSettings.RiverZone prospectiveZone = cell.riverZone;
-
         if (currentLinearDist < zone1Radius) {
             finalHeight = carveZone1Riverbed(cell, currT, distSqToCurr, bedDepthOffset, oceanHeightOffset, sqScaleFactor, targetWaterLevel, lakeMultiplier);
-            prospectiveZone = RiverCarverSettings.RiverZone.Riverbed;
         } else if (currentLinearDist < zone2Radius) {
-            // Banks scale smoothly into our unified actualValleyFloorHeight instead of the flat targetValleyFloor
             finalHeight = carveZone2BankStep(currentLinearDist, zone1Radius, zone2Radius, targetWaterLevel, actualValleyFloorHeight, terraceMask, drainageMask);
-            if (prospectiveZone != RiverCarverSettings.RiverZone.Riverbed) {
-                prospectiveZone = RiverCarverSettings.RiverZone.Banks;
-            }
         } else if (currentLinearDist < zone3Radius) {
             finalHeight = actualValleyFloorHeight;
-            if (prospectiveZone != RiverCarverSettings.RiverZone.Riverbed && prospectiveZone != RiverCarverSettings.RiverZone.Banks) {
-                prospectiveZone = RiverCarverSettings.RiverZone.ValleyFloor;
-            }
         } else {
-            // Fadeout safely steps out directly from our bumpy actualValleyFloorHeight
             finalHeight = carveZone4Fadeout(cell.height, currentLinearDist, zone3Radius, zone4Radius, actualValleyFloorHeight, terraceMask, drainageMask);
-            if (prospectiveZone != RiverCarverSettings.RiverZone.Riverbed && prospectiveZone != RiverCarverSettings.RiverZone.Banks && prospectiveZone != RiverCarverSettings.RiverZone.ValleyFloor) {
-                prospectiveZone = RiverCarverSettings.RiverZone.ValleyFadeout;
-            }
         }
 
         // Only commit data changes to the cell if our carving operations actually cut down the world
         if (finalHeight < cell.height) {
             cell.height = finalHeight;
-            cell.riverZone = prospectiveZone;
+            cell.riverZone = getRiverZoneTag(cell, currentLinearDist, zone1Radius, zone2Radius, zone3Radius);
         }
+    }
+
+    private RiverCarverSettings.RiverZone getRiverZoneTag(Cell cell, float currentLinearDist, float zone1Radius, float zone2Radius, float zone3Radius){
+        RiverCarverSettings.RiverZone prospectiveZone = cell.riverZone;
+
+        if (currentLinearDist < zone1Radius) {
+            prospectiveZone = RiverCarverSettings.RiverZone.Riverbed;
+        } else if (currentLinearDist < zone2Radius) {
+            if (prospectiveZone != RiverCarverSettings.RiverZone.Riverbed) {
+                prospectiveZone = RiverCarverSettings.RiverZone.Banks;
+            }
+        } else if (currentLinearDist < zone3Radius) {
+            if (prospectiveZone != RiverCarverSettings.RiverZone.Riverbed && prospectiveZone != RiverCarverSettings.RiverZone.Banks) {
+                prospectiveZone = RiverCarverSettings.RiverZone.ValleyFloor;
+            }
+        } else {
+            if (prospectiveZone != RiverCarverSettings.RiverZone.Riverbed && prospectiveZone != RiverCarverSettings.RiverZone.Banks && prospectiveZone != RiverCarverSettings.RiverZone.ValleyFloor) {
+                prospectiveZone = RiverCarverSettings.RiverZone.ValleyFadeout;
+            }
+        }
+
+        return prospectiveZone;
     }
 
     private float getLakeMultiplier(Cell cell, float currT, float currX, float currZ, float flatnessFactor) {
