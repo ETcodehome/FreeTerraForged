@@ -274,50 +274,51 @@ public class UpliftRiverCarver implements RTFRiverCarver {
 
     private float applyTerracing(float progress, float terraceMask, float drainageMask, float steps) {
         float intactTerrace = Math.max(0.0F, terraceMask - (drainageMask * 1.5F));
-        float terraceStrength = NoiseUtil.clamp(intactTerrace * 1.5F, 0.0F, 1.0F);
+        // Balanced strength multiplier (1.75F) for a confident but natural terrace presence
+        float terraceStrength = NoiseUtil.clamp(intactTerrace * 1.75F, 0.0F, 1.0F);
 
-        // If terracing isn't influencing this cell, maintain the native slope gradient
         if (terraceStrength <= 0.0F) {
             return progress;
         }
 
-        // Map the continuous linear progress into discrete step spaces
         float scaledProgress = progress * steps;
         float floor = (float) Math.floor(scaledProgress);
-        float fract = scaledProgress - floor; // Ranges from 0.0 to 1.0 within the current step
+        float fract = scaledProgress - floor;
 
-        // --- GEOMORPHOLOGY & WEATHERING MODIFIERS ---
-        // High drainage causes the cliff to erode backward, making the cliff zone narrower
-        float baseCliffBias = 0.72F; // Default: Cliff face occupies the upper 28% of the step
-        float cliffBias = NoiseUtil.clamp(baseCliffBias - (drainageMask * 0.15F), 0.45F, 0.85F);
+        // --- BALANCED GEOMORPHOLOGY TUNING ---
+        // 0.78F puts the cliff face in the upper 22% of the step—distinctly steep but scalable.
+        float baseCliffBias = 0.78F;
+        float cliffBias = NoiseUtil.clamp(baseCliffBias - (drainageMask * 0.14F), 0.55F, 0.88F);
 
-        // High drainage washes eroded material downward, increasing the height of the talus pile
-        float baseTalusHeight = 0.15F; // Default: Talus accumulation takes up 15% of the step height
-        float talusHeight = NoiseUtil.clamp(baseTalusHeight + (drainageMask * 0.25F), 0.05F, 0.50F);
+        float baseTalusHeight = 0.14F;
+        float talusHeight = NoiseUtil.clamp(baseTalusHeight + (drainageMask * 0.22F), 0.04F, 0.45F);
 
         float steppedFract;
         if (fract < cliffBias) {
-            // ZONE 1: Flat Terrace Tier leading into the Concave Talus Apron
             float t = fract / cliffBias;
 
-            // A cubic curve (t^3) keeps the valley floor flat initially, then creates
-            // a perfect concave upward sweep mimicking loose rock accumulating at the base.
-            steppedFract = (float) Math.pow(t, 3.0F) * talusHeight;
+            // Split the difference between t^3 and t^4 using t^3.5
+            // This gives a flat-ish shelf that transitions smoothly into the debris heap
+            steppedFract = (float) Math.pow(t, 3.5F) * talusHeight;
         } else {
-            // ZONE 2: The Cliff Face
             float t = (fract - cliffBias) / (1.0F - cliffBias);
 
-            // Use a smoothstep (S-curve) to transition the cliff steepness out of the
-            // talus apron and gracefully roll over into the lip of the next upper terrace floor.
-            float smoothCliff = t * t * (3.0F - 2.0F * t);
-            steppedFract = NoiseUtil.lerp(talusHeight, 1.0F, smoothCliff);
+            // HYBRID CLIFF CURVE:
+            // We blend a sharp quadratic curve (t^2) with a smooth S-curve (3t^2 - 2t^3).
+            // This yields a cliff face that breaks out of the talus cleanly, but wraps
+            // into the upper shelf with a slightly weathered, natural roll-over.
+            float sharpCurve = t * t;
+            float smoothCurve = t * t * (3.0F - 2.0F * t);
+            float hybridCliff = NoiseUtil.lerp(sharpCurve, smoothCurve, 0.5F);
+
+            steppedFract = NoiseUtil.lerp(talusHeight, 1.0F, hybridCliff);
         }
 
-        // Reconstruct the modified step back into world space
         float steppedProgress = (floor + steppedFract) / steps;
 
-        // Blend our hyper-realistic profile with the raw terrain based on local terrace strength
-        return NoiseUtil.lerp(progress, steppedProgress, terraceStrength * 0.85F);
+        // A 90% maximum blend weight ensures the steps stay well-defined
+        // while allowing the regional terrain shape to gently break up the monotony.
+        return NoiseUtil.lerp(progress, steppedProgress, terraceStrength * 0.90F);
     }
 
     private void updateValleyMask(float prevX, float prevZ, float prevT, float currX, float currZ, float currT, float distSqToCurr, float sqScaleFactor, float targetBedFloor, Cell cell) {
