@@ -99,25 +99,27 @@ public class UpliftRiverCarver implements RTFRiverCarver {
 
     @Override
     public void carve(Cell cell, float prevX, float prevZ, float prevT, float currX, float currZ, float currT) {
+
+        // fixed reference values
         float distSqToCurr = this.getDistance2(currX, currZ, currT);
         float currentLinearDist = (float) Math.sqrt(distSqToCurr);
-
-        // FIX: Calculate proper river progression scale clamped between 0.0 and 1.0
         float shrinkFactor = NoiseUtil.clamp(currT * this.fadeInv, 0.0F, 1.0F);
-
         float flatnessInput = isUpliftContinent ? cell.waterTable : currT;
         float flatnessFactor = NoiseUtil.clamp(ContinentalHydrology.getFlatnessFactor(flatnessInput), 0.0F, 1.0F);
         float scaleFactor = 1.0F + 0.75F * flatnessFactor;
         float sqScaleFactor = scaleFactor * scaleFactor;
 
-        // --- ENVIRONMENTAL VARIATION SAMPLES ---
+        // noise sampling
         float widthVar = this.widthNoise.compute(currX, currZ, 8241);
         float depthVar = this.depthNoise.compute(currX, currZ, 3912);
         float terraceMask = this.terraceNoise.compute(currX, currZ, 5510);
         float asymmetry = this.asymmetryNoise.compute(currX, currZ, 1193);
         float valleyPinchVar = this.valleyPinchNoise.compute(currX, currZ, 6204) * 2.0F;
 
-        // --- DRAINAGE CALCULATION (Ridged Noise) ---
+        // always run mask logic to ensure clean falloffs
+        updateValleyMask(prevX, prevZ, prevT, currX, currZ, currT, distSqToCurr, sqScaleFactor, levels.water - config.bedHeight, cell);
+
+        // --- DRAINAGE CALCULATION ---
         float gullyRaw = this.gullyNoise.compute(currX, currZ, 9876);
         float gullyShape = 1.0F - Math.abs(gullyRaw);
         gullyShape *= gullyShape;
@@ -131,31 +133,31 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float dynamicWidthMult = 1.0F + (widthVar * 0.35F);
         float dynamicDepthMult = 1.0F + (depthVar * 0.25F);
         float sideBias = 1.0F + (asymmetry * 0.4F);
-
-        // Zone 3 pinch/flare: noise output (~-1 to 1) maps to ~0.05x (pinched) through
-        // ~1.95x (flared) so the valley floor narrows and widens as the river runs
         float valleyPinchMultiplier = NoiseUtil.clamp(1.0F + valleyPinchVar, 0.05F, 1.95F);
 
-        // --- 1. TARGET ELEVATIONS ---
+        // --- TARGET ELEVATIONS ---
         float oceanHeightOffset = levels.water;
         float targetWaterLevel = ContinentalHydrology.getWeightedWaterHeight(cell.waterTable) + oceanHeightOffset;
 
         float baseBedDepthOffset = oceanHeightOffset - config.bedHeight;
         float bedDepthOffset = baseBedDepthOffset * dynamicDepthMult;
-        float targetBedFloor = targetWaterLevel - bedDepthOffset;
 
         float bankHeightOffset = (config.maxBankHeight - config.minBankHeight);
         float targetValleyFloor = targetWaterLevel + bankHeightOffset;
         float discrepancyScale = 1.0F + (levels.scale(cell.height - targetWaterLevel)) / 100.0F;
 
+        // --- PRE-CALCULATE UNIFIED VALLEY FLOOR HEIGHT (Fix #2) ---
+        float valleyFloorBumpiness = ((terraceMask * 0.4F) - (drainageMask * 0.6F)) * this.levels.unit;
+        float actualValleyFloorHeight = targetValleyFloor + valleyFloorBumpiness;
+
         // --- RADII BOUNDARIES ---
         float biasedScale = sqScaleFactor * dynamicWidthMult * sideBias;
         float zone1Radius = (float) Math.sqrt(this.getScaledSize(currT, this.bedWidth) * biasedScale);
 
-        // --- ORGANIC LAKE SHORELINE WARPING MODULATION ---
+        // --- ORGANIC LAKE SHORELINE WARPING ---
         float plateauInput = isUpliftContinent ? cell.waterTable : currT;
         int plateauIndex = ContinentalHydrology.getStepId(plateauInput);
-        float widenMultiplier = 0.25F + 0.75F * shrinkFactor;
+        float widenMultiplier = 1.0F;
 
         if (this.shouldWidenOnPlateau(plateauIndex, lakeConfig, currT)) {
             float lakeScaleMin = lakeConfig.sizeMin / 100.0F;
@@ -165,7 +167,6 @@ public class UpliftRiverCarver implements RTFRiverCarver {
             float shorelineWarp = this.lakeWarpNoise.compute(currX, currZ, 7439);
             float organicWarpFactor = baseStepScale * (1.0F + shorelineWarp * 0.45F);
 
-            // --- SMOOTH DISTANCE FADE FACTOR ---
             float distanceMask = 1.0F;
             float fadeWindow = 0.04F;
 
@@ -176,59 +177,53 @@ public class UpliftRiverCarver implements RTFRiverCarver {
             }
 
             distanceMask = distanceMask * distanceMask * (3.0F - 2.0F * distanceMask);
-
             widenMultiplier = 1.0F + (flatnessFactor * organicWarpFactor * distanceMask);
             zone1Radius *= widenMultiplier;
         }
 
-        // Additive chaining recalculates layout bounds
         float zone2Width = (config.maxBankHeight - config.minBankHeight) / this.levels.unit * biasedScale;
         float zone2Radius = zone1Radius + zone2Width;
-
-        // --- APPLY PATH-BASED PINCH/FLARE TO ZONE 3 VALLEY FLOOR ---
-
-        // The full, unshrunk base width (ignoring shrinkFactor)
         float unshrunkZone3BaseWidth = config.bankWidth * dynamicWidthMult * valleyPinchMultiplier;
-
-        // Apply only to Zone 3 so the valley floor still pinches out
         float zone3BaseWidth = unshrunkZone3BaseWidth * shrinkFactor;
         float zone3Width = zone3BaseWidth * shrinkFactor;
         float zone3Radius = zone2Radius + zone3Width;
-
-        // Calculate Zone 4 using the base width
-        // This ensures the fadeout distance remains broad and constant all the way to the river head
         float zone4Radius = zone3Radius + (unshrunkZone3BaseWidth * (4 + discrepancyScale));
 
+        // Spatial gate for the actual carving step
         if (currentLinearDist >= zone4Radius) return;
 
-        // --- 3. PROFILE SELECTION ---
+        // --- PROFILE SELECTION ---
         float finalHeight = cell.height;
+        RiverCarverSettings.RiverZone prospectiveZone = cell.riverZone;
 
         if (currentLinearDist < zone1Radius) {
             finalHeight = carveZone1Riverbed(cell, currT, distSqToCurr, bedDepthOffset, oceanHeightOffset, sqScaleFactor, targetWaterLevel, widenMultiplier);
-            cell.riverZone = RiverCarverSettings.RiverZone.Riverbed;
+            prospectiveZone = RiverCarverSettings.RiverZone.Riverbed;
         } else if (currentLinearDist < zone2Radius) {
-            finalHeight = carveZone2BankStep(currentLinearDist, zone1Radius, zone2Radius, targetWaterLevel, targetValleyFloor, terraceMask, drainageMask);
-            if (finalHeight < cell.height && cell.riverZone != RiverCarverSettings.RiverZone.Riverbed) {
-                cell.riverZone = RiverCarverSettings.RiverZone.Banks;
+            // Banks scale smoothly into our unified actualValleyFloorHeight instead of the flat targetValleyFloor
+            finalHeight = carveZone2BankStep(currentLinearDist, zone1Radius, zone2Radius, targetWaterLevel, actualValleyFloorHeight, terraceMask, drainageMask);
+            if (prospectiveZone != RiverCarverSettings.RiverZone.Riverbed) {
+                prospectiveZone = RiverCarverSettings.RiverZone.Banks;
             }
         } else if (currentLinearDist < zone3Radius) {
-            finalHeight = carveZone3ValleyFloor(targetValleyFloor, terraceMask, drainageMask);
-            if (finalHeight < cell.height && cell.riverZone != RiverCarverSettings.RiverZone.Riverbed && cell.riverZone != RiverCarverSettings.RiverZone.Banks) {
-                cell.riverZone = RiverCarverSettings.RiverZone.ValleyFloor;
+            finalHeight = actualValleyFloorHeight;
+            if (prospectiveZone != RiverCarverSettings.RiverZone.Riverbed && prospectiveZone != RiverCarverSettings.RiverZone.Banks) {
+                prospectiveZone = RiverCarverSettings.RiverZone.ValleyFloor;
             }
         } else {
-            finalHeight = carveZone4Fadeout(cell.height, currentLinearDist, zone3Radius, zone4Radius, targetValleyFloor, terraceMask, drainageMask);
-            if (finalHeight < cell.height && cell.riverZone != RiverCarverSettings.RiverZone.Riverbed && cell.riverZone != RiverCarverSettings.RiverZone.Banks && cell.riverZone != RiverCarverSettings.RiverZone.ValleyFloor) {
-                cell.riverZone = RiverCarverSettings.RiverZone.ValleyFadeout;
+            // Fadeout safely steps out directly from our bumpy actualValleyFloorHeight (Fix #2)
+            finalHeight = carveZone4Fadeout(cell.height, currentLinearDist, zone3Radius, zone4Radius, actualValleyFloorHeight, terraceMask, drainageMask);
+            if (prospectiveZone != RiverCarverSettings.RiverZone.Riverbed && prospectiveZone != RiverCarverSettings.RiverZone.Banks && prospectiveZone != RiverCarverSettings.RiverZone.ValleyFloor) {
+                prospectiveZone = RiverCarverSettings.RiverZone.ValleyFadeout;
             }
         }
 
+        // --- DESTRUCTIVE MUTATION GATE (Fix #3) ---
+        // Only commit data changes to the cell if our carving operations actually cut down the world
         if (finalHeight < cell.height) {
             cell.height = finalHeight;
+            cell.riverZone = prospectiveZone;
         }
-
-        updateValleyMask(prevX, prevZ, prevT, currX, currZ, currT, distSqToCurr, sqScaleFactor, targetBedFloor, cell);
     }
 
     private float carveZone1Riverbed(Cell cell, float currT, float distSqToCurr, float bedDepthOffset, float oceanHeightOffset, float sqScaleFactor, float targetWaterLevel, float widenMultiplier) {
@@ -281,11 +276,48 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float intactTerrace = Math.max(0.0F, terraceMask - (drainageMask * 1.5F));
         float terraceStrength = NoiseUtil.clamp(intactTerrace * 1.5F, 0.0F, 1.0F);
 
-        if (terraceStrength > 0.0F) {
-            float steppedProgress = (float) Math.round(progress * steps) / steps;
-            return NoiseUtil.lerp(progress, steppedProgress, terraceStrength * 0.65F);
+        // If terracing isn't influencing this cell, maintain the native slope gradient
+        if (terraceStrength <= 0.0F) {
+            return progress;
         }
-        return progress;
+
+        // Map the continuous linear progress into discrete step spaces
+        float scaledProgress = progress * steps;
+        float floor = (float) Math.floor(scaledProgress);
+        float fract = scaledProgress - floor; // Ranges from 0.0 to 1.0 within the current step
+
+        // --- GEOMORPHOLOGY & WEATHERING MODIFIERS ---
+        // High drainage causes the cliff to erode backward, making the cliff zone narrower
+        float baseCliffBias = 0.72F; // Default: Cliff face occupies the upper 28% of the step
+        float cliffBias = NoiseUtil.clamp(baseCliffBias - (drainageMask * 0.15F), 0.45F, 0.85F);
+
+        // High drainage washes eroded material downward, increasing the height of the talus pile
+        float baseTalusHeight = 0.15F; // Default: Talus accumulation takes up 15% of the step height
+        float talusHeight = NoiseUtil.clamp(baseTalusHeight + (drainageMask * 0.25F), 0.05F, 0.50F);
+
+        float steppedFract;
+        if (fract < cliffBias) {
+            // ZONE 1: Flat Terrace Tier leading into the Concave Talus Apron
+            float t = fract / cliffBias;
+
+            // A cubic curve (t^3) keeps the valley floor flat initially, then creates
+            // a perfect concave upward sweep mimicking loose rock accumulating at the base.
+            steppedFract = (float) Math.pow(t, 3.0F) * talusHeight;
+        } else {
+            // ZONE 2: The Cliff Face
+            float t = (fract - cliffBias) / (1.0F - cliffBias);
+
+            // Use a smoothstep (S-curve) to transition the cliff steepness out of the
+            // talus apron and gracefully roll over into the lip of the next upper terrace floor.
+            float smoothCliff = t * t * (3.0F - 2.0F * t);
+            steppedFract = NoiseUtil.lerp(talusHeight, 1.0F, smoothCliff);
+        }
+
+        // Reconstruct the modified step back into world space
+        float steppedProgress = (floor + steppedFract) / steps;
+
+        // Blend our hyper-realistic profile with the raw terrain based on local terrace strength
+        return NoiseUtil.lerp(progress, steppedProgress, terraceStrength * 0.85F);
     }
 
     private void updateValleyMask(float prevX, float prevZ, float prevT, float currX, float currZ, float currT, float distSqToCurr, float sqScaleFactor, float targetBedFloor, Cell cell) {
