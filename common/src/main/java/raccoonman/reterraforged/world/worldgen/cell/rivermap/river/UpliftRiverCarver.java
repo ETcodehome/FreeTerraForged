@@ -151,6 +151,8 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         // early exit guard if we're a cell outside the river influence
         if (currentLinearDist >= zone4Radius) return;
 
+        storeFlowDirection(cell, currentLinearDist, zone1Radius);
+
         // calculate the final cell heights
         float finalHeight = cell.height;
         if (currentLinearDist < zone1Radius) {
@@ -167,6 +169,22 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         if (finalHeight < cell.height) {
             cell.height = finalHeight;
             cell.riverZone = getRiverZoneTag(cell, currentLinearDist, zone1Radius, zone2Radius, zone3Radius);
+        }
+    }
+
+    private void storeFlowDirection(Cell cell, float currentLinearDist, float zone1Radius){
+        // Calculate the normalized downstream direction vector
+        float len = (float) Math.sqrt(this.river.dx * this.river.dx + this.river.dz * this.river.dz);
+        float dirX = this.river.dx / (len > 0 ? len : 1.0F);
+        float dirZ = this.river.dz / (len > 0 ? len : 1.0F);
+
+        // Compress the vector into a single byte angle to save memory
+        // Math.atan2 returns -PI to PI, map this to -128 to 127
+        byte flowAngle = (byte) Math.round(Math.atan2(dirZ, dirX) * 128.0 / Math.PI);
+
+        // Assign to cell if within the actual water zone (Zone 1)
+        if (currentLinearDist < zone1Radius) {
+            cell.flowAngle = flowAngle;
         }
     }
 

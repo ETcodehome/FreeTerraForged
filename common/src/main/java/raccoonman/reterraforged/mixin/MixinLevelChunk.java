@@ -10,6 +10,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.ProtoChunk;
 import raccoonman.reterraforged.world.worldgen.RTFChunk;
+import raccoonman.reterraforged.world.worldgen.IFlowFieldHolder;
 
 @Mixin(LevelChunk.class)
 public abstract class MixinLevelChunk implements RTFChunk {
@@ -21,5 +22,9 @@ public abstract class MixinLevelChunk implements RTFChunk {
 	public void init(ServerLevel serverLevel, ProtoChunk protoChunk, @Nullable LevelChunk.PostLoadProcessor postLoadProcessor, CallbackInfo callback) {
 		RTFChunk rtfChunk = (RTFChunk) protoChunk;
 		rtfChunk.getMaxHeight().ifPresent(this::setMaxHeight);
+
+		if (protoChunk instanceof IFlowFieldHolder protoHolder && this instanceof IFlowFieldHolder levelHolder) {
+			levelHolder.reterraforged$getFlowField().copyFrom(protoHolder.reterraforged$getFlowField());
+		}
 	}
 }
