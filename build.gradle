@@ -32,6 +32,9 @@ allprojects {
     repositories {
         maven { url "https://maven.shedaniel.me" }
         maven { url 'https://maven.minecraftforge.net/' }
+        maven { url "https://maven.architectury.dev/" }
+        maven { url "https://maven.fabricmc.net/" }
+        gradlePluginPortal()
     }
 
     tasks.withType(JavaCompile) {

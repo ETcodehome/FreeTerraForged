@@ -26,6 +26,7 @@
 		"MixinFloatyBoaty",
 		"MixinChunkSerializer",
 		"MixinBlock",
+		"MixinServerCommonPacketListenerImpl",
 		"BeardifierAccessor",
 		"LevelChunkSectionAccessor",
 		"terrablender.MixinParameterList",

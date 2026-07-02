@@ -11,6 +11,7 @@ dependencies {
     modImplementation "com.github.glitchfiend:TerraBlender-neoforge:${rootProject.minecraft_version}-${rootProject.terrablender_version}"
 	compileOnly "com.electronwill.night-config:toml:3.6.7"
 	//compileOnly "lithostitched-forge:1.0.0"
+    modApi "dev.architectury:architectury:${rootProject.architectury_version}"
 }
 
 repositories {

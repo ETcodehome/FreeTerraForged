@@ -185,6 +185,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         // Assign to cell if within the actual water zone (Zone 1)
         if (currentLinearDist < zone1Radius) {
             cell.flowAngle = flowAngle;
+            cell.hasFlow = true;
         }
     }
 

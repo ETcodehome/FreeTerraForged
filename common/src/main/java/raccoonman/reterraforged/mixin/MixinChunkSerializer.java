@@ -5,6 +5,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.ai.village.poi.PoiManager;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.chunk.ImposterProtoChunk; // Import this!
 import net.minecraft.world.level.chunk.ProtoChunk;
 import net.minecraft.world.level.chunk.storage.ChunkSerializer;
 import net.minecraft.world.level.chunk.storage.RegionStorageInfo;
@@ -17,7 +18,6 @@ import raccoonman.reterraforged.world.worldgen.IFlowFieldHolder;
 @Mixin(ChunkSerializer.class)
 public class MixinChunkSerializer {
 
-    // Hook into saving a chunk to disk
     @Inject(method = "write", at = @At("RETURN"))
     private static void injectSaveData(ServerLevel level, ChunkAccess chunk, CallbackInfoReturnable<CompoundTag> cir) {
         CompoundTag resultTag = cir.getReturnValue();
@@ -26,12 +26,21 @@ public class MixinChunkSerializer {
         }
     }
 
-    // Hook into loading a chunk from disk (Updated for 1.21.1 Mojang Mappings)
     @Inject(method = "read", at = @At("RETURN"))
     private static void injectLoadData(ServerLevel level, PoiManager poiManager, RegionStorageInfo regionStorageInfo, ChunkPos pos, CompoundTag tag, CallbackInfoReturnable<ProtoChunk> cir) {
-        ProtoChunk protoChunk = cir.getReturnValue();
-        if (protoChunk != null && protoChunk instanceof IFlowFieldHolder holder) {
-            holder.reterraforged$getFlowField().readFromNbt(tag);
+        ProtoChunk returnedChunk = cir.getReturnValue();
+        if (returnedChunk != null) {
+
+            // Fix: Strip off the wrapper if it's a fully generated chunk from disk!
+            ChunkAccess targetChunk = returnedChunk;
+            if (returnedChunk instanceof ImposterProtoChunk imposter) {
+                targetChunk = imposter.getWrapped();
+            }
+
+            // Now apply the NBT data to the real underlying chunk
+            if (targetChunk instanceof IFlowFieldHolder holder) {
+                holder.reterraforged$getFlowField().readFromNbt(tag);
+            }
         }
     }
 }

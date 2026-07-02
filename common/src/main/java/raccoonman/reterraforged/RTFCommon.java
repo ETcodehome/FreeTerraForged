@@ -25,6 +25,13 @@ import raccoonman.reterraforged.world.worldgen.structure.rule.StructureRule;
 import raccoonman.reterraforged.world.worldgen.structure.rule.StructureRules;
 import raccoonman.reterraforged.world.worldgen.surface.rule.RTFSurfaceRules;
 
+import dev.architectury.networking.NetworkManager;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
+import raccoonman.reterraforged.network.FlowFieldSyncPayload;
+import raccoonman.reterraforged.world.worldgen.IFlowFieldHolder;
+
 public class RTFCommon {
 	public static final String MOD_ID = "reterraforged";
 	public static final String LEGACY_MOD_ID = "terraforged";
@@ -50,6 +57,47 @@ public class RTFCommon {
 		RegistryUtil.createDataRegistry(RTFRegistries.NOISE, Noise.DIRECT_CODEC, false);
 		RegistryUtil.createDataRegistry(RTFRegistries.PRESET, Preset.DIRECT_CODEC, false);
 		RegistryUtil.createDataRegistry(RTFRegistries.STRUCTURE_RULE, StructureRule.DIRECT_CODEC, false);
+
+		// Register the payload codec and the Client-side receiver handler
+		NetworkManager.registerReceiver(
+				NetworkManager.Side.S2C, // Server-to-Client direction
+				FlowFieldSyncPayload.TYPE,
+				FlowFieldSyncPayload.CODEC,
+				(payload, context) -> {
+					// Queue the data execution safely on the main client thread
+					context.queue(() -> {
+						if (context.getPlayer().level() instanceof ClientLevel clientLevel) {
+							// Pull the local client-side chunk
+							ChunkAccess chunk = clientLevel.getChunk(payload.pos().x, payload.pos().z, ChunkStatus.FULL, false);
+
+							if (chunk == null) {
+								// CASE 1: Packet arrived too early! The client doesn't know this chunk exists yet.
+								System.out.println("[RTF-CLIENT] ERROR: Received river data for chunk " + payload.pos() + " but the client chunk isn't loaded yet!");
+							} else if (chunk instanceof IFlowFieldHolder holder) {
+								// Apply the real server bytes directly to the client's memory map
+								holder.reterraforged$getFlowField().loadRawGrid(payload.rawGrid());
+
+								// Count actual values to make absolutely sure the payload wasn't stripped during serialization
+								int nonZeroBytes = 0;
+								for (byte b : holder.reterraforged$getFlowField().getRawGrid()) {
+									if (b != 0) nonZeroBytes++;
+								}
+
+								// CASE 2: Success! Check if the client-side object actually registers the rivers
+								System.out.println("[RTF-CLIENT] SUCCESS: Applied grid to client chunk " + payload.pos() +
+										" | Has Rivers: " + holder.reterraforged$getFlowField().hasRivers() +
+										" | Non-Zero Cells: " + nonZeroBytes);
+							} else {
+								// CASE 3: Interface breakdown on client
+								System.out.println("[RTF-CLIENT] ERROR: Chunk found at " + payload.pos() + " but it fails 'instanceof IFlowFieldHolder' on the client side!");
+							}
+						} else {
+							System.out.println("[RTF-CLIENT] ERROR: Packet handler context player level is not a ClientLevel.");
+						}
+					});
+				}
+		);
+
 	}
 
 	public static ResourceLocation location(String name) {

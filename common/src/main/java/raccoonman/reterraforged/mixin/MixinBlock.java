@@ -21,22 +21,14 @@ public class MixinBlock {
 
     @Inject(method = "animateTick", at = @At("HEAD"))
     private void spawnRiverParticles(BlockState state, Level level, BlockPos pos, RandomSource random, CallbackInfo ci) {
-        // Guardrail: Only run on the client side
         if (!level.isClientSide()) {
             return;
         }
 
-        // 1. FAST PERFORMANCE CHECK: Is this block a LiquidBlock?
-        // This ensures non-fluid blocks exit immediately with zero performance cost.
         if (state.getBlock() instanceof LiquidBlock) {
-
-            // 2. Is this specific liquid water?
             if (state.getFluidState().is(FluidTags.WATER)) {
-
-                // 3. Only spawn particles if there is air above the water surface
                 if (level.getBlockState(pos.above()).isAir()) {
 
-                    // 4. Fetch the client-side chunk instance
                     ChunkAccess chunk = level.getChunk(pos);
                     if (chunk instanceof IFlowFieldHolder holder) {
                         ChunkFlowField flowField = holder.reterraforged$getFlowField();
@@ -45,34 +37,27 @@ public class MixinBlock {
                         int localZ = pos.getZ() & 15;
                         byte packedAngle = flowField.getAngle(localX, localZ);
 
-                        // =================================================================
-                        // TEMPORARY TESTING HACK
-                        // Forces particles to render on ALL water blocks until the
-                        // network packet logic is fully wired up.
-                        if (packedAngle == 0) packedAngle = (byte) 32;
-                        // =================================================================
-
                         if (packedAngle != 0) {
-                            // 5. Convert the unsigned byte wrapper map back to Radians
+                            // Convert the unsigned byte wrapper map back to Radians
                             double radians = (packedAngle & 0xFF) * (Math.PI / 128.0);
 
-                            // 6. Calculate downstream physics vectors
-                            double speed = 0.14;
+                            // WATER_WAKE particles perform best at roughly 0.05 - 0.12 speed
+                            double speed = 0.20;
                             double vx = Math.cos(radians) * speed;
                             double vz = Math.sin(radians) * speed;
 
                             // Introduce minor variance so foam lines look organic
-                            vx += (random.nextDouble() - 0.5) * 0.02;
-                            vz += (random.nextDouble() - 0.5) * 0.02;
+                            vx += (random.nextDouble() - 0.5) * 0.01;
+                            vz += (random.nextDouble() - 0.5) * 0.01;
 
-                            // 7. Spawn bright green village sparkles moving downstream on the surface
+                            // Spawn the directional wake particles flat on the water surface
                             level.addParticle(
-                                    ParticleTypes.HAPPY_VILLAGER,
+                                    ParticleTypes.FLAME,
                                     pos.getX() + random.nextDouble(),
-                                    pos.getY() + 0.95,
+                                    pos.getY() + 0.88,
                                     pos.getZ() + random.nextDouble(),
                                     vx,
-                                    0.01,
+                                    0.0, // Keep vertical velocity flat so it stays on the surface
                                     vz
                             );
                         }
