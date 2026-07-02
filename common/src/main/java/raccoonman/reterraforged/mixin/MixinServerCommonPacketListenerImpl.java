@@ -45,19 +45,12 @@ public abstract class MixinServerCommonPacketListenerImpl {
                     }
 
                     if (flowField.hasRivers()) {
-                        System.out.println("[RTF] SUCCESS: Syncing river fields to " + player.getScoreboardName() + " at " + chunkX + ", " + chunkZ);
                         NetworkManager.sendToPlayer(
                                 player,
                                 new FlowFieldSyncPayload(chunk.getPos(), flowField.getRawGrid())
                         );
-                    } else {
-                        System.out.println("[RTF] WARN: Chunk found at " + chunkX + ", " + chunkZ + " but river grid was empty.");
                     }
-                } else {
-                    System.out.println("[RTF] ERROR: Chunk class (" + chunk.getClass().getSimpleName() + ") does not implement IFlowFieldHolder!");
                 }
-            } else {
-                System.out.println("[RTF] ERROR: Failed to acquire chunk reference at " + chunkX + ", " + chunkZ + " during network dispatch.");
             }
         }
     }

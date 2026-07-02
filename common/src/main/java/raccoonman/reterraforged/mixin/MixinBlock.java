@@ -1,6 +1,7 @@
 package raccoonman.reterraforged.mixin;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.util.RandomSource;
@@ -21,60 +22,71 @@ public class MixinBlock {
 
     @Inject(method = "animateTick", at = @At("HEAD"))
     private void spawnRiverParticles(BlockState state, Level level, BlockPos pos, RandomSource random, CallbackInfo ci) {
-        if (!level.isClientSide()) {
-            return;
-        }
 
-        if (state.getBlock() instanceof LiquidBlock) {
-            if (state.getFluidState().is(FluidTags.WATER)) {
-                if (level.getBlockState(pos.above()).isAir()) {
+        // Guard Clauses & Throttling
+        if (!level.isClientSide()) return;
+        if (random.nextFloat() > 0.30f) return; // abandon 70%
+        if (!(state.getBlock() instanceof LiquidBlock)) return;
+        if (!state.getFluidState().is(FluidTags.WATER)) return;
+        if (!level.getBlockState(pos.above()).isAir()) return;
 
-                    ChunkAccess chunk = level.getChunk(pos);
-                    if (chunk instanceof IFlowFieldHolder holder) {
-                        ChunkFlowField flowField = holder.reterraforged$getFlowField();
+        ChunkAccess chunk = level.getChunk(pos);
+        if (!(chunk instanceof IFlowFieldHolder holder)) return;
 
-                        int localX = pos.getX() & 15;
-                        int localZ = pos.getZ() & 15;
-                        byte packedAngle = flowField.getAngle(localX, localZ);
+        ChunkFlowField flowField = holder.reterraforged$getFlowField();
+        int localX = pos.getX() & 15;
+        int localZ = pos.getZ() & 15;
+        byte packedAngle = flowField.getAngle(localX, localZ);
 
-                        if (packedAngle != 0) {
-                            // Convert the unsigned byte wrapper map back to Radians
-                            double radians = (packedAngle & 0xFF) * (Math.PI / 128.0);
+        if (packedAngle != 0) {
+            // Unpack angle to radians
+            double radians = (packedAngle & 0xFF) * (Math.PI / 128.0);
 
-                            // Dynamic Speed: Randomize slightly within the sweet spot
-                            double speed = 0.03 + (random.nextDouble() * 0.02);
+            // Dynamic Sine-Wave Weaving
+            // Blending world space and client game time creates an organic, moving current filament
+            long gameTime = level.getGameTime();
+            double wavePhase = (pos.getX() * 0.4 + pos.getZ() * 0.4) + (gameTime * 0.15);
+            double waveDisplacement = Math.sin(wavePhase) * 0.03;
 
-                            // Forward velocity vector based on flow direction
-                            double forwardVx = Math.cos(radians) * speed;
-                            double forwardVz = Math.sin(radians) * speed;
+            // Base Vectors (Forward Flow and Perpendicular Drift)
+            double speed = 0.025 + (random.nextDouble() * 0.02);
+            double forwardVx = Math.cos(radians) * speed;
+            double forwardVz = Math.sin(radians) * speed;
 
-                            // 2. Perpendicular Drift: Adds lateral spread so foam isn't a perfect, rigid line
-                            double driftSpeed = (random.nextDouble() - 0.5) * 0.04;
-                            double driftVx = -Math.sin(radians) * driftSpeed;
-                            double driftVz = Math.cos(radians) * driftSpeed;
+            // Lateral drift combined with our sine-wave wiggle
+            double lateralDrift = ((random.nextDouble() - 0.5) * 0.02) + waveDisplacement;
+            double driftVx = -Math.sin(radians) * lateralDrift;
+            double driftVz = Math.cos(radians) * lateralDrift;
 
-                            // Combine vectors for final velocity
-                            double vx = forwardVx + driftVx;
-                            double vz = forwardVz + driftVz;
+            double vx = forwardVx + driftVx;
+            double vz = forwardVz + driftVz;
 
-                            // 3. Dynamic Height: Calculate exact water height to prevent hovering/clipping
-                            float fluidHeight = state.getFluidState().getHeight(level, pos);
-                            double particleY = pos.getY() + fluidHeight + 0.02 + 0.25; // +0.02 to prevent Z-fighting on the surface
+            // Particle Type Aesthetic Variety Pool
+            ParticleOptions chosenParticle;
+            float roll = random.nextFloat();
 
-                            // Spawn the directional wake particles flat on the water surface
-                            level.addParticle(
-                                    ParticleTypes.FISHING,
-                                    pos.getX() + random.nextDouble(),
-                                    particleY,
-                                    pos.getZ() + random.nextDouble(),
-                                    vx,
-                                    0.0, // Strict 0.0 ensures it glides on the X/Z plane
-                                    vz
-                            );
-                        }
-                    }
-                }
+            if (roll < 0.45f) {
+                chosenParticle = ParticleTypes.FISHING;
+            } else if (roll < 0.75f) {
+                chosenParticle = ParticleTypes.DOLPHIN;
+            } else {
+                chosenParticle = ParticleTypes.SPLASH;
             }
+
+            // Dynamic Surface Snapping
+            float fluidHeight = state.getFluidState().getHeight(level, pos);
+            double particleY = pos.getY() + fluidHeight + 0.15;
+
+            // Spawn the finalized dynamic particle
+            level.addParticle(
+                chosenParticle,
+                pos.getX() + random.nextDouble(),
+                particleY,
+                pos.getZ() + random.nextDouble(),
+                vx,
+                0.0,
+                vz
+            );
         }
     }
 }

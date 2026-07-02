@@ -20,26 +20,7 @@ public abstract class MixinLevelChunk {
 	)
 	private void bridgeFlowFieldOnChunkPromotion(ServerLevel serverLevel, ProtoChunk protoChunk, @Nullable LevelChunk.PostLoadProcessor postLoadProcessor, CallbackInfo ci) {
 		if ((Object) protoChunk instanceof IFlowFieldHolder protoHolder && (Object) this instanceof IFlowFieldHolder levelHolder) {
-
-			// Check state BEFORE copying
-			boolean protoHadRivers = protoHolder.reterraforged$getFlowField().hasRivers();
-
-			// Copy the data over
 			levelHolder.reterraforged$getFlowField().copyFrom(protoHolder.reterraforged$getFlowField());
-
-			// Check state AFTER copying
-			boolean levelHasRivers = levelHolder.reterraforged$getFlowField().hasRivers();
-
-			// Count actual non-zero values to see if data is real
-			int nonZeroBytes = 0;
-			for (byte b : levelHolder.reterraforged$getFlowField().getRawGrid()) {
-				if (b != 0) nonZeroBytes++;
-			}
-
-			System.out.println("[RTF-DEBUG] Promotion at " + protoChunk.getPos() +
-					" | Proto Has Rivers: " + protoHadRivers +
-					" | Level Has Rivers: " + levelHasRivers +
-					" | Non-Zero Cells: " + nonZeroBytes);
 		}
 	}
 }

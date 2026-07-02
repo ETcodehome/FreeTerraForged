@@ -69,30 +69,10 @@ public class RTFCommon {
 						if (context.getPlayer().level() instanceof ClientLevel clientLevel) {
 							// Pull the local client-side chunk
 							ChunkAccess chunk = clientLevel.getChunk(payload.pos().x, payload.pos().z, ChunkStatus.FULL, false);
-
-							if (chunk == null) {
-								// CASE 1: Packet arrived too early! The client doesn't know this chunk exists yet.
-								System.out.println("[RTF-CLIENT] ERROR: Received river data for chunk " + payload.pos() + " but the client chunk isn't loaded yet!");
-							} else if (chunk instanceof IFlowFieldHolder holder) {
+							if (chunk != null && chunk instanceof IFlowFieldHolder holder) {
 								// Apply the real server bytes directly to the client's memory map
 								holder.reterraforged$getFlowField().loadRawGrid(payload.rawGrid());
-
-								// Count actual values to make absolutely sure the payload wasn't stripped during serialization
-								int nonZeroBytes = 0;
-								for (byte b : holder.reterraforged$getFlowField().getRawGrid()) {
-									if (b != 0) nonZeroBytes++;
-								}
-
-								// CASE 2: Success! Check if the client-side object actually registers the rivers
-								System.out.println("[RTF-CLIENT] SUCCESS: Applied grid to client chunk " + payload.pos() +
-										" | Has Rivers: " + holder.reterraforged$getFlowField().hasRivers() +
-										" | Non-Zero Cells: " + nonZeroBytes);
-							} else {
-								// CASE 3: Interface breakdown on client
-								System.out.println("[RTF-CLIENT] ERROR: Chunk found at " + payload.pos() + " but it fails 'instanceof IFlowFieldHolder' on the client side!");
 							}
-						} else {
-							System.out.println("[RTF-CLIENT] ERROR: Packet handler context player level is not a ClientLevel.");
 						}
 					});
 				}
