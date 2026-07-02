@@ -5,7 +5,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.ai.village.poi.PoiManager;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.ChunkAccess;
-import net.minecraft.world.level.chunk.ImposterProtoChunk; // Import this!
+import net.minecraft.world.level.chunk.ImposterProtoChunk;
 import net.minecraft.world.level.chunk.ProtoChunk;
 import net.minecraft.world.level.chunk.storage.ChunkSerializer;
 import net.minecraft.world.level.chunk.storage.RegionStorageInfo;
@@ -31,13 +31,13 @@ public class MixinChunkSerializer {
         ProtoChunk returnedChunk = cir.getReturnValue();
         if (returnedChunk != null) {
 
-            // Fix: Strip off the wrapper if it's a fully generated chunk from disk!
+            // Strip off the wrapper if it's a fully generated chunk from disk
             ChunkAccess targetChunk = returnedChunk;
             if (returnedChunk instanceof ImposterProtoChunk imposter) {
                 targetChunk = imposter.getWrapped();
             }
 
-            // Now apply the NBT data to the real underlying chunk
+            // Apply the NBT data to the real underlying chunk
             if (targetChunk instanceof IFlowFieldHolder holder) {
                 holder.reterraforged$getFlowField().readFromNbt(tag);
             }

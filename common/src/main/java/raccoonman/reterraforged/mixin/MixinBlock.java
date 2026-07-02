@@ -41,23 +41,34 @@ public class MixinBlock {
                             // Convert the unsigned byte wrapper map back to Radians
                             double radians = (packedAngle & 0xFF) * (Math.PI / 128.0);
 
-                            // WATER_WAKE particles perform best at roughly 0.05 - 0.12 speed
-                            double speed = 0.20;
-                            double vx = Math.cos(radians) * speed;
-                            double vz = Math.sin(radians) * speed;
+                            // Dynamic Speed: Randomize slightly within the sweet spot
+                            double speed = 0.03 + (random.nextDouble() * 0.02);
 
-                            // Introduce minor variance so foam lines look organic
-                            vx += (random.nextDouble() - 0.5) * 0.01;
-                            vz += (random.nextDouble() - 0.5) * 0.01;
+                            // Forward velocity vector based on flow direction
+                            double forwardVx = Math.cos(radians) * speed;
+                            double forwardVz = Math.sin(radians) * speed;
+
+                            // 2. Perpendicular Drift: Adds lateral spread so foam isn't a perfect, rigid line
+                            double driftSpeed = (random.nextDouble() - 0.5) * 0.04;
+                            double driftVx = -Math.sin(radians) * driftSpeed;
+                            double driftVz = Math.cos(radians) * driftSpeed;
+
+                            // Combine vectors for final velocity
+                            double vx = forwardVx + driftVx;
+                            double vz = forwardVz + driftVz;
+
+                            // 3. Dynamic Height: Calculate exact water height to prevent hovering/clipping
+                            float fluidHeight = state.getFluidState().getHeight(level, pos);
+                            double particleY = pos.getY() + fluidHeight + 0.02 + 0.25; // +0.02 to prevent Z-fighting on the surface
 
                             // Spawn the directional wake particles flat on the water surface
                             level.addParticle(
-                                    ParticleTypes.FLAME,
+                                    ParticleTypes.FISHING,
                                     pos.getX() + random.nextDouble(),
-                                    pos.getY() + 0.88,
+                                    particleY,
                                     pos.getZ() + random.nextDouble(),
                                     vx,
-                                    0.0, // Keep vertical velocity flat so it stays on the surface
+                                    0.0, // Strict 0.0 ensures it glides on the X/Z plane
                                     vz
                             );
                         }
