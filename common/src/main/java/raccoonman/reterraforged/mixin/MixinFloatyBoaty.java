@@ -92,7 +92,7 @@ public abstract class MixinFloatyBoaty {
                         }
 
                         // Apply the regular incremental push force
-                        double currentForce = 0.005;
+                        double currentForce = 0.006;
                         motionX += targetX * currentForce;
                         motionZ += targetZ * currentForce;
 
