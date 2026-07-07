@@ -106,7 +106,7 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
 
                 int scanTopY = Math.max(localWaterY, currentFloorHeight);
                 int scanBottomY = Math.min(localWaterY, currentFloorHeight) - 8;
-                scanBottomY = Math.max(scanBottomY, level.getMinBuildHeight() + 16);
+                scanBottomY = Math.max(scanBottomY, levels.scale(levels.water));
 
                 // CACHE 3: structural state once per X/Z column using heightmap
                 BlockState structuralState = null;
@@ -126,6 +126,7 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
                 }
 
                 for (int y = scanTopY; y >= scanBottomY; y--) {
+
                     currentPos.set(blockX, y, blockZ);
                     BlockState currentState = level.getBlockState(currentPos);
 
