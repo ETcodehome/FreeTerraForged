@@ -22,7 +22,6 @@
 		"MixinLevelChunk",
 		"MixinImposterProtoChunk",
 		"MixinNoiseBasedChunkGenerator",
-		"MixinSculkPatchFeature",
 		"MixinFloatyBoaty",
 		"MixinChunkSerializer",
 		"MixinBlock",
