@@ -82,6 +82,12 @@ abstract class MixinNoiseBasedChunkGenerator extends ChunkGenerator {
 		)
 	)
     public int fillFromNoise(NoiseSettings settings, Blender blender, RandomState randomState, StructureManager structureManager, ChunkAccess chunk) {
+
+		RTFRandomState rtfRandomState = (RTFRandomState) (Object) randomState;
+		if (rtfRandomState.generatorContext() == null) {
+			return settings.height();
+		}
+
 		RTFChunk rtfChunk = (RTFChunk) chunk;
 		int maxHeight = rtfChunk.getMaxHeight().orElseGet(settings::height);
 		maxHeight = MaxHeightUtil.getMaxHeight(chunk.getPos(), maxHeight, this.settings.value(), settings, structureManager);
@@ -93,6 +99,12 @@ abstract class MixinNoiseBasedChunkGenerator extends ChunkGenerator {
 		at = @At("HEAD")
 	)
     private void createNoiseChunk(ChunkAccess chunkAccess, StructureManager structureManager, Blender blender, RandomState randomState, CallbackInfoReturnable<NoiseChunk> callback) {
+
+		RTFRandomState rtfRandomState = (RTFRandomState) (Object) randomState;
+		if (rtfRandomState.generatorContext() == null) {
+			return;
+		}
+
 		ActiveChunk.set(chunkAccess);
 	}
 
