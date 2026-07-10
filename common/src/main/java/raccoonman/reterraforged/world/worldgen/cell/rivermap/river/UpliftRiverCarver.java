@@ -154,8 +154,11 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         rivuletShape = rivuletShape * rivuletShape * rivuletShape;
         float drainageMask = (gullyShape * 0.7F) + (rivuletShape * 0.3F);
 
+        // Calculate dynamic depth multiplier and apply downstream depth progression logic
         float dynamicDepthMult = 1.0F + (depthVar * 0.25F);
-        float bedDepthOffset = this.baseBedDepthOffset * dynamicDepthMult;
+        float depthProgress = NoiseUtil.clamp(currT, 0.0F, 1.0F);
+        float bedDepthOffset = this.baseBedDepthOffset * dynamicDepthMult * depthProgress;
+
         float targetValleyFloor = targetWaterLevel + this.bankHeightOffset;
         float valleyFloorBumpiness = ((terraceMask * 0.4F) - (drainageMask * 0.6F)) * this.levels.unit;
         float actualValleyFloorHeight = targetValleyFloor + valleyFloorBumpiness;
@@ -163,7 +166,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         // Calculate the final cell heights
         float finalHeight = cell.height;
         if (currentLinearDist < zone1Radius) {
-            finalHeight = carveZone1Riverbed(cell, currT, distSqToCurr, bedDepthOffset, levels.water, sqScaleFactor, targetWaterLevel, lakeMultiplier);
+            finalHeight = carveZone1Riverbed(cell, currT, distSqToCurr, bedDepthOffset, sqScaleFactor, targetWaterLevel, lakeMultiplier, flatnessFactor, depthVar);
         } else if (currentLinearDist < zone2Radius) {
             finalHeight = carveZone2BankStep(currentLinearDist, zone1Radius, zone2Radius, targetWaterLevel, actualValleyFloorHeight, terraceMask, drainageMask);
         } else if (currentLinearDist < zone3Radius) {
@@ -228,15 +231,45 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         return widenMultiplier;
     }
 
-    private float carveZone1Riverbed(Cell cell, float currT, float distSqToCurr, float bedDepthOffset, float oceanHeightOffset, float sqScaleFactor, float targetWaterLevel, float widenMultiplier) {
+    private float carveZone1Riverbed(Cell cell, float currT, float distSqToCurr, float bedDepthOffset, float sqScaleFactor, float targetWaterLevel, float widenMultiplier, float flatnessFactor, float depthVar) {
         float effectiveScaleFactor = sqScaleFactor * (widenMultiplier * widenMultiplier);
         float bedInfluence = this.getDistanceAlpha(currT, distSqToCurr, this.bedWidth, effectiveScaleFactor);
         bedInfluence = bedInfluence * bedInfluence * (3.0F - 2.0F * bedInfluence);
 
-        float lakeDepthMulti = 0.35F + (lakeConfig.depth / 50.0F);
-        float dynamicDepthOffset = bedDepthOffset * (1.0F + (widenMultiplier - 1.0F) * lakeDepthMulti);
+        // 1. Establish a baseline floor that naturally undulates between ~2.0 and ~2.6 blocks.
+        // This ensures headwaters and shallows have organic ripples/sandbars instead of a flat sheet.
+        float shallowNoiseFloor = (2.3F + (depthVar * 0.3F)) * this.levels.unit;
 
-        float bedHeight = ContinentalHydrology.getWeightedWaterHeight(cell.waterTable) - (dynamicDepthOffset * bedInfluence) + oceanHeightOffset;
+        // 2. Base deep-water capability (driven by downstream progress)
+        float progressiveDepth = bedDepthOffset;
+
+        // Repurpose depth noise to ensure lake basins break out of uniform parameters natively
+        if (widenMultiplier > 1.0F) {
+            float lakeDepthMulti = 0.35F + (lakeConfig.depth / 50.0F);
+            float lakeVariance = 1.0F + (depthVar * 0.40F);
+            progressiveDepth = progressiveDepth * (1.0F + (widenMultiplier - 1.0F) * lakeDepthMulti * lakeVariance);
+        }
+
+        // 3. Combine the base floor with progressive depth, scaled by the regional flatness.
+        // Low flatness = channel is compacted tightly against our textured shallow floor.
+        // High flatness = channel expands deeply away from the baseline.
+        float finalizedDepth = shallowNoiseFloor + (progressiveDepth * flatnessFactor);
+
+        // 4. Inject structural deep-pocket trenches specifically when flatness factor is high
+        if (flatnessFactor > 0.4F) {
+            float flatnessIntensity = (flatnessFactor - 0.4F) / 0.6F;
+            float trenchNoise = (depthVar * 0.5F + 0.5F); // Map signed noise safely to [0.0, 1.0]
+            float deepPocketBonus = flatnessIntensity * trenchNoise * 3.5F * this.levels.unit * currT;
+            finalizedDepth += deepPocketBonus;
+        }
+
+        // Hard protective structural guard to catch extreme negative noise spikes
+        float absoluteFloor = 2.0F * this.levels.unit;
+        if (finalizedDepth < absoluteFloor) {
+            finalizedDepth = absoluteFloor;
+        }
+
+        float bedHeight = targetWaterLevel - (finalizedDepth * bedInfluence);
 
         cell.moisture = 1.0F;
         this.tag(cell, targetWaterLevel);
