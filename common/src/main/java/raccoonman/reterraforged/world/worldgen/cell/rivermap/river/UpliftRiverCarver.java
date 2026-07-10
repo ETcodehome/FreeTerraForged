@@ -1,6 +1,5 @@
 package raccoonman.reterraforged.world.worldgen.cell.rivermap.river;
 
-import java.util.Random;
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
@@ -38,6 +37,11 @@ public class UpliftRiverCarver implements RTFRiverCarver {
     private Noise lakeWarpNoise;
     public LakeConfig lakeConfig;
     private boolean isUpliftContinent;
+
+    // Precomputed immutable constants to alleviate CPU overhead per cell
+    private final float bankHeightOffset;
+    private final float baseBedDepthOffset;
+    private final float zone2WidthFactor;
 
     public UpliftRiverCarver(River river, RiverWarp warp, RiverConfig config, RiverCarverSettings settings, Levels levels, LakeConfig lakeConfig, boolean isUpliftContinent) {
         this.fade = settings.fadeIn;
@@ -85,76 +89,81 @@ public class UpliftRiverCarver implements RTFRiverCarver {
 
         this.lakeConfig = lakeConfig;
         this.isUpliftContinent = isUpliftContinent;
+
+        // Calculate constants once during instantiation
+        this.bankHeightOffset = config.maxBankHeight - config.minBankHeight;
+        this.baseBedDepthOffset = levels.water - config.bedHeight;
+        this.zone2WidthFactor = this.bankHeightOffset / levels.unit;
     }
 
     @Override
     public void carve(Cell cell, float prevX, float prevZ, float prevT, float currX, float currZ, float currT) {
 
-        // fixed reference values
+        // Fixed reference values
         float distSqToCurr = this.getDistance2(currX, currZ, currT);
         float currentLinearDist = (float) Math.sqrt(distSqToCurr);
-        float shrinkFactor = NoiseUtil.clamp(currT * this.fadeInv, 0.0F, 1.0F);
         float flatnessInput = isUpliftContinent ? cell.waterTable : currT;
         float flatnessFactor = NoiseUtil.clamp(ContinentalHydrology.getFlatnessFactor(flatnessInput), 0.0F, 1.0F);
         float scaleFactor = 1.0F + 0.75F * flatnessFactor;
         float sqScaleFactor = scaleFactor * scaleFactor;
 
-        // noise sampling
+        // Step 1: Sample ONLY layout-critical noise arrays to determine structural boundaries
         float widthVar = this.widthNoise.compute(currX, currZ, 8241);
-        float depthVar = this.depthNoise.compute(currX, currZ, 3912);
-        float terraceMask = this.terraceNoise.compute(currX, currZ, 5510);
         float asymmetry = this.asymmetryNoise.compute(currX, currZ, 1193);
         float valleyPinchVar = this.valleyPinchNoise.compute(currX, currZ, 6204) * 2.0F;
 
-        // always run mask logic to ensure clean falloffs
+        // Always run mask logic to ensure clean falloffs
         updateValleyMask(prevX, prevZ, prevT, currT, distSqToCurr, sqScaleFactor, cell);
 
-        // drainage falloffs
-        float gullyRaw = this.gullyNoise.compute(currX, currZ, 9876);
-        float gullyShape = 1.0F - Math.abs(gullyRaw);
-        gullyShape *= gullyShape;
-        float rivuletRaw = this.rivuletNoise.compute(currX, currZ, 5432);
-        float rivuletShape = 1.0F - Math.abs(rivuletRaw);
-        rivuletShape = rivuletShape * rivuletShape * rivuletShape;
-        float drainageMask = (gullyShape * 0.7F) + (rivuletShape * 0.3F);
-
-        // width falloffs
+        // Compute layout parameters
         float dynamicWidthMult = 1.0F + (widthVar * 0.35F);
-        float dynamicDepthMult = 1.0F + (depthVar * 0.25F);
         float sideBias = 1.0F + (asymmetry * 0.4F);
         float valleyPinchMultiplier = NoiseUtil.clamp(1.0F + valleyPinchVar, 0.05F, 1.95F);
 
-        // target elevations
-        float oceanHeightOffset = levels.water;
-        float targetWaterLevel = ContinentalHydrology.getWeightedWaterHeight(cell.waterTable) + oceanHeightOffset;
-        float baseBedDepthOffset = oceanHeightOffset - config.bedHeight;
-        float bedDepthOffset = baseBedDepthOffset * dynamicDepthMult;
-        float bankHeightOffset = (config.maxBankHeight - config.minBankHeight);
-        float targetValleyFloor = targetWaterLevel + bankHeightOffset;
-        float discrepancyScale = 1.0F + (levels.scale(cell.height - targetWaterLevel)) / 100.0F;
-        float valleyFloorBumpiness = ((terraceMask * 0.4F) - (drainageMask * 0.6F)) * this.levels.unit;
-        float actualValleyFloorHeight = targetValleyFloor + valleyFloorBumpiness;
-
-        // Zone calculations
+        // Zone radius calculations
         float biasedScale = sqScaleFactor * dynamicWidthMult * sideBias;
         float zone1Radius = (float) Math.sqrt(this.getScaledSize(currT, this.bedWidth) * biasedScale);
         float lakeMultiplier = getLakeMultiplier(cell, currT, currX, currZ, flatnessFactor);
         zone1Radius *= lakeMultiplier;
-        float zone2Width = (config.maxBankHeight - config.minBankHeight) / this.levels.unit * biasedScale;
+
+        float zone2Width = this.zone2WidthFactor * biasedScale;
         float zone2Radius = zone1Radius + zone2Width;
         float unshrunkZone3BaseWidth = config.bankWidth * dynamicWidthMult * valleyPinchMultiplier;
+        float shrinkFactor = NoiseUtil.clamp(currT * this.fadeInv, 0.0F, 1.0F);
         float zone3BaseWidth = unshrunkZone3BaseWidth * shrinkFactor;
         float zone3Width = zone3BaseWidth * shrinkFactor;
         float zone3Radius = zone2Radius + zone3Width;
-        float zone4Radius = zone3Radius + (unshrunkZone3BaseWidth * (4 + discrepancyScale));
 
-        // early exit guard if we're a cell outside the river influence
+        float targetWaterLevel = ContinentalHydrology.getWeightedWaterHeight(cell.waterTable) + levels.water;
+        float discrepancyScale = 1.0F + (levels.scale(cell.height - targetWaterLevel)) / 100.0F;
+        float zone4Radius = zone3Radius + (unshrunkZone3BaseWidth * (4.0F + discrepancyScale));
+
+        // Step 2: Early Exit Guard. If outside the maximum radius, skip the remaining expensive operations
         if (currentLinearDist >= zone4Radius) return;
 
-        // calculate the final cell heights
+        // Step 3: Defer remaining heavy noise evaluations until we are guaranteed to modify the cell
+        float depthVar = this.depthNoise.compute(currX, currZ, 3912);
+        float terraceMask = this.terraceNoise.compute(currX, currZ, 5510);
+        float gullyRaw = this.gullyNoise.compute(currX, currZ, 9876);
+        float rivuletRaw = this.rivuletNoise.compute(currX, currZ, 5432);
+
+        // Drainage calculation adjustments
+        float gullyShape = 1.0F - Math.abs(gullyRaw);
+        gullyShape *= gullyShape;
+        float rivuletShape = 1.0F - Math.abs(rivuletRaw);
+        rivuletShape = rivuletShape * rivuletShape * rivuletShape;
+        float drainageMask = (gullyShape * 0.7F) + (rivuletShape * 0.3F);
+
+        float dynamicDepthMult = 1.0F + (depthVar * 0.25F);
+        float bedDepthOffset = this.baseBedDepthOffset * dynamicDepthMult;
+        float targetValleyFloor = targetWaterLevel + this.bankHeightOffset;
+        float valleyFloorBumpiness = ((terraceMask * 0.4F) - (drainageMask * 0.6F)) * this.levels.unit;
+        float actualValleyFloorHeight = targetValleyFloor + valleyFloorBumpiness;
+
+        // Calculate the final cell heights
         float finalHeight = cell.height;
         if (currentLinearDist < zone1Radius) {
-            finalHeight = carveZone1Riverbed(cell, currT, distSqToCurr, bedDepthOffset, oceanHeightOffset, sqScaleFactor, targetWaterLevel, lakeMultiplier);
+            finalHeight = carveZone1Riverbed(cell, currT, distSqToCurr, bedDepthOffset, levels.water, sqScaleFactor, targetWaterLevel, lakeMultiplier);
         } else if (currentLinearDist < zone2Radius) {
             finalHeight = carveZone2BankStep(currentLinearDist, zone1Radius, zone2Radius, targetWaterLevel, actualValleyFloorHeight, terraceMask, drainageMask);
         } else if (currentLinearDist < zone3Radius) {
@@ -216,7 +225,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
             distanceMask = distanceMask * distanceMask * (3.0F - 2.0F * distanceMask);
             widenMultiplier = 1.0F + (flatnessFactor * organicWarpFactor * distanceMask);
         }
-        return widenMultiplier; // no op
+        return widenMultiplier;
     }
 
     private float carveZone1Riverbed(Cell cell, float currT, float distSqToCurr, float bedDepthOffset, float oceanHeightOffset, float sqScaleFactor, float targetWaterLevel, float widenMultiplier) {
@@ -330,8 +339,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
 
         riverSeed ^= plateauIndex * 0x5DEECE66DL;
 
-        Random selectionRand = new Random(riverSeed);
-        return selectionRand.nextFloat() < config.chance;
+        return getDeterministicFloat(riverSeed) < config.chance;
     }
 
     private float getLakeScaleForPlateau(int plateauIndex, float minScale, float maxScale) {
@@ -341,8 +349,21 @@ public class UpliftRiverCarver implements RTFRiverCarver {
 
         riverSeed ^= plateauIndex * 0x2545F4914L;
 
-        Random scaleRand = new Random(riverSeed);
-        return minScale + scaleRand.nextFloat() * (maxScale - minScale);
+        return minScale + getDeterministicFloat(riverSeed) * (maxScale - minScale);
+    }
+
+    /**
+     * A stateless, high-quality mixing hash function that maps a long seed
+     * to a pseudo-random uniform float in the range [0.0f, 1.0f).
+     * Eliminates object allocation completely.
+     */
+    private static float getDeterministicFloat(long seed) {
+        seed ^= (seed >>> 33);
+        seed *= 0xff51afd7ed558ccdL;
+        seed ^= (seed >>> 33);
+        seed *= 0xc4ceb9fe1a85ec53L;
+        seed ^= (seed >>> 33);
+        return (float) (seed & 0xFFFFFF) / 16777216.0F;
     }
 
     @Override
