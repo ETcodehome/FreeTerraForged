@@ -104,8 +104,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float currentLinearDist = (float) Math.sqrt(distSqToCurr);
         float flatnessInput = isUpliftContinent ? cell.waterTable : currT;
         float flatnessFactor = NoiseUtil.clamp(ContinentalHydrology.getFlatnessFactor(flatnessInput), 0.0F, 1.0F);
-        float scaleFactor = 1.0F + 0.75F * flatnessFactor;
-        float sqScaleFactor = scaleFactor * scaleFactor;
+        float scaleFactor = 1.0F;
 
         // Step 1: Sample ONLY layout-critical noise arrays to determine structural boundaries
         float widthVar = this.widthNoise.compute(currX, currZ, 8241);
@@ -113,7 +112,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float valleyPinchVar = this.valleyPinchNoise.compute(currX, currZ, 6204) * 2.0F;
 
         // Always run mask logic to ensure clean falloffs
-        updateValleyMask(prevX, prevZ, prevT, currT, distSqToCurr, sqScaleFactor, cell);
+        updateValleyMask(prevX, prevZ, prevT, currT, distSqToCurr, scaleFactor, cell);
 
         // Compute layout parameters
         float dynamicWidthMult = 1.0F + (widthVar * 0.35F);
@@ -121,7 +120,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float valleyPinchMultiplier = NoiseUtil.clamp(1.0F + valleyPinchVar, 0.05F, 1.95F);
 
         // Zone radius calculations
-        float biasedScale = sqScaleFactor * dynamicWidthMult * sideBias;
+        float biasedScale = scaleFactor * dynamicWidthMult * sideBias;
         float zone1Radius = (float) Math.sqrt(this.getScaledSize(currT, this.bedWidth) * biasedScale);
         float lakeMultiplier = getLakeMultiplier(cell, currT, currX, currZ, flatnessFactor);
         zone1Radius *= lakeMultiplier;
@@ -172,7 +171,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         // Calculate the final cell heights
         float finalHeight = cell.height;
         if (currentLinearDist < zone1Radius) {
-            finalHeight = carveZone1Riverbed(cell, currT, distSqToCurr, bedDepthOffset, sqScaleFactor, targetWaterLevel, lakeMultiplier, flatnessFactor, depthVar);
+            finalHeight = carveZone1Riverbed(cell, currT, distSqToCurr, bedDepthOffset, scaleFactor, targetWaterLevel, lakeMultiplier, flatnessFactor, depthVar);
         } else if (currentLinearDist < zone2Radius) {
             finalHeight = carveZone2BankStep(currentLinearDist, zone1Radius, zone2Radius, targetWaterLevel, actualValleyFloorHeight, terraceMask, drainageMask);
         } else if (currentLinearDist < zone3Radius) {
@@ -425,8 +424,14 @@ public class UpliftRiverCarver implements RTFRiverCarver {
     }
 
     private float getDistanceAlpha(float t, float dist2, Range range, float sqScaleFactor) {
+
+
         float size2 = this.getScaledSize(t, range) * sqScaleFactor;
+
+        // fade is beyond area of maximum influence
         if (dist2 >= size2) return 0.0F;
+
+        // return a gradient between 1.0 (at the exact center) and 0.0 (right at the edge).
         return 1.0F - dist2 / size2;
     }
 
