@@ -134,7 +134,13 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float zone3Width = zone3BaseWidth * shrinkFactor;
         float zone3Radius = zone2Radius + zone3Width;
 
-        float targetWaterLevel = ContinentalHydrology.getWeightedWaterHeight(cell.waterTable) + levels.water;
+        float targetWaterLevel =
+            (ContinentalHydrology.getComplexWaterHeight(
+                    cell.waterTable,
+                    cell.globalContinentScale,
+                    cell.continentSizeModifier)
+            ) + levels.water;
+
         float discrepancyScale = 1.0F + (levels.scale(cell.height - targetWaterLevel)) / 100.0F;
         float zone4Radius = zone3Radius + (unshrunkZone3BaseWidth * (4.0F + discrepancyScale));
 

@@ -80,8 +80,11 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
                 );
 
                 float water =
-                        ContinentalHydrology.getWeightedWaterHeight(neighborCell.waterTable)
-                                + oceanHeightOffset;
+                        (ContinentalHydrology.getComplexWaterHeight(
+                                neighborCell.waterTable,
+                                neighborCell.globalContinentScale,
+                                neighborCell.continentSizeModifier)
+                        ) + oceanHeightOffset;
 
                 int waterY = levels.scale(water);
 
@@ -100,7 +103,12 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
 
                 worldLookup.applyCell(cell.reset(), blockX, blockZ, false, false);
 
-                float targetWaterLevel = ContinentalHydrology.getWeightedWaterHeight(cell.waterTable) + oceanHeightOffset;
+                float targetWaterLevel =
+                    (ContinentalHydrology.getComplexWaterHeight(
+                            cell.waterTable,
+                            cell.globalContinentScale,
+                            cell.continentSizeModifier)
+                    ) + oceanHeightOffset;
                 int localWaterY = levels.scale(targetWaterLevel);
                 int currentFloorHeight = levels.scale(cell.height);
 

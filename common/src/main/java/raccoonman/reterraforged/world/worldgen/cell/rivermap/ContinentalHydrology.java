@@ -128,8 +128,11 @@ public class ContinentalHydrology {
         return fixedCurvedStep(continentEdge);
     }
 
-    public static float getWeightedWaterHeight(float inlandPercentage) {
-        return getTargetWaterHeight(inlandPercentage) * 0.50F;
+    public static float getComplexWaterHeight(float waterTableBaseGradient, float globalContinentScale, float thisContinentScale) {
+        return getTargetWaterHeight(waterTableBaseGradient) // base gradient strength input
+                * (globalContinentScale / 4000.0F) // scale uplift based on continent width
+                * (thisContinentScale / 1.0F) // obey per continent jitter
+                * 0.50F; // base uplift
     }
 
     public static float getFlatnessFactor(double x) {
