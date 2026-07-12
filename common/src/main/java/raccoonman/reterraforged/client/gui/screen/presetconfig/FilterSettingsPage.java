@@ -101,7 +101,7 @@ class FilterSettingsPage extends PresetEditorPage {
 
 	@Override
 	public Optional<Page> next() {
-		return Optional.of(new StructureSettingsPage(this.screen, this.preset));
+		return Optional.of(new MiscellaneousPage(this.screen, this.preset));
 	}
 
 }
