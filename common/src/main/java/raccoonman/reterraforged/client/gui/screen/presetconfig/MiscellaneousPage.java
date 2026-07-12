@@ -102,7 +102,7 @@ public class MiscellaneousPage extends PresetEditorPage {
 	
 	@Override
 	public Optional<Page> previous() {
-		return Optional.of(new StructureSettingsPage(this.screen, this.preset));
+		return Optional.of(new FilterSettingsPage(this.screen, this.preset));
 	}
 
 	@Override

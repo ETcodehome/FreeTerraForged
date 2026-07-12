@@ -116,14 +116,8 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 		return new RegistryAccess() {
 			@Override
 			public <T> Optional<Registry<T>> registry(ResourceKey<? extends Registry<? extends T>> key) {
-				String namespace = key.location().getNamespace();
-
-				// Always allow standard/internal namespaces so lookups (like STRUCTURE_SET) reliably work
-				if (namespace.equals("minecraft") || namespace.equals("reterraforged")) {
-					return original.registry(key);
-				}
-
-				// For third-party mods, ONLY allow if they explicitly provided a cloner
+				// ONLY allow the registry if we have explicitly armed it with a cloner.
+				// This prevents third-party registries injected into the 'minecraft' namespace from crashing us.
 				if (armed.contains(key)) {
 					return original.registry(key);
 				}
@@ -134,10 +128,8 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 
 			@Override
 			public Stream<RegistryEntry<?>> registries() {
-				return original.registries().filter(entry -> {
-					String ns = entry.key().location().getNamespace();
-					return ns.equals("minecraft") || ns.equals("reterraforged") || armed.contains(entry.key());
-				});
+				// Filter out any registry that hasn't been explicitly armed
+				return original.registries().filter(entry -> armed.contains(entry.key()));
 			}
 		};
 	}
