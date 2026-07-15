@@ -23,6 +23,7 @@
 		"MixinImposterProtoChunk",
 		"MixinNoiseBasedChunkGenerator",
 		"MixinFloatyBoaty",
+		"MixinC2MECompilerShield",
 		"BeardifierAccessor",
 		"LevelChunkSectionAccessor",
 		"terrablender.MixinParameterList",
