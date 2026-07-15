@@ -47,7 +47,11 @@ public class Wetland {
     public void apply(Cell cell, float rx, float rz, float x, float z) {
 
         // calculate the globally consistent water level at this cell
-        float upliftOffset = (ContinentalHydrology.getWeightedWaterHeight(cell.waterTable));
+        float upliftOffset = (ContinentalHydrology.getComplexWaterHeight(
+                cell.waterTable,
+                cell.globalContinentScale,
+                cell.continentSizeModifier)
+        );
         float oceanHeightOffset = levels.scale(levels.waterLevel);
         float localWaterSurface = oceanHeightOffset + upliftOffset;
 

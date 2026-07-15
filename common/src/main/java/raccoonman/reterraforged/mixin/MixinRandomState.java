@@ -1,5 +1,6 @@
 package raccoonman.reterraforged.mixin;
 
+import net.minecraft.world.level.levelgen.*;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Implements;
@@ -17,12 +18,7 @@ import net.minecraft.core.HolderLookup.RegistryLookup;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.biome.Climate;
-import net.minecraft.world.level.levelgen.DensityFunction;
 import net.minecraft.world.level.levelgen.DensityFunction.NoiseHolder;
-import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
-import net.minecraft.world.level.levelgen.NoiseRouter;
-import net.minecraft.world.level.levelgen.RandomState;
-import net.minecraft.world.level.levelgen.SurfaceSystem;
 import net.minecraft.world.level.levelgen.synth.NormalNoise;
 import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.concurrent.ThreadPools;
@@ -33,7 +29,9 @@ import raccoonman.reterraforged.registries.RTFRegistries;
 import raccoonman.reterraforged.tags.RTFDensityFunctionTags;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
+import raccoonman.reterraforged.world.worldgen.RTFWorldGenContext;
 import raccoonman.reterraforged.world.worldgen.densityfunction.CellSampler;
+import raccoonman.reterraforged.world.worldgen.densityfunction.MarkerFunction;
 import raccoonman.reterraforged.world.worldgen.densityfunction.NoiseFunction;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noises;
@@ -71,6 +69,8 @@ class MixinRandomState {
 	)
 	private NoiseRouter RandomState(NoiseRouter router, DensityFunction.Visitor visitor, NoiseGeneratorSettings noiseGeneratorSettings, HolderGetter<NormalNoise.NoiseParameters> params, final long seed) {
 		this.seed = seed;
+
+		final boolean isVanillaOverworld = RTFWorldGenContext.IS_VANILLA_OVERWORLD.get();
 		this.densityFunctionWrapper = new DensityFunction.Visitor() {
 
 			@Override
@@ -79,9 +79,19 @@ class MixinRandomState {
 					return new NoiseFunction(marker.noise(), (int) seed);
 				}
 				if(function instanceof CellSampler.Marker marker) {
+
+					if (!isVanillaOverworld) {
+						return DensityFunctions.zero();
+					}
+
 					MixinRandomState.this.hasContext = true;
 					return new CellSampler(Suppliers.memoize(() -> MixinRandomState.this.generatorContext.lookup), marker.field());
 				}
+
+				if (function instanceof MarkerFunction && !isVanillaOverworld) {
+					return DensityFunctions.zero();
+				}
+
 				return visitor.apply(function);
 			}
 
@@ -93,7 +103,7 @@ class MixinRandomState {
 
 		// Map the base router first. If the current dimension naturally utilizes RTF, hasContext flips to true here.
 		NoiseRouter mappedRouter = router.mapAll(this.densityFunctionWrapper);
-		if (this.hasContext) {
+		if (this.hasContext && isVanillaOverworld) {
 			this.reterraforged$isRTFDimension = true;
 		}
 		return mappedRouter;

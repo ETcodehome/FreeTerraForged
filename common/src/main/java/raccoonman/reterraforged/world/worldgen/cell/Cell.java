@@ -43,6 +43,7 @@ public class Cell {
     public float riverWaterLevel = 0.0F;
     public int continentX;
     public int continentZ;
+    public float globalContinentScale;
     public boolean erosionMask;
     public Terrain terrain;
     public BiomeType biome;
@@ -102,6 +103,7 @@ public class Cell {
         this.waterTable = other.waterTable;
         this.flowAngle = other.flowAngle;
         this.hasFlow = other.hasFlow;
+        this.globalContinentScale = other.globalContinentScale;
     }
 
     public Cell reset() {

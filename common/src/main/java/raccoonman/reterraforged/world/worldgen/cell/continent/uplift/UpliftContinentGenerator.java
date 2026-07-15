@@ -29,10 +29,13 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
     protected Noise bayNoise;
     protected Levels levels;
 
+    protected WorldSettings.Continent continentSettings;
+
     public UpliftContinentGenerator(Seed seed, GeneratorContext context) {
         super(seed, context);
         WorldSettings settings = context.preset.world();
         int tectonicScale = settings.continent.continentScale * 4;
+        this.continentSettings = settings.continent;
         this.frequency = 1.0F / tectonicScale;
         this.varianceSeed = seed.next();
         this.variance = settings.continent.continentSizeVariance;
@@ -336,7 +339,7 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         );
     }
 
-    protected float getContinentSizeModifier(int cellX, int cellY){
+    public float getContinentSizeModifier(int cellX, int cellY){
         if (this.variance > 0.0f && !this.isDefaultContinent(cellX, cellY)) {
             float sizeValue = AbstractContinent.getCellValue(this.varianceSeed, cellX, cellY);
             float sizeModifier = NoiseUtil.map(sizeValue, 0.0f, this.variance, this.variance);

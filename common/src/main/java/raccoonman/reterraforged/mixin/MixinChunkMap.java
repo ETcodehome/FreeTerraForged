@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import com.mojang.datafixers.DataFixer;
-
+import net.minecraft.world.level.Level;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.progress.ChunkProgressListener;
@@ -24,12 +24,21 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
 import net.minecraft.world.level.storage.DimensionDataStorage;
 import net.minecraft.world.level.storage.LevelStorageSource;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
+import raccoonman.reterraforged.world.worldgen.RTFWorldGenContext;
 
 @Mixin(ChunkMap.class)
 public class MixinChunkMap {
 	@Shadow
     private RandomState randomState;
-	
+
+	@Inject(
+			at = @At("HEAD"),
+			method = "<init>"
+			)
+	private static void beforeChunkMapInit(ServerLevel serverLevel, LevelStorageSource.LevelStorageAccess storageAccess, DataFixer dataFixer, StructureTemplateManager templateLoader, Executor executor, BlockableEventLoop<Runnable> eventLoop, LightChunkGetter lightChunkGetter, ChunkGenerator chunkGenerator, ChunkProgressListener chunkProgressListener, ChunkStatusUpdateListener chunkStatusListener, Supplier<DimensionDataStorage> dimensionStorage, int viewDistance, boolean syncChunkWrites, CallbackInfo callback) {
+		RTFWorldGenContext.IS_VANILLA_OVERWORLD.set(serverLevel.dimension() == Level.OVERWORLD);
+	}
+
 	@Inject(
 		at = @At("TAIL"),
 		method = "<init>"
@@ -38,5 +47,6 @@ public class MixinChunkMap {
 		if((Object) this.randomState instanceof RTFRandomState rtfRandomState) {
 			rtfRandomState.initialize(serverLevel.registryAccess());
 		}
+		RTFWorldGenContext.IS_VANILLA_OVERWORLD.remove();
 	}
 }
