@@ -138,7 +138,12 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
 
         CellPopulator terrain = new ContinentLerper2(oceans, (cell, x, z) -> {
             land.apply(cell, x, z);
-            cell.height += (ContinentalHydrology.getWeightedWaterHeight(cell.waterTable));
+            cell.globalContinentScale = world.continent.continentScale;
+            cell.height += (ContinentalHydrology.getComplexWaterHeight(
+                    cell.waterTable,
+                    cell.globalContinentScale,
+                    cell.continentSizeModifier)
+            );
         }, controlPoints.shallowOcean, controlPoints.inland);
         
         // Wrap with archipelago layer if enabled
