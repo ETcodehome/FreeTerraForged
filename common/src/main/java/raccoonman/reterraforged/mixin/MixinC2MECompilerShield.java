@@ -18,7 +18,7 @@ public class MixinC2MECompilerShield {
     )
     private static void rtf$abortC2MECompilation(DensityFunction df, CallbackInfoReturnable<Object> cir) {
         if (df.getClass().getName().startsWith("raccoonman.reterraforged")) {
-            throw new UnsupportedOperationException("C2ME Density Function Compilation is incompatible with ReTerraForged. \nEdit .minecraft\\config\\c2me.toml and set \nuseDensityFunctionCompiler = false");
+            throw new UnsupportedOperationException("C2ME Density Function Compilation is incompatible with ReTerraForged. To fix edit .minecraft\\config\\c2me.toml and set useDensityFunctionCompiler = false");
         }
     }
 }
