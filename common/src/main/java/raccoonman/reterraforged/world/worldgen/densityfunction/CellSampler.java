@@ -4,6 +4,7 @@ import java.util.function.Supplier;
 
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.KeyDispatchCodec;
+import net.minecraft.world.level.levelgen.DensityFunction;
 import org.jetbrains.annotations.Nullable;
 
 import com.mojang.serialization.Codec;
@@ -27,9 +28,19 @@ import raccoonman.reterraforged.world.worldgen.util.PosUtil;
 
 public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) implements MarkerFunction.Mapped {
 	private static final ThreadLocal<Cache2d> CELL = ThreadLocal.withInitial(Cache2d::new);
-	
+
 	@Override
-	public double compute(FunctionContext ctx) {
+	public double compute(DensityFunction.FunctionContext ctx) {
+
+		try {
+			WorldLookup lookup = this.deferredLookup.get();
+			if (lookup != null) {
+				Cell cell = PointCellCache.get(lookup, ctx.blockX(), ctx.blockZ());
+				return this.field.read(cell, lookup.getHeightmap());
+			}
+		} catch (Throwable t) {	}
+
+		// Fallback to original single-slot Cache2d path if the cache fails/is uninitialized
 		WorldLookup worldLookup = this.deferredLookup.get();
 		Cell cell = CELL.get().getAndUpdate(worldLookup, ctx.blockX(), ctx.blockZ(), true);
 		return this.field.read(cell, worldLookup.getHeightmap());
