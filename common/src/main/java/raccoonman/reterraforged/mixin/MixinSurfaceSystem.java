@@ -98,7 +98,13 @@ class MixinSurfaceSystem {
 				int scaledY = levels.scale(cell.height);
 
 				if (isWaterCell) {
-					int waterY = levels.scale(ContinentalHydrology.getWeightedWaterHeight(cell.waterTable) + oceanLevel);
+					int waterY = levels.scale(
+							(ContinentalHydrology.getComplexWaterHeight(
+									cell.waterTable,
+									cell.globalContinentScale,
+									cell.continentSizeModifier)
+							) + oceanLevel
+					);
 
 					if (waterY < levels.scale(levels.water)) waterY = levels.scale(levels.water);
 
@@ -122,7 +128,14 @@ class MixinSurfaceSystem {
 							// Only consider the neighbor's water height if it is actually a water cell
 							boolean nIsWaterCell = (neighborCell.terrain.isRiver() || neighborCell.terrain.isLake() || neighborCell.terrain.isWetland()) && neighborCell.riverWaterLevel > 0;
 							if (nIsWaterCell) {
-								int nWaterY = levels.scale(ContinentalHydrology.getWeightedWaterHeight(neighborCell.waterTable) + levels.water);
+								int nWaterY = levels.scale(
+										(ContinentalHydrology.getComplexWaterHeight(
+												neighborCell.waterTable,
+												neighborCell.globalContinentScale,
+												neighborCell.continentSizeModifier)
+										) + levels.water
+								);
+
 								if (nWaterY < levels.scale(levels.water)) nWaterY = levels.scale(levels.water);
 
 								if (nWaterY < waterY) {
@@ -184,7 +197,6 @@ class MixinSurfaceSystem {
 
 						// GASKET LOGIC: Soft fade using riverMask
 						int maxNeighborWaterY = scaledY;
-						float maxRiverMask = 0.0F;
 
 						// Check neighbors for water and record the strongest mask influence
 						int[] dx = {0, 0, 1, -1};
@@ -197,16 +209,29 @@ class MixinSurfaceSystem {
 							var neighborCell = neighborReader.getCell(nx & 0xF, nz & 0xF);
 
 							if ((neighborCell.terrain.isRiver() || neighborCell.terrain.isLake())) {
-								int nWaterY = levels.scale(ContinentalHydrology.getWeightedWaterHeight(neighborCell.waterTable) + oceanLevel);
+								int nWaterY = levels.scale(
+									(ContinentalHydrology.getComplexWaterHeight(
+											neighborCell.waterTable,
+											neighborCell.globalContinentScale,
+											neighborCell.continentSizeModifier)
+									) + oceanLevel
+								);
+
 								if (nWaterY > maxNeighborWaterY) {
 									maxNeighborWaterY = nWaterY;
-									maxRiverMask = neighborCell.riverMask; // Capture the mask strength
 								}
 							}
 						}
 
 						// If in river zone and lower than water table, we shouldn't be.
-						int waterTableCeil = levels.scale(ContinentalHydrology.getWeightedWaterHeight(cell.waterTable) + oceanLevel);
+						int waterTableCeil = levels.scale(
+							(ContinentalHydrology.getComplexWaterHeight(
+									cell.waterTable,
+									cell.globalContinentScale,
+									cell.continentSizeModifier)
+								) + oceanLevel
+							);
+
 						boolean isInRiverZone = cell.riverZone == RiverCarverSettings.RiverZone.Banks
 								|| cell.riverZone == RiverCarverSettings.RiverZone.ValleyFloor
 								|| cell.riverZone == RiverCarverSettings.RiverZone.ValleyFadeout;

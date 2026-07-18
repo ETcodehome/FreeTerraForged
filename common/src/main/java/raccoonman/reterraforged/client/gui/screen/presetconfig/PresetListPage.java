@@ -213,21 +213,24 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, PresetEntry, Abstr
 			return entry.getWidget().getName().getString().equals(name);
 		}).findAny().isPresent();
 	}
-	
-	private List<PresetEntry> listPresets(Path path) throws IOException	{
+
+	private List<PresetEntry> listPresets(Path path) throws IOException {
 		List<PresetEntry> presets = new ArrayList<>();
 		if(Files.exists(path)) {
 			for(Path presetPath : Files.list(path)
-				.filter(Files::isRegularFile)
-				.toList()
+					.filter(Files::isRegularFile)
+					.filter(p -> p.toString().endsWith(".json")) // Only process actual .json files
+					.toList()
 			) {
 				try(Reader reader = Files.newBufferedReader(presetPath)) {
 					String base = FileNameUtils.getBaseName(presetPath.toString());
 					DataResult<Preset> result = Preset.DIRECT_CODEC.parse(JsonOps.INSTANCE, JsonParser.parseReader(reader));
-					Preset preset = result.resultOrPartial(RTFCommon.LOGGER::error).orElse(null);
+					Preset preset = result.resultOrPartial(err -> {}).orElse(null); // Silenced codec errors
 					if(preset != null) {
 						presets.add(new PresetEntry(Component.literal(base).withStyle(ChatFormatting.GOLD), preset, false, this));
 					}
+				} catch (Exception e) {
+					// Silently ignore malformed files or reading hiccups
 				}
 			}
 		}
