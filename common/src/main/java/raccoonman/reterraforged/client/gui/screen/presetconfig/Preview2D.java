@@ -82,6 +82,11 @@ public class Preview2D extends Button {
                     props.spawnType = SpawnType.USER_SELECTED;
                     props.spawnX = self.hoveredCoordX;
                     props.spawnZ = self.hoveredCoordZ;
+
+                    if (self.page instanceof WorldSettingsPage worldPage) {
+                        worldPage.spawnType.setValue(SpawnType.USER_SELECTED);
+                    }
+
                     self.page.regenerate();
                 }
             }
