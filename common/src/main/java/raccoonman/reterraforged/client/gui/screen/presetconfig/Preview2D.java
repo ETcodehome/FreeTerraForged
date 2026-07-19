@@ -177,6 +177,8 @@ public class Preview2D extends Button {
                                 int color;
                                 if (bx < stroke || bz < stroke || bx >= tileWidth - stroke || bz >= tileWidth - stroke) {
                                     color = 0xFF000000; // Opaque Black
+                                } else if (levels.scale(cell.height) > properties.worldHeight) {
+                                    color = 0xFFFF00FF; // Missing asset purple (#FF00FF)
                                 } else {
                                     color = mode.getColor(cell, levels);
                                 }
