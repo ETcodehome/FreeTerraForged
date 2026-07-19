@@ -60,8 +60,6 @@ public class Preview3D extends Button {
             Component.translatable(RTFTranslationKeys.GUI_LABEL_PREVIEW_SPAWN)
     };
 
-    private int offsetX, offsetZ;
-
     private DynamicTexture textureCache;
     private ResourceLocation cacheLocation;
     private boolean needsTextureRefresh = false;
@@ -91,6 +89,12 @@ public class Preview3D extends Button {
                     props.spawnType = SpawnType.USER_SELECTED;
                     props.spawnX = self.hoveredCoordX;
                     props.spawnZ = self.hoveredCoordZ;
+
+                    if (self.page instanceof WorldSettingsPage worldPage) {
+                        worldPage.spawnType.setValue(SpawnType.USER_SELECTED);
+                    }
+
+                    Preview2D.globalNavigated = false;
                     self.page.regenerate();
                 }
             }
@@ -123,8 +127,9 @@ public class Preview3D extends Button {
 
         int seed = (int) settings.options().seed();
         int zoomLevel = this.getZoom();
-        int localOffsetX = this.offsetX;
-        int localOffsetZ = this.offsetZ;
+        int localOffsetX = Preview2D.globalOffsetX;
+        int localOffsetZ = Preview2D.globalOffsetZ;
+        boolean localNavigated = Preview2D.globalNavigated;
 
         // Step 1: Offload disk IO and heavy context calculations to background executor
         CompletableFuture<PreGenContext> setupStage = CompletableFuture.supplyAsync(() -> {
@@ -138,16 +143,28 @@ public class Preview3D extends Button {
                     .orElseGet(PerformanceConfig::makeDefault);
 
             GeneratorContext generatorContext = GeneratorContext.makeUncached(currentPreset, noises, seed, FACTOR, 0, config.batchCount());
+            WorldSettings.Properties properties = currentPreset.world().properties;
+            if (properties.spawnType == SpawnType.CONTINENT_CENTER) {
+                long baseContinentCenter = generatorContext.lookup.getHeightmap().continent().getNearestCenter(0, 0);
+                properties.spawnX = PosUtil.unpackLeft(baseContinentCenter);
+                properties.spawnZ = PosUtil.unpackRight(baseContinentCenter);
+            }
 
             int cx = 0;
             int cz = 0;
+
+            // Generalize coordinate selection for all spawn types
             if (currentPreset.world().properties.spawnType == SpawnType.CONTINENT_CENTER) {
-                long nearestContinentCenter = generatorContext.lookup.getHeightmap().continent().getNearestCenter(localOffsetX, localOffsetZ);
+                long nearestContinentCenter = generatorContext.lookup.getHeightmap().continent().getNearestCenter(
+                        localNavigated ? localOffsetX : 0,
+                        localNavigated ? localOffsetZ : 0
+                );
                 cx = PosUtil.unpackLeft(nearestContinentCenter);
                 cz = PosUtil.unpackRight(nearestContinentCenter);
-            } else if (currentPreset.world().properties.spawnType == SpawnType.USER_SELECTED) {
-                cx = currentPreset.world().properties.spawnX;
-                cz = currentPreset.world().properties.spawnZ;
+            } else {
+                // If navigated, center on the clicked spot; otherwise fallback to spawn values or origin depending on type
+                cx = localNavigated ? localOffsetX : (currentPreset.world().properties.spawnType == SpawnType.USER_SELECTED ? currentPreset.world().properties.spawnX : 0);
+                cz = localNavigated ? localOffsetZ : (currentPreset.world().properties.spawnType == SpawnType.USER_SELECTED ? currentPreset.world().properties.spawnZ : 0);
             }
 
             return new PreGenContext(generatorContext, cx, cz, zoomLevel);
@@ -234,30 +251,38 @@ public class Preview3D extends Button {
         float heightScale = getHeightScale((float) blockW);
         int halfTile = tileSize / 2;
 
+        float maxCellHeight = properties.worldHeight * levels.unit;
+
         for (int iz = 0; iz < tileSize; iz++) {
             for (int ix = 0; ix < tileSize; ix++) {
                 Cell cell = activeTile.lookup(ix, iz);
-                int color = mode.getColor(cell, levels);
+
+                // Clamp the geometry height if it exceeds world height boundaries
+                float effectiveHeight = cell.height;
+                int color;
+                if (levels.scale(cell.height) > properties.worldHeight) {
+                    color = 0xFFFF00FF; // Missing asset purple (#FF00FF)
+                    effectiveHeight = maxCellHeight;
+                } else {
+                    color = mode.getColor(cell, levels);
+                }
 
                 int r = (color >> 16) & 0xFF;
                 int g = (color >> 8) & 0xFF;
                 int b = color & 0xFF;
-
                 Color.RGBtoHSB(r, g, b, this.hsbCache);
 
                 int hash = ix * 31 + iz * 17;
                 float jitter = ((hash % 100) / 100.0f) * 0.06f - 0.03f;
-
                 this.hsbCache[2] = Math.max(0.0f, Math.min(1.0f, this.hsbCache[2] + jitter));
-
                 int jitteredColor = (color & 0xFF000000) | (Color.HSBtoRGB(this.hsbCache[0], this.hsbCache[1], this.hsbCache[2]) & 0x00FFFFFF);
-
                 int dx = ix - halfTile;
                 int dz = iz - halfTile;
-
                 int isoX = centerVisualX + (dx - dz) * halfW;
                 int isoY = centerVisualY + (dx + dz) * halfH;
-                int renderY = isoY - Math.round(cell.height * heightScale);
+
+                // We use effectiveHeight instead of cell.height to show when world height limits are truncating peaks
+                int renderY = isoY - Math.round(effectiveHeight * heightScale);
 
                 int topColor = jitteredColor;
                 int leftColor = getSideColor(jitteredColor, 0.75f, true, ix, iz, tileSize);
@@ -314,6 +339,39 @@ public class Preview3D extends Button {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (this.isMouseOver(mouseX, mouseY)) {
+
+            // Right Click: Navigate to specific coordinates
+            if (button == 1) {
+                if (this.updateLegend((int) mouseX, (int) mouseY) && !this.hoveredCoords.isEmpty()) {
+                    this.playDownSound(Minecraft.getInstance().getSoundManager());
+
+                    WorldSettings.Properties props = this.page.preset.getPreset().world().properties;
+                    if (props.spawnType == SpawnType.CONTINENT_CENTER) {
+                        props.spawnType = SpawnType.USER_SELECTED;
+                        if (this.page instanceof WorldSettingsPage worldPage) {
+                            worldPage.spawnType.setValue(SpawnType.USER_SELECTED);
+                        }
+                    }
+
+                    Preview2D.globalOffsetX = this.hoveredCoordX;
+                    Preview2D.globalOffsetZ = this.hoveredCoordZ;
+                    Preview2D.globalNavigated = true;
+                    this.regenerate();
+                    return true;
+                }
+            }
+
+            // Middle Click: Reset to current spawn coordinates
+            else if (button == 2) {
+                this.playDownSound(Minecraft.getInstance().getSoundManager());
+                Preview2D.globalNavigated = false;
+                this.regenerate();
+                return true;
+            }
+        }
+
+        // Left click set spawn coords
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
@@ -417,7 +475,7 @@ public class Preview3D extends Button {
                     int markerY = isoY + halfH;
 
                     int size = 6;
-                    int color = 0xFFFF2222;
+                    int color = 0xFFFFFFFF;
                     int shadow = 0xFF000000;
 
                     guiGraphics.fill(markerX - size + 1, markerY + 1, markerX + size + 2, markerY + 2, shadow);

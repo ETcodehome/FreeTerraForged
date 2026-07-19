@@ -60,7 +60,8 @@ public class Preview2D extends Button {
             Component.translatable(RTFTranslationKeys.GUI_LABEL_PREVIEW_SPAWN)
     };
 
-    private int offsetX, offsetZ;
+    static int globalOffsetX, globalOffsetZ;
+    static boolean globalNavigated = false;
 
     private CompletableFuture<FrameResult> pendingGeneration = null;
 
@@ -82,6 +83,12 @@ public class Preview2D extends Button {
                     props.spawnType = SpawnType.USER_SELECTED;
                     props.spawnX = self.hoveredCoordX;
                     props.spawnZ = self.hoveredCoordZ;
+
+                    if (self.page instanceof WorldSettingsPage worldPage) {
+                        worldPage.spawnType.setValue(SpawnType.USER_SELECTED);
+                    }
+
+                    self.globalNavigated = false;
                     self.page.regenerate();
                 }
             }
@@ -128,8 +135,9 @@ public class Preview2D extends Button {
 
         int seed = (int) settings.options().seed();
         int zoomLevel = this.getZoom();
-        int localOffsetX = this.offsetX;
-        int localOffsetZ = this.offsetZ;
+        int localOffsetX = this.globalOffsetX;
+        int localOffsetZ = this.globalOffsetZ;
+        boolean localNavigated = this.globalNavigated;
         RenderMode mode = this.page.renderMode2D.getValue();
         Levels levels = new Levels(properties.terrainScaler(), properties.seaLevel);
 
@@ -145,16 +153,27 @@ public class Preview2D extends Button {
                     .orElseGet(PerformanceConfig::makeDefault);
 
             GeneratorContext generatorContext = GeneratorContext.makeUncached(presetObj, noises, seed, FACTOR, 0, config.batchCount());
+            if (properties.spawnType == SpawnType.CONTINENT_CENTER) {
+                long baseContinentCenter = generatorContext.lookup.getHeightmap().continent().getNearestCenter(0, 0);
+                properties.spawnX = PosUtil.unpackLeft(baseContinentCenter);
+                properties.spawnZ = PosUtil.unpackRight(baseContinentCenter);
+            }
 
             int cx = 0;
             int cz = 0;
+
+            // Generalize coordinate selection for all spawn types
             if (presetObj.world().properties.spawnType == SpawnType.CONTINENT_CENTER) {
-                long nearestContinentCenter = generatorContext.lookup.getHeightmap().continent().getNearestCenter(localOffsetX, localOffsetZ);
+                long nearestContinentCenter = generatorContext.lookup.getHeightmap().continent().getNearestCenter(
+                        localNavigated ? localOffsetX : 0,
+                        localNavigated ? localOffsetZ : 0
+                );
                 cx = PosUtil.unpackLeft(nearestContinentCenter);
                 cz = PosUtil.unpackRight(nearestContinentCenter);
-            } else if (presetObj.world().properties.spawnType == SpawnType.USER_SELECTED) {
-                cx = presetObj.world().properties.spawnX;
-                cz = presetObj.world().properties.spawnZ;
+            } else {
+                // If navigated, center on the clicked spot; otherwise fallback to spawn values or origin depending on type
+                cx = localNavigated ? localOffsetX : (presetObj.world().properties.spawnType == SpawnType.USER_SELECTED ? presetObj.world().properties.spawnX : 0);
+                cz = localNavigated ? localOffsetZ : (presetObj.world().properties.spawnType == SpawnType.USER_SELECTED ? presetObj.world().properties.spawnZ : 0);
             }
 
             return new PreGenContext(generatorContext, cx, cz, zoomLevel);
@@ -172,6 +191,8 @@ public class Preview2D extends Button {
                                 int color;
                                 if (bx < stroke || bz < stroke || bx >= tileWidth - stroke || bz >= tileWidth - stroke) {
                                     color = 0xFF000000; // Opaque Black
+                                } else if (levels.scale(cell.height) > properties.worldHeight) {
+                                    color = 0xFFFF00FF; // Missing asset purple (#FF00FF)
                                 } else {
                                     color = mode.getColor(cell, levels);
                                 }
@@ -238,6 +259,35 @@ public class Preview2D extends Button {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (this.isMouseOver(mouseX, mouseY)) {
+            // Right Click: Navigate to specific coordinates
+            if (button == 1) {
+                if (this.updateLegend((int) mouseX, (int) mouseY) && !this.hoveredCoords.isEmpty()) {
+                    this.playDownSound(Minecraft.getInstance().getSoundManager());
+
+                    WorldSettings.Properties props = this.page.preset.getPreset().world().properties;
+                    if (props.spawnType == SpawnType.CONTINENT_CENTER) {
+                        props.spawnType = SpawnType.USER_SELECTED;
+                        if (this.page instanceof WorldSettingsPage worldPage) {
+                            worldPage.spawnType.setValue(SpawnType.USER_SELECTED);
+                        }
+                    }
+
+                    Preview2D.globalOffsetX = this.hoveredCoordX;
+                    Preview2D.globalOffsetZ = this.hoveredCoordZ;
+                    Preview2D.globalNavigated = true;
+                    this.regenerate();
+                    return true;
+                }
+            }
+            // Middle Click: Reset to current spawn coordinates
+            else if (button == 2) {
+                this.playDownSound(Minecraft.getInstance().getSoundManager());
+                Preview2D.globalNavigated = false;
+                this.regenerate();
+                return true;
+            }
+        }
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
