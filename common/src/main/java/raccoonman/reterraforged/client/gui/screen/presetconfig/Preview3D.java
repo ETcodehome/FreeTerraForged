@@ -239,30 +239,38 @@ public class Preview3D extends Button {
         float heightScale = getHeightScale((float) blockW);
         int halfTile = tileSize / 2;
 
+        float maxCellHeight = properties.worldHeight * levels.unit;
+
         for (int iz = 0; iz < tileSize; iz++) {
             for (int ix = 0; ix < tileSize; ix++) {
                 Cell cell = activeTile.lookup(ix, iz);
-                int color = mode.getColor(cell, levels);
+
+                // Clamp the geometry height if it exceeds world height boundaries
+                float effectiveHeight = cell.height;
+                int color;
+                if (levels.scale(cell.height) > properties.worldHeight) {
+                    color = 0xFFFF00FF; // Missing asset purple (#FF00FF)
+                    effectiveHeight = maxCellHeight;
+                } else {
+                    color = mode.getColor(cell, levels);
+                }
 
                 int r = (color >> 16) & 0xFF;
                 int g = (color >> 8) & 0xFF;
                 int b = color & 0xFF;
-
                 Color.RGBtoHSB(r, g, b, this.hsbCache);
 
                 int hash = ix * 31 + iz * 17;
                 float jitter = ((hash % 100) / 100.0f) * 0.06f - 0.03f;
-
                 this.hsbCache[2] = Math.max(0.0f, Math.min(1.0f, this.hsbCache[2] + jitter));
-
                 int jitteredColor = (color & 0xFF000000) | (Color.HSBtoRGB(this.hsbCache[0], this.hsbCache[1], this.hsbCache[2]) & 0x00FFFFFF);
-
                 int dx = ix - halfTile;
                 int dz = iz - halfTile;
-
                 int isoX = centerVisualX + (dx - dz) * halfW;
                 int isoY = centerVisualY + (dx + dz) * halfH;
-                int renderY = isoY - Math.round(cell.height * heightScale);
+
+                // We use effectiveHeight instead of cell.height to show when world height limits are truncating peaks
+                int renderY = isoY - Math.round(effectiveHeight * heightScale);
 
                 int topColor = jitteredColor;
                 int leftColor = getSideColor(jitteredColor, 0.75f, true, ix, iz, tileSize);
