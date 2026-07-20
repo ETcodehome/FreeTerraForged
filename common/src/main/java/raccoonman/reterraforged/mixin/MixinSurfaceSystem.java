@@ -32,8 +32,11 @@ import net.minecraft.world.level.levelgen.WorldGenerationContext;
 import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
+import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.RiverCarverSettings;
+import raccoonman.reterraforged.world.worldgen.cell.terrain.Terrain;
+import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainType;
 import raccoonman.reterraforged.world.worldgen.surface.RTFSurfaceSystem;
 import raccoonman.reterraforged.world.worldgen.surface.rule.StrataRule;
 
@@ -63,6 +66,7 @@ class MixinSurfaceSystem {
 			GeneratorContext genCtx = rtfRandomState.generatorContext();
 			if (genCtx != null) {
 				this.reterraforged$placeRiverWater(chunk, biomeManager, genCtx);
+				this.reterraforged$placeVolcanoLava(chunk, genCtx);
 			}
 		}
 	}
@@ -72,6 +76,149 @@ class MixinSurfaceSystem {
 			PositionalRandomFactory factory = this.randomState.getOrCreateRandomFactory(GEOLOGY_RANDOM);
 			return strata.apply(factory.fromHashOf(k));
 		});
+	}
+
+	@Unique
+	private void reterraforged$placeVolcanoLava(ChunkAccess chunk, GeneratorContext genCtx) {
+		var chunkPos = chunk.getPos();
+		var tile = genCtx.cache.provideAtChunk(chunkPos.x, chunkPos.z);
+		var reader = tile.getChunkReader(chunkPos.x, chunkPos.z);
+		var levels = genCtx.generator.getHeightmap().levels();
+		float oceanLevel = levels.water;
+
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+
+		BlockState lava = Blocks.LAVA.defaultBlockState();
+		BlockState magma = Blocks.MAGMA_BLOCK.defaultBlockState();
+		BlockState basalt = Blocks.BASALT.defaultBlockState();
+		BlockState smoothBasalt = Blocks.SMOOTH_BASALT.defaultBlockState();
+		BlockState air = Blocks.AIR.defaultBlockState();
+
+		int minY = chunk.getMinBuildHeight() + 2; // Bedrock level (~ -62 in 1.18+)
+
+		for (int localX = 0; localX < 16; localX++) {
+			for (int localZ = 0; localZ < 16; localZ++) {
+				int globalX = chunkPos.getMinBlockX() + localX;
+				int globalZ = chunkPos.getMinBlockZ() + localZ;
+
+				// Check proximity so twisted South/East walls aren't truncated by terrain bounds
+				if (reterraforged$isNearVolcano(genCtx, globalX, globalZ)) {
+					Cell cell = reader.getCell(localX, localZ);
+					int surfaceY = levels.scale(cell.height);
+
+					// Maximum height for liquid lava inside the conduit
+					int lavaY = levels.scale(
+							(ContinentalHydrology.getComplexWaterHeight(
+									cell.waterTable,
+									cell.globalContinentScale,
+									cell.continentSizeModifier)
+							) + oceanLevel
+					);
+
+					double totalDepth = Math.max(1.0, surfaceY - minY);
+
+					for (int y = surfaceY; y >= minY; y--) {
+						double dy = surfaceY - y;
+						double depthRatio = dy / totalDepth; // 0.0 at surface -> 1.0 at bedrock
+
+						// Zero-centered symmetric winding (0.0 offset at surface dy = 0)
+						double offsetX = Math.sin(dy * 0.025) * 4.5 + Math.sin(dy * 0.011) * 2.0;
+						double offsetZ = Math.sin(dy * 0.020) * 4.5 + Math.sin(dy * 0.014) * 2.0;
+
+						int sampleX = (int) Math.round(globalX - offsetX);
+						int sampleZ = (int) Math.round(globalZ - offsetZ);
+
+						// Continuous distance-weighted factor from 0.0 (outside) to 1.0 (center)
+						double pipeFactor = reterraforged$getSmoothPipeFactor(genCtx, sampleX, sampleZ);
+
+						if (pipeFactor > 0.05) {
+							// Low-amplitude 3D noise for natural wall texture
+							double noise3d = Math.sin(globalX * 0.12 + y * 0.08) * Math.cos(globalZ * 0.12 - y * 0.08) * 0.08;
+							double tubeValue = pipeFactor + noise3d;
+
+							// Tapering thresholds for smooth narrowing toward bedrock
+							double coreThreshold  = 0.65 + (depthRatio * 0.25); // 0.65 (surface) -> 0.90 (bedrock)
+							double innerThreshold = 0.40 + (depthRatio * 0.10); // 0.40 (surface) -> 0.50 (bedrock)
+							double outerThreshold = 0.15;                       // Outer basalt boundary
+
+							pos.set(globalX, y, globalZ);
+
+							// 1. Core Conduit (Liquid Lava below lavaY, Air above lavaY)
+							if (tubeValue >= coreThreshold) {
+								if (y <= lavaY) {
+									chunk.setBlockState(pos, lava, false);
+									if (y == lavaY) {
+										chunk.markPosForPostprocessing(pos);
+									}
+								} else {
+									chunk.setBlockState(pos, air, false);
+								}
+							}
+							// 2. Inner Wall: Magma & Basalt (Runs all the way to surfaceY)
+							else if (tubeValue >= innerThreshold) {
+								int hash = (globalX * 3122011) ^ (y * 11687) ^ (globalZ * 9399223);
+								BlockState state = ((hash & 3) == 0) ? basalt : magma;
+								chunk.setBlockState(pos, state, false);
+							}
+							// 3. Outer Crust: Basalt & Smooth Basalt (Runs all the way to surfaceY)
+							else if (tubeValue >= outerThreshold) {
+								int hash = (globalX * 3122011) ^ (y * 11687) ^ (globalZ * 9399223);
+								BlockState state = ((hash & 1) == 0) ? basalt : smoothBasalt;
+								chunk.setBlockState(pos, state, false);
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	/**
+	 * Checks if a block column is within twist/shell distance of a volcano.
+	 */
+	@Unique
+	private boolean reterraforged$isNearVolcano(GeneratorContext genCtx, int globalX, int globalZ) {
+		int[] dx = {0, 0, 0, 12, -12};
+		int[] dz = {0, 12, -12, 0, 0};
+
+		for (int i = 0; i < 5; i++) {
+			int sx = globalX + dx[i];
+			int sz = globalZ + dz[i];
+			var tile = genCtx.cache.provideAtChunk(sx >> 4, sz >> 4);
+			var reader = tile.getChunkReader(sx >> 4, sz >> 4);
+			Terrain terrain = reader.getCell(sx & 0xF, sz & 0xF).terrain;
+			if (terrain == TerrainType.VOLCANO_PIPE || terrain == TerrainType.VOLCANO) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Samples a 5x5 distance-weighted region to produce a smooth scalar value (0.0 to 1.0).
+	 */
+	@Unique
+	private double reterraforged$getSmoothPipeFactor(GeneratorContext genCtx, int centerX, int centerZ) {
+		double totalWeight = 0.0;
+		double pipeWeight = 0.0;
+
+		for (int dx = -2; dx <= 2; dx++) {
+			for (int dz = -2; dz <= 2; dz++) {
+				int sx = centerX + dx;
+				int sz = centerZ + dz;
+
+				double weight = 1.0 / (1.0 + (dx * dx + dz * dz));
+				totalWeight += weight;
+
+				var tile = genCtx.cache.provideAtChunk(sx >> 4, sz >> 4);
+				var reader = tile.getChunkReader(sx >> 4, sz >> 4);
+				if (reader.getCell(sx & 0xF, sz & 0xF).terrain == TerrainType.VOLCANO_PIPE) {
+					pipeWeight += weight;
+				}
+			}
+		}
+
+		return pipeWeight / totalWeight;
 	}
 
 	@Unique
