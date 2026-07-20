@@ -33,6 +33,7 @@
 		"StructurePiecesBuilderAccessor",
 		"MixinOceanMonumentBuilding",
 		"MixinOceanMonumentStructure",
+		"MixinJigsawStructure",
 		"terrablender.MixinParameterList",
 		"terrablender.MixinClimateSampler",
 		"terrablender.MixinTargetPoint",
