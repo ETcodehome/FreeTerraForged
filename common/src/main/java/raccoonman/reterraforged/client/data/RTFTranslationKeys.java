@@ -41,6 +41,7 @@ public final class RTFTranslationKeys {
 	public static final String GUI_BUTTON_EXPORT_AS_DATAPACK = resolve("gui.button.export");
 	public static final String GUI_BUTTON_EXPORT_SUCCESS = resolve("gui.button.export.success");
 	public static final String GUI_BUTTON_SEED = resolve("gui.button.seed");
+	public static final String GUI_BUTTON_RANDOMIZE_SEED = resolve("gui.button.randomize.seed.tooltip");
 	public static final String GUI_BUTTON_CONTINENT_TYPE = resolve("gui.button.continentType");
 	public static final String GUI_BUTTON_CONTINENT_SHAPE = resolve("gui.button.continentShape");
 	public static final String GUI_BUTTON_SPAWN_TYPE = resolve("gui.button.spawnType");

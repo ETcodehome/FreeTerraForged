@@ -48,6 +48,7 @@
   "reterraforged.gui.button.salt.tooltip": "A random seed value for the structure.",
   "reterraforged.gui.button.seed": "Seed",
   "reterraforged.gui.button.seed.tooltip": "Controls the world seed",
+  "reterraforged.gui.button.randomize.seed.tooltip": "Reroll a random world seed",
   "reterraforged.gui.button.smoothLayerDecorator": "Smooth Layer Decorator",
   "reterraforged.gui.button.smoothLayerDecorator.tooltip": "Modifies layer block levels (ie snow) to fit the terrain",
   "reterraforged.gui.button.spawnType": "Spawn Type",
