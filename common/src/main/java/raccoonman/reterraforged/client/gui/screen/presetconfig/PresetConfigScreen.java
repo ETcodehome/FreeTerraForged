@@ -55,10 +55,7 @@ public class PresetConfigScreen extends LinkedPageScreen {
 	}
 
 	public void setSeed(long seed) {
-		//TODO update the seed edit box
-		this.parent.getUiState().setSettings(this.getSettings().withOptions((options) -> {
-			return new WorldOptions(seed, options.generateStructures(), options.generateBonusChest());
-		}));
+		this.parent.getUiState().setSeed(String.valueOf(seed));
 	}
 	
 	public WorldCreationContext getSettings() {
