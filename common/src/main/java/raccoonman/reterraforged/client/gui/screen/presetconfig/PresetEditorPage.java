@@ -2,7 +2,6 @@ package raccoonman.reterraforged.client.gui.screen.presetconfig;
 
 import java.io.IOException;
 import java.util.Optional;
-import java.util.Random;
 
 import com.google.common.collect.ImmutableList;
 
@@ -13,6 +12,7 @@ import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.level.levelgen.WorldOptions;
 import raccoonman.reterraforged.client.data.RTFTranslationKeys;
 import raccoonman.reterraforged.client.gui.screen.page.BisectedPage;
 import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
@@ -158,33 +158,22 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 			}
 		};
 		this.seedEdit.setTextColor(0xFFFFFF);
+		this.seedEdit.setHint(Component.translatable(RTFTranslationKeys.GUI_BUTTON_SEED));
 		this.seedEdit.setValue(String.valueOf(currentSeed));
 		this.seedEdit.setResponder((text) -> {
-			long seedValue = parseSeed(text);
-			this.screen.setSeed(seedValue);
+			this.screen.setSeed(text);
 			this.regenerate();
 		});
 
 		// Randomize Seed Button
-		this.seedRandomize = Button.builder(Component.literal("🎲"), (button) -> {
-					long newSeed = new Random().nextLong();
-					this.seedEdit.setValue(String.valueOf(newSeed));
+		this.seedRandomize = Button.builder(Component.literal("R"), (button) -> {
+					String newSeed = String.valueOf(WorldOptions.randomSeed());
+					this.seedEdit.setValue(newSeed);
 					this.seedEdit.moveCursorToStart(false);
 				})
 				.tooltip(Tooltip.create(Component.translatable(RTFTranslationKeys.GUI_BUTTON_RANDOMIZE_SEED)))
 				.bounds(0, 0, 20, 20)
 				.build();
-	}
-
-	private static long parseSeed(String text) {
-		if (text == null || text.trim().isEmpty()) {
-			return 0L;
-		}
-		try {
-			return Long.parseLong(text.trim());
-		} catch (NumberFormatException e) {
-			return text.hashCode();
-		}
 	}
 
 	private void initLeftPreviewColumn(int columnX, int padding, int offset, int width, int yBase) {

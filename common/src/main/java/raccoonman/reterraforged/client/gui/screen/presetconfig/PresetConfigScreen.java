@@ -24,7 +24,6 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.data.DataGenerator;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.packs.repository.PackRepository;
-import net.minecraft.world.level.levelgen.WorldOptions;
 import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.client.gui.screen.page.LinkedPageScreen;
 import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
@@ -54,8 +53,8 @@ public class PresetConfigScreen extends LinkedPageScreen {
 		this.removeWidget(widget);
 	}
 
-	public void setSeed(long seed) {
-		this.parent.getUiState().setSeed(String.valueOf(seed));
+	public void setSeed(String seed) {
+		this.parent.getUiState().setSeed(seed);
 	}
 	
 	public WorldCreationContext getSettings() {
