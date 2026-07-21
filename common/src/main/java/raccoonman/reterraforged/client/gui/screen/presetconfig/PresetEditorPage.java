@@ -2,15 +2,21 @@ package raccoonman.reterraforged.client.gui.screen.presetconfig;
 
 import java.io.IOException;
 import java.util.Optional;
+import java.util.Random;
 
 import com.google.common.collect.ImmutableList;
+
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.CycleButton;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.network.chat.Component;
 import raccoonman.reterraforged.client.data.RTFTranslationKeys;
 import raccoonman.reterraforged.client.gui.screen.page.BisectedPage;
 import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
 import raccoonman.reterraforged.client.gui.widget.Slider;
-import raccoonman.reterraforged.client.gui.widget.ValueButton;
 
 public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, AbstractWidget, AbstractWidget> {
 	// Independent control components
@@ -28,7 +34,8 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	public static RenderMode staticMode2D = RenderMode.BIOME_TYPE;
 	public static RenderMode staticMode3D = RenderMode.HYPSOMETRIC;
 
-	private ValueButton<Integer> seed;
+	private EditBox seedEdit;
+	private Button seedRandomize;
 	public static Preview3D preview3D;
 	public static Preview2D preview2D;
 
@@ -135,10 +142,49 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 			this.regenerate();
 		}, RenderMode::name);
 
-		this.seed = PresetWidgets.createRandomButton(RTFTranslationKeys.GUI_BUTTON_SEED, (int) this.screen.getSettings().options().seed(), (i) -> {
-			this.screen.setSeed(i);
+		// Seed Text Input
+		long currentSeed = this.screen.getSettings().options().seed();
+		this.seedEdit = new EditBox(Minecraft.getInstance().font, 0, 0, 0, 20, Component.translatable(RTFTranslationKeys.GUI_BUTTON_SEED)) {
+			@Override
+			public boolean mouseClicked(double mouseX, double mouseY, int button) {
+				boolean wasFocused = this.isFocused();
+				boolean handled = super.mouseClicked(mouseX, mouseY, button);
+				// Highlight text only when clicking to gain focus
+				if (handled && !wasFocused) {
+					this.setCursorPosition(this.getValue().length());
+					this.setHighlightPos(0);
+				}
+				return handled;
+			}
+		};
+		this.seedEdit.setTextColor(0xFFFFFF);
+		this.seedEdit.setValue(String.valueOf(currentSeed));
+		this.seedEdit.setResponder((text) -> {
+			long seedValue = parseSeed(text);
+			this.screen.setSeed(seedValue);
 			this.regenerate();
 		});
+
+		// Randomize Seed Button
+		this.seedRandomize = Button.builder(Component.literal("🎲"), (button) -> {
+					long newSeed = new Random().nextLong();
+					this.seedEdit.setValue(String.valueOf(newSeed));
+					this.seedEdit.moveCursorToStart(false);
+				})
+				.tooltip(Tooltip.create(Component.translatable(RTFTranslationKeys.GUI_BUTTON_RANDOMIZE_SEED)))
+				.bounds(0, 0, 20, 20)
+				.build();
+	}
+
+	private static long parseSeed(String text) {
+		if (text == null || text.trim().isEmpty()) {
+			return 0L;
+		}
+		try {
+			return Long.parseLong(text.trim());
+		} catch (NumberFormatException e) {
+			return text.hashCode();
+		}
 	}
 
 	private void initLeftPreviewColumn(int columnX, int padding, int offset, int width, int yBase) {
@@ -172,13 +218,27 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		this.preview3D.regenerate();
 		this.screen.addWidgetToScreen(this.preview3D);
 
-		// Controls
-		this.seed.setX(x);
-		this.seed.setY(yBase);
-		this.seed.setWidth(width);
-		this.seed.setHeight(20);
-		this.screen.addWidgetToScreen(this.seed);
+		// Seed Input Controls: Edit box on the left, randomize button on the right
+		int buttonWidth = 20;
+		int gap = 4;
+		int editWidth = width - buttonWidth - gap;
 
+		this.seedEdit.setX(x);
+		this.seedEdit.setY(yBase);
+		this.seedEdit.setWidth(editWidth);
+		this.seedEdit.setHeight(20);
+
+		// Resets cursor & clears selection highlight without selecting text
+		this.seedEdit.moveCursorToStart(false);
+		this.screen.addWidgetToScreen(this.seedEdit);
+
+		this.seedRandomize.setX(x + editWidth + gap);
+		this.seedRandomize.setY(yBase);
+		this.seedRandomize.setWidth(buttonWidth);
+		this.seedRandomize.setHeight(20);
+		this.screen.addWidgetToScreen(this.seedRandomize);
+
+		// Controls
 		this.zoom3D.setX(x);
 		this.zoom3D.setY(yBase + 24);
 		this.zoom3D.setWidth(width);
@@ -197,7 +257,8 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		if (this.zoom3D != null) this.screen.removeWidgetFromScreen(this.zoom3D);
 		if (this.renderMode2D != null) this.screen.removeWidgetFromScreen(this.renderMode2D);
 		if (this.renderMode3D != null) this.screen.removeWidgetFromScreen(this.renderMode3D);
-		if (this.seed != null) this.screen.removeWidgetFromScreen(this.seed);
+		if (this.seedEdit != null) this.screen.removeWidgetFromScreen(this.seedEdit);
+		if (this.seedRandomize != null) this.screen.removeWidgetFromScreen(this.seedRandomize);
 
 		if (this.preview3D != null) {
 			this.screen.removeWidgetFromScreen(this.preview3D);
