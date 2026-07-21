@@ -24,6 +24,7 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.data.DataGenerator;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.packs.repository.PackRepository;
+import net.minecraft.world.level.levelgen.WorldOptions;
 import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.client.gui.screen.page.LinkedPageScreen;
 import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
@@ -32,7 +33,10 @@ import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 
 public class PresetConfigScreen extends LinkedPageScreen {
 	private CreateWorldScreen parent;
-	
+	private String seed;
+	private boolean seedInitialized;
+	private boolean applySeedOnClose;
+
 	public PresetConfigScreen(CreateWorldScreen parent) {
 		this.parent = parent;
 		this.currentPage = new PresetListPage(this);
@@ -41,6 +45,9 @@ public class PresetConfigScreen extends LinkedPageScreen {
 	@Override
 	public void onClose() {
 		super.onClose();
+		if(this.applySeedOnClose) {
+			this.applySeedToParent();
+		}
 
 		this.minecraft.setScreen(this.parent);
 	}
@@ -54,11 +61,37 @@ public class PresetConfigScreen extends LinkedPageScreen {
 	}
 
 	public void setSeed(String seed) {
-		this.parent.getUiState().setSeed(seed);
+		this.seed = seed;
+		this.seedInitialized = true;
+	}
+
+	public String getSeed() {
+		if(!this.seedInitialized) {
+			String parentSeed = this.parent.getUiState().getSeed();
+			this.seed = parentSeed == null || parentSeed.trim().isEmpty() ? String.valueOf(this.parent.getUiState().getSettings().options().seed()) : parentSeed;
+			this.seedInitialized = true;
+		}
+		return this.seed;
 	}
 	
 	public WorldCreationContext getSettings() {
-		return this.parent.getUiState().getSettings();
+		WorldCreationContext settings = this.parent.getUiState().getSettings();
+		if(this.seedInitialized && this.seed != null && !this.seed.trim().isEmpty()) {
+			settings = settings.withOptions((options) -> options.withSeed(WorldOptions.parseSeed(this.seed)));
+		}
+		return settings;
+	}
+
+	@Override
+	public void onDone() {
+		this.applySeedOnClose = true;
+		this.applySeedToParent();
+		super.onDone();
+		this.applySeedToParent();
+	}
+
+	private void applySeedToParent() {
+		this.parent.getUiState().setSeed(this.getSeed());
 	}
 
 	public void applyPreset(PresetEntry preset) throws IOException {		
