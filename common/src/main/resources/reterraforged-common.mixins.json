@@ -36,6 +36,7 @@
 		"terrablender.MixinNoiseChunk"
   	],
   	"client": [
+		"MixinGuaranteeData",
 		"ScreenInvoker"
   	],
   	"injectors": {
