@@ -45,17 +45,12 @@ public class UpliftRiverCarver implements RTFRiverCarver {
     // Fractional extension into Zone 4 where warping reaches full blend
     private static final float WARP_END_ZONE4_RATIO = 0.60F;
 
-    // Halved maximum space shift offset
+    // Maximum space shift / translation offset limit
     private static final float MAX_WARP_OFFSET = 0.05F;
 
-    // MODERATE SAFEGUARDS (1/3 position back toward Approach 2)
+    // MODERATE SAFEGUARDS
     private static final float MIN_ZONE2_WIDTH = 1.5F;       // Tight floor to prevent 0-block cliffs
     private static final float MIN_WARP_RAMP_SPAN = 6.0F;    // Tighter span to keep warp features pronounced
-
-    // Precomputed immutable constants
-    private final float bankHeightOffset;
-    private final float baseBedDepthOffset;
-    private final float zone2WidthFactor;
 
     public UpliftRiverCarver(River river, RiverWarp warp, RiverConfig config, RiverCarverSettings settings, Levels levels, LakeConfig lakeConfig, boolean isUpliftContinent) {
         this.fade = settings.fadeIn;
@@ -79,6 +74,8 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         this.main = config.main;
         this.connecting = settings.connecting;
         this.waterLine = levels.water;
+
+        // bedDepth stores bed level limits; banksDepth stores bank height limits above water
         this.bedDepth = new Range(levels.water, config.bedHeight);
         this.banksDepth = new Range(config.minBankHeight, config.maxBankHeight);
         this.valleyCurve = settings.valleyCurve;
@@ -90,18 +87,13 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         this.terraceNoise = Noises.simplex(5510, 200, 1);
         this.asymmetryNoise = Noises.simplex(1193, 250, 1);
         this.valleyPinchNoise = Noises.simplex(6204, 360, 2);
-        this.valleyWarpNoise = Noises.simplex(4321, 160, 1);
+        this.valleyWarpNoise = Noises.simplex(4321, 160, 2);
         this.gullyNoise = Noises.simplex(9876, 65, 2);
         this.rivuletNoise = Noises.simplex(5432, 20, 2);
         this.lakeWarpNoise = Noises.simplex(7439, 55, 3);
 
         this.lakeConfig = lakeConfig;
         this.isUpliftContinent = isUpliftContinent;
-
-        // Calculate constants once during instantiation
-        this.bankHeightOffset = config.maxBankHeight - config.minBankHeight;
-        this.baseBedDepthOffset = levels.water - config.bedHeight;
-        this.zone2WidthFactor = this.bankHeightOffset / levels.unit;
     }
 
     @Override
@@ -113,6 +105,12 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float flatnessInput = isUpliftContinent ? cell.waterTable : currT;
         float flatnessFactor = NoiseUtil.clamp(ContinentalHydrology.getFlatnessFactor(flatnessInput), 0.0F, 1.0F);
         float scaleFactor = 1.0F;
+
+        // Dynamic Bank Depth: Height of embankments ABOVE water level (minBankHeight -> maxBankHeight)
+        float dynamicBankDepth = this.getScaledSize(currT, this.banksDepth);
+
+        // Dynamic Bed Depth: Distance BELOW water level down to riverbed floor
+        float maxPossibleBedDepth = this.waterLine - this.getScaledSize(currT, this.bedDepth);
 
         // Step 1: Sample layout-critical noise
         float widthVar = this.widthNoise.compute(currX, currZ, 8241);
@@ -126,13 +124,14 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float sideBias = 1.0F + (asymmetry * 0.4F);
         float valleyPinchMultiplier = NoiseUtil.clamp(1.0F + valleyPinchVar, 0.05F, 1.95F);
 
-        // Zone radius calculations with light minimum bank width
+        // Zone radius calculations (Zone 2 width scales with dynamicBankDepth)
         float biasedScale = scaleFactor * dynamicWidthMult * sideBias;
         float zone1Radius = (float) Math.sqrt(this.getScaledSize(currT, this.bedWidth) * biasedScale);
         float lakeMultiplier = getLakeMultiplier(cell, currT, currX, currZ, flatnessFactor);
         zone1Radius *= lakeMultiplier;
 
-        float zone2Width = Math.max(MIN_ZONE2_WIDTH, this.zone2WidthFactor * biasedScale);
+        float dynamicZone2Width = (dynamicBankDepth / levels.unit) * biasedScale;
+        float zone2Width = Math.max(MIN_ZONE2_WIDTH, dynamicZone2Width);
         float zone2Radius = zone1Radius + zone2Width;
 
         float unshrunkZone3BaseWidth = config.bankWidth * dynamicWidthMult * valleyPinchMultiplier;
@@ -163,7 +162,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float rivuletRaw = this.rivuletNoise.compute(currX, currZ, 5432);
         float warpRaw = this.valleyWarpNoise.compute(currX, currZ, 4321);
 
-        // BALANCED RAMP SPAN CALCULATION:
+        // BALANCED RAMP SPAN CALCULATION
         float warpStartDist = zone2Radius + (zone3Width * WARP_START_ZONE3_RATIO);
         float calculatedEndDist = zone3Radius + (zone4Width * WARP_END_ZONE4_RATIO);
         float warpEndDist = Math.max(warpStartDist + MIN_WARP_RAMP_SPAN, calculatedEndDist);
@@ -205,18 +204,19 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         rivuletShape = rivuletShape * rivuletShape * rivuletShape;
         float drainageMask = (gullyShape * 0.7F) + (rivuletShape * 0.3F);
 
+        // Dynamic Bed Depth modulated by depth noise module
         float dynamicDepthMult = 1.0F + (depthVar * 0.25F);
-        float depthProgress = NoiseUtil.clamp(currT, 0.0F, 1.0F);
-        float bedDepthOffset = this.baseBedDepthOffset * dynamicDepthMult * depthProgress;
+        float dynamicBedDepth = maxPossibleBedDepth * dynamicDepthMult;
 
-        float targetValleyFloor = targetWaterLevel + this.bankHeightOffset;
+        // Bank depth defines surrounding valley floor height above target water level
+        float targetValleyFloor = targetWaterLevel + dynamicBankDepth;
         float valleyFloorBumpiness = ((terraceMask * 0.4F) - (drainageMask * 0.6F)) * this.levels.unit;
         float actualValleyFloorHeight = targetValleyFloor + valleyFloorBumpiness;
 
         // Calculate final cell heights
         float finalHeight = cell.height;
         if (currentLinearDist < zone1Radius) {
-            finalHeight = carveZone1Riverbed(cell, currT, distSqToCurr, bedDepthOffset, scaleFactor, targetWaterLevel, lakeMultiplier, flatnessFactor, depthVar);
+            finalHeight = carveZone1Riverbed(cell, currT, distSqToCurr, dynamicBedDepth, scaleFactor, targetWaterLevel, lakeMultiplier, flatnessFactor, depthVar);
         } else if (currentLinearDist < zone2Radius) {
             finalHeight = carveZone2BankStep(currentLinearDist, zone1Radius, zone2Radius, targetWaterLevel, actualValleyFloorHeight, terraceMask, drainageMask);
         } else if (currentLinearDist < zone3Radius) {
@@ -281,13 +281,13 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         return widenMultiplier;
     }
 
-    private float carveZone1Riverbed(Cell cell, float currT, float distSqToCurr, float bedDepthOffset, float sqScaleFactor, float targetWaterLevel, float widenMultiplier, float flatnessFactor, float depthVar) {
+    private float carveZone1Riverbed(Cell cell, float currT, float distSqToCurr, float dynamicBedDepth, float sqScaleFactor, float targetWaterLevel, float widenMultiplier, float flatnessFactor, float depthVar) {
         float effectiveScaleFactor = sqScaleFactor * (widenMultiplier * widenMultiplier);
         float bedInfluence = this.getDistanceAlpha(currT, distSqToCurr, this.bedWidth, effectiveScaleFactor);
         bedInfluence = bedInfluence * bedInfluence * (3.0F - 2.0F * bedInfluence);
 
         float shallowNoiseFloor = (2.3F + (depthVar * 0.3F)) * this.levels.unit;
-        float progressiveDepth = bedDepthOffset;
+        float progressiveDepth = dynamicBedDepth;
 
         if (widenMultiplier > 1.0F) {
             float lakeDepthMulti = 0.35F + (lakeConfig.depth / 50.0F);
@@ -309,6 +309,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
             finalizedDepth = absoluteFloor;
         }
 
+        // Riverbed sits BELOW target water level by finalizedDepth
         float bedHeight = targetWaterLevel - (finalizedDepth * bedInfluence);
 
         cell.moisture = 1.0F;
@@ -331,6 +332,8 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         progress = Math.max(0.0F, progress - (drainageMask * 0.3F * arc));
 
         float smoothProgress = progress * progress * (3.0F - 2.0F * progress);
+
+        // Slopes upward from targetWaterLevel at river edge to targetValleyFloor at outer bank
         return NoiseUtil.lerp(targetWaterLevel, targetValleyFloor, smoothProgress);
     }
 
