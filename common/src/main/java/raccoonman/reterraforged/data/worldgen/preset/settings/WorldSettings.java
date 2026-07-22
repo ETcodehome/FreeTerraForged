@@ -107,13 +107,18 @@ public class WorldSettings {
     }
     
     public static class Properties {
+    	// Also the pivot Populators.makeDeepOcean scales its floor noise's horizontal wavelength
+    	// against, so the floor is byte-identical to upstream at this default and only changes shape
+    	// (not just size) once a preset actually configures a different oceanDepth. Keep both in sync.
+    	public static final int DEFAULT_OCEAN_DEPTH = 63;
+
     	public static final Codec<Properties> CODEC = RecordCodecBuilder.create(instance -> instance.group(
     		SpawnType.CODEC.fieldOf("spawnType").forGetter((o) -> o.spawnType),
     		Codec.INT.fieldOf("worldHeight").forGetter((o) -> o.worldHeight),
     		Codec.INT.optionalFieldOf("worldDepth", 64).forGetter((o) -> o.worldDepth),
     		Codec.INT.fieldOf("seaLevel").forGetter((o) -> o.seaLevel),
     		Codec.INT.optionalFieldOf("lavaLevel", -54).forGetter((o) -> o.lavaLevel),
-    		Codec.INT.optionalFieldOf("oceanDepth", 63).forGetter((o) -> o.oceanDepth),
+    		Codec.INT.optionalFieldOf("oceanDepth", DEFAULT_OCEAN_DEPTH).forGetter((o) -> o.oceanDepth),
             Codec.INT.optionalFieldOf("spawnX", 0).forGetter((o) -> o.spawnX),
             Codec.INT.optionalFieldOf("spawnZ", 0).forGetter((o) -> o.spawnZ)
     	).apply(instance, Properties::new));

@@ -1,6 +1,7 @@
 package raccoonman.reterraforged.world.worldgen.cell.terrain;
 
 import raccoonman.reterraforged.data.worldgen.preset.settings.TerrainSettings;
+import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings;
 import raccoonman.reterraforged.world.worldgen.biome.Erosion;
 import raccoonman.reterraforged.world.worldgen.biome.Weirdness;
 import raccoonman.reterraforged.world.worldgen.cell.CellPopulator;
@@ -32,18 +33,31 @@ public class Populators {
 		float upper = Math.max(levels.water(-minDepth), lower);
 		float canyonUpper = Math.max(levels.water(-canyonMinDepth), lower);
 
-		Noise hills = Noises.perlin(++seed, 150, 3);
+		// The floor's horizontal noise scale needs to grow along with oceanDepth, not stay fixed.
+		// The vertical range (lower..upper above) already scales with oceanDepth, but the noise's
+		// own wavelength didn't, so the same hills/canyons shape was getting stretched into an
+		// ever-taller range at a fixed width as oceanDepth grew, producing proportionally steeper
+		// slopes rather than "more" detail. Scaling the wavelength by the same ratio keeps the
+		// floor's actual steepness roughly constant regardless of oceanDepth. Pivoted on the
+		// default, upstream-matching oceanDepth so behavior at the default is unchanged.
+		float depthScale = oceanDepth / (float) WorldSettings.Properties.DEFAULT_OCEAN_DEPTH;
+		int hillsScale = Math.max(1, Math.round(150 * depthScale));
+		int selectorScale = Math.max(1, Math.round(500 * depthScale));
+		int warpScale = Math.max(1, Math.round(50 * depthScale));
+		float warpStrength = 50.0F * depthScale;
+
+		Noise hills = Noises.perlin(++seed, hillsScale, 3);
 		hills = Noises.map(hills, lower, upper);
 
-		Noise canyons = Noises.perlin(++seed, 150, 4);
+		Noise canyons = Noises.perlin(++seed, hillsScale, 4);
 		canyons = Noises.powCurve(canyons, 0.2F);
 		canyons = Noises.invert(canyons);
 		canyons = Noises.map(canyons, lower, canyonUpper);
 
-		Noise selector = Noises.perlin(++seed, 500, 1);
+		Noise selector = Noises.perlin(++seed, selectorScale, 1);
 
 		Noise height = Noises.blend(selector, hills, canyons, 0.6F, 0.65F);
-		height = Noises.warpPerlin(height, ++seed, 50, 2, 50.0F);
+		height = Noises.warpPerlin(height, ++seed, warpScale, 2, warpStrength);
 		height = Noises.clamp(height, lower, upper);
 		return new OceanPopulator(TerrainType.DEEP_OCEAN, height, levels.min);
 	}
