@@ -39,15 +39,20 @@ public class UpliftRiverCarver implements RTFRiverCarver {
     public LakeConfig lakeConfig;
     private boolean isUpliftContinent;
 
-    // Fractional offset into Zone 3 where warping begins
-    private static final float WARP_START_ZONE3_RATIO = 0.85F;
+    // Fractional offset into Zone 3 where warping begins (8% into Zone 3)
+    private static final float WARP_START_ZONE3_RATIO = 0.08F;
 
-    // Power exponent for standard vs warped uplift transition across outer Zone 3
-    private static final float WARP_POWER_EXPONENT = 3.0F;
+    // Fractional extension into Zone 4 where warping reaches full blend
+    private static final float WARP_END_ZONE4_RATIO = 0.60F;
+
     // Halved maximum space shift offset
-    private static final float MAX_WARP_OFFSET = 0.025F;
+    private static final float MAX_WARP_OFFSET = 0.05F;
 
-    // Precomputed immutable constants to alleviate CPU overhead per cell
+    // MODERATE SAFEGUARDS (1/3 position back toward Approach 2)
+    private static final float MIN_ZONE2_WIDTH = 1.5F;       // Tight floor to prevent 0-block cliffs
+    private static final float MIN_WARP_RAMP_SPAN = 6.0F;    // Tighter span to keep warp features pronounced
+
+    // Precomputed immutable constants
     private final float bankHeightOffset;
     private final float baseBedDepthOffset;
     private final float zone2WidthFactor;
@@ -84,19 +89,10 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         this.depthNoise = Noises.simplex(3912, 100, 2);
         this.terraceNoise = Noises.simplex(5510, 200, 1);
         this.asymmetryNoise = Noises.simplex(1193, 250, 1);
-
-        // Broad spatial period (~360 blocks) so the valley floor gradually pinches
-        // narrow then flares wide as the river travels through the world
         this.valleyPinchNoise = Noises.simplex(6204, 360, 2);
-
-        // Valley floor domain warp noise (~160 blocks) to disguise linear micro-terraces
         this.valleyWarpNoise = Noises.simplex(4321, 160, 1);
-
-        // Drainage initialization
         this.gullyNoise = Noises.simplex(9876, 65, 2);
         this.rivuletNoise = Noises.simplex(5432, 20, 2);
-
-        // Multi-octave simplex noise for complex, jagged lake boundaries (Scale 55, 3 Octaves)
         this.lakeWarpNoise = Noises.simplex(7439, 55, 3);
 
         this.lakeConfig = lakeConfig;
@@ -118,34 +114,34 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float flatnessFactor = NoiseUtil.clamp(ContinentalHydrology.getFlatnessFactor(flatnessInput), 0.0F, 1.0F);
         float scaleFactor = 1.0F;
 
-        // Step 1: Sample ONLY layout-critical noise arrays to determine structural boundaries
+        // Step 1: Sample layout-critical noise
         float widthVar = this.widthNoise.compute(currX, currZ, 8241);
         float asymmetry = this.asymmetryNoise.compute(currX, currZ, 1193);
         float valleyPinchVar = this.valleyPinchNoise.compute(currX, currZ, 6204) * 2.0F;
 
-        // Always run mask logic to ensure clean falloffs
         updateValleyMask(prevX, prevZ, prevT, currT, distSqToCurr, scaleFactor, cell);
 
-        // Compute layout parameters
+        // Layout parameters
         float dynamicWidthMult = 1.0F + (widthVar * 0.35F);
         float sideBias = 1.0F + (asymmetry * 0.4F);
         float valleyPinchMultiplier = NoiseUtil.clamp(1.0F + valleyPinchVar, 0.05F, 1.95F);
 
-        // Zone radius calculations
+        // Zone radius calculations with light minimum bank width
         float biasedScale = scaleFactor * dynamicWidthMult * sideBias;
         float zone1Radius = (float) Math.sqrt(this.getScaledSize(currT, this.bedWidth) * biasedScale);
         float lakeMultiplier = getLakeMultiplier(cell, currT, currX, currZ, flatnessFactor);
         zone1Radius *= lakeMultiplier;
 
-        float zone2Width = this.zone2WidthFactor * biasedScale;
+        float zone2Width = Math.max(MIN_ZONE2_WIDTH, this.zone2WidthFactor * biasedScale);
         float zone2Radius = zone1Radius + zone2Width;
+
         float unshrunkZone3BaseWidth = config.bankWidth * dynamicWidthMult * valleyPinchMultiplier;
         float shrinkFactor = NoiseUtil.clamp(currT * this.fadeInv, 0.0F, 1.0F);
         float zone3BaseWidth = unshrunkZone3BaseWidth * shrinkFactor;
         float zone3Width = zone3BaseWidth * shrinkFactor;
         float zone3Radius = zone2Radius + zone3Width;
 
-        // Calculate baseline target water level for boundary checks
+        // Calculate target water level
         float baseWaterLevel = ContinentalHydrology.getComplexWaterHeight(
                 cell.waterTable,
                 cell.globalContinentScale,
@@ -154,37 +150,45 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float targetWaterLevel = baseWaterLevel + levels.water;
 
         float discrepancyScale = 1.0F + (levels.scale(cell.height - targetWaterLevel)) / 100.0F;
-        float zone4Radius = zone3Radius + (unshrunkZone3BaseWidth * (4.0F + discrepancyScale));
+        float zone4Width = unshrunkZone3BaseWidth * (4.0F + discrepancyScale);
+        float zone4Radius = zone3Radius + zone4Width;
 
-        // Step 2: Early Exit Guard. If outside the maximum radius, skip remaining operations
+        // Early Exit Guard
         if (currentLinearDist >= zone4Radius) return;
 
-        // Step 3: Defer remaining heavy noise evaluations
+        // Defer remaining heavy noise evaluations
         float depthVar = this.depthNoise.compute(currX, currZ, 3912);
         float terraceMask = this.terraceNoise.compute(currX, currZ, 5510);
         float gullyRaw = this.gullyNoise.compute(currX, currZ, 9876);
         float rivuletRaw = this.rivuletNoise.compute(currX, currZ, 5432);
         float warpRaw = this.valleyWarpNoise.compute(currX, currZ, 4321);
 
-        // Start warp transition 1/3 of the way into Zone 3 to keep standard uplift
-        // dominant across Zone 1, Zone 2, and the inner valley floor.
+        // BALANCED RAMP SPAN CALCULATION:
         float warpStartDist = zone2Radius + (zone3Width * WARP_START_ZONE3_RATIO);
+        float calculatedEndDist = zone3Radius + (zone4Width * WARP_END_ZONE4_RATIO);
+        float warpEndDist = Math.max(warpStartDist + MIN_WARP_RAMP_SPAN, calculatedEndDist);
+        float rampSpan = warpEndDist - warpStartDist;
 
         float zone3Weight = 0.0F;
-        if (currentLinearDist > warpStartDist && currentLinearDist < zone4Radius) {
-            if (currentLinearDist < zone3Radius) {
-                float rampSpan = Math.max(0.001F, zone3Radius - warpStartDist);
-                float progress = NoiseUtil.clamp((currentLinearDist - warpStartDist) / rampSpan, 0.0F, 1.0F);
-                zone3Weight = (float) Math.pow(progress, WARP_POWER_EXPONENT);
+        if (currentLinearDist > warpStartDist) {
+            float progress = NoiseUtil.clamp((currentLinearDist - warpStartDist) / rampSpan, 0.0F, 1.0F);
+
+            // Quintic Smoothstep (6t^5 - 15t^4 + 10t^3)
+            float smoothProgress = progress * progress * progress * (progress * (progress * 6.0F - 15.0F) + 10.0F);
+
+            if (currentLinearDist < warpEndDist) {
+                zone3Weight = smoothProgress;
             } else {
-                // Smooth fadeout across Zone 4 back to standard terrain
-                float fadeoutProgress = 1.0F - ((currentLinearDist - zone3Radius) / Math.max(0.001F, zone4Radius - zone3Radius));
+                float fadeoutProgress = 1.0F - ((currentLinearDist - warpEndDist) / Math.max(0.001F, zone4Radius - warpEndDist));
                 zone3Weight = NoiseUtil.clamp(fadeoutProgress, 0.0F, 1.0F);
             }
         }
 
-        // Apply Zone 3 domain warping with reduced intensity
-        float noiseOffset = warpRaw * MAX_WARP_OFFSET;
+        // Retain at least 60% warp amplitude even on small/narrow streams
+        float widthWarpScale = NoiseUtil.clamp(shrinkFactor * dynamicWidthMult, 0.60F, 1.0F);
+        float effectiveWarpOffset = MAX_WARP_OFFSET * widthWarpScale;
+
+        float noiseOffset = warpRaw * effectiveWarpOffset;
         float warpedWaterHeight = ContinentalHydrology.getZone3WarpedWaterHeight(
                 cell.waterTable,
                 noiseOffset,
@@ -201,7 +205,6 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         rivuletShape = rivuletShape * rivuletShape * rivuletShape;
         float drainageMask = (gullyShape * 0.7F) + (rivuletShape * 0.3F);
 
-        // Calculate dynamic depth multiplier and apply downstream depth progression logic
         float dynamicDepthMult = 1.0F + (depthVar * 0.25F);
         float depthProgress = NoiseUtil.clamp(currT, 0.0F, 1.0F);
         float bedDepthOffset = this.baseBedDepthOffset * dynamicDepthMult * depthProgress;
@@ -210,7 +213,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float valleyFloorBumpiness = ((terraceMask * 0.4F) - (drainageMask * 0.6F)) * this.levels.unit;
         float actualValleyFloorHeight = targetValleyFloor + valleyFloorBumpiness;
 
-        // Calculate the final cell heights
+        // Calculate final cell heights
         float finalHeight = cell.height;
         if (currentLinearDist < zone1Radius) {
             finalHeight = carveZone1Riverbed(cell, currT, distSqToCurr, bedDepthOffset, scaleFactor, targetWaterLevel, lakeMultiplier, flatnessFactor, depthVar);
@@ -222,7 +225,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
             finalHeight = carveZone4Fadeout(cell.height, currentLinearDist, zone3Radius, zone4Radius, actualValleyFloorHeight, terraceMask, drainageMask);
         }
 
-        // Only commit data changes to the cell if our carving operations actually cut down the world
+        // Only commit data changes to the cell if carving cut down the world
         if (finalHeight < cell.height) {
             cell.height = finalHeight;
             cell.riverZone = getRiverZoneTag(cell, currentLinearDist, zone1Radius, zone2Radius, zone3Radius);
@@ -283,34 +286,24 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float bedInfluence = this.getDistanceAlpha(currT, distSqToCurr, this.bedWidth, effectiveScaleFactor);
         bedInfluence = bedInfluence * bedInfluence * (3.0F - 2.0F * bedInfluence);
 
-        // 1. Establish a baseline floor that naturally undulates between ~2.0 and ~2.6 blocks.
-        // This ensures headwaters and shallows have organic ripples/sandbars instead of a flat sheet.
         float shallowNoiseFloor = (2.3F + (depthVar * 0.3F)) * this.levels.unit;
-
-        // 2. Base deep-water capability (driven by downstream progress)
         float progressiveDepth = bedDepthOffset;
 
-        // Repurpose depth noise to ensure lake basins break out of uniform parameters natively
         if (widenMultiplier > 1.0F) {
             float lakeDepthMulti = 0.35F + (lakeConfig.depth / 50.0F);
             float lakeVariance = 1.0F + (depthVar * 0.40F);
             progressiveDepth = progressiveDepth * (1.0F + (widenMultiplier - 1.0F) * lakeDepthMulti * lakeVariance);
         }
 
-        // 3. Combine the base floor with progressive depth, scaled by the regional flatness.
-        // Low flatness = channel is compacted tightly against our textured shallow floor.
-        // High flatness = channel expands deeply away from the baseline.
         float finalizedDepth = shallowNoiseFloor + (progressiveDepth * flatnessFactor);
 
-        // 4. Inject structural deep-pocket trenches specifically when flatness factor is high
         if (flatnessFactor > 0.4F) {
             float flatnessIntensity = (flatnessFactor - 0.4F) / 0.6F;
-            float trenchNoise = (depthVar * 0.5F + 0.5F); // Map signed noise safely to [0.0, 1.0]
+            float trenchNoise = (depthVar * 0.5F + 0.5F);
             float deepPocketBonus = flatnessIntensity * trenchNoise * 3.5F * this.levels.unit * currT;
             finalizedDepth += deepPocketBonus;
         }
 
-        // Hard protective structural guard to catch extreme negative noise spikes
         float absoluteFloor = 2.0F * this.levels.unit;
         if (finalizedDepth < absoluteFloor) {
             finalizedDepth = absoluteFloor;
@@ -324,10 +317,15 @@ public class UpliftRiverCarver implements RTFRiverCarver {
     }
 
     private float carveZone2BankStep(float distance, float zone1Radius, float zone2Radius, float targetWaterLevel, float targetValleyFloor, float terraceMask, float drainageMask) {
-        float progress = (distance - zone1Radius) / (zone2Radius - zone1Radius);
+        float actualWidth = zone2Radius - zone1Radius;
+        float progress = (distance - zone1Radius) / actualWidth;
         progress = NoiseUtil.clamp(progress, 0.0F, 1.0F);
 
-        progress = applyTerracing(progress, terraceMask, drainageMask, 3.0F);
+        // Light width gating only when bank is tighter than 1.5 blocks
+        float widthTerraceFactor = NoiseUtil.clamp((actualWidth - 1.0F) / 1.0F, 0.0F, 1.0F);
+        if (widthTerraceFactor > 0.0F) {
+            progress = applyTerracing(progress, terraceMask * 0.45F * widthTerraceFactor, drainageMask, 2.0F);
+        }
 
         float arc = progress * (1.0F - progress) * 4.0F;
         progress = Math.max(0.0F, progress - (drainageMask * 0.3F * arc));
@@ -337,7 +335,8 @@ public class UpliftRiverCarver implements RTFRiverCarver {
     }
 
     private float carveZone4Fadeout(float originalTerrainHeight, float distance, float zone3Radius, float zone4Radius, float targetValleyFloor, float terraceMask, float drainageMask) {
-        float progress = (distance - zone3Radius) / (zone4Radius - zone3Radius);
+        float span = Math.max(6.0F, zone4Radius - zone3Radius);
+        float progress = (distance - zone3Radius) / span;
         progress = NoiseUtil.clamp(progress, 0.0F, 1.0F);
 
         float modifiedProgress = applyTerracing(progress, terraceMask, drainageMask, 5.0F);
@@ -352,7 +351,6 @@ public class UpliftRiverCarver implements RTFRiverCarver {
     private float applyTerracing(float progress, float terraceMask, float drainageMask, float steps) {
         float intactTerrace = Math.max(0.0F, terraceMask - (drainageMask * 1.5F));
 
-        // Balanced strength multiplier (1.75F) for a confident but natural terrace presence
         float terraceStrength = NoiseUtil.clamp(intactTerrace * 1.75F, 0.0F, 1.0F);
 
         if (terraceStrength <= 0.0F) {
@@ -363,7 +361,6 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float floor = (float) Math.floor(scaledProgress);
         float fract = scaledProgress - floor;
 
-        // 0.78F puts the cliff face in the upper 22% of the step, distinctly steep but scalable.
         float baseCliffBias = 0.78F;
         float cliffBias = NoiseUtil.clamp(baseCliffBias - (drainageMask * 0.14F), 0.55F, 0.88F);
 
@@ -373,16 +370,9 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float steppedFract;
         if (fract < cliffBias) {
             float t = fract / cliffBias;
-
-            // Split the difference between t^3 and t^4 using t^3.5
-            // This gives a flat-ish shelf that transitions smoothly into the debris heap
             steppedFract = (float) Math.pow(t, 3.5F) * talusHeight;
         } else {
             float t = (fract - cliffBias) / (1.0F - cliffBias);
-
-            // We blend a sharp quadratic curve (t^2) with a smooth S-curve (3t^2 - 2t^3).
-            // This yields a cliff face that breaks out of the talus cleanly, but wraps
-            // into the upper shelf with a slightly weathered, natural roll-over.
             float sharpCurve = t * t;
             float smoothCurve = t * t * (3.0F - 2.0F * t);
             float hybridCliff = NoiseUtil.lerp(sharpCurve, smoothCurve, 0.5F);
@@ -392,8 +382,6 @@ public class UpliftRiverCarver implements RTFRiverCarver {
 
         float steppedProgress = (floor + steppedFract) / steps;
 
-        // A 90% maximum blend weight ensures the steps stay well-defined
-        // while allowing the regional terrain shape to gently break up the monotony.
         return NoiseUtil.lerp(progress, steppedProgress, terraceStrength * 0.90F);
     }
 
@@ -432,11 +420,6 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         return minScale + getDeterministicFloat(riverSeed) * (maxScale - minScale);
     }
 
-    /**
-     * A stateless, high-quality mixing hash function that maps a long seed
-     * to a pseudo-random uniform float in the range [0.0f, 1.0f).
-     * Eliminates object allocation completely.
-     */
     private static float getDeterministicFloat(long seed) {
         seed ^= (seed >>> 33);
         seed *= 0xff51afd7ed558ccdL;
@@ -466,13 +449,8 @@ public class UpliftRiverCarver implements RTFRiverCarver {
     }
 
     private float getDistanceAlpha(float t, float dist2, Range range, float sqScaleFactor) {
-
         float size2 = this.getScaledSize(t, range) * sqScaleFactor;
-
-        // fade is beyond area of maximum influence
         if (dist2 >= size2) return 0.0F;
-
-        // return a gradient between 1.0 (at the exact center) and 0.0 (right at the edge).
         return 1.0F - dist2 / size2;
     }
 
