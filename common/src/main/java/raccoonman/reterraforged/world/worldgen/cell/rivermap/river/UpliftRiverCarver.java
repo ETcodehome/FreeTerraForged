@@ -35,8 +35,17 @@ public class UpliftRiverCarver implements RTFRiverCarver {
     private Noise gullyNoise;
     private Noise rivuletNoise;
     private Noise lakeWarpNoise;
+    private Noise valleyWarpNoise;
     public LakeConfig lakeConfig;
     private boolean isUpliftContinent;
+
+    // Fractional offset into Zone 3 where warping begins
+    private static final float WARP_START_ZONE3_RATIO = 0.85F;
+
+    // Power exponent for standard vs warped uplift transition across outer Zone 3
+    private static final float WARP_POWER_EXPONENT = 3.0F;
+    // Halved maximum space shift offset
+    private static final float MAX_WARP_OFFSET = 0.025F;
 
     // Precomputed immutable constants to alleviate CPU overhead per cell
     private final float bankHeightOffset;
@@ -79,6 +88,9 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         // Broad spatial period (~360 blocks) so the valley floor gradually pinches
         // narrow then flares wide as the river travels through the world
         this.valleyPinchNoise = Noises.simplex(6204, 360, 2);
+
+        // Valley floor domain warp noise (~160 blocks) to disguise linear micro-terraces
+        this.valleyWarpNoise = Noises.simplex(4321, 160, 1);
 
         // Drainage initialization
         this.gullyNoise = Noises.simplex(9876, 65, 2);
@@ -133,24 +145,54 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float zone3Width = zone3BaseWidth * shrinkFactor;
         float zone3Radius = zone2Radius + zone3Width;
 
-        float targetWaterLevel =
-            (ContinentalHydrology.getComplexWaterHeight(
-                    cell.waterTable,
-                    cell.globalContinentScale,
-                    cell.continentSizeModifier)
-            ) + levels.water;
+        // Calculate baseline target water level for boundary checks
+        float baseWaterLevel = ContinentalHydrology.getComplexWaterHeight(
+                cell.waterTable,
+                cell.globalContinentScale,
+                cell.continentSizeModifier);
+
+        float targetWaterLevel = baseWaterLevel + levels.water;
 
         float discrepancyScale = 1.0F + (levels.scale(cell.height - targetWaterLevel)) / 100.0F;
         float zone4Radius = zone3Radius + (unshrunkZone3BaseWidth * (4.0F + discrepancyScale));
 
-        // Step 2: Early Exit Guard. If outside the maximum radius, skip the remaining expensive operations
+        // Step 2: Early Exit Guard. If outside the maximum radius, skip remaining operations
         if (currentLinearDist >= zone4Radius) return;
 
-        // Step 3: Defer remaining heavy noise evaluations until we are guaranteed to modify the cell
+        // Step 3: Defer remaining heavy noise evaluations
         float depthVar = this.depthNoise.compute(currX, currZ, 3912);
         float terraceMask = this.terraceNoise.compute(currX, currZ, 5510);
         float gullyRaw = this.gullyNoise.compute(currX, currZ, 9876);
         float rivuletRaw = this.rivuletNoise.compute(currX, currZ, 5432);
+        float warpRaw = this.valleyWarpNoise.compute(currX, currZ, 4321);
+
+        // Start warp transition 1/3 of the way into Zone 3 to keep standard uplift
+        // dominant across Zone 1, Zone 2, and the inner valley floor.
+        float warpStartDist = zone2Radius + (zone3Width * WARP_START_ZONE3_RATIO);
+
+        float zone3Weight = 0.0F;
+        if (currentLinearDist > warpStartDist && currentLinearDist < zone4Radius) {
+            if (currentLinearDist < zone3Radius) {
+                float rampSpan = Math.max(0.001F, zone3Radius - warpStartDist);
+                float progress = NoiseUtil.clamp((currentLinearDist - warpStartDist) / rampSpan, 0.0F, 1.0F);
+                zone3Weight = (float) Math.pow(progress, WARP_POWER_EXPONENT);
+            } else {
+                // Smooth fadeout across Zone 4 back to standard terrain
+                float fadeoutProgress = 1.0F - ((currentLinearDist - zone3Radius) / Math.max(0.001F, zone4Radius - zone3Radius));
+                zone3Weight = NoiseUtil.clamp(fadeoutProgress, 0.0F, 1.0F);
+            }
+        }
+
+        // Apply Zone 3 domain warping with reduced intensity
+        float noiseOffset = warpRaw * MAX_WARP_OFFSET;
+        float warpedWaterHeight = ContinentalHydrology.getZone3WarpedWaterHeight(
+                cell.waterTable,
+                noiseOffset,
+                zone3Weight,
+                cell.globalContinentScale,
+                cell.continentSizeModifier
+        );
+        targetWaterLevel = warpedWaterHeight + levels.water;
 
         // Drainage calculation adjustments
         float gullyShape = 1.0F - Math.abs(gullyRaw);
@@ -424,7 +466,6 @@ public class UpliftRiverCarver implements RTFRiverCarver {
     }
 
     private float getDistanceAlpha(float t, float dist2, Range range, float sqScaleFactor) {
-
 
         float size2 = this.getScaledSize(t, range) * sqScaleFactor;
 
