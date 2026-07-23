@@ -36,16 +36,8 @@ import net.minecraft.world.level.levelgen.structure.structures.JigsawStructure;
 import net.minecraft.world.level.levelgen.structure.templatesystem.LiquidSettings;
 
 /**
- * Trial Chambers and Ancient City pick their start_height blind, with no project_start_to_heightmap set - under a
- * deep enough oceanDepth (or shallow enough worldDepth) the vanilla sample can land in open water or below the
- * dimension's real floor, and every other piece is placed relative to that first point via jigsaw connectors, so
- * the whole structure inherits the bad anchor. Reimplements findGenerationPoint() for just these two structures:
- * samples real OCEAN_FLOOR_WG across the structure's own max_distance_from_center footprint (both the deepest floor
- * and shallowest surface found) to pick an initial target to try, retargets the blind sample into whatever safe
- * window that leaves (or skips if none exists), then verifies the real generated bounding box - checked against the
- * world's real bottom, and against a second, more precise ceiling resampled from the real footprint's own lowest
- * point rather than the pre-build guess radius, since a piece can be nowhere near wherever the tallest point in that
- * wider radius happened to be.
+ * Keeps Trial Chamber and Ancient City jigsaw starts within a terrain-bounded vertical window, then validates the
+ * generated pieces against the dimension floor and the lowest surface over the resulting structure footprint.
  */
 @Mixin(JigsawStructure.class)
 public class MixinJigsawStructure {
@@ -139,17 +131,12 @@ public class MixinJigsawStructure {
 			return;
 		}
 
-		// getPiecesBuilder() is not idempotent - it re-runs random piece selection against the structure's
-		// RandomSource on every call - so the result must be forced and reused here, not left as the lazy
-		// consumer vanilla's own generate() would otherwise invoke a second time with an advanced RNG state.
+		// Building twice advances the structure RNG and can select different pieces, so reuse one materialized builder.
 		Structure.GenerationStub stub = result.get();
 		StructurePiecesBuilder builder = stub.getPiecesBuilder();
 		BoundingBox realBbox = builder.getBoundingBox();
 
-		// maxLocalY only bounded the pre-build guess against the shallowest point anywhere in the whole
-		// max_distance_from_center radius, which can be far from where the real structure actually ended up
-		// sprawling - a hill on the far side of that radius shouldn't grant headroom to a piece nowhere near it.
-		// Now that the real footprint is known, re-derive the ceiling from the real footprint's own lowest point.
+		// The initial search radius can include unrelated high terrain; derive the ceiling from the resulting footprint.
 		int realMaxLocalY = rtf$sampleLocalCeiling(generationContext, realBbox) - rtf$MARGIN;
 		if (realBbox.minY() <= minWorldY || realBbox.maxY() >= realMaxLocalY) {
 			cir.setReturnValue(Optional.empty());
@@ -183,9 +170,6 @@ public class MixinJigsawStructure {
 		return new FloorRange(worst, best);
 	}
 
-	// Grid-samples across the real structure's own footprint (not the wide pre-build guess radius) and takes
-	// the lowest point found - the worst-case-within-reach philosophy already used for the pre-build floor
-	// sample, just correctly scoped to where the structure actually is instead of anywhere within reach of it.
 	@Unique
 	private int rtf$sampleLocalCeiling(Structure.GenerationContext generationContext, BoundingBox realBbox) {
 		int steps = rtf$GRID_STEPS_PER_SIDE * 2;

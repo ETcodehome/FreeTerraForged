@@ -148,7 +148,7 @@ class MixinNoiseChunk {
 									effectiveLavaStatus = new Aquifer.FluidStatus(effectiveLava, Blocks.LAVA.defaultBlockState());
 								}
 							} catch (Exception e) {
-								// tile cache miss — fall back to global lava level
+								// Preserve the global lava level when terrain lookup fails.
 							}
 						}
 						columnCache[0] = x;

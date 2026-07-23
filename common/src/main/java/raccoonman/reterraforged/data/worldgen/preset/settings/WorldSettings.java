@@ -107,9 +107,6 @@ public class WorldSettings {
     }
     
     public static class Properties {
-    	// Also the pivot Populators.makeDeepOcean scales its floor noise's horizontal wavelength
-    	// against, so the floor is byte-identical to upstream at this default and only changes shape
-    	// (not just size) once a preset actually configures a different oceanDepth. Keep both in sync.
     	public static final int DEFAULT_OCEAN_DEPTH = 63;
 
     	public static final Codec<Properties> CODEC = RecordCodecBuilder.create(instance -> instance.group(

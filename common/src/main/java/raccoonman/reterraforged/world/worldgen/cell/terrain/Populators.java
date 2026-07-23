@@ -33,13 +33,7 @@ public class Populators {
 		float upper = Math.max(levels.water(-minDepth), lower);
 		float canyonUpper = Math.max(levels.water(-canyonMinDepth), lower);
 
-		// The floor's horizontal noise scale needs to grow along with oceanDepth, not stay fixed.
-		// The vertical range (lower..upper above) already scales with oceanDepth, but the noise's
-		// own wavelength didn't, so the same hills/canyons shape was getting stretched into an
-		// ever-taller range at a fixed width as oceanDepth grew, producing proportionally steeper
-		// slopes rather than "more" detail. Scaling the wavelength by the same ratio keeps the
-		// floor's actual steepness roughly constant regardless of oceanDepth. Pivoted on the
-		// default, upstream-matching oceanDepth so behavior at the default is unchanged.
+		// Scale horizontal noise and warp with vertical depth to keep ocean-floor slopes consistent.
 		float depthScale = oceanDepth / (float) WorldSettings.Properties.DEFAULT_OCEAN_DEPTH;
 		int hillsScale = Math.max(1, Math.round(150 * depthScale));
 		int selectorScale = Math.max(1, Math.round(500 * depthScale));
