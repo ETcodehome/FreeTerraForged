@@ -38,11 +38,12 @@
 		"terrablender.MixinClimateSampler",
 		"terrablender.MixinTargetPoint",
 		"terrablender.MixinNoiseChunk"
-  	],
-  	"client": [
-		"MixinGuaranteeData",
-		"ScreenInvoker"
-  	],
+		],
+		"client": [
+			"MixinCreateWorldScreenWorldTab",
+			"MixinGuaranteeData",
+			"ScreenInvoker"
+		],
   	"injectors": {
 		"defaultRequire": 1
   	}
