@@ -183,7 +183,8 @@ public class ErodeFeature extends Feature<Config> {
         if(top.is(RTFBlockTags.ERODIBLE)) {
             BlockState material = getMaterial(config, rand, clusterNoise, warpX, warpZ, cell, pos, top, generator instanceof NoiseBasedChunkGenerator noiseChunkGenerator ? noiseChunkGenerator.generatorSettings().value().defaultBlock() : Blocks.STONE.defaultBlockState());
             if (material != top) {
-                if (material.is(RTFBlockTags.ROCK)) {
+                // Treat TUFF as a decorative band (like Mossy Cobble) rather than running erodeRock on it
+                if (material.is(RTFBlockTags.ROCK) && !material.is(Blocks.TUFF)) {
                     erodeRock(chunk, cell, pos, surfaceY);
                     return;
                 } else {
