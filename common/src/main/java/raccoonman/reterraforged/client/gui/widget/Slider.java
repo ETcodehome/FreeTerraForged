@@ -44,6 +44,14 @@ public class Slider extends AbstractSliderButton {
 		return this.max;
 	}
 
+	public void setRange(double min, double max) {
+		double current = this.lerpValue(this.value);
+		this.min = min;
+		this.max = max;
+		this.value = this.getSliderValue((float) current);
+		this.updateMessage();
+	}
+
     public double getSliderValue(float value) {
     	return (Mth.clamp(value, this.min, this.max) - this.min) / (this.max - this.min);
     }
