@@ -110,22 +110,6 @@ public class PresetConfiguredFeatures {
 		SurfaceSettings surface = preset.surface();
 		SurfaceSettings.Erosion erosion = surface.erosion();
 
-		// Define the mixture matrix for the gravel/andesite scree layer (e.g., 3:1 ratio)
-		ErodeFeature.WeightedBlockSelector screeMaterials = new ErodeFeature.WeightedBlockSelector(List.of(
-				new ErodeFeature.WeightedBlockEntry(Blocks.GRAVEL.defaultBlockState(), 1),
-				new ErodeFeature.WeightedBlockEntry(Blocks.COARSE_DIRT.defaultBlockState(), 1),
-				new ErodeFeature.WeightedBlockEntry(Blocks.ANDESITE.defaultBlockState(), 2),
-				new ErodeFeature.WeightedBlockEntry(Blocks.TUFF.defaultBlockState(), 2),
-				new ErodeFeature.WeightedBlockEntry(Blocks.MOSS_BLOCK.defaultBlockState(), 1)
-		));
-
-		// Define the mixture matrix for the loose soil transition apron
-		ErodeFeature.WeightedBlockSelector dirtMaterials = new ErodeFeature.WeightedBlockSelector(List.of(
-				new ErodeFeature.WeightedBlockEntry(Blocks.COARSE_DIRT.defaultBlockState(), 2),
-				new ErodeFeature.WeightedBlockEntry(Blocks.MOSS_BLOCK.defaultBlockState(), 2),
-				new ErodeFeature.WeightedBlockEntry(Blocks.GRAVEL.defaultBlockState(), 1)
-		));
-
 		// Pass the configured selectors directly into the final parameters of the Config record
 		ErodeFeature.Config erodeConfig = new ErodeFeature.Config(
 				erosion.rockVariance,
@@ -136,14 +120,7 @@ public class PresetConfiguredFeatures {
 				erosion.dirtSteepness,
 				erosion.screeSteepness,
 				6F / 255F,
-				3F / 255F,
-				256,
-				3F / 255F,
-				0.55F,
-				0.01F,
-				0.02F,
-				screeMaterials,
-				dirtMaterials
+				3F / 255F
 		);
 
 		if(miscellaneous.erosionDecorator) {

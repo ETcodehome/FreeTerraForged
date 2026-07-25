@@ -41,6 +41,31 @@ import java.util.TreeMap;
 
 public class ErodeFeature extends Feature<Config> {
 
+    // Internal fixed modifiers
+    private static final float SEDIMENT_MODIFIER = 256F;
+    private static final float SEDIMENT_NOISE = 3F / 255F;
+    private static final float SCREE_VALUE = 0.55F;
+
+    // Noise sampling parameters
+    private static final float CLUSTER_SCALE = 0.05F;
+    private static final float WARP_SCALE = 0.04F;
+    private static final float WARP_STRENGTH = 22.0F;
+
+    // Internal Mixture Matrices
+    private static final WeightedBlockSelector SCREE_MATERIALS = new WeightedBlockSelector(List.of(
+            new WeightedBlockEntry(Blocks.GRAVEL.defaultBlockState(), 1),
+            new WeightedBlockEntry(Blocks.COARSE_DIRT.defaultBlockState(), 1),
+            new WeightedBlockEntry(Blocks.ANDESITE.defaultBlockState(), 2),
+            new WeightedBlockEntry(Blocks.TUFF.defaultBlockState(), 2),
+            new WeightedBlockEntry(Blocks.MOSS_BLOCK.defaultBlockState(), 1)
+    ));
+
+    private static final WeightedBlockSelector DIRT_MATERIALS = new WeightedBlockSelector(List.of(
+            new WeightedBlockEntry(Blocks.COARSE_DIRT.defaultBlockState(), 2),
+            new WeightedBlockEntry(Blocks.MOSS_BLOCK.defaultBlockState(), 2),
+            new WeightedBlockEntry(Blocks.GRAVEL.defaultBlockState(), 1)
+    ));
+
     public ErodeFeature(Codec<Config> codec) {
         super(codec);
     }
@@ -62,10 +87,12 @@ public class ErodeFeature extends Feature<Config> {
             raccoonman.reterraforged.world.worldgen.cell.heightmap.Heightmap heightmap = generatorContext.generator.getHeightmap();
             Levels levels = heightmap.levels();
 
-            int worldSeed = heightmap.climate().randomSeed();
-            Noise rand = Noises.white(worldSeed, 1);
-            // Coherent Perlin Noise with low octaves (2) to handle smooth structural block clustering
-            Noise clusterNoise = Noises.perlin((worldSeed + 7777), 2, 1);
+            long worldSeed = heightmap.climate().randomSeed();
+            Noise rand = Noises.white((int) worldSeed, 1);
+
+            Noise clusterNoise = Noises.perlin((int) (worldSeed + 7777), 2, 1);
+            Noise warpX = Noises.perlin((int) (worldSeed + 1001), 2, 1);
+            Noise warpZ = Noises.perlin((int) (worldSeed + 2002), 2, 1);
 
             Noise desertErosionVariance = makeDesertErosionVariance(levels);
             BlockPos.MutableBlockPos pos = new MutableBlockPos();
@@ -88,7 +115,7 @@ public class ErodeFeature extends Feature<Config> {
                     }
 
                     if(surfaceY <= scaledY && surfaceY >= generator.getSeaLevel() - 1 && !biome.is(Biomes.WOODED_BADLANDS) && !biome.is(Biomes.BADLANDS)) {
-                        erodeColumn(config, rand, clusterNoise, generator, chunk, cell, pos, surfaceY);
+                        erodeColumn(config, rand, clusterNoise, warpX, warpZ, generator, chunk, cell, pos, surfaceY);
                         //remove any foliage that may have generated above
                         pos.setY(surfaceY);
                         while(!level.getBlockState(pos.setY(pos.getY() + 1)).canSurvive(level, pos)) {
@@ -143,7 +170,7 @@ public class ErodeFeature extends Feature<Config> {
         }
     }
 
-    private static void erodeColumn(Config config, Noise rand, Noise clusterNoise, ChunkGenerator generator, ChunkAccess chunk, Cell cell, BlockPos.MutableBlockPos pos, int surfaceY) {
+    private static void erodeColumn(Config config, Noise rand, Noise clusterNoise, Noise warpX, Noise warpZ, ChunkGenerator generator, ChunkAccess chunk, Cell cell, BlockPos.MutableBlockPos pos, int surfaceY) {
         if (cell.terrain.isRiver() || cell.terrain.isWetland()) {
             return;
         }
@@ -154,7 +181,7 @@ public class ErodeFeature extends Feature<Config> {
 
         BlockState top = chunk.getBlockState(pos);
         if(top.is(RTFBlockTags.ERODIBLE)) {
-            BlockState material = getMaterial(config, rand, clusterNoise, cell, pos, top, generator instanceof NoiseBasedChunkGenerator noiseChunkGenerator ? noiseChunkGenerator.generatorSettings().value().defaultBlock() : Blocks.STONE.defaultBlockState());
+            BlockState material = getMaterial(config, rand, clusterNoise, warpX, warpZ, cell, pos, top, generator instanceof NoiseBasedChunkGenerator noiseChunkGenerator ? noiseChunkGenerator.generatorSettings().value().defaultBlock() : Blocks.STONE.defaultBlockState());
             if (material != top) {
                 if (material.is(RTFBlockTags.ROCK)) {
                     erodeRock(chunk, cell, pos, surfaceY);
@@ -163,7 +190,7 @@ public class ErodeFeature extends Feature<Config> {
                     ColumnDecorator.fillDownSolid(chunk, pos, surfaceY, surfaceY - 4, material);
                 }
             }
-            placeScree(config, rand, clusterNoise, chunk, cell, pos, surfaceY);
+            placeScree(config, rand, clusterNoise, warpX, warpZ, chunk, cell, pos, surfaceY);
         }
     }
 
@@ -185,7 +212,7 @@ public class ErodeFeature extends Feature<Config> {
         }
     }
 
-    private static void placeScree(Config config, Noise rand, Noise clusterNoise, ChunkAccess chunk, Cell cell, BlockPos.MutableBlockPos pos, int surfaceY) {
+    private static void placeScree(Config config, Noise rand, Noise clusterNoise, Noise warpX, Noise warpZ, ChunkAccess chunk, Cell cell, BlockPos.MutableBlockPos pos, int surfaceY) {
         int x = pos.getX();
         int z = pos.getZ();
         float steepness = cell.gradient + rand.compute(x, z, 1) * config.slopeModifier();
@@ -193,19 +220,15 @@ public class ErodeFeature extends Feature<Config> {
             return;
         }
 
-        float sediment = cell.sediment * config.sedimentNoise();
-        float noise = rand.compute(x, z, 2) * config.sedimentNoise();
-        if (sediment + noise > config.screeValue()) {
-            // Apply a low-frequency scale to coordinates to cluster materials together smoothly
-            float sample = clusterNoise.compute(x * config.screeClusterScale(), z * config.screeClusterScale(), 3);
-            float materialNoise = Math.max(0.0f, Math.min(1.0f, (sample + 1.0f) / 2.0f));
-
-            BlockState chosenScree = config.screeMaterials().sample(materialNoise, Blocks.GRAVEL.defaultBlockState());
+        float sediment = cell.sediment * SEDIMENT_NOISE;
+        float noise = rand.compute(x, z, 2) * SEDIMENT_NOISE;
+        if (sediment + noise > SCREE_VALUE) {
+            BlockState chosenScree = sampleMaterial(SCREE_MATERIALS, x, z, clusterNoise, warpX, warpZ, rand, 3, Blocks.GRAVEL.defaultBlockState());
             ColumnDecorator.fillDownSolid(chunk, pos, surfaceY, surfaceY - 2, chosenScree);
         }
     }
 
-    private static BlockState getMaterial(Config config, Noise rand, Noise clusterNoise, Cell cell, BlockPos.MutableBlockPos pos, BlockState top, BlockState middle) {
+    private static BlockState getMaterial(Config config, Noise rand, Noise clusterNoise, Noise warpX, Noise warpZ, Cell cell, BlockPos.MutableBlockPos pos, BlockState top, BlockState middle) {
         int x = pos.getX();
         int z = pos.getZ();
         float height = cell.height + rand.compute(x, z, 0) * config.heightModifier();
@@ -216,13 +239,11 @@ public class ErodeFeature extends Feature<Config> {
         }
 
         if (steepness > config.screeSteepness() || height > ColumnDecorator.sampleNoise(x, z, config.rockVar(), config.rockMin())) {
-            float sample = clusterNoise.compute(x * config.screeClusterScale(), z * config.screeClusterScale(), 4);
-            float materialNoise = Math.max(0.0f, Math.min(1.0f, (sample + 1.0f) / 2.0f));
-            return config.screeMaterials().sample(materialNoise, Blocks.COARSE_DIRT.defaultBlockState());
+            return Blocks.TUFF.defaultBlockState();
         }
 
         if (steepness > config.dirtSteepness() && height > ColumnDecorator.sampleNoise(x, z, config.dirtVar(), config.dirtMin())) {
-            return ground(config, clusterNoise, pos, top);
+            return ground(config, clusterNoise, warpX, warpZ, rand, pos, top);
         }
 
         return top;
@@ -235,16 +256,12 @@ public class ErodeFeature extends Feature<Config> {
         return Blocks.STONE.defaultBlockState();
     }
 
-    private static BlockState ground(Config config, Noise clusterNoise, BlockPos.MutableBlockPos pos, BlockState state) {
+    private static BlockState ground(Config config, Noise clusterNoise, Noise warpX, Noise warpZ, Noise rand, BlockPos.MutableBlockPos pos, BlockState state) {
         int x = pos.getX();
         int z = pos.getZ();
 
         if (state.is(Blocks.GRASS_BLOCK) || state.is(Blocks.MYCELIUM)) {
-            // Cluster the surface apron materials smoothly using low-frequency noise
-            float sample = clusterNoise.compute(x * config.dirtClusterScale(), z * config.dirtClusterScale(), 4);
-            float materialNoise = Math.max(0.0f, Math.min(1.0f, (sample + 1.0f) / 2.0f));
-
-            return config.dirtMaterials().sample(materialNoise, Blocks.COARSE_DIRT.defaultBlockState());
+            return sampleMaterial(DIRT_MATERIALS, x, z, clusterNoise, warpX, warpZ, rand, 4, Blocks.COARSE_DIRT.defaultBlockState());
         }
         if (state.is(BlockTags.BASE_STONE_OVERWORLD)) {
             return Blocks.MOSS_BLOCK.defaultBlockState();
@@ -259,33 +276,73 @@ public class ErodeFeature extends Feature<Config> {
             return Blocks.SMOOTH_RED_SANDSTONE.defaultBlockState();
         }
 
-        float sample = clusterNoise.compute(x * config.dirtClusterScale(), z * config.dirtClusterScale(), 4);
-        float materialNoise = Math.max(0.0f, Math.min(1.0f, (sample + 1.0f) / 2.0f));
-        return config.dirtMaterials().sample(materialNoise, Blocks.COARSE_DIRT.defaultBlockState());
+        return sampleMaterial(DIRT_MATERIALS, x, z, clusterNoise, warpX, warpZ, rand, 4, Blocks.COARSE_DIRT.defaultBlockState());
+    }
+
+    private static BlockState sampleMaterial(WeightedBlockSelector selector, int x, int z, Noise clusterNoise, Noise warpX, Noise warpZ, Noise rand, int seedOffset, BlockState fallback) {
+        // Standard unwarped noise pass for non-moss blocks
+        float rawNoise = clusterNoise.compute(x * CLUSTER_SCALE, z * CLUSTER_SCALE, seedOffset);
+        float oldSample = Math.max(0.0f, Math.min(1.0f, (rawNoise + 1.0f) / 2.0f));
+
+        // Domain-warped noise pass for moss
+        float warpedSample = sampleWarpedNoise(x, z, CLUSTER_SCALE, WARP_SCALE, WARP_STRENGTH, clusterNoise, warpX, warpZ, rand, seedOffset);
+
+        BlockState warpedState = selector.sample(warpedSample, fallback);
+
+        // If domain-warped noise selects moss, place moss with organic creep boundaries
+        if (warpedState.is(Blocks.MOSS_BLOCK)) {
+            return warpedState;
+        }
+
+        // For all non-moss blocks, use the old unwarped noise
+        BlockState oldState = selector.sample(oldSample, fallback);
+        if (oldState.is(Blocks.MOSS_BLOCK)) {
+            return selector.sampleNonMoss(oldSample, fallback);
+        }
+
+        return oldState;
+    }
+
+    private static float sampleWarpedNoise(int x, int z, float scale, float warpScale, float warpStrength, Noise clusterNoise, Noise warpX, Noise warpZ, Noise rand, int seedOffset) {
+        float wx = warpX.compute(x * warpScale, z * warpScale, seedOffset) * warpStrength;
+        float wz = warpZ.compute(x * warpScale, z * warpScale, seedOffset + 10) * warpStrength;
+
+        float warpedX = (x + wx) * scale;
+        float warpedZ = (z + wz) * scale;
+        float baseSample = clusterNoise.compute(warpedX, warpedZ, seedOffset);
+
+        float dither = (rand.compute(x, z, seedOffset) - 0.5f) * 0.12f;
+
+        float normalized = (baseSample + 1.0f) / 2.0f + dither;
+        return Math.max(0.0f, Math.min(1.0f, normalized));
     }
 
     // --- Weighted Selector Framework ---
 
-    public record WeightedBlockEntry(BlockState state, int weight) {
-        public static final Codec<WeightedBlockEntry> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-                BlockState.CODEC.fieldOf("state").forGetter(WeightedBlockEntry::state),
-                Codec.INT.fieldOf("weight").forGetter(WeightedBlockEntry::weight)
-        ).apply(instance, WeightedBlockEntry::new));
-    }
+    public record WeightedBlockEntry(BlockState state, int weight) {}
 
     public static class WeightedBlockSelector {
         private final NavigableMap<Float, BlockState> cumulativeMap = new TreeMap<>();
+        private final NavigableMap<Float, BlockState> nonMossCumulativeMap = new TreeMap<>();
         private final float totalWeight;
+        private final float nonMossTotalWeight;
 
         public WeightedBlockSelector(List<WeightedBlockEntry> entries) {
             float sum = 0.0f;
+            float nonMossSum = 0.0f;
             for (WeightedBlockEntry entry : entries) {
                 if (entry.weight() > 0) {
                     sum += entry.weight();
                     cumulativeMap.put(sum, entry.state());
+
+                    if (!entry.state().is(Blocks.MOSS_BLOCK)) {
+                        nonMossSum += entry.weight();
+                        nonMossCumulativeMap.put(nonMossSum, entry.state());
+                    }
                 }
             }
             this.totalWeight = sum;
+            this.nonMossTotalWeight = nonMossSum;
         }
 
         public BlockState sample(float noiseSample, BlockState fallback) {
@@ -297,22 +354,20 @@ public class ErodeFeature extends Feature<Config> {
             return entry != null ? entry.getValue() : fallback;
         }
 
-        public static final Codec<WeightedBlockSelector> CODEC = WeightedBlockEntry.CODEC.listOf().xmap(
-                WeightedBlockSelector::new,
-                selector -> selector.cumulativeMap.entrySet().stream()
-                        .map(e -> new WeightedBlockEntry(e.getValue(), 1))
-                        .toList()
-        );
+        public BlockState sampleNonMoss(float noiseSample, BlockState fallback) {
+            if (nonMossCumulativeMap.isEmpty()) {
+                return fallback;
+            }
+            float target = noiseSample * nonMossTotalWeight;
+            Map.Entry<Float, BlockState> entry = nonMossCumulativeMap.ceilingEntry(target);
+            return entry != null ? entry.getValue() : fallback;
+        }
     }
 
     public record Config(
             int rockVar, int rockMin, int dirtVar, int dirtMin,
             float rockSteepness, float dirtSteepness, float screeSteepness,
-            float heightModifier, float slopeModifier, float sedimentModifier,
-            float sedimentNoise, float screeValue,
-            float screeClusterScale, float dirtClusterScale,
-            WeightedBlockSelector screeMaterials,
-            WeightedBlockSelector dirtMaterials
+            float heightModifier, float slopeModifier
     ) implements FeatureConfiguration {
 
         public static final Codec<Config> CODEC = RecordCodecBuilder.create(instance -> instance.group(
@@ -324,14 +379,7 @@ public class ErodeFeature extends Feature<Config> {
                 Codec.FLOAT.fieldOf("dirt_steepness").forGetter(Config::dirtSteepness),
                 Codec.FLOAT.fieldOf("scree_steepness").forGetter(Config::screeSteepness),
                 Codec.FLOAT.fieldOf("height_modifier").forGetter(Config::heightModifier),
-                Codec.FLOAT.fieldOf("slope_modifier").forGetter(Config::slopeModifier),
-                Codec.FLOAT.fieldOf("sediment_modifier").forGetter(Config::sedimentModifier),
-                Codec.FLOAT.fieldOf("sediment_noise").forGetter(Config::sedimentNoise),
-                Codec.FLOAT.fieldOf("screeValue").forGetter(Config::screeValue),
-                Codec.FLOAT.fieldOf("scree_cluster_scale").forGetter(Config::screeClusterScale),
-                Codec.FLOAT.fieldOf("dirt_cluster_scale").forGetter(Config::dirtClusterScale),
-                WeightedBlockSelector.CODEC.fieldOf("scree_materials").forGetter(Config::screeMaterials),
-                WeightedBlockSelector.CODEC.fieldOf("dirt_materials").forGetter(Config::dirtMaterials)
+                Codec.FLOAT.fieldOf("slope_modifier").forGetter(Config::slopeModifier)
         ).apply(instance, Config::new));
     }
 }
