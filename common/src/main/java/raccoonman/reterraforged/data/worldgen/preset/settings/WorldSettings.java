@@ -107,36 +107,41 @@ public class WorldSettings {
     }
     
     public static class Properties {
+    	public static final int DEFAULT_OCEAN_DEPTH = 63;
+
     	public static final Codec<Properties> CODEC = RecordCodecBuilder.create(instance -> instance.group(
     		SpawnType.CODEC.fieldOf("spawnType").forGetter((o) -> o.spawnType),
     		Codec.INT.fieldOf("worldHeight").forGetter((o) -> o.worldHeight),
     		Codec.INT.optionalFieldOf("worldDepth", 64).forGetter((o) -> o.worldDepth),
     		Codec.INT.fieldOf("seaLevel").forGetter((o) -> o.seaLevel),
     		Codec.INT.optionalFieldOf("lavaLevel", -54).forGetter((o) -> o.lavaLevel),
+    		Codec.INT.optionalFieldOf("oceanDepth", DEFAULT_OCEAN_DEPTH).forGetter((o) -> o.oceanDepth),
             Codec.INT.optionalFieldOf("spawnX", 0).forGetter((o) -> o.spawnX),
             Codec.INT.optionalFieldOf("spawnZ", 0).forGetter((o) -> o.spawnZ)
     	).apply(instance, Properties::new));
-    	
+
         public static SpawnType spawnType;
         public int worldHeight;
         public int worldDepth;
         public int seaLevel;
         public int lavaLevel;
+        public int oceanDepth;
         public static int spawnX;
         public static int spawnZ;
-        
-        public Properties(SpawnType spawnType, int worldHeight, int worldDepth, int seaLevel, int lavaLevel, int spawnX, int spawnZ) {
+
+        public Properties(SpawnType spawnType, int worldHeight, int worldDepth, int seaLevel, int lavaLevel, int oceanDepth, int spawnX, int spawnZ) {
         	this.spawnType = spawnType;
         	this.worldHeight = worldHeight;
         	this.worldDepth = worldDepth;
         	this.seaLevel = seaLevel;
         	this.lavaLevel = lavaLevel;
+        	this.oceanDepth = Math.max(10, oceanDepth);
             this.spawnX = spawnX;
             this.spawnZ = spawnZ;
         }
-        
+
         public Properties copy() {
-        	return new Properties(this.spawnType, this.worldHeight, this.worldDepth, this.seaLevel, this.lavaLevel, this.spawnX, this.spawnZ);
+        	return new Properties(this.spawnType, this.worldHeight, this.worldDepth, this.seaLevel, this.lavaLevel, this.oceanDepth, this.spawnX, this.spawnZ);
         }
         
         @Deprecated

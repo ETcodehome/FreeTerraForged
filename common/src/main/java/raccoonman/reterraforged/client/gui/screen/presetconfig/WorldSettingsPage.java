@@ -39,6 +39,7 @@ public class WorldSettingsPage extends PresetEditorPage {
 	public CycleButton<SpawnType> spawnType;
 	private Slider worldHeight;
 	private Slider worldDepth;
+	private Slider oceanDepth;
 	private Slider seaLevel;
 	private Slider lavaLevel;
 	
@@ -173,10 +174,18 @@ public class WorldSettingsPage extends PresetEditorPage {
 		this.worldDepth = PresetWidgets.createIntSlider(properties.worldDepth, 0, 1024, RTFTranslationKeys.GUI_SLIDER_WORLD_DEPTH, (slider, value) -> {
 			int nearestMultiple = getNearestMultiple(slider, (float) value, 16);
 			properties.worldDepth = nearestMultiple;
+			this.updateOceanDepthRange(properties);
 			return slider.getSliderValue(nearestMultiple);
+		});
+		this.oceanDepth = PresetWidgets.createIntSlider(properties.oceanDepth, 10, properties.seaLevel + properties.worldDepth - 10, RTFTranslationKeys.GUI_SLIDER_OCEAN_DEPTH, (slider, value) -> {
+			int depth = (int) slider.scaleValue(value);
+			properties.oceanDepth = depth;
+			this.regenerate();
+			return value;
 		});
 		this.seaLevel = PresetWidgets.createIntSlider(properties.seaLevel, 0, 255, RTFTranslationKeys.GUI_SLIDER_SEA_LEVEL, (slider, value) -> {
 			properties.seaLevel = (int) slider.scaleValue(value);
+			this.updateOceanDepthRange(properties);
 			this.regenerate();
 			return value;
 		});
@@ -209,6 +218,7 @@ public class WorldSettingsPage extends PresetEditorPage {
 		this.left.addWidget(this.spawnType);
 		this.left.addWidget(this.worldHeight);
 		this.left.addWidget(this.worldDepth);
+		this.left.addWidget(this.oceanDepth);
 		this.left.addWidget(this.seaLevel);
 		this.left.addWidget(this.lavaLevel);
 	}
@@ -246,6 +256,11 @@ public class WorldSettingsPage extends PresetEditorPage {
 		}
 	}
 	
+	private void updateOceanDepthRange(WorldSettings.Properties properties) {
+		this.oceanDepth.setRange(10, properties.seaLevel + properties.worldDepth - 10);
+		properties.oceanDepth = (int) this.oceanDepth.scaleValue((float) this.oceanDepth.getValue());
+	}
+
 	private static int getNearestMultiple(Slider slider, float value, int multiple)  {
 		int lerpedValue = (int) slider.lerpValue(value);
 		int lerpedMultiple = (int) slider.lerpValue((float) slider.getSliderValue(multiple));
