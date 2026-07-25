@@ -42,7 +42,6 @@ import java.util.TreeMap;
 public class ErodeFeature extends Feature<Config> {
 
     // Internal fixed modifiers
-    private static final float SEDIMENT_MODIFIER = 256F;
     private static final float SEDIMENT_NOISE = 3F / 255F;
     private static final float SCREE_VALUE = 0.55F;
 

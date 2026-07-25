@@ -181,6 +181,8 @@ public final class RTFTranslationKeys {
 	public static final String GUI_LABEL_CONTROL_POINTS = resolve("gui.label.controlPoints");
 	public static final String GUI_LABEL_PROPERTIES = resolve("gui.label.properties");
 	public static final String GUI_LABEL_TRANSITIONS = resolve("gui.label.transitions");
+	public static final String GUI_LABEL_SCREE_THRESHOLDS = resolve("gui.label.scree.thresholds");
+	public static final String GUI_LABEL_EROSION_DECORATOR = resolve("gui.label.erosion.decorator");
 	public static final String GUI_LABEL_NOISE_CAVES = resolve("gui.label.noiseCaves");
 	public static final String GUI_LABEL_CARVERS = resolve("gui.label.carvers");
 	public static final String GUI_LABEL_TEMPERATURE = resolve("gui.label.temperature");
@@ -202,6 +204,7 @@ public final class RTFTranslationKeys {
 	public static final String GUI_LABEL_LAKES = resolve("gui.label.lakes");
 	public static final String GUI_LABEL_WETLANDS = resolve("gui.label.wetlands");
 	public static final String GUI_LABEL_EROSION = resolve("gui.label.erosion");
+	public static final String GUI_LABEL_HYDRAULIC_EROSION = resolve("gui.label.hydraulic.erosion");
 	public static final String GUI_LABEL_SMOOTHING = resolve("gui.label.smoothing");
 	public static final String GUI_LABEL_ISLAND = resolve("gui.label.island");
 	
