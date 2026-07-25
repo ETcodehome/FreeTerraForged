@@ -505,7 +505,7 @@ public class Presets {
 		);
 	}
 
-	public static Preset makeRivers() {
+	public static Preset modernDefaultWithRivers() {
 		return new Preset(
 
 				new WorldSettings(
@@ -541,9 +541,9 @@ public class Presets {
 						400,
 						40,
 						95,
-						0.95F,
-						0.68F,
-						0.4F)),
+						0.8F,
+						0.4F,
+						0.6F)),
 
 				new CaveSettings(0.199F,
 						1.5625F,
@@ -686,12 +686,12 @@ public class Presets {
 				IslandSettings.makeDefault(),
 				new FilterSettings(
 
-						new Erosion(250,
-								32,
-								0.901F,
-								0.901F,
-								0.8112F,
-								0.8112F),
+						new Erosion(38,
+								2,
+								0.3F,
+								0.3F,
+								0.2F,
+								0.279F),
 
 						new Smoothing(1, 1.8F, 0.9F)
 				),
