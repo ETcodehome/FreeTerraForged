@@ -76,6 +76,7 @@ public class SurfaceSettingsPage extends PresetEditorPage {
 			return value;
 		});
 		this.rockMin = PresetWidgets.createIntSlider(erosion.rockMin, -1024, 1024, RTFTranslationKeys.GUI_SLIDER_ROCK_MIN, (slider, value) -> {
+			value = Math.max(value, this.dirtMin.getValue());
 			erosion.rockMin = (int) slider.scaleValue(value);
 			return value;
 		});
@@ -84,6 +85,7 @@ public class SurfaceSettingsPage extends PresetEditorPage {
 			return value;
 		});
 		this.dirtMin = PresetWidgets.createIntSlider(erosion.dirtMin, -1024, 1024, RTFTranslationKeys.GUI_SLIDER_DIRT_MIN, (slider, value) -> {
+			value = Math.min(value, this.rockMin.getValue());
 			erosion.dirtMin = (int) slider.scaleValue(value);
 			return value;
 		});

@@ -28,6 +28,7 @@ import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
+import raccoonman.reterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainType;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
 import raccoonman.reterraforged.world.worldgen.feature.ErodeFeature.Config;
@@ -114,8 +115,8 @@ public class ErodeFeature extends Feature<Config> {
                     }
 
                     if(surfaceY <= scaledY && surfaceY >= generator.getSeaLevel() - 1 && !biome.is(Biomes.WOODED_BADLANDS) && !biome.is(Biomes.BADLANDS)) {
-                        erodeColumn(config, rand, clusterNoise, warpX, warpZ, generator, chunk, cell, pos, surfaceY);
-                        //remove any foliage that may have generated above
+                        erodeColumn(config, levels, rand, clusterNoise, warpX, warpZ, generator, chunk, cell, pos, surfaceY);
+                        // remove any foliage that may have generated above
                         pos.setY(surfaceY);
                         while(!level.getBlockState(pos.setY(pos.getY() + 1)).canSurvive(level, pos)) {
                             level.setBlock(pos, Blocks.AIR.defaultBlockState(), 3);
@@ -169,7 +170,7 @@ public class ErodeFeature extends Feature<Config> {
         }
     }
 
-    private static void erodeColumn(Config config, Noise rand, Noise clusterNoise, Noise warpX, Noise warpZ, ChunkGenerator generator, ChunkAccess chunk, Cell cell, BlockPos.MutableBlockPos pos, int surfaceY) {
+    private static void erodeColumn(Config config, Levels levels, Noise rand, Noise clusterNoise, Noise warpX, Noise warpZ, ChunkGenerator generator, ChunkAccess chunk, Cell cell, BlockPos.MutableBlockPos pos, int surfaceY) {
         if (cell.terrain.isRiver() || cell.terrain.isWetland()) {
             return;
         }
@@ -180,7 +181,7 @@ public class ErodeFeature extends Feature<Config> {
 
         BlockState top = chunk.getBlockState(pos);
         if(top.is(RTFBlockTags.ERODIBLE)) {
-            BlockState material = getMaterial(config, rand, clusterNoise, warpX, warpZ, cell, pos, top, generator instanceof NoiseBasedChunkGenerator noiseChunkGenerator ? noiseChunkGenerator.generatorSettings().value().defaultBlock() : Blocks.STONE.defaultBlockState());
+            BlockState material = getMaterial(config, levels, rand, clusterNoise, warpX, warpZ, generator, cell, pos, surfaceY, top, generator instanceof NoiseBasedChunkGenerator noiseChunkGenerator ? noiseChunkGenerator.generatorSettings().value().defaultBlock() : Blocks.STONE.defaultBlockState());
             if (material != top) {
                 // Treat TUFF as a decorative band (like Mossy Cobble) rather than running erodeRock on it
                 if (material.is(RTFBlockTags.ROCK) && !material.is(Blocks.TUFF)) {
@@ -228,21 +229,43 @@ public class ErodeFeature extends Feature<Config> {
         }
     }
 
-    private static BlockState getMaterial(Config config, Noise rand, Noise clusterNoise, Noise warpX, Noise warpZ, Cell cell, BlockPos.MutableBlockPos pos, BlockState top, BlockState middle) {
+    private static BlockState getMaterial(Config config, Levels levels, Noise rand, Noise clusterNoise, Noise warpX, Noise warpZ, ChunkGenerator generator, Cell cell, BlockPos.MutableBlockPos pos, int surfaceY, BlockState top, BlockState middle) {
         int x = pos.getX();
         int z = pos.getZ();
         float height = cell.height + rand.compute(x, z, 0) * config.heightModifier();
         float steepness = cell.gradient + rand.compute(x, z, 1) * config.slopeModifier();
 
-        if (steepness > config.rockSteepness() || height > ColumnDecorator.sampleNoise(x, z, config.rockVar(), config.rockMin())) {
+        // Continental uplift offset in normalized (0.0 - 1.0) float space
+        float upliftNormalized = ContinentalHydrology.getComplexWaterHeight(
+                cell.waterTable,
+                cell.globalContinentScale,
+                cell.continentSizeModifier
+        );
+
+        // Uplift baseline in normalized float space (sea level + uplift)
+        float upliftBaselineNormalized = levels.water + upliftNormalized;
+
+        // Add config relative offsets (converted from 0..255 scale to 0.0..1.0 float scale)
+        float effectiveRockBias = upliftBaselineNormalized + (config.rockMin() / 255.0f);
+        float effectiveDirtBias = upliftBaselineNormalized + (config.dirtMin() / 255.0f);
+
+        float rockVarFloat = config.rockVar() / 255.0f;
+        float dirtVarFloat = config.dirtVar() / 255.0f;
+
+        // Sample noise using the float overload (scale, bias)
+        float rockThreshold = ColumnDecorator.sampleNoise(x, z, rockVarFloat, effectiveRockBias);
+        float dirtThreshold = ColumnDecorator.sampleNoise(x, z, dirtVarFloat, effectiveDirtBias);
+
+        // Compare normalized 'height' (0.0 - 1.0) against normalized thresholds
+        if (steepness > config.rockSteepness() || height > rockThreshold) {
             return rock(middle);
         }
 
-        if (steepness > config.screeSteepness() || height > ColumnDecorator.sampleNoise(x, z, config.rockVar(), config.rockMin())) {
+        if (steepness > config.screeSteepness() || height > rockThreshold) {
             return Blocks.TUFF.defaultBlockState();
         }
 
-        if (steepness > config.dirtSteepness() && height > ColumnDecorator.sampleNoise(x, z, config.dirtVar(), config.dirtMin())) {
+        if (steepness > config.dirtSteepness() && height > dirtThreshold) {
             return ground(config, clusterNoise, warpX, warpZ, rand, pos, top);
         }
 
@@ -316,8 +339,6 @@ public class ErodeFeature extends Feature<Config> {
         float normalized = (baseSample + 1.0f) / 2.0f + dither;
         return Math.max(0.0f, Math.min(1.0f, normalized));
     }
-
-    // --- Weighted Selector Framework ---
 
     public record WeightedBlockEntry(BlockState state, int weight) {}
 
