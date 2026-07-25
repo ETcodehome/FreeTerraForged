@@ -47,11 +47,7 @@ public class MixinOceanMonumentBuilding implements OceanMonumentBuildingFix {
 		BlockPos blockPos,
 		CallbackInfo ci
 	) {
-		// A monument spans many chunks; postProcess() runs once per intersecting chunk and those
-		// can decorate concurrently on different worldgen worker threads. Only the thread that
-		// wins this CAS may move the piece, so a monument reaching this fallback path (normally a
-		// no-op - see MixinOceanMonumentStructure, which adjusts and marks during structure-start
-		// creation before any postProcess call can happen) can't be shifted twice.
+		// CAS guards against concurrent postProcess() calls across this monument's chunks double-moving the piece.
 		if (!this.rtf$oceanDepthAdjusted.compareAndSet(false, true)) {
 			return;
 		}
@@ -84,13 +80,8 @@ public class MixinOceanMonumentBuilding implements OceanMonumentBuildingFix {
 
 	@Unique
 	private static int rtf$sampleHighestOceanFloor(WorldGenLevel level, ChunkGenerator chunkGenerator, BoundingBox box) {
-		// level is a WorldGenRegion scoped to a small radius around whichever chunk triggered this
-		// postProcess() call; sampling level.getHeight() across the monument's full ~58x58
-		// footprint can reach columns outside that radius and crash generation outright
-		// (WorldGenRegion.getChunk() throws when asked for a chunk outside its accessible
-		// dependency radius). getFirstOccupiedHeight() samples density functions directly, the
-		// same globally-safe approach MixinOceanMonumentStructure already uses at structure-start
-		// time, so it never touches chunk-loaded bounds.
+		// getFirstOccupiedHeight samples density functions directly, avoiding the chunk-loaded-radius
+		// bound that level.getHeight() would hit sampling this far across the monument's footprint.
 		RandomState randomState = level.getLevel().getChunkSource().randomState();
 		int highest = level.getMinBuildHeight();
 		for (int ix = 0; ix <= rtf$FOOTPRINT_SAMPLE_STEPS; ix++) {
