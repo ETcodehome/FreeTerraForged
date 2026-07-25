@@ -48,6 +48,11 @@ public class MixinJigsawStructure {
 	@Unique
 	private static final int rtf$GRID_STEPS_PER_SIDE = 3;
 
+	// 0 = not yet checked, 1 = target structure, 2 = not a target; cached per-instance so non-target
+	// structures skip the registry lookups after their first attempt.
+	@Unique
+	private byte rtf$targetStatus;
+
 	@Shadow
 	@Final
 	private Holder<StructureTemplatePool> startPool;
@@ -81,10 +86,14 @@ public class MixinJigsawStructure {
 
 	@Inject(method = "findGenerationPoint", at = @At("HEAD"), cancellable = true)
 	private void rtf$correctOrSkip(Structure.GenerationContext generationContext, CallbackInfoReturnable<Optional<Structure.GenerationStub>> cir) {
-		Structure self = (Structure) (Object) this;
-		Structure trialChambers = generationContext.registryAccess().registryOrThrow(Registries.STRUCTURE).get(BuiltinStructures.TRIAL_CHAMBERS);
-		Structure ancientCity = generationContext.registryAccess().registryOrThrow(Registries.STRUCTURE).get(BuiltinStructures.ANCIENT_CITY);
-		if (self != trialChambers && self != ancientCity) {
+		if (this.rtf$targetStatus == 0) {
+			Structure self = (Structure) (Object) this;
+			var registry = generationContext.registryAccess().registryOrThrow(Registries.STRUCTURE);
+			Structure trialChambers = registry.get(BuiltinStructures.TRIAL_CHAMBERS);
+			Structure ancientCity = registry.get(BuiltinStructures.ANCIENT_CITY);
+			this.rtf$targetStatus = (self == trialChambers || self == ancientCity) ? (byte) 1 : (byte) 2;
+		}
+		if (this.rtf$targetStatus == 2) {
 			return;
 		}
 
