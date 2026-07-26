@@ -315,12 +315,12 @@ public class Presets {
 								0)
 				),
 				new SurfaceSettings(new SurfaceSettings.Erosion(30,
-						395,
-						40,
-						393,
-						0.65F,
-						0.475F,
-						0.0F)),
+						250,
+						20,
+						10,
+						1.2F,
+						0.4F,
+						0.8F)),
 
 				new CaveSettings(0.05578F,
 						1.5625F,
@@ -479,12 +479,12 @@ public class Presets {
 				),
 				new FilterSettings(
 
-						new Erosion(250,
-								32,
-								0.901F,
-								0.9085F,
-								0.8112F,
-								0.8112F),
+						new Erosion(38,
+								2,
+								0.3F,
+								0.3F,
+								0.2F,
+								0.279F),
 
 						new Smoothing(0, 0.0F, 0.0F)
 				),
