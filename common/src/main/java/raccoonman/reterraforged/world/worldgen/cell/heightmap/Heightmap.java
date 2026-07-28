@@ -55,6 +55,7 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
 	}
 	
 	public void applyRivers(Cell cell, float x, float z, Rivermap rivermap) {
+		cell.terrainErosion = cell.erosion;
         rivermap.apply(cell, x, z);
         VolcanoPopulator.modifyVolcanoType(cell, this.levels);
 	}
