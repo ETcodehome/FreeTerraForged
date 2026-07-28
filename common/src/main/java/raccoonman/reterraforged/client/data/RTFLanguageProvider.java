@@ -92,6 +92,7 @@ public final class RTFLanguageProvider {
 			this.add(RTFTranslationKeys.GUI_SLIDER_INLAND, "Inland");
 			this.add(RTFTranslationKeys.GUI_SLIDER_WORLD_HEIGHT, "World Height");
 			this.add(RTFTranslationKeys.GUI_SLIDER_WORLD_DEPTH, "World Depth");
+			this.add(RTFTranslationKeys.GUI_SLIDER_OCEAN_DEPTH, "Ocean Depth");
 			this.add(RTFTranslationKeys.GUI_SLIDER_SEA_LEVEL, "Sea Level");
 			this.add(RTFTranslationKeys.GUI_SLIDER_LAVA_LEVEL, "Lava Level");
 			this.add(RTFTranslationKeys.GUI_SLIDER_ROCK_VARIANCE, "Rock Variance");
@@ -246,6 +247,7 @@ public final class RTFLanguageProvider {
 			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_SLIDER_INLAND), "Controls the overall transition from ocean to inland terrain.");
 			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_SLIDER_WORLD_HEIGHT), "Controls the world height");
 			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_SLIDER_WORLD_DEPTH), "Controls the minimum y level");
+			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_SLIDER_OCEAN_DEPTH), "Controls how deep the ocean floor extends below sea level.");
 			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_SLIDER_SEA_LEVEL), "Controls the sea level");
 			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_SLIDER_LAVA_LEVEL), "Controls the lava level.");
 			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_SLIDER_ROCK_VARIANCE), "Controls the density of the rock gradient");

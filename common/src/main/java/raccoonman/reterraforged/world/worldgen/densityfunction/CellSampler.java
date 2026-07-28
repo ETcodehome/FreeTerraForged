@@ -28,17 +28,25 @@ import raccoonman.reterraforged.world.worldgen.util.PosUtil;
 
 public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) implements MarkerFunction.Mapped {
 	private static final ThreadLocal<Cache2d> CELL = ThreadLocal.withInitial(Cache2d::new);
+	private static final ThreadLocal<Cell> SHARED_FAST_CELL = ThreadLocal.withInitial(Cell::new);
 
 	@Override
 	public double compute(DensityFunction.FunctionContext ctx) {
-
 		try {
 			WorldLookup lookup = this.deferredLookup.get();
 			if (lookup != null) {
-				Cell cell = PointCellCache.get(lookup, ctx.blockX(), ctx.blockZ());
+				// Grab the reusable cell for this specific worker thread
+				Cell cell = SHARED_FAST_CELL.get();
+
+				// Populate it via the zero-allocation fast path
+				PointCellCache.fill(lookup, ctx.blockX(), ctx.blockZ(), cell);
+
+				// Read and return the data
 				return this.field.read(cell, lookup.getHeightmap());
 			}
-		} catch (Throwable t) {	}
+		} catch (Throwable t) {
+			// Intentionally swallowed to fall through to original logic on failure
+		}
 
 		// Fallback to original single-slot Cache2d path if the cache fails/is uninitialized
 		WorldLookup worldLookup = this.deferredLookup.get();

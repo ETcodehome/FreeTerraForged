@@ -6,6 +6,9 @@ import raccoonman.reterraforged.world.worldgen.cell.heightmap.WorldLookup;
 
 import java.util.Arrays;
 
+/**
+ * A strictly zero-allocation, thread-local cache for ReTerraForged cell math.
+ */
 public final class PointCellCache {
     private static final ThreadLocal<PointCellCache> LOCAL_CACHE = ThreadLocal.withInitial(PointCellCache::new);
     private static final int CACHE_SIZE = 4096; // Must be a power of two
@@ -15,42 +18,41 @@ public final class PointCellCache {
     private final long[] keys = new long[CACHE_SIZE];
     private final Cell[] cells = new Cell[CACHE_SIZE];
 
-    public static Cell get(WorldLookup lookup, int blockX, int blockZ) {
-        return LOCAL_CACHE.get().getOrCreate(lookup, blockX, blockZ);
+    private PointCellCache() {
+        for (int i = 0; i < CACHE_SIZE; i++) {
+            this.cells[i] = new Cell();
+        }
+        Arrays.fill(this.keys, Long.MIN_VALUE);
     }
 
-    private Cell getOrCreate(WorldLookup lookup, int blockX, int blockZ) {
+    public static void fill(WorldLookup lookup, int blockX, int blockZ, Cell target) {
+        LOCAL_CACHE.get().fillInternal(lookup, blockX, blockZ, target);
+    }
+
+    private void fillInternal(WorldLookup lookup, int blockX, int blockZ, Cell target) {
+        // Validates environment to prevent state-leaking across restarts
         if (this.boundLookup != lookup) {
             this.rebind(lookup);
         }
 
-        // Quart-snap coordinates (matching RTF's original Cache2d alignment)
-        int qx = blockX & ~3;
-        int qz = blockZ & ~3;
-        long key = ((long) qx << 32) | (qz & 0xFFFFFFFFL);
+        // Removed the ~3 masking. We now use EXACT 1:1 coordinates.
+        long key = ((long) blockX << 32) | (blockZ & 0xFFFFFFFFL);
         int idx = (int) (HashCommon.mix(key) & MASK);
 
-        Cell cell = this.cells[idx];
-        if (cell != null && this.keys[idx] == key) {
-            return cell; // Cache Hit!
-        }
+        Cell cachedCell = this.cells[idx];
 
         // Cache Miss
-        if (cell == null) {
-            cell = new Cell();
-            this.cells[idx] = cell;
+        if (this.keys[idx] != key) {
+            // Evaluates using exact coordinates, mirroring RTF's native getAndUpdate
+            lookup.applyCell(cachedCell.reset(), blockX, blockZ, true);
+            this.keys[idx] = key;
         }
 
-        // Evaluate the heavy pipeline natively
-        lookup.applyCell(cell.reset(), qx, qz, true);
-        this.keys[idx] = key;
-        return cell;
+        target.copyFrom(cachedCell);
     }
 
     private void rebind(WorldLookup lookup) {
-        Arrays.fill(this.cells, null); // Clear old entries safely
+        Arrays.fill(this.keys, Long.MIN_VALUE);
         this.boundLookup = lookup;
     }
-
-    private PointCellCache() {}
 }

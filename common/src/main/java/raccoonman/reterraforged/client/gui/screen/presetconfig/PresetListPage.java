@@ -192,7 +192,7 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, PresetEntry, Abstr
 		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_VANILLAISH_PRESET_NAME).withStyle(ChatFormatting.DARK_GRAY), Presets.makeLegacyVanillaish(), true, this));
 
 		// Modern patterns
-		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_RIVERS_PRESET_NAME).withStyle(ChatFormatting.GREEN), Presets.makeRivers(), true, this));
+		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_RIVERS_PRESET_NAME).withStyle(ChatFormatting.GREEN), Presets.modernDefaultWithRivers(), true, this));
 
 		// User presets
 		entries.addAll(this.listPresets(PRESET_PATH));

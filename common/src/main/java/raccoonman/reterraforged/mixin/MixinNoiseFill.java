@@ -1,13 +1,7 @@
 package raccoonman.reterraforged.mixin;
 
-import java.util.EnumSet;
-
-import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.minecraft.server.level.WorldGenRegion;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
-import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import net.minecraft.world.level.StructureManager;
 import net.minecraft.world.level.levelgen.RandomState;
@@ -38,17 +32,6 @@ public abstract class MixinNoiseFill {
         WorldGenTracker.PEAK_CONCURRENCY.updateAndGet(peak -> Math.max(peak, active));
     }
 
-    @WrapOperation(
-            method = "doFill",
-            at = @At(
-                    value = "INVOKE",
-                    target = "Lnet/minecraft/world/level/levelgen/Heightmap;update(IIILnet/minecraft/world/level/block/state/BlockState;)Z"))
-    private boolean rtf$skipPerBlockHeightmapUpdate(final Heightmap instance, final int x, final int y,
-                                                    final int z, final BlockState state,
-                                                    final Operation<Boolean> original) {
-        return false;
-    }
-
     @Inject(method = "doFill", at = @At("TAIL"))
     private void rtf$fillEnd(final Blender blender, final StructureManager structureManager,
                              final RandomState random, final ChunkAccess chunk,
@@ -59,7 +42,6 @@ public abstract class MixinNoiseFill {
             WorldGenTracker.TOTAL_NANOS.add(System.nanoTime() - start);
             WorldGenTracker.TOTAL_CHUNKS.increment(); // Register one completed chunk tally
         }
-        Heightmap.primeHeightmaps(chunk, EnumSet.of(Heightmap.Types.OCEAN_FLOOR_WG, Heightmap.Types.WORLD_SURFACE_WG));
         WorldGenTracker.ACTIVE_THREADS.decrementAndGet();
     }
 
