@@ -19,6 +19,7 @@ import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.data.worldgen.preset.settings.CaveSettings;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings;
+import raccoonman.reterraforged.world.worldgen.biome.UndergroundBiomeBanding;
 import raccoonman.reterraforged.world.worldgen.densityfunction.CellSampler;
 import raccoonman.reterraforged.world.worldgen.densityfunction.RTFDensityFunctions;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
@@ -76,6 +77,7 @@ public class PresetNoiseRouterData {
     	
     	CaveSettings caves = preset.caves();
     	float cheeseCaveDepthOffset = caves.cheeseCaveDepthOffset;
+        double undergroundNoiseScale = UndergroundBiomeBanding.undergroundNoiseScale(preset);
     	
     	DensityFunction aquiferBarrier = DensityFunctions.noise(noiseParams.getOrThrow(Noises.AQUIFER_BARRIER), 0.5);
         DensityFunction aquiferFluidLevelFloodedness = DensityFunctions.noise(noiseParams.getOrThrow(Noises.AQUIFER_FLUID_LEVEL_FLOODEDNESS), 0.67);
@@ -88,16 +90,16 @@ public class PresetNoiseRouterData {
         DensityFunction temperature = blendClimateAxis(
             depth,
             RTFDensityFunctions.cell(CellSampler.Field.TEMPERATURE),
-            DensityFunctions.shiftedNoise2d(shiftX, shiftZ, 0.25D, noiseParams.getOrThrow(Noises.TEMPERATURE))
+            DensityFunctions.shiftedNoise2d(shiftX, shiftZ, undergroundNoiseScale, noiseParams.getOrThrow(Noises.TEMPERATURE))
         );
         DensityFunction vegetation = blendClimateAxis(
             depth,
             RTFDensityFunctions.cell(CellSampler.Field.MOISTURE),
-            DensityFunctions.shiftedNoise2d(shiftX, shiftZ, 0.25D, noiseParams.getOrThrow(Noises.VEGETATION))
+            DensityFunctions.shiftedNoise2d(shiftX, shiftZ, undergroundNoiseScale, noiseParams.getOrThrow(Noises.VEGETATION))
         );
         DensityFunction surfaceContinents = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.CONTINENTS);
         DensityFunction vanillaContinents = DensityFunctions.flatCache(
-            DensityFunctions.shiftedNoise2d(shiftX, shiftZ, 0.25D, noiseParams.getOrThrow(Noises.CONTINENTALNESS))
+            DensityFunctions.shiftedNoise2d(shiftX, shiftZ, undergroundNoiseScale, noiseParams.getOrThrow(Noises.CONTINENTALNESS))
         );
         DensityFunction continents = blendClimateAxis(
             depth,
@@ -106,7 +108,7 @@ public class PresetNoiseRouterData {
         );
         DensityFunction surfaceErosion = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.EROSION);
         DensityFunction vanillaErosion = DensityFunctions.flatCache(
-            DensityFunctions.shiftedNoise2d(shiftX, shiftZ, 0.25D, noiseParams.getOrThrow(Noises.EROSION))
+            DensityFunctions.shiftedNoise2d(shiftX, shiftZ, undergroundNoiseScale, noiseParams.getOrThrow(Noises.EROSION))
         );
         DensityFunction erosion = blendClimateAxis(
             depth,
@@ -120,7 +122,7 @@ public class PresetNoiseRouterData {
         DensityFunction ridges = blendClimateAxis(
             depth,
             NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.RIDGES),
-            DensityFunctions.flatCache(DensityFunctions.shiftedNoise2d(shiftX, shiftZ, 0.25D, noiseParams.getOrThrow(Noises.RIDGE)))
+            DensityFunctions.flatCache(DensityFunctions.shiftedNoise2d(shiftX, shiftZ, undergroundNoiseScale, noiseParams.getOrThrow(Noises.RIDGE)))
         );
         DensityFunction initialDensity = NoiseRouterData.noiseGradientDensity(DensityFunctions.cache2d(factor), depth);
         DensityFunction slopedCheese = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.SLOPED_CHEESE);
