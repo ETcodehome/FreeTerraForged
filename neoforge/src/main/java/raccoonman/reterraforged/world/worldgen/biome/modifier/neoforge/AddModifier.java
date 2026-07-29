@@ -22,12 +22,12 @@ import raccoonman.reterraforged.world.worldgen.biome.modifier.Order;
 
 public record AddModifier(Order order, GenerationStep.Decoration step, Optional<Filter> biomes, HolderSet<PlacedFeature> features) implements ForgeBiomeModifier {
 	public static final MapCodec<AddModifier> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
-			Order.CODEC.fieldOf("order").forGetter(AddModifier::order),
-			GenerationStep.Decoration.CODEC.fieldOf("step").forGetter(AddModifier::step),
-			Filter.CODEC.optionalFieldOf("biomes").forGetter(AddModifier::biomes),
-			PlacedFeature.LIST_CODEC.fieldOf("features").forGetter(AddModifier::features)
+		Order.CODEC.fieldOf("order").forGetter(AddModifier::order),
+		GenerationStep.Decoration.CODEC.fieldOf("step").forGetter(AddModifier::step),
+		Filter.CODEC.optionalFieldOf("biomes").forGetter(AddModifier::biomes),
+		PlacedFeature.LIST_CODEC.fieldOf("features").forGetter(AddModifier::features)
 	).apply(instance, AddModifier::new));
-
+	
 	@Override
 	public void modify(Holder<Biome> biome, BiomeModifier.Phase phase, BiomeInfo.Builder builder) {
 		if(phase == BiomeModifier.Phase.AFTER_EVERYTHING) {
@@ -35,16 +35,14 @@ public record AddModifier(Order order, GenerationStep.Decoration step, Optional<
 				if(this.biomes.isPresent() && !this.biomes.get().test(biome)) {
 					return;
 				}
-
+				
 				List<List<Holder<PlacedFeature>>> featureSteps = builderAccessor.getFeatures();
 				int index = this.step.ordinal();
-
+	
 				while (index >= featureSteps.size()) {
-					// Use mutable ArrayList instead of Collections.emptyList()
 					featureSteps.add(new ArrayList<>());
 				}
 
-				//  Guarantee the resulting list is wrapped in a mutable ArrayList
 				List<Holder<PlacedFeature>> updatedList = this.add(featureSteps.get(index));
 				featureSteps.set(index, new ArrayList<>(updatedList));
 			} else {
@@ -60,7 +58,9 @@ public record AddModifier(Order order, GenerationStep.Decoration step, Optional<
 
 	private List<Holder<PlacedFeature>> add(@Nullable List<Holder<PlacedFeature>> values) {
 		List<Holder<PlacedFeature>> newFeatures = this.features.stream().toList();
-		if (values == null) return new ArrayList<>(newFeatures);
+		if (values == null) {
+			return new ArrayList<>(newFeatures);
+		}
 		return new ArrayList<>(this.order.add(values, newFeatures));
 	}
 }
