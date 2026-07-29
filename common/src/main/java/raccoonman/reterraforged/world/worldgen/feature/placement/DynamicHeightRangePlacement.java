@@ -6,6 +6,8 @@ import java.util.Optional;
 import java.util.stream.Stream;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.Level;
@@ -13,6 +15,7 @@ import net.minecraft.world.level.levelgen.VerticalAnchor;
 import net.minecraft.world.level.levelgen.heightproviders.HeightProvider;
 import net.minecraft.world.level.levelgen.heightproviders.UniformHeight;
 import net.minecraft.world.level.levelgen.placement.HeightRangePlacement;
+import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.minecraft.world.level.levelgen.placement.PlacementContext;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.mixin.HeightRangePlacementAccessor;
@@ -50,7 +53,11 @@ public final class DynamicHeightRangePlacement {
 		RandomSource random,
 		BlockPos origin
 	) {
-		if (!isCanonicalRange(placement) || !isRtfOverworld(context) || !isTopLevelModifier(placement, context)) {
+		if (!isCanonicalRange(placement) || !isRtfOverworld(context)) {
+			return Optional.empty();
+		}
+		Optional<ResourceLocation> featureId = getTopLevelFeatureId(placement, context);
+		if (featureId.isEmpty()) {
 			return Optional.empty();
 		}
 
@@ -64,14 +71,19 @@ public final class DynamicHeightRangePlacement {
 		}
 
 		List<HeightBand> bands = createBands(minY, maxY);
-		Stream<BlockPos> positions = bands.stream().flatMap(band -> {
-			if (!band.guaranteed() && random.nextInt(REFERENCE_SPAN) >= band.size()) {
-				return Stream.empty();
+		List<BlockPos> positions = new ArrayList<>(bands.size());
+		int baseY = Mth.randomBetweenInclusive(random, REFERENCE_MIN_Y, REFERENCE_MAX_Y);
+		positions.add(origin.atY(baseY));
+
+		BandRandom extensionRandom = new BandRandom(extensionSeed(context, featureId.get(), origin, baseY));
+		for (int i = 1; i < bands.size(); i++) {
+			HeightBand band = bands.get(i);
+			if (band.guaranteed() || extensionRandom.nextInt(REFERENCE_SPAN) < band.size()) {
+				int y = band.minInclusive() + extensionRandom.nextInt(band.size());
+				positions.add(origin.atY(y));
 			}
-			int y = Mth.randomBetweenInclusive(random, band.minInclusive(), band.maxInclusive());
-			return Stream.of(origin.atY(y));
-		});
-		return Optional.of(positions);
+		}
+		return Optional.of(positions.stream());
 	}
 
 	public static boolean isCanonicalRange(HeightRangePlacement placement) {
@@ -123,16 +135,51 @@ public final class DynamicHeightRangePlacement {
 			.isPresent();
 	}
 
-	private static boolean isTopLevelModifier(HeightRangePlacement placement, PlacementContext context) {
-		return context.topFeature()
-			.map(feature -> feature.placement().stream().anyMatch(modifier -> modifier == placement))
-			.orElse(false);
+	private static Optional<ResourceLocation> getTopLevelFeatureId(HeightRangePlacement placement, PlacementContext context) {
+		Optional<PlacedFeature> feature = context.topFeature()
+			.filter(topFeature -> topFeature.placement().stream().anyMatch(modifier -> modifier == placement));
+		if (feature.isEmpty()) {
+			return Optional.empty();
+		}
+		return Optional.ofNullable(
+			context.getLevel()
+				.registryAccess()
+				.registryOrThrow(Registries.PLACED_FEATURE)
+				.getKey(feature.get())
+		);
+	}
+
+	private static long extensionSeed(PlacementContext context, ResourceLocation featureId, BlockPos origin, int baseY) {
+		long seed = context.getLevel().getSeed();
+		seed ^= Mth.getSeed(origin.getX(), baseY, origin.getZ());
+		seed ^= (long)featureId.getNamespace().hashCode() << 32;
+		seed ^= Integer.toUnsignedLong(featureId.getPath().hashCode());
+		return mix64(seed);
+	}
+
+	private static long mix64(long value) {
+		value = (value ^ value >>> 30) * -4658895280553007687L;
+		value = (value ^ value >>> 27) * -7723592293110705685L;
+		return value ^ value >>> 31;
 	}
 
 	record HeightBand(int minInclusive, int maxInclusive, boolean guaranteed) {
 
 		int size() {
 			return this.maxInclusive - this.minInclusive + 1;
+		}
+	}
+
+	private static final class BandRandom {
+		private long state;
+
+		private BandRandom(long seed) {
+			this.state = seed;
+		}
+
+		private int nextInt(int bound) {
+			this.state += -7046029254386353131L;
+			return (int)Long.remainderUnsigned(mix64(this.state), bound);
 		}
 	}
 }
