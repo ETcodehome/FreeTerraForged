@@ -208,8 +208,8 @@ public class MixinJigsawStructure {
 
 		BlockPos blockPos = new BlockPos(originX, target, originZ);
 		Holder<Biome> biome = generationContext.chunkGenerator()
-				.getBiomeSource()
-				.getNoiseBiome(QuartPos.fromBlock(blockPos.getX()), QuartPos.fromBlock(blockPos.getY()), QuartPos.fromBlock(blockPos.getZ()), generationContext.randomState().sampler());
+			.getBiomeSource()
+			.getNoiseBiome(QuartPos.fromBlock(blockPos.getX()), QuartPos.fromBlock(blockPos.getY()), QuartPos.fromBlock(blockPos.getZ()), generationContext.randomState().sampler());
 		if (!generationContext.validBiome().test(biome)) {
 			cir.setReturnValue(Optional.empty());
 			cir.cancel();
@@ -217,10 +217,10 @@ public class MixinJigsawStructure {
 		}
 
 		Optional<Structure.GenerationStub> result = JigsawPlacement.addPieces(
-				generationContext, this.startPool, this.startJigsawName, this.maxDepth, blockPos, this.useExpansionHack,
-				this.projectStartToHeightmap, this.maxDistanceFromCenter,
-				PoolAliasLookup.create(this.poolAliases, blockPos, generationContext.seed()),
-				this.dimensionPadding, this.liquidSettings
+			generationContext, this.startPool, this.startJigsawName, this.maxDepth, blockPos, this.useExpansionHack,
+			this.projectStartToHeightmap, this.maxDistanceFromCenter,
+			PoolAliasLookup.create(this.poolAliases, blockPos, generationContext.seed()),
+			this.dimensionPadding, this.liquidSettings
 		);
 		if (result.isEmpty()) {
 			cir.setReturnValue(result);
@@ -275,7 +275,7 @@ public class MixinJigsawStructure {
 				int x = originX + radius * xi / rtf$GRID_STEPS_PER_SIDE;
 				int z = originZ + radius * zi / rtf$GRID_STEPS_PER_SIDE;
 				int floor = generationContext.chunkGenerator()
-						.getFirstOccupiedHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, generationContext.heightAccessor(), generationContext.randomState());
+					.getFirstOccupiedHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, generationContext.heightAccessor(), generationContext.randomState());
 				if (floor < worst) {
 					worst = floor;
 				}
@@ -296,7 +296,7 @@ public class MixinJigsawStructure {
 			for (int zi = 0; zi <= steps; zi++) {
 				int z = realBbox.minZ() + (realBbox.maxZ() - realBbox.minZ()) * zi / steps;
 				int floor = generationContext.chunkGenerator()
-						.getFirstOccupiedHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, generationContext.heightAccessor(), generationContext.randomState());
+					.getFirstOccupiedHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, generationContext.heightAccessor(), generationContext.randomState());
 				if (floor < lowest) {
 					lowest = floor;
 				}
