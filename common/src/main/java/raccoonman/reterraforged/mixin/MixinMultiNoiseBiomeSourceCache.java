@@ -23,7 +23,7 @@ import raccoonman.reterraforged.world.worldgen.terrablender.TBCompat;
 @Mixin(MultiNoiseBiomeSource.class)
 public abstract class MixinMultiNoiseBiomeSourceCache {
     @Unique
-    private volatile Climate.ParameterList<Holder<Biome>> rtf$undergroundBandedParameters;
+    private volatile UndergroundBiomeBanding.Layout<Holder<Biome>> rtf$undergroundBanding;
     @Unique
     private Preset rtf$undergroundBandingPreset;
 
@@ -58,23 +58,22 @@ public abstract class MixinMultiNoiseBiomeSourceCache {
         }
 
         Climate.TargetPoint target = sampler.sample(x, y, z);
-        if (!UndergroundBiomeBanding.appliesAt(target)) {
-            return;
-        }
-
-        Climate.ParameterList<Holder<Biome>> banded = this.rtf$undergroundBandedParameters;
-        if (banded == null || this.rtf$undergroundBandingPreset != preset) {
+        UndergroundBiomeBanding.Layout<Holder<Biome>> banding = this.rtf$undergroundBanding;
+        if (banding == null || this.rtf$undergroundBandingPreset != preset) {
             synchronized (this) {
-                banded = this.rtf$undergroundBandedParameters;
-                if (banded == null || this.rtf$undergroundBandingPreset != preset) {
-                    banded = new Climate.ParameterList<>(UndergroundBiomeBanding.apply(preset, this.parameters().values()));
+                banding = this.rtf$undergroundBanding;
+                if (banding == null || this.rtf$undergroundBandingPreset != preset) {
+                    banding = UndergroundBiomeBanding.apply(preset, this.parameters().values());
                     this.rtf$undergroundBandingPreset = preset;
-                    this.rtf$undergroundBandedParameters = banded;
+                    this.rtf$undergroundBanding = banding;
                 }
             }
         }
+        if (!banding.appliesAt(target)) {
+            return;
+        }
 
-        cir.setReturnValue(banded.findValue(target));
+        cir.setReturnValue(banding.findValue(target));
     }
 
     @Inject(

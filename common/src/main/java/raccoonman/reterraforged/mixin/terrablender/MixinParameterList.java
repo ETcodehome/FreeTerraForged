@@ -39,9 +39,9 @@ class MixinParameterList<T> {
 	@Unique
 	private Preset reterraforged$bandingPreset;
 	@Unique
-	private final List<Climate.ParameterList<T>> reterraforged$pendingBandings = new ArrayList<>();
+	private final List<UndergroundBiomeBanding.Layout<T>> reterraforged$pendingBandings = new ArrayList<>();
 	@Unique
-	private final List<Climate.ParameterList<T>> reterraforged$bandedTrees = new ArrayList<>();
+	private final List<UndergroundBiomeBanding.Layout<T>> reterraforged$bandedTrees = new ArrayList<>();
 	@Unique
 	private boolean reterraforged$bandingInitialized;
 
@@ -87,11 +87,10 @@ class MixinParameterList<T> {
 		List<Pair<Climate.ParameterPoint, T>> entries
 	) {
 		if (this.reterraforged$bandingPreset != null) {
-			List<Pair<Climate.ParameterPoint, T>> bandedEntries = UndergroundBiomeBanding.apply(
+			this.reterraforged$pendingBandings.add(UndergroundBiomeBanding.apply(
 				this.reterraforged$bandingPreset,
 				entries
-			);
-			this.reterraforged$pendingBandings.add(new Climate.ParameterList<>(bandedEntries));
+			));
 		}
 		return entries;
 	}
@@ -153,7 +152,7 @@ class MixinParameterList<T> {
 		int z,
 		CallbackInfoReturnable<T> callback
 	) {
-		if (this.reterraforged$bandingPreset == null || !UndergroundBiomeBanding.appliesAt(targetPoint)) {
+		if (this.reterraforged$bandingPreset == null) {
 			return;
 		}
 
@@ -161,18 +160,22 @@ class MixinParameterList<T> {
 		if (treeIndex < 0 || treeIndex >= this.reterraforged$bandedTrees.size()) {
 			return;
 		}
-		Climate.ParameterList<T> banded = this.reterraforged$bandedTrees.get(treeIndex);
-		if (banded == null) {
+		UndergroundBiomeBanding.Layout<T> banding = this.reterraforged$bandedTrees.get(treeIndex);
+		if (banding == null) {
+			return;
+		}
+		if (!banding.appliesAt(targetPoint)) {
 			return;
 		}
 
-		T value = banded.findValue(targetPoint);
+		T value = banding.findValue(targetPoint);
 		if (value instanceof Holder<?> holder
 			&& holder.unwrapKey().filter(Region.DEFERRED_PLACEHOLDER::equals).isPresent()) {
-			Climate.ParameterList<T> defaultBanding = this.reterraforged$bandedTrees.getFirst();
-			if (defaultBanding != null) {
-				value = defaultBanding.findValue(targetPoint);
+			UndergroundBiomeBanding.Layout<T> defaultBanding = this.reterraforged$bandedTrees.getFirst();
+			if (defaultBanding == null || !defaultBanding.appliesAt(targetPoint)) {
+				return;
 			}
+			value = defaultBanding.findValue(targetPoint);
 		}
 		callback.setReturnValue(value);
 	}
