@@ -103,28 +103,63 @@ public final class DynamicHeightRangePlacement {
 
 	static List<HeightBand> createBands(int minY, int maxY) {
 		List<HeightBand> bands = new ArrayList<>();
-		bands.add(new HeightBand(REFERENCE_MIN_Y, REFERENCE_MAX_Y, true));
+		bands.add(bandContaining(minY, maxY, REFERENCE_MIN_Y));
 
-		int deepUpper = REFERENCE_MIN_Y - 1;
-		while (deepUpper >= minY) {
-			int size = Math.min(REFERENCE_SPAN, deepUpper - minY + 1);
-			int deepLower = deepUpper - size + 1;
-			bands.add(new HeightBand(deepLower, deepUpper, size == REFERENCE_SPAN));
-			deepUpper = deepLower - 1;
+		int deepY = REFERENCE_MIN_Y - 1;
+		while (deepY >= minY) {
+			HeightBand band = bandContaining(minY, maxY, deepY);
+			bands.add(band);
+			deepY = band.minInclusive() - 1;
 		}
 
-		int highLower = REFERENCE_MAX_Y + 1;
-		while (highLower <= maxY) {
-			int size = Math.min(REFERENCE_SPAN, maxY - highLower + 1);
-			int highUpper = highLower + size - 1;
-			bands.add(new HeightBand(highLower, highUpper, size == REFERENCE_SPAN));
-			highLower = highUpper + 1;
+		int highY = REFERENCE_MAX_Y + 1;
+		while (highY <= maxY) {
+			HeightBand band = bandContaining(minY, maxY, highY);
+			bands.add(band);
+			highY = band.maxInclusive() + 1;
 		}
 
 		return List.copyOf(bands);
 	}
 
-	private static boolean isRtfOverworld(PlacementContext context) {
+	static HeightBand bandContaining(int minY, int maxY, int y) {
+		if (minY > maxY) {
+			throw new IllegalArgumentException("Minimum generation Y exceeds maximum generation Y");
+		}
+		if (y < minY || y > maxY) {
+			throw new IllegalArgumentException("Y is outside the generation bounds");
+		}
+		if (y >= REFERENCE_MIN_Y && y <= REFERENCE_MAX_Y) {
+			return new HeightBand(
+				Math.max(minY, REFERENCE_MIN_Y),
+				Math.min(maxY, REFERENCE_MAX_Y),
+				true
+			);
+		}
+		if (y < REFERENCE_MIN_Y) {
+			int index = (REFERENCE_MIN_Y - 1 - y) / REFERENCE_SPAN;
+			int bandMax = REFERENCE_MIN_Y - 1 - index * REFERENCE_SPAN;
+			int minInclusive = Math.max(minY, bandMax - REFERENCE_SPAN + 1);
+			int maxInclusive = Math.min(maxY, bandMax);
+			return new HeightBand(
+				minInclusive,
+				maxInclusive,
+				maxInclusive - minInclusive + 1 == REFERENCE_SPAN
+			);
+		}
+
+		int index = (y - REFERENCE_MAX_Y - 1) / REFERENCE_SPAN;
+		int bandMin = REFERENCE_MAX_Y + 1 + index * REFERENCE_SPAN;
+		int minInclusive = Math.max(minY, bandMin);
+		int maxInclusive = Math.min(maxY, bandMin + REFERENCE_SPAN - 1);
+		return new HeightBand(
+			minInclusive,
+			maxInclusive,
+			maxInclusive - minInclusive + 1 == REFERENCE_SPAN
+		);
+	}
+
+	static boolean isRtfOverworld(PlacementContext context) {
 		if (!Level.OVERWORLD.equals(context.getLevel().getLevel().dimension())) {
 			return false;
 		}
