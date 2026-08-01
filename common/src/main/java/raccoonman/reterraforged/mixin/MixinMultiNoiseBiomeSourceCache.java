@@ -14,7 +14,7 @@ import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.world.worldgen.biome.ClimatePointCache;
 import raccoonman.reterraforged.world.worldgen.biome.RTFClimateSampler;
 import raccoonman.reterraforged.world.worldgen.biome.UndergroundBiomeBanding;
-import raccoonman.reterraforged.world.worldgen.terrablender.TBCompat;
+import raccoonman.reterraforged.world.worldgen.terrablender.TerraBlenderParameterList;
 
 /**
  * Memoizes {@code MultiNoiseBiomeSource.getNoiseBiome(x, y, z, sampler)} per thread.
@@ -48,7 +48,10 @@ public abstract class MixinMultiNoiseBiomeSourceCache {
             cancellable = true)
     private void rtf$bandedNoiseBiome(final int x, final int y, final int z, final Climate.Sampler sampler,
                                       final CallbackInfoReturnable<Holder<Biome>> cir) {
-        if (TBCompat.isEnabled() || !((Object) sampler instanceof RTFClimateSampler rtfSampler)) {
+        Climate.ParameterList<Holder<Biome>> parameters = this.parameters();
+        if (((Object) parameters instanceof TerraBlenderParameterList terraBlenderParameters
+                && terraBlenderParameters.reterraforged$isTerraBlenderInitialized())
+                || !((Object) sampler instanceof RTFClimateSampler rtfSampler)) {
             return;
         }
 
@@ -63,7 +66,7 @@ public abstract class MixinMultiNoiseBiomeSourceCache {
             synchronized (this) {
                 banding = this.rtf$undergroundBanding;
                 if (banding == null || this.rtf$undergroundBandingPreset != preset) {
-                    banding = UndergroundBiomeBanding.apply(preset, this.parameters().values());
+                    banding = UndergroundBiomeBanding.apply(preset, parameters.values());
                     this.rtf$undergroundBandingPreset = preset;
                     this.rtf$undergroundBanding = banding;
                 }
