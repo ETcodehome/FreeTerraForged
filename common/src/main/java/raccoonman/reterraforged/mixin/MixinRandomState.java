@@ -35,6 +35,7 @@ import raccoonman.reterraforged.world.worldgen.densityfunction.MarkerFunction;
 import raccoonman.reterraforged.world.worldgen.densityfunction.NoiseFunction;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noises;
+import raccoonman.reterraforged.world.worldgen.biome.RTFClimateSampler;
 import raccoonman.reterraforged.world.worldgen.terrablender.TBClimateSampler;
 import raccoonman.reterraforged.world.worldgen.terrablender.TBCompat;
 
@@ -121,6 +122,10 @@ class MixinRandomState {
 		// Only compile global density tags and build a heavy Overworld GeneratorContext
 		// if the base router mapping verified that this instance is actually an RTF worldgen dimension.
 		if (this.reterraforged$isRTFDimension) {
+			if (this.preset != null && (Object) this.sampler instanceof RTFClimateSampler rtfClimateSampler) {
+				rtfClimateSampler.setUndergroundBiomeBandingPreset(this.preset);
+			}
+
 			RegistryLookup<Noise> noises = registries.lookupOrThrow(RTFRegistries.NOISE);
 			RegistryLookup<DensityFunction> functions = registries.lookupOrThrow(Registries.DENSITY_FUNCTION);
 
