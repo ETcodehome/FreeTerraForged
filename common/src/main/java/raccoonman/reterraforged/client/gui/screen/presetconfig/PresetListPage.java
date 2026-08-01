@@ -87,7 +87,7 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 		super.init();
 
 		// Change screen "Next" button label to "Edit"
-		this.screen.nextButton.setMessage(Component.literal("Edit"));
+		this.screen.nextButton.setMessage(Component.translatable(RTFTranslationKeys.GUI_BUTTON_EDIT));
 
 		// Input field
 		this.input = PresetWidgets.createEditBox(this.screen.font, (text) -> {
@@ -114,7 +114,7 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 			this.rebuildPresets(name);
 		});
 
-		this.renamePreset = PresetWidgets.createThrowingButton("Rename Selected", () -> {
+		this.renamePreset = PresetWidgets.createThrowingButton(RTFTranslationKeys.GUI_BUTTON_RENAME, () -> {
 			Entry<AbstractWidget> selected = this.left.getSelected();
 			if (selected != null && selected.getWidget() instanceof PresetEntry entry && !entry.isBuiltin()) {
 				String newName = this.input.getValue().trim();
@@ -129,7 +129,7 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 					this.rebuildPresets(newName);
 					Toasts.notify(
 							RTFTranslationKeys.GUI_SELECT_PRESET_TITLE,
-							Component.literal("Renamed to " + newName),
+							Component.translatable(RTFTranslationKeys.GUI_TOAST_PRESET_RENAMED, newName),
 							SystemToastId.WORLD_BACKUP
 					);
 				}
@@ -217,7 +217,7 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 					customEntry.save();
 					Toasts.notify(
 							RTFTranslationKeys.GUI_SELECT_PRESET_TITLE,
-							Component.literal("Created default preset: " + presetName),
+							Component.translatable(RTFTranslationKeys.GUI_TOAST_PRESET_CREATED, presetName),
 							SystemToastId.WORLD_BACKUP
 					);
 				} catch (IOException e) {
@@ -260,13 +260,13 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 
 		if(this.selectionDetails != null) {
 			if(entry == null) {
-				this.selectionDetails.setText(Component.literal("Select a preset from the left panel to use, modify or export.").withStyle(ChatFormatting.DARK_GRAY));
+				this.selectionDetails.setText(Component.translatable(RTFTranslationKeys.GUI_SELECT_PRESET_NO_SELECTION).withStyle(ChatFormatting.DARK_GRAY));
 			} else {
 
 				if(entry.isBuiltin()) {
-					this.selectionDetails.setText(Component.literal("★ Template Preset (Read Only)\nEdit will duplicate this template to a fresh user preset and will save any settings edits to it.").withStyle(ChatFormatting.GRAY));
+					this.selectionDetails.setText(Component.translatable(RTFTranslationKeys.GUI_SELECT_PRESET_TEMPLATE_DESC).withStyle(ChatFormatting.GRAY));
 				} else {
-					this.selectionDetails.setText(Component.literal("✎ Custom User Preset (Editable)\nChanges made when editing settings will be saved to this preset.").withStyle(ChatFormatting.GOLD));
+					this.selectionDetails.setText(Component.translatable(RTFTranslationKeys.GUI_SELECT_PRESET_CUSTOM_DESC).withStyle(ChatFormatting.GOLD));
 				}
 			}
 		}
@@ -282,13 +282,13 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 		List<AbstractWidget> widgets = new ArrayList<>();
 
 		// Section 1: User Presets (Your Presets)
-		widgets.add(new CategoryHeader(Component.literal("Your Presets").withStyle(ChatFormatting.GOLD)));
+		widgets.add(new CategoryHeader(Component.translatable(RTFTranslationKeys.GUI_HEADER_YOUR_PRESETS).withStyle(ChatFormatting.GOLD)));
 		List<PresetEntry> userPresets = new ArrayList<>();
 		userPresets.addAll(this.listPresets(PRESET_PATH));
 		userPresets.addAll(this.listPresets(LEGACY_PRESET_PATH));
 
 		if (userPresets.isEmpty()) {
-			widgets.add(new EmptyNoticeLabel(Component.literal("No custom presets created yet").withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC)));
+			widgets.add(new EmptyNoticeLabel(Component.translatable(RTFTranslationKeys.GUI_EMPTY_USER_PRESETS).withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC)));
 		} else {
 			widgets.addAll(userPresets);
 		}
@@ -297,7 +297,7 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 		widgets.add(new Spacer(12));
 
 		// Section 2: Templates (Included Templates - Standard Light Grey)
-		widgets.add(new CategoryHeader(Component.literal("Included Templates").withStyle(ChatFormatting.GRAY)));
+		widgets.add(new CategoryHeader(Component.translatable(RTFTranslationKeys.GUI_HEADER_INCLUDED_TEMPLATES).withStyle(ChatFormatting.GRAY)));
 
 		// Modern Patterns
 		widgets.add(createTemplateEntry(Component.translatable(RTFTranslationKeys.GUI_RIVERS_PRESET_NAME), Presets.modernDefaultWithRivers(), ChatFormatting.GRAY));
@@ -546,8 +546,8 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 
 			// 2. Small subtext tag centered underneath
 			Component subtext = this.builtin
-					? Component.literal("Template Preset").withStyle(ChatFormatting.DARK_GRAY)
-					: Component.literal("User Preset").withStyle(ChatFormatting.DARK_GRAY);
+					? Component.translatable(RTFTranslationKeys.GUI_LABEL_TEMPLATE_PRESET).withStyle(ChatFormatting.DARK_GRAY)
+					: Component.translatable(RTFTranslationKeys.GUI_LABEL_USER_PRESET).withStyle(ChatFormatting.DARK_GRAY);
 
 			graphics.pose().pushPose();
 			graphics.pose().translate(x + w / 2.0f, y + 12.0f, 0.0f);
