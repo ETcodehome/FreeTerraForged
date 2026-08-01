@@ -3,6 +3,18 @@ package raccoonman.reterraforged.client.data;
 import raccoonman.reterraforged.RTFCommon;
 
 public final class RTFTranslationKeys {
+	public static final String GUI_BUTTON_EDIT = resolve("gui.button.edit");
+	public static final String GUI_BUTTON_RENAME = resolve("gui.button.rename");
+	public static final String GUI_TOAST_PRESET_RENAMED = resolve("gui.toast.preset_renamed");
+	public static final String GUI_TOAST_PRESET_CREATED = resolve("gui.toast.preset_created");
+	public static final String GUI_SELECT_PRESET_NO_SELECTION = resolve("gui.select_preset.no_selection");
+	public static final String GUI_SELECT_PRESET_TEMPLATE_DESC = resolve("gui.select_preset.template_desc");
+	public static final String GUI_SELECT_PRESET_CUSTOM_DESC = resolve("gui.select_preset.custom_desc");
+	public static final String GUI_HEADER_YOUR_PRESETS = resolve("gui.header.your_presets");
+	public static final String GUI_EMPTY_USER_PRESETS = resolve("gui.empty.user_presets");
+	public static final String GUI_HEADER_INCLUDED_TEMPLATES = resolve("gui.header.included_templates");
+	public static final String GUI_LABEL_TEMPLATE_PRESET = resolve("gui.label.template_preset");
+	public static final String GUI_LABEL_USER_PRESET = resolve("gui.label.user_preset");
 	public static final String METADATA_DESCRIPTION = resolve("metadata.description");
 	public static final String PRESET_METADATA_DESCRIPTION = resolve("preset.metadata.description");
 	public static final String MUD_SWAMPS_METADATA_DESCRIPTION = resolve("mudSwamps.metadata.description");
