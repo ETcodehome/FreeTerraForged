@@ -19,6 +19,7 @@ import net.minecraft.core.QuartPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.tags.StructureTags;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.biome.Biome;
@@ -102,9 +103,14 @@ public class MixinJigsawStructure {
 			Structure trialChambers = registry.get(BuiltinStructures.TRIAL_CHAMBERS);
 			Structure ancientCity = registry.get(BuiltinStructures.ANCIENT_CITY);
 
+			boolean isVillage = registry.getResourceKey(self)
+					.flatMap(registry::getHolder)
+					.map(holder -> holder.is(StructureTags.VILLAGE))
+					.orElse(false);
+
 			if (self == trialChambers || self == ancientCity) {
 				this.rtf$targetStatus = (byte) 1;
-			} else if (this.startPool.unwrapKey().map(k -> k.location().getPath().contains("village")).orElse(false)) {
+			} else if (isVillage) {
 				this.rtf$targetStatus = (byte) 2;
 			} else {
 				this.rtf$targetStatus = (byte) 3;
