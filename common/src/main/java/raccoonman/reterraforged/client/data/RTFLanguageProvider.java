@@ -43,7 +43,7 @@ public final class RTFLanguageProvider {
 
 			this.add(RTFTranslationKeys.GUI_BUTTON_TRUE, "true");
 			this.add(RTFTranslationKeys.GUI_BUTTON_FALSE, "false");
-			this.add(RTFTranslationKeys.GUI_BUTTON_CREATE, "Create");
+			this.add(RTFTranslationKeys.GUI_BUTTON_CREATE, "Create Default");
 			this.add(RTFTranslationKeys.GUI_BUTTON_COPY, "Copy");
 			this.add(RTFTranslationKeys.GUI_BUTTON_DELETE, "Delete");
 			this.add(RTFTranslationKeys.GUI_BUTTON_OPEN_PRESET_FOLDER, "Open Preset Folder");
