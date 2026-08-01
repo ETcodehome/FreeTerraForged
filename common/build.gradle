@@ -11,10 +11,15 @@ dependencies {
     modImplementation "com.github.glitchfiend:TerraBlender-neoforge:${rootProject.minecraft_version}-${rootProject.terrablender_version}"
 	compileOnly "com.electronwill.night-config:toml:3.6.7"
 	//compileOnly "lithostitched-forge:1.0.0"
+	testImplementation "org.junit.jupiter:junit-jupiter:5.11.4"
 }
 
 repositories {
 
+}
+
+test {
+	useJUnitPlatform()
 }
 
 remapJar {

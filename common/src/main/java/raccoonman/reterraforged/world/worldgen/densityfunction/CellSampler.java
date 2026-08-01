@@ -178,11 +178,25 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 
 			}
 		},
+		CONTINENT_EDGE("continent_edge") {
+
+			@Override
+			public float read(Cell cell, Heightmap heightmap) {
+				return cell.continentEdge;
+			}
+		},
 		EROSION("erosion") {
 			
 			@Override
 			public float read(Cell cell, Heightmap heightmap) {
 				return cell.erosion;
+			}
+		},
+		TERRAIN_EROSION("terrain_erosion") {
+
+			@Override
+			public float read(Cell cell, Heightmap heightmap) {
+				return cell.terrainErosion;
 			}
 		},
 		WEIRDNESS("weirdness") {
