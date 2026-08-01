@@ -64,7 +64,6 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 	private Button openExportFolder;
 	private Button exportAsDatapack;
 
-	private Label selectionHeader;
 	private WrappedLabel selectionDetails;
 
 	public PresetListPage(PresetConfigScreen screen) {
@@ -174,7 +173,6 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 		});
 
 		// Information & Description Labels (At bottom of right panel)
-		this.selectionHeader = new Label(-1, -1, -1, -1, (b) -> {}, Component.empty());
 		this.selectionDetails = new WrappedLabel(this.screen.font);
 
 		// Right panel hierarchy: Controls at top, description at bottom
@@ -186,7 +184,6 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 		this.right.addWidget(this.openPresetFolder);
 		this.right.addWidget(this.openExportFolder);
 		this.right.addWidget(this.exportAsDatapack);
-		this.right.addWidget(this.selectionHeader);
 		this.right.addWidget(this.selectionDetails);
 
 		this.left.setRenderSelected(true);
@@ -220,7 +217,7 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 					customEntry.save();
 					Toasts.notify(
 							RTFTranslationKeys.GUI_SELECT_PRESET_TITLE,
-							Component.literal("Created preset: " + presetName),
+							Component.literal("Created default preset: " + presetName),
 							SystemToastId.WORLD_BACKUP
 					);
 				} catch (IOException e) {
@@ -261,18 +258,15 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 		if(this.createPreset != null) this.createPreset.active = validName;
 		if(this.renamePreset != null) this.renamePreset.active = isCustom && validName;
 
-		if(this.selectionHeader != null && this.selectionDetails != null) {
+		if(this.selectionDetails != null) {
 			if(entry == null) {
-				this.selectionHeader.setMessage(Component.literal("No Preset Selected").withStyle(ChatFormatting.GRAY, ChatFormatting.ITALIC));
-				this.selectionDetails.setText(Component.literal("Select a preset from the left panel to modify or export.").withStyle(ChatFormatting.DARK_GRAY));
+				this.selectionDetails.setText(Component.literal("Select a preset from the left panel to use, modify or export.").withStyle(ChatFormatting.DARK_GRAY));
 			} else {
-				this.selectionHeader.setMessage(Component.literal("Selected: ").withStyle(ChatFormatting.GRAY)
-						.append(entry.getName()));
 
 				if(entry.isBuiltin()) {
-					this.selectionDetails.setText(Component.literal("★ Built-in Template (Read-Only)\nEdit will automatically duplicate this template to a fresh user preset and will save any settings edits to it.").withStyle(ChatFormatting.GRAY));
+					this.selectionDetails.setText(Component.literal("★ Template Preset (Read Only)\nEdit will duplicate this template to a fresh user preset and will save any settings edits to it.").withStyle(ChatFormatting.GRAY));
 				} else {
-					this.selectionDetails.setText(Component.literal("✎ Custom Preset (Editable)\nChanges made when editing settings will be saved to this preset.").withStyle(ChatFormatting.GOLD));
+					this.selectionDetails.setText(Component.literal("✎ Custom User Preset (Editable)\nChanges made when editing settings will be saved to this preset.").withStyle(ChatFormatting.GOLD));
 				}
 			}
 		}
