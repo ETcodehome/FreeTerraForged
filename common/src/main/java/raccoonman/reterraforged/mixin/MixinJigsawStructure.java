@@ -47,8 +47,8 @@ import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
 /**
  * 1) Keeps Trial Chamber and Ancient City jigsaw starts within a terrain-bounded vertical window, then validates the
  *    generated pieces against the dimension floor and the lowest surface over the resulting structure footprint.
- * 2) Retries Village placement with random offsets if the candidate origin lands on a river cell or produces a
- *    decimated piece list.
+ * 2) Retries Village placement with random offsets if the candidate origin lands on a river cell, or if the outer
+ *    boundary perimeter of the resulting structure footprint intersects a river.
  */
 @Mixin(JigsawStructure.class)
 public class MixinJigsawStructure {
@@ -131,7 +131,7 @@ public class MixinJigsawStructure {
 
 		RandomSource random = generationContext.random();
 		int maxAttempts = 8;
-		int minRequiredPieces = 5; // Rejects desolate village stubs pruned by river intersections
+		int minRequiredPieces = 5;
 
 		for (int attempt = 0; attempt < maxAttempts; attempt++) {
 			int offsetX = (attempt == 0) ? 0 : random.nextIntBetweenInclusive(-32, 32);
@@ -140,7 +140,7 @@ public class MixinJigsawStructure {
 			int candidateX = originX + offsetX;
 			int candidateZ = originZ + offsetZ;
 
-			// Quick 2D Cell pre-check: skip if origin lands on river terrain
+			// Quick 2D Cell pre-check: skip immediately if the center origin lands on river terrain
 			if (rtf$isRiverCell(candidateX, candidateZ, generationContext.randomState())) {
 				continue;
 			}
@@ -170,12 +170,19 @@ public class MixinJigsawStructure {
 			Structure.GenerationStub stub = result.get();
 			StructurePiecesBuilder builder = stub.getPiecesBuilder();
 
-			// Ensure the placement isn't a decimated stub
-			if (builder.build().pieces().size() >= minRequiredPieces) {
-				cir.setReturnValue(Optional.of(new Structure.GenerationStub(stub.position(), Either.right(builder))));
-				cir.cancel();
-				return;
+			// Reject if it generated too few pieces
+			if (builder.build().pieces().size() < minRequiredPieces) {
+				continue;
 			}
+
+			// Outer boundary check: ensure the resulting structure's perimeter does not intersect a river
+			if (rtf$footprintIntersectsRiver(builder.getBoundingBox(), generationContext.randomState())) {
+				continue;
+			}
+
+			cir.setReturnValue(Optional.of(new Structure.GenerationStub(stub.position(), Either.right(builder))));
+			cir.cancel();
+			return;
 		}
 
 		// Discard structure if all attempts land on rivers or produce desolate pieces
@@ -208,8 +215,8 @@ public class MixinJigsawStructure {
 
 		BlockPos blockPos = new BlockPos(originX, target, originZ);
 		Holder<Biome> biome = generationContext.chunkGenerator()
-			.getBiomeSource()
-			.getNoiseBiome(QuartPos.fromBlock(blockPos.getX()), QuartPos.fromBlock(blockPos.getY()), QuartPos.fromBlock(blockPos.getZ()), generationContext.randomState().sampler());
+				.getBiomeSource()
+				.getNoiseBiome(QuartPos.fromBlock(blockPos.getX()), QuartPos.fromBlock(blockPos.getY()), QuartPos.fromBlock(blockPos.getZ()), generationContext.randomState().sampler());
 		if (!generationContext.validBiome().test(biome)) {
 			cir.setReturnValue(Optional.empty());
 			cir.cancel();
@@ -217,10 +224,10 @@ public class MixinJigsawStructure {
 		}
 
 		Optional<Structure.GenerationStub> result = JigsawPlacement.addPieces(
-			generationContext, this.startPool, this.startJigsawName, this.maxDepth, blockPos, this.useExpansionHack,
-			this.projectStartToHeightmap, this.maxDistanceFromCenter,
-			PoolAliasLookup.create(this.poolAliases, blockPos, generationContext.seed()),
-			this.dimensionPadding, this.liquidSettings
+				generationContext, this.startPool, this.startJigsawName, this.maxDepth, blockPos, this.useExpansionHack,
+				this.projectStartToHeightmap, this.maxDistanceFromCenter,
+				PoolAliasLookup.create(this.poolAliases, blockPos, generationContext.seed()),
+				this.dimensionPadding, this.liquidSettings
 		);
 		if (result.isEmpty()) {
 			cir.setReturnValue(result);
@@ -228,12 +235,10 @@ public class MixinJigsawStructure {
 			return;
 		}
 
-		// Building twice advances the structure RNG and can select different pieces, so reuse one materialized builder.
 		Structure.GenerationStub stub = result.get();
 		StructurePiecesBuilder builder = stub.getPiecesBuilder();
 		BoundingBox realBbox = builder.getBoundingBox();
 
-		// The initial search radius can include unrelated high terrain; derive the ceiling from the resulting footprint.
 		int realMaxLocalY = rtf$sampleLocalCeiling(generationContext, realBbox) - rtf$MARGIN;
 		if (realBbox.minY() <= minWorldY || realBbox.maxY() >= realMaxLocalY) {
 			cir.setReturnValue(Optional.empty());
@@ -243,6 +248,40 @@ public class MixinJigsawStructure {
 
 		cir.setReturnValue(Optional.of(new Structure.GenerationStub(stub.position(), Either.right(builder))));
 		cir.cancel();
+	}
+
+	@Unique
+	private boolean rtf$footprintIntersectsRiver(BoundingBox box, RandomState randomState) {
+		int step = 3;
+
+		int minX = box.minX();
+		int maxX = box.maxX();
+		int minZ = box.minZ();
+		int maxZ = box.maxZ();
+
+		// 1. Scan northern (minZ) and southern (maxZ) perimeter edges along X
+		for (int x = minX; x <= maxX; x += step) {
+			if (rtf$isRiverCell(x, minZ, randomState) || rtf$isRiverCell(x, maxZ, randomState)) {
+				return true;
+			}
+		}
+		// Explicit check for the exact eastern corner bounds if (maxX - minX) isn't divisible by 3
+		if (rtf$isRiverCell(maxX, minZ, randomState) || rtf$isRiverCell(maxX, maxZ, randomState)) {
+			return true;
+		}
+
+		// 2. Scan western (minX) and eastern (maxX) perimeter edges along Z
+		for (int z = minZ; z <= maxZ; z += step) {
+			if (rtf$isRiverCell(minX, z, randomState) || rtf$isRiverCell(maxX, z, randomState)) {
+				return true;
+			}
+		}
+		// Explicit check for the exact southern corner bounds if (maxZ - minZ) isn't divisible by 3
+		if (rtf$isRiverCell(minX, maxZ, randomState) || rtf$isRiverCell(maxX, maxZ, randomState)) {
+			return true;
+		}
+
+		return false;
 	}
 
 	@Unique
@@ -275,7 +314,7 @@ public class MixinJigsawStructure {
 				int x = originX + radius * xi / rtf$GRID_STEPS_PER_SIDE;
 				int z = originZ + radius * zi / rtf$GRID_STEPS_PER_SIDE;
 				int floor = generationContext.chunkGenerator()
-					.getFirstOccupiedHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, generationContext.heightAccessor(), generationContext.randomState());
+						.getFirstOccupiedHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, generationContext.heightAccessor(), generationContext.randomState());
 				if (floor < worst) {
 					worst = floor;
 				}
@@ -296,7 +335,7 @@ public class MixinJigsawStructure {
 			for (int zi = 0; zi <= steps; zi++) {
 				int z = realBbox.minZ() + (realBbox.maxZ() - realBbox.minZ()) * zi / steps;
 				int floor = generationContext.chunkGenerator()
-					.getFirstOccupiedHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, generationContext.heightAccessor(), generationContext.randomState());
+						.getFirstOccupiedHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, generationContext.heightAccessor(), generationContext.randomState());
 				if (floor < lowest) {
 					lowest = floor;
 				}
