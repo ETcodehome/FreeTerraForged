@@ -270,7 +270,7 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 						.append(entry.getName()));
 
 				if(entry.isBuiltin()) {
-					this.selectionDetails.setText(Component.literal("★ Built-in Template (Read-Only)\nEdit automatically creates a copy of this preset so changes are preserved across sessions.").withStyle(ChatFormatting.GRAY));
+					this.selectionDetails.setText(Component.literal("★ Built-in Template (Read-Only)\nEdit will automatically duplicate this template to a fresh user preset and will save any settings edits to it.").withStyle(ChatFormatting.GRAY));
 				} else {
 					this.selectionDetails.setText(Component.literal("✎ Custom Preset (Editable)\nChanges made when editing settings will be saved to this preset.").withStyle(ChatFormatting.GOLD));
 				}
@@ -298,6 +298,9 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 		} else {
 			widgets.addAll(userPresets);
 		}
+
+		// Empty unselectable spacer entry between Sections
+		widgets.add(new Spacer(12));
 
 		// Section 2: Templates (Included Templates - Standard Light Grey)
 		widgets.add(new CategoryHeader(Component.literal("Included Templates").withStyle(ChatFormatting.GRAY)));
@@ -333,8 +336,7 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 
 	private PresetEntry createTemplateEntry(Component nameComponent, Preset preset, ChatFormatting nameColor) {
 		String cleanName = nameComponent.getString();
-		Component label = nameComponent.copy().withStyle(nameColor)
-				.append(Component.literal(" [Template]").withStyle(ChatFormatting.DARK_GRAY));
+		Component label = nameComponent.copy().withStyle(nameColor);
 		return new PresetEntry(cleanName, label, preset, true, this);
 	}
 
@@ -377,8 +379,7 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 						DataResult<Preset> result = Preset.DIRECT_CODEC.parse(JsonOps.INSTANCE, JsonParser.parseReader(reader));
 						Preset preset = result.resultOrPartial(err -> {}).orElse(null);
 						if(preset != null) {
-							Component label = Component.literal(base).withStyle(ChatFormatting.GOLD)
-									.append(Component.literal(" [Custom]").withStyle(ChatFormatting.DARK_GRAY));
+							Component label = Component.literal(base).withStyle(ChatFormatting.GOLD);
 							presets.add(new PresetEntry(base, label, preset, false, this));
 						}
 					} catch (Exception e) {
@@ -388,6 +389,22 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 			}
 		}
 		return presets;
+	}
+
+	// Unselectable blank spacing widget
+	public static class Spacer extends AbstractWidget {
+		public Spacer(int height) {
+			super(0, 0, 200, height, Component.empty());
+			this.active = false;
+		}
+
+		@Override
+		public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+			// Intentional no-op: invisible spacer
+		}
+
+		@Override
+		protected void updateWidgetNarration(NarrationElementOutput narrationElementOutput) {}
 	}
 
 	// Center-aligned category banner header without vertical marker bar
@@ -470,7 +487,7 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 		protected void updateWidgetNarration(NarrationElementOutput narrationElementOutput) {}
 	}
 
-	// Center-aligned preset list entry
+	// Center-aligned preset list entry with subtext tag underneath
 	public static class PresetEntry extends Label {
 		private String rawName;
 		private Component displayName;
@@ -527,10 +544,22 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 			int x = this.getX();
 			int y = this.getY();
 			int w = this.getWidth();
-			int h = this.getHeight();
 
 			int textColor = this.isHoveredOrFocused() ? 0xFFFFFF : 0xE0E0E0;
-			graphics.drawCenteredString(font, this.getMessage(), x + w / 2, y + (h - 8) / 2, textColor);
+
+			// 1. Main Title centered near top of entry slot
+			graphics.drawCenteredString(font, this.getMessage(), x + w / 2, y + 2, textColor);
+
+			// 2. Small subtext tag centered underneath
+			Component subtext = this.builtin
+					? Component.literal("Template Preset").withStyle(ChatFormatting.DARK_GRAY)
+					: Component.literal("User Preset").withStyle(ChatFormatting.DARK_GRAY);
+
+			graphics.pose().pushPose();
+			graphics.pose().translate(x + w / 2.0f, y + 12.0f, 0.0f);
+			graphics.pose().scale(0.6f, 0.6f, 0.8f);
+			graphics.drawCenteredString(font, subtext, 0, 0, 0xFFFFFF);
+			graphics.pose().popPose();
 		}
 
 		public void save() throws IOException {
