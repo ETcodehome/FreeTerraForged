@@ -24,7 +24,7 @@
 		"MixinNoiseBasedChunkGenerator",
 		"MixinFloatyBoaty",
 		"MixinC2MECompilerShield",
-		"MixinMultiNoiseBiomeSourceCache",
+		"MixinMultiNoiseBiomeSource",
 		"MixinWorldGenRegionCache",
 		"MixinNoiseFill",
 		"MixinChunkGeneratorTiming",
@@ -45,6 +45,8 @@
 		"MixinJigsawStructure",
 		"terrablender.MixinParameterList",
 		"terrablender.MixinClimateSampler",
+		"terrablender.MixinNamespacedSurfaceRuleSource",
+		"terrablender.SurfaceRulesContextAccessor",
 		"terrablender.MixinTargetPoint",
 		"terrablender.MixinNoiseChunk"
 		],
