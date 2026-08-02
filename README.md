@@ -1,4 +1,4 @@
-# ReTerraForged
+# FreeTerraForged
 A community driven fork of the Legendary ReTerraForged project for modern minecraft providing heavily customizable overworld terrain generation.
 Several novel features have been community contributed to the fork so far including 3D rivers, waterfalls and island generation.
 Additional feature contributions are welcomed via forking and raising a merge PR.
