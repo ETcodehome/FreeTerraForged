@@ -137,7 +137,7 @@ public class MixinJigsawStructure {
 
 		RandomSource random = generationContext.random();
 		int maxAttempts = 8;
-		int minRequiredPieces = 5;
+		int minRequiredPieces = 2;
 
 		for (int attempt = 0; attempt < maxAttempts; attempt++) {
 			int offsetX = (attempt == 0) ? 0 : random.nextIntBetweenInclusive(-32, 32);
@@ -151,21 +151,39 @@ public class MixinJigsawStructure {
 				continue;
 			}
 
+			// Sample raw startHeight (returns 0 for villages)
 			int sampledY = this.startHeight.sample(random, new WorldGenerationContext(generationContext.chunkGenerator(), generationContext.heightAccessor()));
-			BlockPos blockPos = new BlockPos(candidateX, sampledY, candidateZ);
 
+			// Calculate actual surface Y ONLY for biome validation
+			int surfaceY = sampledY;
+			if (this.projectStartToHeightmap.isPresent()) {
+				surfaceY += generationContext.chunkGenerator().getFirstOccupiedHeight(
+						candidateX, candidateZ, this.projectStartToHeightmap.get(),
+						generationContext.heightAccessor(), generationContext.randomState()
+				);
+			}
+
+			// Query noise biome at ground level
 			Holder<Biome> biome = generationContext.chunkGenerator()
 					.getBiomeSource()
-					.getNoiseBiome(QuartPos.fromBlock(blockPos.getX()), QuartPos.fromBlock(blockPos.getY()), QuartPos.fromBlock(blockPos.getZ()), generationContext.randomState().sampler());
+					.getNoiseBiome(
+							QuartPos.fromBlock(candidateX),
+							QuartPos.fromBlock(surfaceY),
+							QuartPos.fromBlock(candidateZ),
+							generationContext.randomState().sampler()
+					);
 
 			if (!generationContext.validBiome().test(biome)) {
 				continue;
 			}
 
+			// Pass sampledY (0) to JigsawPlacement so its internal heightmap addition doesn't double-count surfaceY
+			BlockPos placementPos = new BlockPos(candidateX, sampledY, candidateZ);
+
 			Optional<Structure.GenerationStub> result = JigsawPlacement.addPieces(
-					generationContext, this.startPool, this.startJigsawName, this.maxDepth, blockPos, this.useExpansionHack,
+					generationContext, this.startPool, this.startJigsawName, this.maxDepth, placementPos, this.useExpansionHack,
 					this.projectStartToHeightmap, this.maxDistanceFromCenter,
-					PoolAliasLookup.create(this.poolAliases, blockPos, generationContext.seed()),
+					PoolAliasLookup.create(this.poolAliases, placementPos, generationContext.seed()),
 					this.dimensionPadding, this.liquidSettings
 			);
 
