@@ -10,10 +10,12 @@ import raccoonman.reterraforged.world.worldgen.densityfunction.tile.filter.Filte
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.filter.NoiseCorrection;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.filter.Smoothing;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.filter.Steepness;
+import raccoonman.reterraforged.world.worldgen.densityfunction.tile.filter.TerrainCeiling;
 
 public class WorldFilters {
     private Smoothing smoothing;
     private Steepness steepness;
+    private TerrainCeiling terrainCeiling;
     private BeachDetect beach;
     private NoiseCorrection corrections;
     private FilterSettings settings;
@@ -27,6 +29,9 @@ public class WorldFilters {
         this.beach = BeachDetect.make(context);
         this.smoothing = Smoothing.make(context.preset.filters().smoothing, context.levels);
         this.steepness = Steepness.make(1, 10.0F, context.levels);
+        if (context.preset.terrain().general.mountainVariety > 0.0F) {
+            this.terrainCeiling = TerrainCeiling.make(context.preset.world().properties);
+        }
         this.corrections = new NoiseCorrection(context.levels);
         this.erosion = new WorldErosion<>(factory, (e, size) -> e.getSize() == size);
         this.erosionIterations = context.preset.filters().erosion.dropletsPerChunk;
@@ -47,6 +52,9 @@ public class WorldFilters {
         this.applyRequiredFilters(tile, regionX, regionZ);
         if(optionalFilters) {
         	this.applyCorrections(tile, regionX, regionZ);
+        }
+        if (this.terrainCeiling != null) {
+            this.terrainCeiling.apply(tile, regionX, regionZ, 1);
         }
     }
     
