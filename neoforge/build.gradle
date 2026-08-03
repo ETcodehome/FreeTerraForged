@@ -33,6 +33,11 @@ dependencies {
     neoForge "net.neoforged:neoforge:$rootProject.neoforge_version"
     common(project(path: ":common", configuration: "namedElements")) { transitive false }
     shadowCommon(project(path: ":common", configuration: "transformProductionNeoForge")) { transitive false }
+    modCompileOnly "maven.modrinth:biolith:3.0.14-neoforge"
+}
+
+repositories {
+    maven { url "https://api.modrinth.com/maven" }
 }
 
 evaluationDependsOn(':common')

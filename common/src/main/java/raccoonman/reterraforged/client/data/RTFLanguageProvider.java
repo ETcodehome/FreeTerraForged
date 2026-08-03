@@ -30,7 +30,7 @@ public final class RTFLanguageProvider {
 			this.add(RTFTranslationKeys.GUI_HUGE_BIOMES_PRESET_NAME, "Legacy - TerraForged Huge Biomes");
 			this.add(RTFTranslationKeys.GUI_LITE_PRESET_NAME, "Legacy - TerraForged Lite");
 			this.add(RTFTranslationKeys.GUI_VANILLAISH_PRESET_NAME, "Legacy - TerraForged Vanilla-ish");
-			this.add(RTFTranslationKeys.GUI_RIVERS_PRESET_NAME, "Modern Default with 3D Rivers");
+			this.add(RTFTranslationKeys.GUI_RIVERS_PRESET_NAME, "Modern - Default with 3D Rivers");
 			this.add(RTFTranslationKeys.GUI_WORLD_SETTINGS_TITLE, "World Settings");
 			this.add(RTFTranslationKeys.GUI_SURFACE_SETTINGS_TITLE, "Surface Settings (Experimental)");
 			this.add(RTFTranslationKeys.GUI_CAVE_SETTINGS_TITLE, "Cave Settings (Experimental)");
@@ -43,7 +43,7 @@ public final class RTFLanguageProvider {
 
 			this.add(RTFTranslationKeys.GUI_BUTTON_TRUE, "true");
 			this.add(RTFTranslationKeys.GUI_BUTTON_FALSE, "false");
-			this.add(RTFTranslationKeys.GUI_BUTTON_CREATE, "Create");
+			this.add(RTFTranslationKeys.GUI_BUTTON_CREATE, "Create Default");
 			this.add(RTFTranslationKeys.GUI_BUTTON_COPY, "Copy");
 			this.add(RTFTranslationKeys.GUI_BUTTON_DELETE, "Delete");
 			this.add(RTFTranslationKeys.GUI_BUTTON_OPEN_PRESET_FOLDER, "Open Preset Folder");
