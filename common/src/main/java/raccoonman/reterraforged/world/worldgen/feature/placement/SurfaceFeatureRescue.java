@@ -129,11 +129,14 @@ public final class SurfaceFeatureRescue {
 				return Optional.empty();
 			}
 
-			HeightBand band = DynamicHeightRangePlacement.bandContaining(
-				this.context.getMinGenY(),
-				this.context.getMinGenY() + this.context.getGenDepth() - 1,
-				originalOrigin.getY()
-			);
+			int minY = this.context.getMinGenY();
+			int maxY = minY + this.context.getGenDepth() - 1;
+			int originY = originalOrigin.getY();
+			if (originY < minY || originY > maxY) {
+				return Optional.empty();
+			}
+
+			HeightBand band = DynamicHeightRangePlacement.bandContaining(minY, maxY, originY);
 			if (!this.bandBudgets
 				.computeIfAbsent(band, ignored -> new BandBudget(this.sampledCount))
 				.shouldSearch()) {
