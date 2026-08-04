@@ -2,41 +2,57 @@ package raccoonman.reterraforged.world.worldgen.cell.terrain.populator;
 
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.cell.CellPopulator;
-import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
+import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 
 public class VariedMountainPopulator implements CellPopulator, WeightedPopulator {
 	private final TerrainPopulator[] variants;
-	private final Noise selector;
-	private final float offsetX;
-	private final float offsetZ;
+	private final TerrainPopulator edgeReference;
 	private final float weight;
 
 	public VariedMountainPopulator(TerrainPopulator[] variants, float weight) {
 		this.variants = variants;
-		this.selector = null;
-		this.offsetX = 0;
-		this.offsetZ = 0;
+		this.edgeReference = null;
 		this.weight = weight;
 	}
 
-	public VariedMountainPopulator(TerrainPopulator[] variants, Noise selector, float offsetX, float offsetZ, float weight) {
+	/**
+	 * For populators not already wrapped by {@code RegionLerper} (e.g. mountain chains, which sit
+	 * outside the terrain-region mosaic and are placed by their own silhouette mask instead), the
+	 * hash-selected variant is blended toward {@code edgeReference} as {@code cell.terrainRegionEdge}
+	 * approaches a region boundary, the same technique {@code RegionLerper} uses.
+	 */
+	public VariedMountainPopulator(TerrainPopulator[] variants, TerrainPopulator edgeReference, float weight) {
 		this.variants = variants;
-		this.selector = selector;
-		this.offsetX = offsetX;
-		this.offsetZ = offsetZ;
+		this.edgeReference = edgeReference;
 		this.weight = weight;
 	}
 
 	@Override
 	public void apply(Cell cell, float x, float z) {
-		int index;
-		if (this.selector != null) {
-			float val = Math.max(0.0F, Math.min(1.0F, this.selector.compute(x + this.offsetX, z + this.offsetZ, 0)));
-			index = Math.min((int) (val * this.variants.length), this.variants.length - 1);
-		} else {
-			index = cellHash(cell.terrainRegionId, this.variants.length);
+		int index = cellHash(cell.terrainRegionId, this.variants.length);
+		TerrainPopulator selected = this.variants[index];
+		if (this.edgeReference == null) {
+			selected.apply(cell, x, z);
+			return;
 		}
-		this.variants[index].apply(cell, x, z);
+		float alpha = cell.terrainRegionEdge;
+		if (alpha >= 1.0F) {
+			selected.apply(cell, x, z);
+			return;
+		}
+		if (alpha <= 0.0F) {
+			this.edgeReference.apply(cell, x, z);
+			return;
+		}
+		this.edgeReference.apply(cell, x, z);
+		float borderHeight = cell.height;
+		float borderErosion = cell.erosion;
+		float borderWeirdness = cell.weirdness;
+
+		selected.apply(cell, x, z);
+		cell.height = NoiseUtil.lerp(borderHeight, cell.height, alpha);
+		cell.erosion = NoiseUtil.lerp(borderErosion, cell.erosion, alpha);
+		cell.weirdness = NoiseUtil.lerp(borderWeirdness, cell.weirdness, alpha);
 	}
 
 	@Override

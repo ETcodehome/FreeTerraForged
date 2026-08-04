@@ -162,13 +162,7 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
         	float highErosion = 0.65F - 0.25F * variety;
         	TerrainPopulator chainHigh = Populators.makeMountainChain(chainVarietySeed, ground, highSettings, highChainHScale, highChainVScale, general.fancyMountains, legacy, highErosion);
 
-        	Noise chainSelector = Noises.perlin(chainVarietySeed.next(), general.terrainRegionSize * 3, 1);
-        	chainSelector = Noises.clamp(chainSelector, 0.15F, 0.85F);
-        	chainSelector = Noises.map(chainSelector, 0.0F, 1.0F);
-
-        	float selectorOffsetX = general.terrainRegionSize * 1.37F;
-        	float selectorOffsetZ = general.terrainRegionSize * 0.89F;
-        	mountains = new VariedMountainPopulator(new TerrainPopulator[]{chainLow, chainCenter, chainHigh}, chainSelector, selectorOffsetX, selectorOffsetZ, mtnSettings.weight);
+        	mountains = new VariedMountainPopulator(new TerrainPopulator[]{chainLow, chainCenter, chainHigh}, chainCenter, mtnSettings.weight);
         } else {
         	mountains = Populators.makeMountainChain(mountainSeed, ground, terrainSettings.mountains, terrainSettings.general.legacyMountainScaling ? 1.0F : terrainSettings.mountains.horizontalScale * 2.25F, terrainSettings.general.legacyMountainScaling ? globalVerticalScale : globalVerticalScale * terrainSettings.mountains.verticalScale, general.fancyMountains, general.legacyMountainScaling);
         }
