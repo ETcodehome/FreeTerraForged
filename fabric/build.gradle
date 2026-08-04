@@ -22,13 +22,8 @@ configurations {
 dependencies {
     modImplementation "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}"
     modApi("net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}") { exclude group: 'net.fabricmc', module: 'fabric-loader' }
-    modCompileOnly "maven.modrinth:biolith:3.0.14-fabric"
     common(project(path: ":common", configuration: "namedElements")) { transitive false }
     shadowCommon(project(path: ":common", configuration: "transformProductionFabric")) { transitive false }
-}
-
-repositories {
-    maven { url "https://api.modrinth.com/maven" }
 }
 
 processResources {

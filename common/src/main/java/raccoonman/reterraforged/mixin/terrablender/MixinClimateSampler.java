@@ -14,9 +14,6 @@ import net.minecraft.world.level.biome.Climate.TargetPoint;
 import net.minecraft.world.level.levelgen.DensityFunction;
 import raccoonman.reterraforged.world.worldgen.terrablender.TBClimateSampler;
 import raccoonman.reterraforged.world.worldgen.terrablender.TBTargetPoint;
-import raccoonman.reterraforged.world.worldgen.terrablender.TerraBlenderRegionSelector;
-import terrablender.api.RegionType;
-import terrablender.api.Regions;
 
 @Mixin(Climate.Sampler.class)
 @Implements(@Interface(iface = TBClimateSampler.class, prefix = "reterraforged$TBClimateSampler$"))
@@ -36,9 +33,7 @@ class MixinClimateSampler {
 	}
 	
 	public void reterraforged$TBClimateSampler$setUniqueness(DensityFunction uniqueness) {
-		this.uniqueness = TerraBlenderRegionSelector.needsUniqueness(Regions.getCount(RegionType.OVERWORLD))
-			? uniqueness
-			: null;
+		this.uniqueness = uniqueness;
 	}
 	
 	public DensityFunction reterraforged$TBClimateSampler$getUniqueness() {

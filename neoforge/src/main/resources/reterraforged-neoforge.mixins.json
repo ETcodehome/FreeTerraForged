@@ -4,7 +4,6 @@
   "minVersion": "0.8",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-	"MixinBiolithTerraBlenderCompat",
   	"MixinTagsProvider",
   	"MixinBiomeGenerationSettingsPlainsBuilder",
     "MixinChunkStatusTasks",
