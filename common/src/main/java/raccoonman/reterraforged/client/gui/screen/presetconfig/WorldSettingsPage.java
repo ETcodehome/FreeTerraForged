@@ -157,6 +157,7 @@ public class WorldSettingsPage extends PresetEditorPage {
 		});
 		this.inland = PresetWidgets.createFloatSlider(controlPoints.inland, 0.0F, 1.0F, RTFTranslationKeys.GUI_SLIDER_INLAND, (slider, value) -> {
 			value = Math.max(value, this.coast.getValue());
+			value = Math.max(value, 0.001);
 			controlPoints.inland = (float) slider.scaleValue(value);
 			this.regenerate();
 			return value;
