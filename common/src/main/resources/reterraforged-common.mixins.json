@@ -27,20 +27,37 @@
 		"MixinBlock",
 		"MixinPlayerChunkSender",
 		"MixinC2MECompilerShield",
-		"MixinMultiNoiseBiomeSourceCache",
+		"MixinMultiNoiseBiomeSource",
 		"MixinWorldGenRegionCache",
 		"MixinNoiseFill",
 		"MixinChunkGeneratorTiming",
+		"HeightRangePlacementAccessor",
+		"UniformHeightAccessor",
+		"EnvironmentScanPlacementAccessor",
+		"RandomOffsetPlacementAccessor",
+		"BlockPredicateFilterAccessor",
+		"MixinHeightRangePlacement",
+		"MixinCountPlacement",
+		"MixinEnvironmentScanPlacement",
+		"MixinPlacedFeature",
 		"BeardifierAccessor",
 		"LevelChunkSectionAccessor",
+		"StructurePiecesBuilderAccessor",
+		"MixinOceanMonumentBuilding",
+		"MixinOceanMonumentStructure",
+		"MixinJigsawStructure",
 		"terrablender.MixinParameterList",
 		"terrablender.MixinClimateSampler",
+		"terrablender.MixinNamespacedSurfaceRuleSource",
+		"terrablender.SurfaceRulesContextAccessor",
 		"terrablender.MixinTargetPoint",
 		"terrablender.MixinNoiseChunk"
-  	],
-  	"client": [
-		"ScreenInvoker"
-  	],
+		],
+		"client": [
+			"MixinCreateWorldScreenWorldTab",
+			"MixinGuaranteeData",
+			"ScreenInvoker"
+		],
   	"injectors": {
 		"defaultRequire": 1
   	}

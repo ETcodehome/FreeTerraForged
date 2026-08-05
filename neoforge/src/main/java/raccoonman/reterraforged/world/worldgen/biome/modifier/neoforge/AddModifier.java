@@ -1,6 +1,6 @@
 package raccoonman.reterraforged.world.worldgen.biome.modifier.neoforge;
 
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -40,10 +40,11 @@ public record AddModifier(Order order, GenerationStep.Decoration step, Optional<
 				int index = this.step.ordinal();
 	
 				while (index >= featureSteps.size()) {
-					featureSteps.add(Collections.emptyList());
+					featureSteps.add(new ArrayList<>());
 				}
-	
-				featureSteps.set(index, this.add(featureSteps.get(index)));
+
+				List<Holder<PlacedFeature>> updatedList = this.add(featureSteps.get(index));
+				featureSteps.set(index, new ArrayList<>(updatedList));
 			} else {
 				throw new IllegalStateException();
 			}
@@ -56,7 +57,10 @@ public record AddModifier(Order order, GenerationStep.Decoration step, Optional<
 	}
 
 	private List<Holder<PlacedFeature>> add(@Nullable List<Holder<PlacedFeature>> values) {
-		if (values == null) return this.features.stream().toList();
-		return this.order.add(values, this.features.stream().toList());
+		List<Holder<PlacedFeature>> newFeatures = this.features.stream().toList();
+		if (values == null) {
+			return new ArrayList<>(newFeatures);
+		}
+		return new ArrayList<>(this.order.add(values, newFeatures));
 	}
 }

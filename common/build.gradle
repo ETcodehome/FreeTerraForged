@@ -12,10 +12,15 @@ dependencies {
 	compileOnly "com.electronwill.night-config:toml:3.6.7"
 	//compileOnly "lithostitched-forge:1.0.0"
     modApi "dev.architectury:architectury:${rootProject.architectury_version}"
+	testImplementation "org.junit.jupiter:junit-jupiter:5.11.4"
 }
 
 repositories {
 
+}
+
+test {
+	useJUnitPlatform()
 }
 
 remapJar {

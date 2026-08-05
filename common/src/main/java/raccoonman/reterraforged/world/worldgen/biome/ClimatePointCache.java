@@ -2,13 +2,11 @@ package raccoonman.reterraforged.world.worldgen.biome;
 
 import it.unimi.dsi.fastutil.HashCommon;
 import java.util.Arrays;
-import net.minecraft.core.Holder;
-import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.Climate;
 
 /**
- * Highly optimized, thread-local memoization cache for climate point samples.
- * Uses two independent direct-mapped hash tables to prevent chunk-filling sweeps
- * from evicting long-lived structure-probe lookups.
+ * Thread-local memoization for climate samples. Keeping this cache at the sampler boundary lets
+ * every biome selector observe the same point without caching or bypassing any selector's result.
  */
 public final class ClimatePointCache {
 
@@ -21,15 +19,15 @@ public final class ClimatePointCache {
     private long stamp;
 
     /**
-     * @return the cached biome holder for this context, or null on a cache miss.
+     * @return the cached climate point for this sampler, or null on a cache miss.
      */
-    public static Holder<Biome> find(final Object source, final Object sampler, final int x, final int y, final int z) {
+    public static Climate.TargetPoint find(final Object sampler, final int x, final int y, final int z) {
         final ClimatePointCache c = TL.get();
-        final Slot slot = c.slotFor(source, sampler);
+        final Slot slot = c.slotFor(sampler);
         final long key = key(x, y, z);
         final int idx = (int) HashCommon.mix(key) & MASK;
 
-        final Holder<Biome> val = slot.vals[idx];
+        final Climate.TargetPoint val = slot.vals[idx];
         if (val != null && slot.keys[idx] == key) {
             return val; // Cache Hit!
         }
@@ -37,19 +35,19 @@ public final class ClimatePointCache {
     }
 
     /**
-     * Stores a freshly evaluated biome holder in the active environment slot.
+     * Stores a fully evaluated climate point in the active sampler slot.
      */
-    public static void store(final Object source, final Object sampler, final int x, final int y, final int z, final Holder<Biome> biome) {
-        if (biome == null) {
+    public static void store(final Object sampler, final int x, final int y, final int z, final Climate.TargetPoint target) {
+        if (target == null) {
             return;
         }
         final ClimatePointCache c = TL.get();
-        final Slot slot = c.slotFor(source, sampler);
+        final Slot slot = c.slotFor(sampler);
         final long key = key(x, y, z);
         final int idx = (int) HashCommon.mix(key) & MASK;
 
         slot.keys[idx] = key;
-        slot.vals[idx] = biome;
+        slot.vals[idx] = target;
     }
 
     /**
@@ -60,34 +58,31 @@ public final class ClimatePointCache {
         return ((long) (y & 0xFFFF) << 48) | ((long) (x & 0xFFFFFF) << 24) | (z & 0xFFFFFFL);
     }
 
-    private Slot slotFor(final Object source, final Object sampler) {
+    private Slot slotFor(final Object sampler) {
         this.stamp++;
-        if (this.a.source == source && this.a.sampler == sampler) {
+        if (this.a.sampler == sampler) {
             this.a.lastUse = this.stamp;
             return this.a;
         }
-        if (this.b.source == source && this.b.sampler == sampler) {
+        if (this.b.sampler == sampler) {
             this.b.lastUse = this.stamp;
             return this.b;
         }
         // Evict the least recently used table and rebind it to this environment
         final Slot evict = this.a.lastUse <= this.b.lastUse ? this.a : this.b;
-        evict.rebind(source, sampler);
+        evict.rebind(sampler);
         evict.lastUse = this.stamp;
         return evict;
     }
 
     private static final class Slot {
-        Object source;
         Object sampler;
         final long[] keys = new long[SIZE];
-        @SuppressWarnings("unchecked")
-        final Holder<Biome>[] vals = new Holder[SIZE];
+        final Climate.TargetPoint[] vals = new Climate.TargetPoint[SIZE];
         long lastUse;
 
-        void rebind(final Object newSource, final Object newSampler) {
+        void rebind(final Object newSampler) {
             Arrays.fill(this.vals, null); // Instantly clears active values safely
-            this.source = newSource;
             this.sampler = newSampler;
         }
     }

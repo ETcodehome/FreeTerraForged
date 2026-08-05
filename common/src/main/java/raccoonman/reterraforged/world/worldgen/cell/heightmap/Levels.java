@@ -4,7 +4,9 @@ import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 
 public class Levels {
     public int worldHeight;
+    public int worldDepth;
     public float unit;
+    public float min;
     public int waterY;
     private int groundY;
     public int groundLevel;
@@ -12,10 +14,16 @@ public class Levels {
     public float ground;
     public float water;
     private float elevationRange;
-    
+
     public Levels(int height, int seaLevel) {
+        this(height, 0, seaLevel);
+    }
+
+    public Levels(int height, int depth, int seaLevel) {
         this.worldHeight = Math.max(1, height);
+        this.worldDepth = Math.max(0, depth);
         this.unit = NoiseUtil.div(1, this.worldHeight);
+        this.min = this.scale(-this.worldDepth);
         this.waterLevel = seaLevel;
         this.groundLevel = this.waterLevel + 1;
         this.waterY = Math.min(this.waterLevel - 1, this.worldHeight);
