@@ -195,6 +195,8 @@
   "reterraforged.gui.slider.erosion.rate.tooltip": "Controls how quickly material dissolves (during erosion)",
   "reterraforged.gui.slider.globalHorizontalScale": "Global Horizontal Scale",
   "reterraforged.gui.slider.globalHorizontalScale.tooltip": "Globally controls the horizontal scaling of terrain",
+  "reterraforged.gui.slider.mountainVariety": "Mountain Variety",
+  "reterraforged.gui.slider.mountainVariety.tooltip": "Controls variation between mountain regions. At 0 all mountains share the same parameters. Higher values spread height, width, base elevation, and erosion character across regions for more diverse mountain ranges",
   "reterraforged.gui.slider.globalVerticalScale": "Global Vertical Scale",
   "reterraforged.gui.slider.globalVerticalScale.tooltip": "Globally controls the vertical scaling of terrain",
   "reterraforged.gui.slider.inland": "Inland",

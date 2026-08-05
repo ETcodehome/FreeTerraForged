@@ -23,6 +23,7 @@ public class TerrainSettingsPage extends PresetEditorPage {
 	private Slider globalHorizontalScale;
 	private CycleButton<Boolean> fancyMountains;
 	private CycleButton<Boolean> legacyMountainScaling;
+	private Slider mountainVariety;
 	
 	private Slider steppeWeight;
 	private Slider steppeBaseScale;
@@ -114,6 +115,11 @@ public class TerrainSettingsPage extends PresetEditorPage {
 		this.legacyMountainScaling = PresetWidgets.createToggle(general.legacyMountainScaling, RTFTranslationKeys.GUI_BUTTON_LEGACY_MOUNTAIN_SCALING, (button, value) -> {
 			general.legacyMountainScaling = value;
 			this.regenerate();
+		});
+		this.mountainVariety = PresetWidgets.createFloatSlider(general.mountainVariety, 0.0F, 1.0F, RTFTranslationKeys.GUI_SLIDER_MOUNTAIN_VARIETY, (slider, value) -> {
+			general.mountainVariety = (float) slider.scaleValue(value);
+			this.regenerate();
+			return value;
 		});
 
 		Terrain steppe = terrain.steppe;
@@ -337,6 +343,7 @@ public class TerrainSettingsPage extends PresetEditorPage {
 		this.left.addWidget(this.globalHorizontalScale);
 		this.left.addWidget(this.fancyMountains);
 		this.left.addWidget(this.legacyMountainScaling);
+		this.left.addWidget(this.mountainVariety);
 
 		this.left.addWidget(PresetWidgets.createLabel(RTFTranslationKeys.GUI_LABEL_STEPPE));
 		this.left.addWidget(this.steppeWeight);
