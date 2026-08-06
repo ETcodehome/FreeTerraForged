@@ -7,12 +7,14 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import raccoonman.reterraforged.data.worldgen.preset.settings.FlowSettings;
 import raccoonman.reterraforged.world.worldgen.IFlowFieldHolder;
 import raccoonman.reterraforged.world.worldgen.ChunkFlowField;
 
@@ -35,8 +37,14 @@ public abstract class MixinFloatyBoaty {
             )
     )
     private void applyRiverPhysics(CallbackInfo ci) {
+
         Boat boat = (Boat) (Object) this;
         Level level = boat.level();
+
+        boolean allowFlowDynamics = FlowSettings.CurrentPresetState.get().enableBoatFlowDynamics();
+        if (!allowFlowDynamics){
+            return;
+        }
 
         BlockPos pos = boat.blockPosition().below();
         Holder<Biome> biomeHolder = level.getBiome(pos);
@@ -48,7 +56,8 @@ public abstract class MixinFloatyBoaty {
             double motionZ = currentMotion.z;
 
             // 1. Buoyancy
-            if (this.status == Boat.Status.UNDER_WATER || this.status == Boat.Status.UNDER_FLOWING_WATER) {
+            boolean allowGoingUpWaterfalls = FlowSettings.CurrentPresetState.get().enableNavigableWaterfalls();
+            if (allowGoingUpWaterfalls && (this.status == Boat.Status.UNDER_WATER || this.status == Boat.Status.UNDER_FLOWING_WATER)) {
                 motionY = (boat.getControllingPassenger() != null) ? 0.3 : 0.2;
             }
 

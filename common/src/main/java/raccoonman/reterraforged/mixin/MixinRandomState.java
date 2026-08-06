@@ -24,6 +24,7 @@ import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.concurrent.ThreadPools;
 import raccoonman.reterraforged.config.PerformanceConfig;
 import raccoonman.reterraforged.data.worldgen.compat.terrablender.TBNoiseRouterData;
+import raccoonman.reterraforged.data.worldgen.preset.settings.FlowSettings;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.registries.RTFRegistries;
 import raccoonman.reterraforged.tags.RTFDensityFunctionTags;
@@ -145,6 +146,9 @@ class MixinRandomState {
 						.orElseGet(PerformanceConfig::makeDefault);
 				this.generatorContext = GeneratorContext.makeCached(this.preset, noises, (int) this.seed, config.tileSize(), config.batchCount(), ThreadPools.availableProcessors() > 4);
 			}
+
+			// populate static fields needed for mixins
+			FlowSettings.CurrentPresetState.set(preset.flow());
 		}
 	}
 

@@ -14,6 +14,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import raccoonman.reterraforged.data.worldgen.preset.settings.FlowSettings;
 import raccoonman.reterraforged.world.worldgen.ChunkFlowField;
 import raccoonman.reterraforged.world.worldgen.IFlowFieldHolder;
 
@@ -29,6 +30,7 @@ public class MixinBlock {
         if (!(state.getBlock() instanceof LiquidBlock)) return;
         if (!state.getFluidState().is(FluidTags.WATER)) return;
         if (!level.getBlockState(pos.above()).isAir()) return;
+        if (!FlowSettings.CurrentPresetState.get().enableFlowParticles()) return;
 
         ChunkAccess chunk = level.getChunk(pos);
         if (!(chunk instanceof IFlowFieldHolder holder)) return;

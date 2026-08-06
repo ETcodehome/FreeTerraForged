@@ -1,0 +1,57 @@
+package raccoonman.reterraforged.data.worldgen.preset.settings;
+
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
+
+public class FlowSettings {
+    public static final Codec<FlowSettings> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+            Codec.BOOL.optionalFieldOf("flowParticles", true).forGetter(FlowSettings::serializeFlowParticles),
+            Codec.BOOL.optionalFieldOf("boatFlowDynamics", true).forGetter(FlowSettings::serializeBoatFlowDynamics),
+            Codec.BOOL.optionalFieldOf("navigableWaterfalls", true).forGetter(FlowSettings::serializeNavigableWaterfalls)
+    ).apply(instance, FlowSettings::new));
+
+    public boolean flowParticles;
+    public boolean boatFlowDynamics;
+    public boolean navigableWaterfalls;
+
+    public FlowSettings() {
+        this(true, true, true);
+    }
+
+    public FlowSettings(boolean flowParticles, boolean boatFlowDynamics, boolean navigableWaterfalls) {
+        this.flowParticles = flowParticles;
+        this.boatFlowDynamics = boatFlowDynamics;
+        this.navigableWaterfalls = navigableWaterfalls;
+    }
+
+    public FlowSettings copy() {
+        return new FlowSettings(
+            this.flowParticles,
+            this.boatFlowDynamics,
+            this.navigableWaterfalls
+        );
+    }
+
+    public class CurrentPresetState {
+        private static FlowSettings currentSettings = new FlowSettings();
+
+        public static FlowSettings get() {
+            return currentSettings;
+        }
+
+        public static void set(FlowSettings settings) {
+            currentSettings = settings != null ? settings : new FlowSettings();
+        }
+    }
+    public static FlowSettings makeDefault() {
+        return new FlowSettings(true, true, true);
+    }
+
+    private boolean serializeFlowParticles() { return this.flowParticles; }
+    private boolean serializeBoatFlowDynamics() { return this.boatFlowDynamics; }
+    private boolean serializeNavigableWaterfalls() { return this.navigableWaterfalls; }
+
+    public static boolean enableFlowParticles() { return CurrentPresetState.currentSettings.flowParticles; }
+    public static boolean enableBoatFlowDynamics() { return CurrentPresetState.currentSettings.boatFlowDynamics; }
+    public static boolean enableNavigableWaterfalls() { return CurrentPresetState.currentSettings.navigableWaterfalls; }
+}
