@@ -161,6 +161,9 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 				}
 				
 				if(cell.terrain.isShallowOcean()) {
+					if(shallowOcean <= deepOcean) {
+						return Continentalness.OCEAN.mid();
+					}
 					float alpha = NoiseUtil.clamp(cell.continentEdge, deepOcean, shallowOcean);
 					alpha = NoiseUtil.lerp(alpha, deepOcean, shallowOcean, 0.0F, 0.98F);
 					return NoiseUtil.lerp(Continentalness.OCEAN.min(), Continentalness.OCEAN.max(), alpha);
