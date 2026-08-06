@@ -171,7 +171,11 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 					alpha = NoiseUtil.lerp(alpha, shallowOcean, beach, 0.0F, 1.0F);
 					return NoiseUtil.lerp(Continentalness.COAST.min(), Continentalness.COAST.max(), alpha);
 				}
-			
+
+				if(cell.terrain == TerrainType.ISLAND_BEACH) {
+					return Continentalness.COAST.mid();
+				}
+
 				float alpha = NoiseUtil.clamp(cell.continentEdge, beach, inland);
 				alpha = NoiseUtil.lerp(alpha, beach, inland, 0.0F, 1.0F);
 				return NoiseUtil.lerp(Continentalness.NEAR_INLAND.mid(), Continentalness.FAR_INLAND.max(), alpha);

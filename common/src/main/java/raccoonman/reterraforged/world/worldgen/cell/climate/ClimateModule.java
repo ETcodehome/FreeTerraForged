@@ -168,17 +168,11 @@ public class ClimateModule {
 
 			if (madeMushroomIslands(cell)){ return; }
 
-			if (cell.terrain == TerrainType.ISLAND_BEACH) {
-				cell.biome = BiomeType.SAVANNA;
-				cell.temperature = Temperature.LEVEL_3.mid();
-				cell.moisture = Humidity.LEVEL_1.mid();
-			} else {
-				float islTemp = this.temperature.compute(centerX, centerZ, 0);
-				float islMoist = this.moisture.compute(centerX, centerZ, 0);
-				cell.biome = BiomeType.get(islTemp, islMoist);
-				cell.temperature = cell.biome.getTemperature(cell.biomeRegionId);
-				cell.moisture = cell.biome.getMoisture(cell.biomeRegionId);
-			}
+			float islTemp = this.temperature.compute(centerX, centerZ, 0);
+			float islMoist = this.moisture.compute(centerX, centerZ, 0);
+			cell.biome = BiomeType.get(islTemp, islMoist);
+			cell.temperature = cell.biome.getTemperature(cell.biomeRegionId);
+			cell.moisture = cell.biome.getMoisture(cell.biomeRegionId);
 		}
 	}
 
