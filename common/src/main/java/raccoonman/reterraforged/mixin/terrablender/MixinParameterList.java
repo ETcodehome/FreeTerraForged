@@ -1,7 +1,5 @@
 package raccoonman.reterraforged.mixin.terrablender;
 
-import java.lang.reflect.Array;
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -138,22 +136,21 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 		}
 
 		try {
-			Field uniqueTreesField = this.getClass().getDeclaredField("uniqueTrees");
-			uniqueTreesField.setAccessible(true);
-			Object uniqueTrees = uniqueTreesField.get(this);
-			int pendingIndex = 0;
-
-			for (int index = 0; index < Array.getLength(uniqueTrees); index++) {
-				this.reterraforged$regionalEntries.add(
-					Array.get(uniqueTrees, index) == null
-						? null
-						: this.reterraforged$pendingRegionalEntries.get(pendingIndex++)
+			int treeCount = this.getTreeCount();
+			int capturedCount = this.reterraforged$pendingRegionalEntries.size();
+			if (capturedCount != treeCount) {
+				this.reterraforged$regionalEntries.clear();
+				RTFCommon.LOGGER.error(
+					"TerraBlender region tree count ({}) does not match captured regional entry sets ({}); underground banding disabled",
+					treeCount, capturedCount
 				);
+			} else {
+				this.reterraforged$regionalEntries.addAll(this.reterraforged$pendingRegionalEntries);
 			}
-		} catch (ReflectiveOperationException | RuntimeException exception) {
+		} catch (RuntimeException exception) {
 			this.reterraforged$regionalEntries.clear();
 			RTFCommon.LOGGER.error(
-				"Failed to capture TerraBlender biome entries; preserving TerraBlender's original biome trees",
+				"Failed to capture TerraBlender biome entries; underground banding disabled",
 				exception
 			);
 		} finally {
@@ -233,7 +230,9 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 
 	@Inject(method = "getTree", at = @At("HEAD"), require = 1)
 	private void reterraforged$composeBeforeTreeLookup(int uniqueness, CallbackInfoReturnable<Climate.RTree<T>> callback) {
-		this.reterraforged$ensureComposedTrees();
+		if (this.reterraforged$bandingInitialized) {
+			this.reterraforged$ensureComposedTrees();
+		}
 	}
 
 	@Inject(method = "getUniqueness", at = @At("HEAD"), cancellable = true, require = 1)
@@ -267,14 +266,12 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 				);
 				List<Climate.ParameterList<T>> originalTrees = new ArrayList<>(this.reterraforged$regionalEntries.size());
 				List<UndergroundBiomeBanding.Layout<T>> bandedTrees = new ArrayList<>(this.reterraforged$regionalEntries.size());
-				List<Climate.RTree<T>> regionalTrees = new ArrayList<>(this.reterraforged$regionalEntries.size());
 
 				for (int index = 0; index < this.reterraforged$regionalEntries.size(); index++) {
 					List<Pair<Climate.ParameterPoint, T>> regional = this.reterraforged$regionalEntries.get(index);
 					if (regional == null) {
 						originalTrees.add(null);
 						bandedTrees.add(null);
-						regionalTrees.add(null);
 						continue;
 					}
 					List<Pair<Climate.ParameterPoint, T>> effectiveEntries = index == 0
@@ -282,12 +279,10 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 						: ClimateParameterListComposition.append(regional, globalAdditions);
 					originalTrees.add(new Climate.ParameterList<>(effectiveEntries));
 					bandedTrees.add(UndergroundBiomeBanding.apply(this.reterraforged$bandingPreset, effectiveEntries));
-					regionalTrees.add(Climate.RTree.create(effectiveEntries));
 				}
 
 				this.reterraforged$composedOriginalTrees = Collections.unmodifiableList(originalTrees);
 				this.reterraforged$bandedTrees = Collections.unmodifiableList(bandedTrees);
-				this.reterraforged$replaceRegionalTrees(regionalTrees);
 				this.reterraforged$composedValuesReference = currentValues;
 				RTFCommon.LOGGER.info(
 					"Composed TerraBlender underground biome trees: {} regions, {} late global parameter points",
@@ -295,7 +290,7 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 					globalAdditions.size()
 				);
 				return true;
-			} catch (ReflectiveOperationException | RuntimeException exception) {
+			} catch (RuntimeException exception) {
 				this.reterraforged$composedOriginalTrees = List.of();
 				this.reterraforged$bandedTrees = List.of();
 				this.reterraforged$composedValuesReference = currentValues;
@@ -304,20 +299,6 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 					exception
 				);
 				return false;
-			}
-		}
-	}
-
-	@Unique
-	private void reterraforged$replaceRegionalTrees(List<Climate.RTree<T>> regionalTrees) throws ReflectiveOperationException {
-		Field uniqueTreesField = this.getClass().getDeclaredField("uniqueTrees");
-		uniqueTreesField.setAccessible(true);
-		Object uniqueTrees = uniqueTreesField.get(this);
-		int count = Math.min(Array.getLength(uniqueTrees), regionalTrees.size());
-		for (int index = 0; index < count; index++) {
-			Climate.RTree<T> tree = regionalTrees.get(index);
-			if (tree != null) {
-				Array.set(uniqueTrees, index, tree);
 			}
 		}
 	}
@@ -359,6 +340,11 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 	@Override
 	public boolean reterraforged$isTerraBlenderInitialized() {
 		return this.reterraforged$bandingInitialized;
+	}
+
+	@Shadow
+	public int getTreeCount() {
+		throw new UnsupportedOperationException();
 	}
 
 	@Shadow
