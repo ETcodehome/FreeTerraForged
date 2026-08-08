@@ -1,5 +1,6 @@
 package raccoonman.reterraforged.world.worldgen.cell.rivermap.river;
 
+import raccoonman.reterraforged.world.worldgen.ChunkFlowField;
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
@@ -168,7 +169,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float valleyFloorBumpiness = ((terraceMask * 0.4F) - (drainageMask * 0.6F)) * this.levels.unit;
         float actualValleyFloorHeight = targetValleyFloor + valleyFloorBumpiness;
 
-        storeFlowDirection(cell, currentLinearDist, zone1Radius);
+        storeFlowDirection(cell, currentLinearDist, zone1Radius, 1.0f - flatnessFactor);
 
         // calculate the final cell heights
         float finalHeight = cell.height;
@@ -189,21 +190,21 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         }
     }
 
-    private void storeFlowDirection(Cell cell, float currentLinearDist, float zone1Radius){
-        // Calculate the normalized downstream direction vector
-        float len = (float) Math.sqrt(this.river.dx * this.river.dx + this.river.dz * this.river.dz);
-        float dirX = this.river.dx / (len > 0 ? len : 1.0F);
-        float dirZ = this.river.dz / (len > 0 ? len : 1.0F);
-
-        // Compress the vector into a single byte angle to save memory
-        // Math.atan2 returns -PI to PI, map this to -128 to 127
-        byte flowAngle = (byte) Math.round(Math.atan2(dirZ, dirX) * 128.0 / Math.PI);
-
-        // Assign to cell if within the actual water zone (Zone 1)
-        if (currentLinearDist < zone1Radius) {
-            cell.flowAngle = flowAngle;
-            cell.hasFlow = true;
+    private void storeFlowDirection(Cell cell, float currentLinearDist, float zone1Radius, float rawSpeed) {
+        if (currentLinearDist >= zone1Radius) {
+            cell.flowAngle = 0;
+            return;
         }
+
+        // Math.atan2 is scale-invariant, so vector normalization (Math.sqrt) is unneeded
+        double radians = Math.atan2(this.river.dz, this.river.dx);
+
+        float maxSpeed = 1.0F;
+        float normalizedSpeed = rawSpeed / maxSpeed;
+
+        // Pack magnitude and direction in a single helper call
+        cell.flowAngle = ChunkFlowField.pack(normalizedSpeed, radians);
+        cell.hasFlow = cell.flowAngle != 0;
     }
 
     private RiverCarverSettings.RiverZone getRiverZoneTag(Cell cell, float currentLinearDist, float zone1Radius, float zone2Radius, float zone3Radius){

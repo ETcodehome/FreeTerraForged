@@ -38,11 +38,12 @@ public class MixinBlock {
         ChunkFlowField flowField = holder.reterraforged$getFlowField();
         int localX = pos.getX() & 15;
         int localZ = pos.getZ() & 15;
-        byte packedAngle = flowField.getAngle(localX, localZ);
 
-        if (packedAngle != 0) {
-            // Unpack angle to radians
-            double radians = (packedAngle & 0xFF) * (Math.PI / 128.0);
+        // Check for active flow (magnitude > 0)
+        if (flowField.hasFlow(localX, localZ)) {
+            // Query direction and magnitude directly via helper getters
+            double radians = flowField.getAngleRadians(localX, localZ);
+            float flowStrength = flowField.getNormalizedMagnitude(localX, localZ);
 
             // Dynamic Sine-Wave Weaving
             // Blending world space and client game time creates an organic, moving current filament
@@ -50,8 +51,8 @@ public class MixinBlock {
             double wavePhase = (pos.getX() * 0.4 + pos.getZ() * 0.4) + (gameTime * 0.15);
             double waveDisplacement = Math.sin(wavePhase) * 0.03;
 
-            // Base Vectors (Forward Flow and Perpendicular Drift)
-            double speed = 0.025 + (random.nextDouble() * 0.02);
+            // Base Vectors (Forward Flow scaled by river magnitude, and Perpendicular Drift)
+            double speed = (0.025 + (random.nextDouble() * 0.02)) * flowStrength;
             double forwardVx = Math.cos(radians) * speed;
             double forwardVz = Math.sin(radians) * speed;
 
@@ -81,13 +82,13 @@ public class MixinBlock {
 
             // Spawn the finalized dynamic particle
             level.addParticle(
-                chosenParticle,
-                pos.getX() + random.nextDouble(),
-                particleY,
-                pos.getZ() + random.nextDouble(),
-                vx,
-                0.0,
-                vz
+                    chosenParticle,
+                    pos.getX() + random.nextDouble(),
+                    particleY,
+                    pos.getZ() + random.nextDouble(),
+                    vx,
+                    0.0,
+                    vz
             );
         }
     }
