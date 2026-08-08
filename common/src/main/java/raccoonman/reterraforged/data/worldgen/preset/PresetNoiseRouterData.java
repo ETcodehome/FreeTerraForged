@@ -77,53 +77,17 @@ public class PresetNoiseRouterData {
     	
     	CaveSettings caves = preset.caves();
     	float cheeseCaveDepthOffset = caves.cheeseCaveDepthOffset;
-        double undergroundNoiseScale = UndergroundBiomeBanding.undergroundNoiseScale(preset);
-    	
     	DensityFunction aquiferBarrier = DensityFunctions.noise(noiseParams.getOrThrow(Noises.AQUIFER_BARRIER), 0.5);
         DensityFunction aquiferFluidLevelFloodedness = DensityFunctions.noise(noiseParams.getOrThrow(Noises.AQUIFER_FLUID_LEVEL_FLOODEDNESS), 0.67);
         DensityFunction aquiferFluidLevelSpread = DensityFunctions.noise(noiseParams.getOrThrow(Noises.AQUIFER_FLUID_LEVEL_SPREAD), 0.7142857142857143);
         DensityFunction aquiferLava = DensityFunctions.noise(noiseParams.getOrThrow(Noises.AQUIFER_LAVA));
         DensityFunction factor = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.FACTOR);
         DensityFunction depth = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.DEPTH);
-        DensityFunction shiftX = NoiseRouterData.getFunction(densityFunctions, VANILLA_SHIFT_X);
-        DensityFunction shiftZ = NoiseRouterData.getFunction(densityFunctions, VANILLA_SHIFT_Z);
-        DensityFunction temperature = blendClimateAxis(
-            depth,
-            RTFDensityFunctions.cell(CellSampler.Field.TEMPERATURE),
-            DensityFunctions.shiftedNoise2d(shiftX, shiftZ, undergroundNoiseScale, noiseParams.getOrThrow(Noises.TEMPERATURE))
-        );
-        DensityFunction vegetation = blendClimateAxis(
-            depth,
-            RTFDensityFunctions.cell(CellSampler.Field.MOISTURE),
-            DensityFunctions.shiftedNoise2d(shiftX, shiftZ, undergroundNoiseScale, noiseParams.getOrThrow(Noises.VEGETATION))
-        );
-        DensityFunction surfaceContinents = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.CONTINENTS);
-        DensityFunction vanillaContinents = DensityFunctions.flatCache(
-            DensityFunctions.shiftedNoise2d(shiftX, shiftZ, undergroundNoiseScale, noiseParams.getOrThrow(Noises.CONTINENTALNESS))
-        );
-        DensityFunction continents = blendClimateAxis(
-            depth,
-            surfaceContinents,
-            terrainAlignedUndergroundContinentalness(worldSettings, surfaceContinents, vanillaContinents)
-        );
-        DensityFunction surfaceErosion = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.EROSION);
-        DensityFunction vanillaErosion = DensityFunctions.flatCache(
-            DensityFunctions.shiftedNoise2d(shiftX, shiftZ, undergroundNoiseScale, noiseParams.getOrThrow(Noises.EROSION))
-        );
-        DensityFunction erosion = blendClimateAxis(
-            depth,
-            surfaceErosion,
-            terrainAlignedUndergroundErosion(
-                worldSettings,
-                RTFDensityFunctions.cell(CellSampler.Field.TERRAIN_EROSION),
-                vanillaErosion
-            )
-        );
-        DensityFunction ridges = blendClimateAxis(
-            depth,
-            NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.RIDGES),
-            DensityFunctions.flatCache(DensityFunctions.shiftedNoise2d(shiftX, shiftZ, undergroundNoiseScale, noiseParams.getOrThrow(Noises.RIDGE)))
-        );
+        DensityFunction temperature = RTFDensityFunctions.cell(CellSampler.Field.TEMPERATURE);
+        DensityFunction vegetation = RTFDensityFunctions.cell(CellSampler.Field.MOISTURE);
+        DensityFunction continents = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.CONTINENTS);
+        DensityFunction erosion = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.EROSION);
+        DensityFunction ridges = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.RIDGES);
         DensityFunction initialDensity = NoiseRouterData.noiseGradientDensity(DensityFunctions.cache2d(factor), depth);
         DensityFunction slopedCheese = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.SLOPED_CHEESE);
 //        DensityFunction entrances = DensityFunctions.min(slopedCheese, DensityFunctions.mul(DensityFunctions.constant(5.0), NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.ENTRANCES)));

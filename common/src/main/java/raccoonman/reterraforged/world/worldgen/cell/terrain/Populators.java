@@ -25,6 +25,9 @@ public class Populators {
 	@Deprecated
 	public static final Noise DEFAULT_WEIRDNESS = Weirdness.MID_SLICE_NORMAL_DESCENDING.source();
 
+	private static final int EROSION_VARIATION_SEED_OFFSET = 48291;
+	private static final int WEIRDNESS_VARIATION_SEED_OFFSET = 73519;
+
 	public static CellPopulator makeDeepOcean(@Deprecated int seed, Levels levels, int oceanDepth) {
 		int minDepth = Math.max(8, oceanDepth / 3);
 		int canyonMinDepth = minDepth + Math.max(1, (oceanDepth - minDepth) / 2);
@@ -81,7 +84,9 @@ public class Populators {
         height = Noises.warpPerlin(height, seed.next(), 256, 1, 200.0F);
         height = Noises.mul(height, 0.08F);
         height = Noises.add(height, -0.02F);
-		return TerrainPopulator.make(TerrainType.FLATS, ground, height, DEFAULT_EROSION, DEFAULT_WEIRDNESS, settings);
+		Noise climateErosion = centeredVariation(seed.offset(EROSION_VARIATION_SEED_OFFSET), Erosion.LEVEL_4.mid(), 0.05F);
+		Noise climateWeirdness = centeredVariation(seed.offset(WEIRDNESS_VARIATION_SEED_OFFSET), Weirdness.MID_SLICE_NORMAL_DESCENDING.mid(), 0.05F);
+		return TerrainPopulator.make(TerrainType.FLATS, ground, height, climateErosion, climateWeirdness, settings);
     }
     
     private static TerrainPopulator makePlains(@Deprecated Seed seed, Noise ground, TerrainSettings.Terrain noiseSettings, TerrainSettings.Terrain scalingSettings, float verticalScale) {
@@ -99,7 +104,9 @@ public class Populators {
       	height = Noises.warpPerlin(height, seed.next(), 256, 1, 256.0F);
       	height = Noises.mul(height, 0.15F * verticalScale);
       	height = Noises.add(height, -0.02F);
-      	return TerrainPopulator.make(TerrainType.FLATS, ground, height, DEFAULT_EROSION, DEFAULT_WEIRDNESS, scalingSettings);
+      	Noise climateErosion = centeredVariation(seed.offset(EROSION_VARIATION_SEED_OFFSET), Erosion.LEVEL_4.mid(), 0.05F);
+      	Noise climateWeirdness = centeredVariation(seed.offset(WEIRDNESS_VARIATION_SEED_OFFSET), Weirdness.MID_SLICE_NORMAL_DESCENDING.mid(), 0.05F);
+      	return TerrainPopulator.make(TerrainType.FLATS, ground, height, climateErosion, climateWeirdness, scalingSettings);
     }
 
     public static TerrainPopulator makePlains(@Deprecated Seed seed, Noise ground, TerrainSettings.Terrain settings, float verticalScale) {
@@ -140,7 +147,8 @@ public class Populators {
 		Noise weirdness = Noises.clamp(valleyBase, 0.0F, 0.415F);
 		weirdness = Noises.map(weirdness, 0.0F, 1.0F);
 		weirdness = Noises.map(weirdness, Weirdness.LOW_SLICE_NORMAL_DESCENDING.mid(), -0.42F);
-		return TerrainPopulator.make(TerrainType.PLATEAU, ground, height, Erosion.LEVEL_3.source(), weirdness, settings);
+		Noise erosion = centeredVariation(seed.offset(EROSION_VARIATION_SEED_OFFSET), Erosion.LEVEL_3.mid(), 0.05F);
+		return TerrainPopulator.make(TerrainType.PLATEAU, ground, height, erosion, weirdness, settings);
 	}
 	
 	public static TerrainPopulator makeHills1(@Deprecated Seed seed, Noise ground, TerrainSettings.Terrain settings, float verticalScale) {
@@ -153,7 +161,9 @@ public class Populators {
 		height = Noises.warpPerlin(height, seed.next(), 30, 3, 20.0F);
 		height = Noises.warpPerlin(height, seed.next(), 400, 3, 200.0F);
 		height = Noises.mul(height, 0.6F * verticalScale);
-		return TerrainPopulator.make(TerrainType.HILLS, ground, height, DEFAULT_EROSION, DEFAULT_WEIRDNESS, settings);
+		Noise erosion = centeredVariation(seed.offset(EROSION_VARIATION_SEED_OFFSET), Erosion.LEVEL_4.mid(), 0.05F);
+		Noise weirdness = centeredVariation(seed.offset(WEIRDNESS_VARIATION_SEED_OFFSET), Weirdness.MID_SLICE_NORMAL_DESCENDING.mid(), 0.05F);
+		return TerrainPopulator.make(TerrainType.HILLS, ground, height, erosion, weirdness, settings);
 	}
 
 	public static TerrainPopulator makeHills2(@Deprecated Seed seed, Noise ground, TerrainSettings.Terrain settings, float verticalScale) {
@@ -171,7 +181,9 @@ public class Populators {
 		height = Noises.mul(height, scaler2);
 		
 		height = Noises.mul(height, 0.55F * verticalScale);
-		return TerrainPopulator.make(TerrainType.HILLS, ground, height, DEFAULT_EROSION, DEFAULT_WEIRDNESS, settings);
+		Noise erosion = centeredVariation(seed.offset(EROSION_VARIATION_SEED_OFFSET), Erosion.LEVEL_4.mid(), 0.05F);
+		Noise weirdness = centeredVariation(seed.offset(WEIRDNESS_VARIATION_SEED_OFFSET), Weirdness.MID_SLICE_NORMAL_DESCENDING.mid(), 0.05F);
+		return TerrainPopulator.make(TerrainType.HILLS, ground, height, erosion, weirdness, settings);
 	}
 
 	public static TerrainPopulator makeDales(@Deprecated Seed seed, Noise ground, TerrainSettings.Terrain settings) {
@@ -236,7 +248,9 @@ public class Populators {
 		Noise height = Noises.mul(shape, detail);
 		height = Noises.mul(height, 0.55F);
 		height = Noises.add(height, 0.025F);
-		return TerrainPopulator.make(TerrainType.BADLANDS, ground, height, DEFAULT_EROSION, DEFAULT_WEIRDNESS, settings);
+		Noise erosion = centeredVariation(seed.offset(EROSION_VARIATION_SEED_OFFSET), Erosion.LEVEL_4.mid(), 0.05F);
+		Noise weirdness = centeredVariation(seed.offset(WEIRDNESS_VARIATION_SEED_OFFSET), Weirdness.MID_SLICE_NORMAL_DESCENDING.mid(), 0.05F);
+		return TerrainPopulator.make(TerrainType.BADLANDS, ground, height, erosion, weirdness, settings);
 	}
 	
 	// TODO only use erosion + ridge combos that respect continentalness
@@ -270,7 +284,8 @@ public class Populators {
 		Noise weirdness = Noises.negative(blend);
 		weirdness = Noises.min(weirdness, Noises.constant(Weirdness.LOW_SLICE_NORMAL_DESCENDING.max() - 0.01F));
 		
-		return TerrainPopulator.make(TerrainType.HILLS, ground, height, Erosion.LEVEL_5.source(), weirdness, settings);
+		Noise erosion = centeredVariation(seed.offset(EROSION_VARIATION_SEED_OFFSET), Erosion.LEVEL_5.mid(), 0.05F);
+		return TerrainPopulator.make(TerrainType.HILLS, ground, height, erosion, weirdness, settings);
 	}
 
     private static final int MOUNTAINS_H = 610;
@@ -293,7 +308,8 @@ public class Populators {
 			height = makeFancy(seed, height, erosionStrength);
 		}
 		height = Noises.cache2d(height);
-		return TerrainPopulator.make(terrainType, ground, Noises.mul(height, (legacyScaling ? 0.7F : MOUNTAINS_V) * verticalScale), Erosion.LEVEL_1.source(), Noises.min(Noises.mul(height, Noises.constant(-1.0F)), Noises.constant(-0.08F)), settings);
+		Noise erosion = centeredVariation(seed.offset(EROSION_VARIATION_SEED_OFFSET), Erosion.LEVEL_1.mid(), 0.05F);
+		return TerrainPopulator.make(terrainType, ground, Noises.mul(height, (legacyScaling ? 0.7F : MOUNTAINS_V) * verticalScale), erosion, Noises.min(Noises.mul(height, Noises.constant(-1.0F)), Noises.constant(-0.08F)), settings);
 	}
 
 	public static TerrainPopulator makeMountains(@Deprecated Seed seed, Noise ground, TerrainSettings.Terrain settings, float horizontalScale, float verticalScale, boolean makeFancy, boolean legacyScaling, float erosionStrength) {
@@ -332,7 +348,8 @@ public class Populators {
 			height = makeFancy(seed, height, erosionStrength);
 		}
 		height = Noises.cache2d(height);
-		return TerrainPopulator.make(TerrainType.MOUNTAINS_2, ground, Noises.mul(height, 0.645F * verticalScale), Erosion.LEVEL_2.source(), Noises.min(Noises.mul(height, Noises.constant(-1.0F)), Noises.constant(-0.08F)), settings);
+		Noise erosion = centeredVariation(seed.offset(EROSION_VARIATION_SEED_OFFSET), Erosion.LEVEL_2.mid(), 0.05F);
+		return TerrainPopulator.make(TerrainType.MOUNTAINS_2, ground, Noises.mul(height, 0.645F * verticalScale), erosion, Noises.min(Noises.mul(height, Noises.constant(-1.0F)), Noises.constant(-0.08F)), settings);
 	}
 
 	public static TerrainPopulator makeMountains2(@Deprecated Seed seed, Noise ground, TerrainSettings.Terrain settings, float verticalScale, boolean makeFancy, boolean legacyScaling) {
@@ -370,7 +387,8 @@ public class Populators {
         	height = makeFancy(seed, height, erosionStrength);
     	}
 		height = Noises.cache2d(height);
-		return TerrainPopulator.make(TerrainType.MOUNTAINS_3, ground, Noises.mul(height, (legacyScaling ? 0.645F : MOUNTAINS3_V) * verticalScale), Erosion.LEVEL_1.source(), Noises.min(Noises.mul(height, Noises.constant(-1.0F)), Noises.constant(-0.08F)), settings);
+		Noise erosion = centeredVariation(seed.offset(EROSION_VARIATION_SEED_OFFSET), Erosion.LEVEL_1.mid(), 0.05F);
+		return TerrainPopulator.make(TerrainType.MOUNTAINS_3, ground, Noises.mul(height, (legacyScaling ? 0.645F : MOUNTAINS3_V) * verticalScale), erosion, Noises.min(Noises.mul(height, Noises.constant(-1.0F)), Noises.constant(-0.08F)), settings);
     }
 
     public static TerrainPopulator makeMountains3(@Deprecated Seed seed, Noise ground, TerrainSettings.Terrain settings, float verticalScale, boolean makeFancy, boolean legacyScaling) {
@@ -389,5 +407,10 @@ public class Populators {
 	
 	public static TerrainPopulator makeBorder(@Deprecated Seed seed, Noise ground, TerrainSettings.Terrain plainsSettings, TerrainSettings.Terrain steppeSettings, float verticalScale) {
 		return makePlains(seed, ground, plainsSettings, steppeSettings, verticalScale);
+	}
+
+	private static Noise centeredVariation(Seed seed, float center, float halfWidth) {
+		Noise variation = Noises.perlin(seed.next(), 200, 2);
+		return Noises.map(variation, center - halfWidth, center + halfWidth);
 	}
 }
