@@ -181,29 +181,74 @@ public class UpliftRiverCarver implements RTFRiverCarver {
             finalHeight = carveZone4Fadeout(cell.height, currentLinearDist, zone3Radius, zone4Radius, actualValleyFloorHeight, terraceMask, drainageMask);
         }
 
-        // Only commit data changes to the cell if our carving operations actually cut down the world
-        if (finalHeight < cell.height) {
+        boolean carvedThisPass = finalHeight < cell.height;
+        if (carvedThisPass) {
             cell.height = finalHeight;
             cell.riverZone = getRiverZoneTag(cell, currentLinearDist, zone1Radius, zone2Radius, zone3Radius, finalHeight, targetWaterLevel);
         }
 
-        // Only add flow data if we're in the bed
-        boolean isSubMerged = cell.riverWaterLevel > cell.height && cell.height < targetWaterLevel;
+        // Only this river's own zone1 (riverbed), carved on this exact pass, may claim flow.
+        boolean isSubMerged = currentLinearDist < zone1Radius
+                && carvedThisPass
+                && finalHeight < targetWaterLevel;
+
         if (isSubMerged) {
-            storeFlowDirection(cell, 0.5f);
-        } else {
-            cell.hasFlow = false;
-            cell.flowAngle = 0;
+            storeFlowDirection(cell, currX, currZ, currT, zone1Radius, currentLinearDist, lakeMultiplier);
         }
     }
 
-    private void storeFlowDirection(Cell cell, float normalizedMagnitude) {
+    private void storeFlowDirection(Cell cell, float currX, float currZ, float currT, float zone1Radius, float currentLinearDist, float lakeMultiplier) {
+        float dx = this.river.dx;
+        float dz = this.river.dz;
+        float segmentLength = (float) Math.sqrt(dx * dx + dz * dz);
 
-        // Math.atan2 is scale-invariant, so vector normalization (Math.sqrt) is unneeded
-        double radians = Math.atan2(this.river.dz, this.river.dx);
+        if (segmentLength < 0.0001F) {
+            cell.hasFlow = false;
+            cell.flowAngle = 0;
+            return;
+        }
 
-        // Pack magnitude and direction in a single helper call
-        cell.flowAngle = ChunkFlowField.pack(normalizedMagnitude, radians);
+        // 1. Pure downstream unit vector along the river spine
+        float dsX = dx / segmentLength;
+        float dsZ = dz / segmentLength;
+
+        // 2. Projected point on spine (clamped strictly to segment bounds)
+        float clampedT = NoiseUtil.clamp(currT, 0.0F, 1.0F);
+        float projX = this.river.x1 + clampedT * dx;
+        float projZ = this.river.z1 + clampedT * dz;
+
+        // 3. Compute normalized (unit) inward direction vector
+        float inwardX = projX - currX;
+        float inwardZ = projZ - currZ;
+        float inwardDist = (float) Math.sqrt(inwardX * inwardX + inwardZ * inwardZ);
+
+        if (inwardDist > 0.0001F) {
+            inwardX /= inwardDist;
+            inwardZ /= inwardDist;
+        } else {
+            inwardX = 0.0F;
+            inwardZ = 0.0F;
+        }
+
+        // 4. Inward pull dampening factor (1.0 in standard rivers, drops toward 0.0 in wide lakes)
+        float lakeDampening = 1.0F / Math.max(1.0F, lakeMultiplier);
+
+        // 5. Normalized distance across channel (0.0 at center, 1.0 at bank)
+        float normalizedDist = zone1Radius > 0.0F ? NoiseUtil.clamp(currentLinearDist / zone1Radius, 0.0F, 1.0F) : 0.0F;
+
+        // 6. Inward turn weight: modest at banks, zero at center, suppressed in open lakes
+        float turnWeight = normalizedDist * 0.35F * lakeDampening;
+
+        // 7. Blend downstream vector with capped unit inward vector
+        float flowX = dsX + (inwardX * turnWeight);
+        float flowZ = dsZ + (inwardZ * turnWeight);
+
+        // 8. Calmer current in open lake bodies
+        float velocityMagnitude = (1.0F - (normalizedDist * normalizedDist * 0.50F)) * lakeDampening;
+
+        double radians = Math.atan2(flowZ, flowX);
+
+        cell.flowAngle = ChunkFlowField.pack(velocityMagnitude, radians);
         cell.hasFlow = cell.flowAngle != 0;
     }
 
@@ -445,7 +490,6 @@ public class UpliftRiverCarver implements RTFRiverCarver {
     }
 
     private float getDistanceAlpha(float t, float dist2, Range range, float sqScaleFactor) {
-
 
         float size2 = this.getScaledSize(t, range) * sqScaleFactor;
 

@@ -63,7 +63,7 @@ public class FlowFieldDebugRenderer {
                 // Case 1: River biome with no flow direction -> Render red exclamation mark
                 if (!hasFlow) {
                     if (isRiver) {
-                        drawRedDot(lastPose, buffer, startX, startY, startZ);
+                        //drawRedDot(lastPose, buffer, startX, startY, startZ);
                     }
                     continue;
                 }
