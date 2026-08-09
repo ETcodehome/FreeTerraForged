@@ -88,7 +88,7 @@ public class Populators {
         height = Noises.mul(height, 0.08F);
         height = Noises.add(height, -0.02F);
 		Noise climateErosion = parameterVariation(seed.offset(EROSION_VARIATION_SEED_OFFSET), Erosion.LEVEL_2, Erosion.LEVEL_4, EROSION_VARIATION_SCALE);
-		Noise climateWeirdness = parameterVariation(seed.offset(WEIRDNESS_VARIATION_SEED_OFFSET), Weirdness.MID_SLICE_NORMAL_DESCENDING, Weirdness.MID_SLICE_VARIANT_ASCENDING, WEIRDNESS_VARIATION_SCALE);
+		Noise climateWeirdness = negativeWeirdnessVariation(seed.offset(WEIRDNESS_VARIATION_SEED_OFFSET));
 		return TerrainPopulator.make(TerrainType.FLATS, ground, height, climateErosion, climateWeirdness, settings);
     }
 
@@ -108,7 +108,7 @@ public class Populators {
       	height = Noises.mul(height, 0.15F * verticalScale);
       	height = Noises.add(height, -0.02F);
 		Noise climateErosion = parameterVariation(seed.offset(EROSION_VARIATION_SEED_OFFSET), Erosion.LEVEL_2, Erosion.LEVEL_4, EROSION_VARIATION_SCALE);
-		Noise climateWeirdness = parameterVariation(seed.offset(WEIRDNESS_VARIATION_SEED_OFFSET), Weirdness.MID_SLICE_NORMAL_DESCENDING, Weirdness.MID_SLICE_VARIANT_ASCENDING, WEIRDNESS_VARIATION_SCALE);
+		Noise climateWeirdness = negativeWeirdnessVariation(seed.offset(WEIRDNESS_VARIATION_SEED_OFFSET));
       	return TerrainPopulator.make(TerrainType.FLATS, ground, height, climateErosion, climateWeirdness, scalingSettings);
     }
 
@@ -165,7 +165,7 @@ public class Populators {
 		height = Noises.warpPerlin(height, seed.next(), 400, 3, 200.0F);
 		height = Noises.mul(height, 0.6F * verticalScale);
 		Noise climateErosion = parameterVariation(seed.offset(EROSION_VARIATION_SEED_OFFSET), Erosion.LEVEL_1, Erosion.LEVEL_5, EROSION_VARIATION_SCALE);
-		Noise climateWeirdness = parameterVariation(seed.offset(WEIRDNESS_VARIATION_SEED_OFFSET), Weirdness.MID_SLICE_NORMAL_DESCENDING, Weirdness.MID_SLICE_VARIANT_ASCENDING, WEIRDNESS_VARIATION_SCALE);
+		Noise climateWeirdness = negativeWeirdnessVariation(seed.offset(WEIRDNESS_VARIATION_SEED_OFFSET));
 		return TerrainPopulator.make(TerrainType.HILLS, ground, height, climateErosion, climateWeirdness, settings);
 	}
 
@@ -185,7 +185,7 @@ public class Populators {
 
 		height = Noises.mul(height, 0.55F * verticalScale);
 		Noise climateErosion = parameterVariation(seed.offset(EROSION_VARIATION_SEED_OFFSET), Erosion.LEVEL_1, Erosion.LEVEL_5, EROSION_VARIATION_SCALE);
-		Noise climateWeirdness = parameterVariation(seed.offset(WEIRDNESS_VARIATION_SEED_OFFSET), Weirdness.MID_SLICE_NORMAL_DESCENDING, Weirdness.MID_SLICE_VARIANT_ASCENDING, WEIRDNESS_VARIATION_SCALE);
+		Noise climateWeirdness = negativeWeirdnessVariation(seed.offset(WEIRDNESS_VARIATION_SEED_OFFSET));
 		return TerrainPopulator.make(TerrainType.HILLS, ground, height, climateErosion, climateWeirdness, settings);
 	}
 
@@ -254,7 +254,7 @@ public class Populators {
 		height = Noises.mul(height, 0.55F);
 		height = Noises.add(height, 0.025F);
 		Noise climateErosion = parameterVariation(seed.offset(EROSION_VARIATION_SEED_OFFSET), Erosion.LEVEL_1, Erosion.LEVEL_3, EROSION_VARIATION_SCALE);
-		Noise climateWeirdness = parameterVariation(seed.offset(WEIRDNESS_VARIATION_SEED_OFFSET), Weirdness.MID_SLICE_NORMAL_DESCENDING, Weirdness.MID_SLICE_VARIANT_ASCENDING, WEIRDNESS_VARIATION_SCALE);
+		Noise climateWeirdness = negativeWeirdnessVariation(seed.offset(WEIRDNESS_VARIATION_SEED_OFFSET));
 		return TerrainPopulator.make(TerrainType.BADLANDS, ground, height, climateErosion, climateWeirdness, settings);
 	}
 
@@ -415,6 +415,18 @@ public class Populators {
 	private static Noise parameterVariation(Seed seed, BiomeParameter from, BiomeParameter to, int scale) {
 		Noise variation = Noises.perlin(seed.next(), scale, 2);
 		return Noises.map(variation, from.min(), to.max());
+	}
+
+	private static Noise negativeWeirdnessVariation(Seed seed) {
+		// Vanilla reserves [-0.05, 0.05] for its valley slice. The existing macro-biome
+		// sign inversion below the terrain pipeline supplies the corresponding variant
+		// slice, so ordinary terrain only needs to produce the normal descending side.
+		Noise variation = Noises.perlin(seed.next(), WEIRDNESS_VARIATION_SCALE, 2);
+		return Noises.map(
+			variation,
+			Weirdness.MID_SLICE_NORMAL_DESCENDING.min(),
+			Weirdness.LOW_SLICE_NORMAL_DESCENDING.max() - 0.01F
+		);
 	}
 
 	private static Noise centeredVariation(Seed seed, float center, float halfWidth) {
