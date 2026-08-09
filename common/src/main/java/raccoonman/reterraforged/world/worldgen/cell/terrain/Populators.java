@@ -29,6 +29,7 @@ public class Populators {
 	private static final int EROSION_VARIATION_SEED_OFFSET = 48291;
 	private static final int WEIRDNESS_VARIATION_SEED_OFFSET = 73519;
 	private static final int EROSION_VARIATION_SCALE = 200;
+	private static final int WEIRDNESS_VARIATION_SCALE = 300;
 
 	public static CellPopulator makeDeepOcean(@Deprecated int seed, Levels levels, int oceanDepth) {
 		int minDepth = Math.max(8, oceanDepth / 3);
@@ -87,7 +88,7 @@ public class Populators {
         height = Noises.mul(height, 0.08F);
         height = Noises.add(height, -0.02F);
 		Noise climateErosion = parameterVariation(seed.offset(EROSION_VARIATION_SEED_OFFSET), Erosion.LEVEL_2, Erosion.LEVEL_4, EROSION_VARIATION_SCALE);
-		Noise climateWeirdness = centeredVariation(seed.offset(WEIRDNESS_VARIATION_SEED_OFFSET), Weirdness.MID_SLICE_NORMAL_DESCENDING.mid(), 0.05F);
+		Noise climateWeirdness = parameterVariation(seed.offset(WEIRDNESS_VARIATION_SEED_OFFSET), Weirdness.MID_SLICE_NORMAL_DESCENDING, Weirdness.MID_SLICE_VARIANT_ASCENDING, WEIRDNESS_VARIATION_SCALE);
 		return TerrainPopulator.make(TerrainType.FLATS, ground, height, climateErosion, climateWeirdness, settings);
     }
 
@@ -107,7 +108,7 @@ public class Populators {
       	height = Noises.mul(height, 0.15F * verticalScale);
       	height = Noises.add(height, -0.02F);
 		Noise climateErosion = parameterVariation(seed.offset(EROSION_VARIATION_SEED_OFFSET), Erosion.LEVEL_2, Erosion.LEVEL_4, EROSION_VARIATION_SCALE);
-		Noise climateWeirdness = centeredVariation(seed.offset(WEIRDNESS_VARIATION_SEED_OFFSET), Weirdness.MID_SLICE_NORMAL_DESCENDING.mid(), 0.05F);
+		Noise climateWeirdness = parameterVariation(seed.offset(WEIRDNESS_VARIATION_SEED_OFFSET), Weirdness.MID_SLICE_NORMAL_DESCENDING, Weirdness.MID_SLICE_VARIANT_ASCENDING, WEIRDNESS_VARIATION_SCALE);
       	return TerrainPopulator.make(TerrainType.FLATS, ground, height, climateErosion, climateWeirdness, scalingSettings);
     }
 
@@ -164,7 +165,7 @@ public class Populators {
 		height = Noises.warpPerlin(height, seed.next(), 400, 3, 200.0F);
 		height = Noises.mul(height, 0.6F * verticalScale);
 		Noise climateErosion = parameterVariation(seed.offset(EROSION_VARIATION_SEED_OFFSET), Erosion.LEVEL_1, Erosion.LEVEL_5, EROSION_VARIATION_SCALE);
-		Noise climateWeirdness = centeredVariation(seed.offset(WEIRDNESS_VARIATION_SEED_OFFSET), Weirdness.MID_SLICE_NORMAL_DESCENDING.mid(), 0.05F);
+		Noise climateWeirdness = parameterVariation(seed.offset(WEIRDNESS_VARIATION_SEED_OFFSET), Weirdness.MID_SLICE_NORMAL_DESCENDING, Weirdness.MID_SLICE_VARIANT_ASCENDING, WEIRDNESS_VARIATION_SCALE);
 		return TerrainPopulator.make(TerrainType.HILLS, ground, height, climateErosion, climateWeirdness, settings);
 	}
 
@@ -184,7 +185,7 @@ public class Populators {
 
 		height = Noises.mul(height, 0.55F * verticalScale);
 		Noise climateErosion = parameterVariation(seed.offset(EROSION_VARIATION_SEED_OFFSET), Erosion.LEVEL_1, Erosion.LEVEL_5, EROSION_VARIATION_SCALE);
-		Noise climateWeirdness = centeredVariation(seed.offset(WEIRDNESS_VARIATION_SEED_OFFSET), Weirdness.MID_SLICE_NORMAL_DESCENDING.mid(), 0.05F);
+		Noise climateWeirdness = parameterVariation(seed.offset(WEIRDNESS_VARIATION_SEED_OFFSET), Weirdness.MID_SLICE_NORMAL_DESCENDING, Weirdness.MID_SLICE_VARIANT_ASCENDING, WEIRDNESS_VARIATION_SCALE);
 		return TerrainPopulator.make(TerrainType.HILLS, ground, height, climateErosion, climateWeirdness, settings);
 	}
 
@@ -253,7 +254,7 @@ public class Populators {
 		height = Noises.mul(height, 0.55F);
 		height = Noises.add(height, 0.025F);
 		Noise climateErosion = parameterVariation(seed.offset(EROSION_VARIATION_SEED_OFFSET), Erosion.LEVEL_1, Erosion.LEVEL_3, EROSION_VARIATION_SCALE);
-		Noise climateWeirdness = centeredVariation(seed.offset(WEIRDNESS_VARIATION_SEED_OFFSET), Weirdness.MID_SLICE_NORMAL_DESCENDING.mid(), 0.05F);
+		Noise climateWeirdness = parameterVariation(seed.offset(WEIRDNESS_VARIATION_SEED_OFFSET), Weirdness.MID_SLICE_NORMAL_DESCENDING, Weirdness.MID_SLICE_VARIANT_ASCENDING, WEIRDNESS_VARIATION_SCALE);
 		return TerrainPopulator.make(TerrainType.BADLANDS, ground, height, climateErosion, climateWeirdness, settings);
 	}
 
