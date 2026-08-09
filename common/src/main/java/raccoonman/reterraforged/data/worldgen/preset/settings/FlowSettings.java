@@ -17,9 +17,9 @@ public class FlowSettings {
 
     // Codec for writing to disk
     public static final Codec<FlowSettings> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-            Codec.BOOL.optionalFieldOf("flowParticles", true).forGetter(FlowSettings::serializeFlowParticles),
-            Codec.BOOL.optionalFieldOf("boatFlowDynamics", true).forGetter(FlowSettings::serializeBoatFlowDynamics),
-            Codec.BOOL.optionalFieldOf("navigableWaterfalls", true).forGetter(FlowSettings::serializeNavigableWaterfalls)
+            Codec.BOOL.fieldOf("flowParticles").orElse(true).forGetter(FlowSettings::serializeFlowParticles),
+            Codec.BOOL.fieldOf("boatFlowDynamics").orElse(true).forGetter(FlowSettings::serializeBoatFlowDynamics),
+            Codec.BOOL.fieldOf("navigableWaterfalls").orElse(true).forGetter(FlowSettings::serializeNavigableWaterfalls)
     ).apply(instance, FlowSettings::new));
 
     // default constructor

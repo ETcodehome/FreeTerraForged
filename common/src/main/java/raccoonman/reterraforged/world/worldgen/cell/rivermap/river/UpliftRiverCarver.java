@@ -169,7 +169,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float valleyFloorBumpiness = ((terraceMask * 0.4F) - (drainageMask * 0.6F)) * this.levels.unit;
         float actualValleyFloorHeight = targetValleyFloor + valleyFloorBumpiness;
 
-        storeFlowDirection(cell, currentLinearDist, zone1Radius, 1.0f - flatnessFactor);
+        storeFlowDirection(cell, currentLinearDist, zone1Radius, 0.5f);
 
         // calculate the final cell heights
         float finalHeight = cell.height;
