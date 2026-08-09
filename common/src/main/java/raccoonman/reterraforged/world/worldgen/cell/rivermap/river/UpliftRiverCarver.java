@@ -169,8 +169,6 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float valleyFloorBumpiness = ((terraceMask * 0.4F) - (drainageMask * 0.6F)) * this.levels.unit;
         float actualValleyFloorHeight = targetValleyFloor + valleyFloorBumpiness;
 
-        storeFlowDirection(cell, currentLinearDist, zone1Radius, 0.5f);
-
         // calculate the final cell heights
         float finalHeight = cell.height;
         if (currentLinearDist < zone1Radius) {
@@ -186,31 +184,34 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         // Only commit data changes to the cell if our carving operations actually cut down the world
         if (finalHeight < cell.height) {
             cell.height = finalHeight;
-            cell.riverZone = getRiverZoneTag(cell, currentLinearDist, zone1Radius, zone2Radius, zone3Radius);
+            cell.riverZone = getRiverZoneTag(cell, currentLinearDist, zone1Radius, zone2Radius, zone3Radius, finalHeight, targetWaterLevel);
+        }
+
+        // Only add flow data if we're in the bed
+        boolean isSubMerged = cell.riverWaterLevel > cell.height && cell.height < targetWaterLevel;
+        if (isSubMerged) {
+            storeFlowDirection(cell, 0.5f);
+        } else {
+            cell.hasFlow = false;
+            cell.flowAngle = 0;
         }
     }
 
-    private void storeFlowDirection(Cell cell, float currentLinearDist, float zone1Radius, float rawSpeed) {
-        if (currentLinearDist >= zone1Radius) {
-            cell.flowAngle = 0;
-            return;
-        }
+    private void storeFlowDirection(Cell cell, float normalizedMagnitude) {
 
         // Math.atan2 is scale-invariant, so vector normalization (Math.sqrt) is unneeded
         double radians = Math.atan2(this.river.dz, this.river.dx);
 
-        float maxSpeed = 1.0F;
-        float normalizedSpeed = rawSpeed / maxSpeed;
-
         // Pack magnitude and direction in a single helper call
-        cell.flowAngle = ChunkFlowField.pack(normalizedSpeed, radians);
+        cell.flowAngle = ChunkFlowField.pack(normalizedMagnitude, radians);
         cell.hasFlow = cell.flowAngle != 0;
     }
 
-    private RiverCarverSettings.RiverZone getRiverZoneTag(Cell cell, float currentLinearDist, float zone1Radius, float zone2Radius, float zone3Radius){
+    private RiverCarverSettings.RiverZone getRiverZoneTag(Cell cell, float currentLinearDist, float zone1Radius, float zone2Radius, float zone3Radius, float finalHeight, float targetWaterLevel) {
         RiverCarverSettings.RiverZone prospectiveZone = cell.riverZone;
+        boolean isSubmerged = finalHeight < (targetWaterLevel - 0.01F);
 
-        if (currentLinearDist < zone1Radius) {
+        if (currentLinearDist < zone1Radius && isSubmerged) {
             prospectiveZone = RiverCarverSettings.RiverZone.Riverbed;
         } else if (currentLinearDist < zone2Radius) {
             if (prospectiveZone != RiverCarverSettings.RiverZone.Riverbed) {
@@ -465,10 +466,10 @@ public class UpliftRiverCarver implements RTFRiverCarver {
 
     private void tag(Cell cell, float bedHeight) {
         if (cell.terrain.isLake()) return;
-        cell.erosionMask = true;
-        cell.terrain = TerrainType.RIVER;
         float newMax = Math.max(this.waterLine, bedHeight);
         if (newMax > cell.riverWaterLevel) {
+            cell.erosionMask = true;
+            cell.terrain = TerrainType.RIVER;
             cell.riverWaterLevel = Math.max(this.waterLine, bedHeight);
         }
     }

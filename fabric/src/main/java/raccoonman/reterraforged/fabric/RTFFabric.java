@@ -23,7 +23,6 @@ public class RTFFabric implements ModInitializer, DataGeneratorEntrypoint {
 		RegistryUtil.createDataRegistry(RTFRegistries.BIOME_MODIFIER, BiomeModifier.DIRECT_CODEC, false);
 	}
 
-	//TODO merge this with forge's datagen since they're the same now
 	@Override
 	public void onInitializeDataGenerator(FabricDataGenerator fabricDataGenerator) {
 		Pack pack = fabricDataGenerator.createPack();
