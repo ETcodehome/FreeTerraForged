@@ -5,6 +5,7 @@ import org.apache.logging.log4j.Logger;
 
 import net.minecraft.resources.ResourceLocation;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
+import raccoonman.reterraforged.network.RTFNetworking;
 import raccoonman.reterraforged.platform.RegistryUtil;
 import raccoonman.reterraforged.registries.RTFBuiltInRegistries;
 import raccoonman.reterraforged.registries.RTFRegistries;
@@ -58,7 +59,7 @@ public class RTFCommon {
 		RegistryUtil.createDataRegistry(RTFRegistries.PRESET, Preset.DIRECT_CODEC, false);
 		RegistryUtil.createDataRegistry(RTFRegistries.STRUCTURE_RULE, StructureRule.DIRECT_CODEC, false);
 
-		NetworkManager.registerS2CPayloadType(FlowFieldSyncPayload.TYPE, FlowFieldSyncPayload.CODEC);
+		RTFNetworking.init();
 	}
 
 	public static ResourceLocation location(String name) {
