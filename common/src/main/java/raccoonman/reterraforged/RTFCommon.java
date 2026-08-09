@@ -58,26 +58,7 @@ public class RTFCommon {
 		RegistryUtil.createDataRegistry(RTFRegistries.PRESET, Preset.DIRECT_CODEC, false);
 		RegistryUtil.createDataRegistry(RTFRegistries.STRUCTURE_RULE, StructureRule.DIRECT_CODEC, false);
 
-		// Register the payload codec and the Client-side receiver handler
-		NetworkManager.registerReceiver(
-				NetworkManager.Side.S2C, // Server-to-Client direction
-				FlowFieldSyncPayload.TYPE,
-				FlowFieldSyncPayload.CODEC,
-				(payload, context) -> {
-					// Queue the data execution safely on the main client thread
-					context.queue(() -> {
-						if (context.getPlayer().level() instanceof ClientLevel clientLevel) {
-							// Pull the local client-side chunk
-							ChunkAccess chunk = clientLevel.getChunk(payload.pos().x, payload.pos().z, ChunkStatus.FULL, false);
-							if (chunk != null && chunk instanceof IFlowFieldHolder holder) {
-								// Apply the real server bytes directly to the client's memory map
-								holder.reterraforged$getFlowField().loadRawGrid(payload.rawGrid());
-							}
-						}
-					});
-				}
-		);
-
+		NetworkManager.registerS2CPayloadType(FlowFieldSyncPayload.TYPE, FlowFieldSyncPayload.CODEC);
 	}
 
 	public static ResourceLocation location(String name) {

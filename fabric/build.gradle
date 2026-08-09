@@ -9,6 +9,12 @@ architectury {
 
 loom {
     accessWidenerPath = project(":common").loom.accessWidenerPath
+    runs {
+        server {
+            // Remove "nogui" so the vanilla Swing interface opens
+            programArgs.remove("nogui")
+        }
+    }
 }
 
 configurations {
