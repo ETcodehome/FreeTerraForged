@@ -6,6 +6,7 @@ import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.debug.DebugRenderer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.BiomeTags;
 import net.minecraft.world.entity.player.Player;
@@ -19,7 +20,8 @@ import raccoonman.reterraforged.world.worldgen.IFlowFieldHolder;
 public class FlowFieldDebugRenderer {
 
     public static boolean ENABLED = true;
-    private static final int RADIUS_BLOCKS = 64;
+    private static final int LINE_RADIUS_BLOCKS = 64;
+    private static final int TEXT_RADIUS_BLOCKS = 8;
 
     public static void render(PoseStack poseStack, Camera camera, MultiBufferSource.BufferSource bufferSource) {
         if (!ENABLED) return;
@@ -29,6 +31,13 @@ public class FlowFieldDebugRenderer {
         Level level = mc.level;
         if (player == null || level == null) return;
 
+        BlockPos playerPos = player.blockPosition();
+
+        renderLines(poseStack, camera, bufferSource, level, playerPos);
+        renderTextMagnitudes(poseStack, bufferSource, level, playerPos);
+    }
+
+    private static void renderLines(PoseStack poseStack, Camera camera, MultiBufferSource.BufferSource bufferSource, Level level, BlockPos playerPos) {
         Vec3 camPos = camera.getPosition();
         VertexConsumer buffer = bufferSource.getBuffer(RenderType.lines());
 
@@ -36,10 +45,8 @@ public class FlowFieldDebugRenderer {
         poseStack.translate(-camPos.x, -camPos.y, -camPos.z);
         PoseStack.Pose lastPose = poseStack.last();
 
-        BlockPos playerPos = player.blockPosition();
-
-        for (int x = -RADIUS_BLOCKS; x <= RADIUS_BLOCKS; x++) {
-            for (int z = -RADIUS_BLOCKS; z <= RADIUS_BLOCKS; z++) {
+        for (int x = -LINE_RADIUS_BLOCKS; x <= LINE_RADIUS_BLOCKS; x++) {
+            for (int z = -LINE_RADIUS_BLOCKS; z <= LINE_RADIUS_BLOCKS; z++) {
                 int worldX = playerPos.getX() + x;
                 int worldZ = playerPos.getZ() + z;
 
@@ -60,19 +67,16 @@ public class FlowFieldDebugRenderer {
                 float startY = surfaceY + 0.1f;
                 float startZ = worldZ + 0.5f;
 
-                // Case 1: River biome with no flow direction -> Render red exclamation mark
                 if (!hasFlow) {
                     if (isRiver) {
-                        //drawRedDot(lastPose, buffer, startX, startY, startZ);
+                        drawRedDot(lastPose, buffer, startX, startY, startZ);
                     }
                     continue;
                 }
 
-                // Case 2: Tile has flow -> Render direction vector arrow
                 double radians = flowField.getAngleRadians(localX, localZ);
                 float strength = flowField.getNormalizedMagnitude(localX, localZ);
 
-                // Max radius from center (0.5) to edge is 0.5f. Keeping line length <= 0.38f ensures headroom for cell padding.
                 float lineLength = 0.10f + (strength * 0.28f);
                 float endX = startX + (float) Math.cos(radians) * lineLength;
                 float endZ = startZ + (float) Math.sin(radians) * lineLength;
@@ -85,7 +89,6 @@ public class FlowFieldDebugRenderer {
 
                 double headAngle1 = radians + Math.toRadians(150);
                 double headAngle2 = radians - Math.toRadians(150);
-                // Scale arrowhead barb length proportionally to shaft length
                 float arrowLen = lineLength * 0.30f;
 
                 drawLine(lastPose, buffer, endX, startY, endZ,
@@ -102,12 +105,56 @@ public class FlowFieldDebugRenderer {
         bufferSource.endBatch(RenderType.lines());
     }
 
+    private static void renderTextMagnitudes(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource, Level level, BlockPos playerPos) {
+        int maxDistSq = TEXT_RADIUS_BLOCKS * TEXT_RADIUS_BLOCKS;
+
+        for (int x = -TEXT_RADIUS_BLOCKS; x <= TEXT_RADIUS_BLOCKS; x++) {
+            for (int z = -TEXT_RADIUS_BLOCKS; z <= TEXT_RADIUS_BLOCKS; z++) {
+                // Circular radius check to clip corners cleanly at 16 blocks
+                if ((x * x + z * z) > maxDistSq) continue;
+
+                int worldX = playerPos.getX() + x;
+                int worldZ = playerPos.getZ() + z;
+
+                ChunkAccess chunk = level.getChunk(worldX >> 4, worldZ >> 4);
+                if (!(chunk instanceof IFlowFieldHolder holder)) continue;
+
+                ChunkFlowField flowField = holder.reterraforged$getFlowField();
+                int localX = worldX & 15;
+                int localZ = worldZ & 15;
+
+                if (!flowField.hasFlow(localX, localZ)) continue;
+
+                int surfaceY = level.getHeight(Heightmap.Types.WORLD_SURFACE, worldX, worldZ);
+                int strength = flowField.getMagnitude(localX, localZ);
+
+                float startX = worldX + 0.5f;
+                float startY = surfaceY + 0.30f; // Offset above the line shaft
+                float startZ = worldZ + 0.5f;
+
+                String magText = String.valueOf(strength);
+
+                DebugRenderer.renderFloatingText(
+                        poseStack,
+                        bufferSource,
+                        magText,
+                        startX,
+                        startY,
+                        startZ,
+                        0xFFFFFFFF,
+                        0.010f,  // Compact font scale
+                        true,    // Center align
+                        0.0f,    // Padding
+                        true     // See-through depth check
+                );
+            }
+        }
+    }
+
     private static void drawRedDot(PoseStack.Pose pose, VertexConsumer buffer, float x, float y, float z) {
         float r = 1.0f, g = 0.0f, b = 0.0f, a = 1.0f;
 
-        // Dot at bottom
         drawLine(pose, buffer, x, y + 0.08f, z, x, y + 0.18f, z, r, g, b, a);
-        // Dot cross cap
         drawLine(pose, buffer, x - 0.05f, y + 0.13f, z, x + 0.05f, y + 0.13f, z, r, g, b, a);
         drawLine(pose, buffer, x, y + 0.13f, z - 0.05f, x, y + 0.13f, z + 0.05f, r, g, b, a);
     }
