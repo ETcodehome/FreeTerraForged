@@ -84,9 +84,9 @@ class UndergroundBiomeBandingTest {
 
 		float firstRotationDepth = bandCenter(start, end, bands, 1);
 		assertEquals(
-			"wet",
+			"redstone",
 			banding.findValue(target(-0.9F, 0.0F, -0.5F, firstRotationDepth, -0.9F)),
-			"the first hard-rotation band must ignore the entry band's climate winner"
+			"rotation must not discard the candidates' horizontal climate constraints"
 		);
 	}
 
@@ -108,7 +108,7 @@ class UndergroundBiomeBandingTest {
 	}
 
 	@Test
-	void hardRotatesEveryDeepBandEvenWhenOneCandidateIsClimatePerfect() {
+	void rotatesOnlyAmongCandidatesWhoseHorizontalClimateContainsTheTarget() {
 		Preset preset = preset(1024, 640, 50);
 		float end = UndergroundBiomeBanding.endDepth(preset);
 		int bands = UndergroundBiomeBanding.bandCount(preset, 3, BOTTOM_DEPTH, end);
@@ -116,12 +116,11 @@ class UndergroundBiomeBandingTest {
 
 		assertEquals(19, bands);
 		for (int band = 0; band < bands; band++) {
-			String expected = List.of("dripstone", "lush", "deep_dark").get(band % 3);
 			float depth = bandCenter(BOTTOM_DEPTH, end, bands, band);
 			assertEquals(
-				expected,
+				"dripstone",
 				banding.findValue(target(0.0F, 0.9F, 0.0F, depth, -0.9F)),
-				"climate-perfect dripstone must not monopolize deep band " + band
+				"an ineligible candidate must not take ownership of deep band " + band
 			);
 		}
 	}
@@ -132,11 +131,15 @@ class UndergroundBiomeBandingTest {
 		float end = UndergroundBiomeBanding.endDepth(preset);
 		int bands = UndergroundBiomeBanding.bandCount(preset, 3, BOTTOM_DEPTH, end);
 		float depth = bandCenter(BOTTOM_DEPTH, end, bands, 0);
-		UndergroundBiomeBanding.Layout<String> banding = UndergroundBiomeBanding.apply(preset, vanillaLikeEntries());
+		UndergroundBiomeBanding.Layout<String> banding = UndergroundBiomeBanding.apply(preset, List.of(
+			entry(FULL_RANGE, FULL_RANGE, FULL_RANGE, FULL_RANGE, SHALLOW_CAVE_DEPTH, FULL_RANGE, "first"),
+			entry(FULL_RANGE, FULL_RANGE, FULL_RANGE, FULL_RANGE, SHALLOW_CAVE_DEPTH, FULL_RANGE, "second"),
+			entry(FULL_RANGE, FULL_RANGE, FULL_RANGE, FULL_RANGE, BOTTOM_CAVE_DEPTH, FULL_RANGE, "bottom")
+		));
 
-		assertEquals("dripstone", banding.findValue(target(depth, -0.9F)));
-		assertEquals("lush", banding.findValue(target(depth, 0.0F)));
-		assertEquals("deep_dark", banding.findValue(target(depth, 0.9F)));
+		assertEquals("first", banding.findValue(target(depth, -0.9F)));
+		assertEquals("second", banding.findValue(target(depth, 0.0F)));
+		assertEquals("bottom", banding.findValue(target(depth, 0.9F)));
 	}
 
 	@Test
@@ -202,6 +205,94 @@ class UndergroundBiomeBandingTest {
 		}
 		assertEquals(Set.of("shallow_a", "shallow_b", "mod_shallow", "mod_bottom"), selected);
 		assertFalse(selected.contains("custom"));
+	}
+
+	@Test
+	void acceptsNarrowWeirdnessForAConventionalShallowCave() {
+		Climate.Parameter sulfurWeirdness = Climate.Parameter.span(-1.1F, -0.85F);
+		Climate.ParameterPoint sulfur = entry(
+			FULL_RANGE, FULL_RANGE, FULL_RANGE, FULL_RANGE,
+			SHALLOW_CAVE_DEPTH, sulfurWeirdness, "sulfur"
+		).getFirst();
+
+		assertEquals(
+			UndergroundBiomeBanding.CandidateRole.SHALLOW_CAVE,
+			UndergroundBiomeBanding.classify(sulfur, false)
+		);
+	}
+
+	@Test
+	void narrowWeirdnessCandidateCanWinInsideItsRegisteredInterval() {
+		Preset preset = preset(1024, 640, 50);
+		Climate.Parameter sulfurWeirdness = Climate.Parameter.span(-1.1F, -0.85F);
+		List<Pair<Climate.ParameterPoint, String>> entries = List.of(
+			entry(FULL_RANGE, FULL_RANGE, FULL_RANGE, FULL_RANGE, Climate.Parameter.point(0.0F), FULL_RANGE, "surface"),
+			entry(FULL_RANGE, FULL_RANGE, FULL_RANGE, FULL_RANGE, SHALLOW_CAVE_DEPTH, sulfurWeirdness, "sulfur"),
+			entry(FULL_RANGE, FULL_RANGE, FULL_RANGE, FULL_RANGE, SHALLOW_CAVE_DEPTH, Climate.Parameter.span(0.2F, 1.0F), "other")
+		);
+		UndergroundBiomeBanding.Layout<String> banding = UndergroundBiomeBanding.apply(preset, entries);
+		float start = Climate.unquantizeCoord(banding.bandingStart());
+		float end = Math.min(BOTTOM_DEPTH, UndergroundBiomeBanding.endDepth(preset));
+		int bands = UndergroundBiomeBanding.bandCount(preset, 2, start, end);
+
+		assertEquals("sulfur", banding.findValue(target(bandCenter(start, end, bands, 0), -0.9F)));
+	}
+
+	@Test
+	void usesACaveTagToCorroborateNonstandardPositiveDepthShapes() {
+		Climate.ParameterPoint taggedShallow = entry(
+			FULL_RANGE, FULL_RANGE, FULL_RANGE, FULL_RANGE,
+			Climate.Parameter.span(0.4F, 0.6F), FULL_RANGE, "tagged_shallow"
+		).getFirst();
+		Climate.ParameterPoint taggedDeep = entry(
+			FULL_RANGE, FULL_RANGE, FULL_RANGE, FULL_RANGE,
+			Climate.Parameter.point(1.2F), FULL_RANGE, "tagged_deep"
+		).getFirst();
+
+		assertEquals(
+			UndergroundBiomeBanding.CandidateRole.UNKNOWN,
+			UndergroundBiomeBanding.classify(taggedShallow, false)
+		);
+		assertEquals(
+			UndergroundBiomeBanding.CandidateRole.SHALLOW_CAVE,
+			UndergroundBiomeBanding.classify(taggedShallow, true)
+		);
+		assertEquals(
+			UndergroundBiomeBanding.CandidateRole.DEEP_CAVE,
+			UndergroundBiomeBanding.classify(taggedDeep, true)
+		);
+	}
+
+	@Test
+	void keepsSurfaceAndMalformedShapesOutOfTheBandingPool() {
+		Climate.ParameterPoint surface = entry(
+			FULL_RANGE, FULL_RANGE, FULL_RANGE, FULL_RANGE,
+			Climate.Parameter.point(0.0F), FULL_RANGE, "surface"
+		).getFirst();
+		Climate.Parameter malformed = new Climate.Parameter(10L, -10L);
+		Climate.ParameterPoint malformedPoint = new Climate.ParameterPoint(
+			FULL_RANGE, FULL_RANGE, FULL_RANGE, FULL_RANGE, malformed, FULL_RANGE, 0L
+		);
+
+		assertEquals(UndergroundBiomeBanding.CandidateRole.SURFACE, UndergroundBiomeBanding.classify(surface, true));
+		assertEquals(UndergroundBiomeBanding.CandidateRole.UNKNOWN, UndergroundBiomeBanding.classify(malformedPoint, true));
+	}
+
+	@Test
+	void oneUnknownEntryDoesNotDisableValidCandidates() {
+		Preset preset = preset(1024, 640, 50);
+		List<Pair<Climate.ParameterPoint, String>> entries = List.of(
+			entry(FULL_RANGE, FULL_RANGE, FULL_RANGE, FULL_RANGE, Climate.Parameter.point(0.0F), FULL_RANGE, "surface"),
+			entry(FULL_RANGE, FULL_RANGE, FULL_RANGE, FULL_RANGE, SHALLOW_CAVE_DEPTH, FULL_RANGE, "shallow_a"),
+			entry(FULL_RANGE, FULL_RANGE, FULL_RANGE, FULL_RANGE, SHALLOW_CAVE_DEPTH, FULL_RANGE, "shallow_b"),
+			entry(FULL_RANGE, FULL_RANGE, FULL_RANGE, FULL_RANGE, Climate.Parameter.span(0.4F, 0.6F), FULL_RANGE, "unknown")
+		);
+
+		UndergroundBiomeBanding.Layout<String> banding = UndergroundBiomeBanding.apply(preset, entries);
+
+		assertTrue(banding.appliesAt(target(1.0F, 0.0F)));
+		assertEquals(2, banding.shallowCandidateCount());
+		assertEquals(1, banding.unknownEntryCount());
 	}
 
 	@Test
