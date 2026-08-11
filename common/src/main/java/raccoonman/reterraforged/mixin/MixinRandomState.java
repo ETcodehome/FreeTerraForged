@@ -120,7 +120,7 @@ class MixinRandomState {
 		// if the base router mapping verified that this instance is actually an RTF worldgen dimension.
 		if (this.reterraforged$isRTFDimension) {
 			if (this.preset != null && (Object) this.sampler instanceof RTFClimateSampler rtfClimateSampler) {
-				rtfClimateSampler.setUndergroundBiomeBandingPreset(this.preset);
+				rtfClimateSampler.setUndergroundBiomeBandingPreset(this.preset, this.seed);
 			}
 
 			RegistryLookup<Noise> noises = registries.lookupOrThrow(RTFRegistries.NOISE);
@@ -147,6 +147,10 @@ class MixinRandomState {
 	@Nullable
 	public GeneratorContext reterraforged$RTFRandomState$generatorContext() {
 		return this.generatorContext;
+	}
+
+	public long reterraforged$RTFRandomState$seed() {
+		return this.seed;
 	}
 
 	@Nullable

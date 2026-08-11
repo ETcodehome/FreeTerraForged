@@ -183,7 +183,7 @@ class MixinNoiseChunk {
 		if ((Object) this.randomState instanceof RTFRandomState randomState
 			&& randomState.preset() != null
 			&& (Object) callback.getReturnValue() instanceof RTFClimateSampler sampler) {
-			sampler.setUndergroundBiomeBandingPreset(randomState.preset());
+			sampler.setUndergroundBiomeBandingPreset(randomState.preset(), randomState.seed());
 		}
 	}
 

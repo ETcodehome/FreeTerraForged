@@ -125,6 +125,7 @@ public final class RTFTranslationKeys {
 	public static final String GUI_SLIDER_MOISTURE_MAX = resolve("gui.slider.moistureMax");
 	public static final String GUI_SLIDER_MOISTURE_BIAS = resolve("gui.slider.moistureBias");
 	public static final String GUI_SLIDER_BIOME_SIZE = resolve("gui.slider.biomeSize");
+	public static final String GUI_SLIDER_UNDERGROUND_BIOME_SIZE = resolve("gui.slider.undergroundBiomeSize");
 	public static final String GUI_SLIDER_MACRO_NOISE_SIZE = resolve("gui.slider.macroNoiseSize");
 	public static final String GUI_SLIDER_BIOME_WARP_SCALE = resolve("gui.slider.biomeWarpScale");
 	public static final String GUI_SLIDER_BIOME_WARP_STRENGTH = resolve("gui.slider.biomeWarpStrength");

@@ -91,7 +91,7 @@ class UndergroundBiomeBandingTest {
 	}
 
 	@Test
-	void usesWeirdnessToResolveEqualEntryFitnessWithoutNeighborLookups() {
+	void usesHorizontalPhaseToResolveEqualEntryFitnessWithoutChangingClimateAxes() {
 		Preset preset = preset(1024, 640, 50);
 		List<Pair<Climate.ParameterPoint, String>> entries = List.of(
 			entry(FULL_RANGE, FULL_RANGE, FULL_RANGE, FULL_RANGE, SHALLOW_CAVE_DEPTH, FULL_RANGE, "first"),
@@ -103,8 +103,16 @@ class UndergroundBiomeBandingTest {
 		int bands = UndergroundBiomeBanding.bandCount(preset, 2, start, end);
 		float entryDepth = bandCenter(start, end, bands, 0);
 
-		assertEquals("first", banding.findValue(target(entryDepth, -0.9F)));
-		assertEquals("second", banding.findValue(target(entryDepth, 0.9F)));
+		assertEquals(
+			banding.findValue(target(entryDepth, -0.9F), 100, 0),
+			banding.findValue(target(entryDepth, 0.9F), 100, 0),
+			"the phase must not synthesize a different weirdness axis"
+		);
+		Set<String> selected = new LinkedHashSet<>();
+		for (int quartX = -256; quartX <= 256; quartX++) {
+			selected.add(banding.findValue(target(entryDepth, 0.0F), quartX, 0));
+		}
+		assertEquals(Set.of("first", "second"), selected);
 	}
 
 	@Test
@@ -126,7 +134,7 @@ class UndergroundBiomeBandingTest {
 	}
 
 	@Test
-	void phasesHardRotationHorizontallyWithWeirdness() {
+	void phasesHardRotationHorizontallyWithCoordinates() {
 		Preset preset = preset(1024, 640, 50);
 		float end = UndergroundBiomeBanding.endDepth(preset);
 		int bands = UndergroundBiomeBanding.bandCount(preset, 3, BOTTOM_DEPTH, end);
@@ -137,9 +145,11 @@ class UndergroundBiomeBandingTest {
 			entry(FULL_RANGE, FULL_RANGE, FULL_RANGE, FULL_RANGE, BOTTOM_CAVE_DEPTH, FULL_RANGE, "bottom")
 		));
 
-		assertEquals("first", banding.findValue(target(depth, -0.9F)));
-		assertEquals("second", banding.findValue(target(depth, 0.0F)));
-		assertEquals("bottom", banding.findValue(target(depth, 0.9F)));
+		Set<String> selected = new LinkedHashSet<>();
+		for (int quartX = -256; quartX <= 256; quartX++) {
+			selected.add(banding.findValue(target(depth, 0.0F), quartX, 0));
+		}
+		assertEquals(Set.of("first", "second", "bottom"), selected);
 	}
 
 	@Test
@@ -173,6 +183,69 @@ class UndergroundBiomeBandingTest {
 		assertEquals(21, UndergroundBiomeBanding.bandCount(preset(1024, 1024, 50), 3, BOTTOM_DEPTH, 16.0F));
 		assertEquals(10, UndergroundBiomeBanding.bandCount(preset(1024, 1024, 225), 3, BOTTOM_DEPTH, 16.0F));
 		assertEquals(9, UndergroundBiomeBanding.bandCount(preset(1024, 1024, 255), 3, BOTTOM_DEPTH, 16.0F));
+	}
+
+	@Test
+	void undergroundSizeControlsVerticalBandsIndependentlyOfSurfaceSize() {
+		Preset largeSurfaceSmallUnderground = preset(1024, 1024, 900, 50);
+		Preset smallSurfaceLargeUnderground = preset(1024, 1024, 50, 900);
+
+		int smallUndergroundBands = UndergroundBiomeBanding.bandCount(
+			largeSurfaceSmallUnderground, 3, BOTTOM_DEPTH, 16.0F
+		);
+		int largeUndergroundBands = UndergroundBiomeBanding.bandCount(
+			smallSurfaceLargeUnderground, 3, BOTTOM_DEPTH, 16.0F
+		);
+
+		assertTrue(smallUndergroundBands > largeUndergroundBands);
+		assertEquals(
+			smallUndergroundBands,
+			UndergroundBiomeBanding.bandCount(preset(1024, 1024, 50, 50), 3, BOTTOM_DEPTH, 16.0F)
+		);
+	}
+
+	@Test
+	void horizontalPhaseIsDeterministicAndSeeded() {
+		Preset preset = preset(1024, 640, 225);
+
+		float first = UndergroundBiomeBanding.horizontalPhase(preset, 3L, -317, 91);
+		assertEquals(first, UndergroundBiomeBanding.horizontalPhase(preset, 3L, -317, 91));
+		assertFalse(first == UndergroundBiomeBanding.horizontalPhase(preset, 4L, -317, 91));
+	}
+
+	@Test
+	void largerUndergroundSizesProduceSmootherHorizontalPhaseFields() {
+		double smallRoughness = horizontalRoughness(preset(1024, 640, 900, 50), 3L);
+		double defaultRoughness = horizontalRoughness(preset(1024, 640, 50, 225), 3L);
+		double largeRoughness = horizontalRoughness(preset(1024, 640, 50, 900), 3L);
+
+		assertTrue(smallRoughness > defaultRoughness);
+		assertTrue(defaultRoughness > largeRoughness);
+	}
+
+	@Test
+	void horizontalCoordinatesChangeEligibleCaveSelectionCoherently() {
+		Preset preset = preset(1024, 640, 50);
+		UndergroundBiomeBanding.Layout<String> banding = UndergroundBiomeBanding.apply(
+			preset,
+			List.of(
+				entry(FULL_RANGE, FULL_RANGE, FULL_RANGE, FULL_RANGE, SHALLOW_CAVE_DEPTH, FULL_RANGE, "first"),
+				entry(FULL_RANGE, FULL_RANGE, FULL_RANGE, FULL_RANGE, SHALLOW_CAVE_DEPTH, FULL_RANGE, "second")
+			),
+			3L
+		);
+		float end = UndergroundBiomeBanding.endDepth(preset);
+		int bands = UndergroundBiomeBanding.bandCount(preset, 2, BOTTOM_DEPTH, end);
+		Climate.TargetPoint target = target(bandCenter(BOTTOM_DEPTH, end, bands, 0), 0.0F);
+		Set<String> selected = new LinkedHashSet<>();
+
+		for (int quartX = -256; quartX <= 256; quartX++) {
+			String value = banding.findValue(target, quartX, 0);
+			assertEquals(value, banding.findValue(target, quartX, 0));
+			selected.add(value);
+		}
+
+		assertEquals(Set.of("first", "second"), selected);
 	}
 
 	@Test
@@ -311,11 +384,30 @@ class UndergroundBiomeBandingTest {
 	}
 
 	private static Preset preset(int worldDepth, int worldHeight, int biomeSize) {
+		return preset(worldDepth, worldHeight, biomeSize, biomeSize);
+	}
+
+	private static Preset preset(int worldDepth, int worldHeight, int biomeSize, int undergroundBiomeSize) {
 		Preset preset = Presets.makeRTFDefault();
 		preset.world().properties.worldDepth = worldDepth;
 		preset.world().properties.worldHeight = worldHeight;
 		preset.climate().biomeShape.biomeSize = biomeSize;
+		preset.climate().biomeShape.undergroundBiomeSize = undergroundBiomeSize;
 		return preset;
+	}
+
+	private static double horizontalRoughness(Preset preset, long seed) {
+		double roughness = 0.0D;
+		int samples = 0;
+		for (int quartZ = -64; quartZ < 64; quartZ += 4) {
+			for (int quartX = -64; quartX < 64; quartX++) {
+				float current = UndergroundBiomeBanding.horizontalPhase(preset, seed, quartX, quartZ);
+				float next = UndergroundBiomeBanding.horizontalPhase(preset, seed, quartX + 1, quartZ);
+				roughness += Math.abs(next - current);
+				samples++;
+			}
+		}
+		return roughness / samples;
 	}
 
 	private static List<Pair<Climate.ParameterPoint, String>> vanillaLikeEntries() {

@@ -46,6 +46,8 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 	@Unique
 	private Preset reterraforged$bandingPreset;
 	@Unique
+	private long reterraforged$bandingSeed;
+	@Unique
 	private List<Pair<Climate.ParameterPoint, T>> reterraforged$baseEntries;
 	@Unique
 	private List<List<Pair<Climate.ParameterPoint, T>>> reterraforged$pendingRegionalEntries;
@@ -87,6 +89,7 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 			this.reterraforged$regionalEntries = new ArrayList<>();
 		}
 		this.reterraforged$bandingPreset = null;
+		this.reterraforged$bandingSeed = seed;
 		this.reterraforged$baseEntries = List.copyOf(this.values);
 		this.reterraforged$pendingRegionalEntries.clear();
 		this.reterraforged$regionalEntries.clear();
@@ -246,7 +249,7 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 			|| (requireOriginalMatch && !Objects.equals(requiredOriginal, originalValue))) {
 			return null;
 		}
-		T bandedValue = banding.appliesAt(targetPoint) ? banding.findValue(targetPoint) : originalValue;
+		T bandedValue = banding.appliesAt(targetPoint) ? banding.findValue(targetPoint, x, z) : originalValue;
 		return reterraforged$isDeferredPlaceholder(bandedValue) ? null : bandedValue;
 	}
 
@@ -297,7 +300,7 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 		}
 
 		T bandedValue = banding.appliesAt(targetPoint)
-			? banding.findValue(targetPoint)
+			? banding.findValue(targetPoint, x, z)
 			: originalValue;
 		if (reterraforged$isDeferredPlaceholder(bandedValue)) {
 			return new TerraBlenderParameterList.SelectionDiagnostics<>(treeIndex, originalValue, null, "deferred_banded_winner");
@@ -441,6 +444,7 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 					UndergroundBiomeBanding.Layout<T> layout = UndergroundBiomeBanding.apply(
 						this.reterraforged$bandingPreset,
 						overlay.entries(),
+						this.reterraforged$bandingSeed,
 						(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value))
 					);
 					surfaceTrees.add(new Climate.ParameterList<>(effectiveEntries));

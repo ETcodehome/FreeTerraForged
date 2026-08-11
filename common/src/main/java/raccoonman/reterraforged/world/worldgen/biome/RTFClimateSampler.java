@@ -10,8 +10,10 @@ public interface RTFClimateSampler {
 	
 	BlockPos getSpawnSearchCenter();
 
-	void setUndergroundBiomeBandingPreset(@Nullable Preset preset);
+	void setUndergroundBiomeBandingPreset(@Nullable Preset preset, long seed);
 
 	@Nullable
 	Preset getUndergroundBiomeBandingPreset();
+
+	long getUndergroundBiomeBandingSeed();
 }

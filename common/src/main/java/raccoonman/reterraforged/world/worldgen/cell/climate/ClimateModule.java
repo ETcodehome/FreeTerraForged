@@ -35,7 +35,7 @@ public class ClimateModule {
 	private Levels levels;
 	
 	public ClimateModule(Seed seed, Continent continent, WorldSettings.ControlPoints controlPoints, ClimateSettings climateSettings, Levels levels) {
-		int biomeSize = climateSettings.biomeShape.biomeSize;
+		int biomeSize = climateSettings.biomeShape.biomeSize();
 		
 		float tempScaler = (float) climateSettings.temperature.scale;
 		float moistScaler = climateSettings.moisture.scale * 2.5F;
