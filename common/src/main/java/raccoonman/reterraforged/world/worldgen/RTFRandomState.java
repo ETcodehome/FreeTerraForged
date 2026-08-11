@@ -15,6 +15,8 @@ public interface RTFRandomState {
 
 	@Nullable
 	GeneratorContext generatorContext();
+
+	long seed();
 	
 	DensityFunction wrap(DensityFunction function);
 

@@ -10,9 +10,7 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
-
 import com.google.common.base.Suppliers;
-
 import net.minecraft.core.HolderGetter;
 import net.minecraft.core.HolderLookup.RegistryLookup;
 import net.minecraft.core.RegistryAccess;
@@ -23,7 +21,6 @@ import net.minecraft.world.level.levelgen.synth.NormalNoise;
 import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.concurrent.ThreadPools;
 import raccoonman.reterraforged.config.PerformanceConfig;
-import raccoonman.reterraforged.data.worldgen.compat.terrablender.TBNoiseRouterData;
 import raccoonman.reterraforged.data.worldgen.preset.settings.FlowSettings;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.registries.RTFRegistries;
@@ -37,29 +34,18 @@ import raccoonman.reterraforged.world.worldgen.densityfunction.NoiseFunction;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noises;
 import raccoonman.reterraforged.world.worldgen.biome.RTFClimateSampler;
-import raccoonman.reterraforged.world.worldgen.terrablender.TBClimateSampler;
-import raccoonman.reterraforged.world.worldgen.terrablender.TBCompat;
 
 @Mixin(RandomState.class)
 @Implements(@Interface(iface = RTFRandomState.class, prefix = "reterraforged$RTFRandomState$"))
 class MixinRandomState {
+
 	private DensityFunction.Visitor densityFunctionWrapper;
-	@Shadow
-	@Final
-	private Climate.Sampler sampler;
-	@Shadow
-	@Final
-	private SurfaceSystem surfaceSystem;
-
-	private boolean hasContext;
-	@Unique private boolean reterraforged$isRTFDimension = false; // Tracks if the BASE router belongs to RTF
-
-	@Nullable
-	private GeneratorContext generatorContext;
-	@Nullable
-	private Preset preset;
-
 	private long seed;
+	private boolean hasContext;
+	@Shadow	@Final private Climate.Sampler sampler;
+	@Unique private boolean reterraforged$isRTFDimension = false; // Tracks if the BASE router belongs to RTF
+	@Nullable private GeneratorContext generatorContext;
+	@Nullable private Preset preset;
 
 	@Redirect(
 			at = @At(
@@ -77,9 +63,11 @@ class MixinRandomState {
 
 			@Override
 			public DensityFunction apply(DensityFunction function) {
+
 				if(function instanceof NoiseFunction.Marker marker) {
 					return new NoiseFunction(marker.noise(), (int) seed);
 				}
+
 				if(function instanceof CellSampler.Marker marker) {
 
 					if (!isVanillaOverworld) {
@@ -124,7 +112,7 @@ class MixinRandomState {
 		// if the base router mapping verified that this instance is actually an RTF worldgen dimension.
 		if (this.reterraforged$isRTFDimension) {
 			if (this.preset != null && (Object) this.sampler instanceof RTFClimateSampler rtfClimateSampler) {
-				rtfClimateSampler.setUndergroundBiomeBandingPreset(this.preset);
+				rtfClimateSampler.setUndergroundBiomeBandingPreset(this.preset, this.seed);
 			}
 
 			RegistryLookup<Noise> noises = registries.lookupOrThrow(RTFRegistries.NOISE);
@@ -133,12 +121,6 @@ class MixinRandomState {
 			functions.get(RTFDensityFunctionTags.ADDITIONAL_NOISE_ROUTER_FUNCTIONS).ifPresent((set) -> {
 				set.forEach((function) -> function.value().mapAll(this.densityFunctionWrapper));
 			});
-
-			if((Object) this.sampler instanceof TBClimateSampler tbClimateSampler && TBCompat.isEnabled()) {
-				functions.get(TBNoiseRouterData.UNIQUENESS).ifPresent((uniqueness) -> {
-					tbClimateSampler.setUniqueness(uniqueness.value().mapAll(this.densityFunctionWrapper));
-				});
-			}
 
 			if (this.preset != null) {
 				PerformanceConfig config = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
@@ -162,12 +144,14 @@ class MixinRandomState {
 		return this.generatorContext;
 	}
 
+	public Noise reterraforged$RTFRandomState$seed(Noise noise) {
+		return Noises.shiftSeed(noise, (int) this.seed);
+	}
+
+	public long reterraforged$RTFRandomState$seed() { return this.seed;	}
+
 	@Nullable
 	public DensityFunction reterraforged$RTFRandomState$wrap(DensityFunction function) {
 		return this.densityFunctionWrapper != null ? function.mapAll(this.densityFunctionWrapper) : function;
-	}
-
-	public Noise reterraforged$RTFRandomState$seed(Noise noise) {
-		return Noises.shiftSeed(noise, (int) this.seed);
 	}
 }
