@@ -35,7 +35,7 @@ public class ClimateModule {
 	private Levels levels;
 	
 	public ClimateModule(Seed seed, Continent continent, WorldSettings.ControlPoints controlPoints, ClimateSettings climateSettings, Levels levels) {
-		int biomeSize = climateSettings.biomeShape.biomeSize;
+		int biomeSize = climateSettings.biomeShape.biomeSize();
 		
 		float tempScaler = (float) climateSettings.temperature.scale;
 		float moistScaler = climateSettings.moisture.scale * 2.5F;
@@ -142,14 +142,14 @@ public class ClimateModule {
 		cell.biome = BiomeType.get(cell.regionTemperature, cell.regionMoisture);
 		cell.regionTemperature = this.modifyTemp(cell.height, cell.regionTemperature, originalX, originalZ);
 
-        cell.temperature = cell.biome.getTemperature(cell.biomeRegionId);
-        cell.moisture = cell.biome.getMoisture(cell.biomeRegionId);
+		float queryTemp = this.temperature.compute(x, z, 0);
+		float queryMoist = this.moisture.compute(x, z, 0);
+		queryMoist = this.modifyMoisture(queryMoist, continentEdge);
+		queryTemp = this.modifyTemp(cell.height, queryTemp, originalX, originalZ);
+		cell.temperature = queryTemp * 2.0F - 1.0F;
+		cell.moisture = queryMoist * 2.0F - 1.0F;
 
-		// Mountain biome override: sample existing climate at terrain region center
-		// This keeps mountains in their correct climate zone while ensuring all cells
-		// within the same terrain region get the same biome
 		if (cell.terrain != null && cell.terrain.getCategory() == TerrainCategory.HIGHLAND) {
-			// Convert terrain region center to biome-frequency space for correct climate sampling
 			float mtnFreqX = cell.terrainRegionCenterX * this.biomeFreq;
 			float mtnFreqZ = cell.terrainRegionCenterZ * this.biomeFreq;
 
@@ -157,28 +157,23 @@ public class ClimateModule {
 			float mtnMoist = this.moisture.compute(mtnFreqX, mtnFreqZ, 0);
 			cell.biome = BiomeType.get(mtnTemp, mtnMoist);
 
-			// Keep cell.temperature/moisture consistent with the overridden biome
-			cell.temperature = cell.biome.getTemperature(cell.biomeRegionId);
-			cell.moisture = cell.biome.getMoisture(cell.biomeRegionId);
+			mtnMoist = this.modifyMoisture(mtnMoist, continentEdge);
+			mtnTemp = this.modifyTemp(cell.height, mtnTemp, originalX, originalZ);
+			cell.temperature = mtnTemp * 2.0F - 1.0F;
+			cell.moisture = mtnMoist * 2.0F - 1.0F;
 		}
 
-		// Island biome override: sample climate for island terrain so islands
-		// get land biomes instead of ocean/frozen_ocean
 		if (cell.terrain == TerrainType.ISLAND_BEACH || cell.terrain == TerrainType.ISLAND || cell.terrain == TerrainType.ISLAND_MOUNTAINS) {
 
 			if (madeMushroomIslands(cell)){ return; }
 
-			if (cell.terrain == TerrainType.ISLAND_BEACH) {
-				cell.biome = BiomeType.SAVANNA;
-				cell.temperature = Temperature.LEVEL_3.mid();
-				cell.moisture = Humidity.LEVEL_1.mid();
-			} else {
-				float islTemp = this.temperature.compute(centerX, centerZ, 0);
-				float islMoist = this.moisture.compute(centerX, centerZ, 0);
-				cell.biome = BiomeType.get(islTemp, islMoist);
-				cell.temperature = cell.biome.getTemperature(cell.biomeRegionId);
-				cell.moisture = cell.biome.getMoisture(cell.biomeRegionId);
-			}
+			float islTemp = this.temperature.compute(centerX, centerZ, 0);
+			float islMoist = this.moisture.compute(centerX, centerZ, 0);
+			cell.biome = BiomeType.get(islTemp, islMoist);
+			islMoist = this.modifyMoisture(islMoist, continentEdge);
+			islTemp = this.modifyTemp(cell.height, islTemp, originalX, originalZ);
+			cell.temperature = islTemp * 2.0F - 1.0F;
+			cell.moisture = islMoist * 2.0F - 1.0F;
 		}
 	}
 

@@ -1,11 +1,11 @@
 package raccoonman.reterraforged.mixin.terrablender;
 
-import java.lang.reflect.Array;
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -27,9 +27,8 @@ import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.registries.RTFRegistries;
 import raccoonman.reterraforged.world.worldgen.biome.ClimateParameterListComposition;
 import raccoonman.reterraforged.world.worldgen.biome.UndergroundBiomeBanding;
-import raccoonman.reterraforged.world.worldgen.terrablender.TBTargetPoint;
+import raccoonman.reterraforged.world.worldgen.biome.UndergroundBiomeTags;
 import raccoonman.reterraforged.world.worldgen.terrablender.TerraBlenderParameterList;
-import raccoonman.reterraforged.world.worldgen.terrablender.TerraBlenderRegionSelector;
 import terrablender.api.Region;
 import terrablender.api.RegionType;
 import terrablender.api.Regions;
@@ -47,6 +46,8 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 	@Unique
 	private Preset reterraforged$bandingPreset;
 	@Unique
+	private long reterraforged$bandingSeed;
+	@Unique
 	private List<Pair<Climate.ParameterPoint, T>> reterraforged$baseEntries;
 	@Unique
 	private List<List<Pair<Climate.ParameterPoint, T>>> reterraforged$pendingRegionalEntries;
@@ -55,9 +56,19 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 	@Unique
 	private volatile List<Pair<Climate.ParameterPoint, T>> reterraforged$composedValuesReference;
 	@Unique
-	private volatile List<Climate.ParameterList<T>> reterraforged$composedOriginalTrees;
+	private volatile ClimateParameterListComposition.Snapshot<T> reterraforged$compositionSnapshot;
 	@Unique
-	private volatile List<UndergroundBiomeBanding.Layout<T>> reterraforged$bandedTrees;
+	private volatile List<Climate.ParameterList<T>> reterraforged$regionalSurfaceTrees;
+	@Unique
+	private volatile List<UndergroundBiomeBanding.Layout<T>> reterraforged$regionalBanding;
+	@Unique
+	private volatile List<T> reterraforged$shallowCandidateValues;
+	@Unique
+	private volatile List<T> reterraforged$deepCandidateValues;
+	@Unique
+	private volatile int reterraforged$replacedCaveSlotCount;
+	@Unique
+	private volatile String reterraforged$compositionFallbackReason;
 	@Unique
 	private boolean reterraforged$bandingInitialized;
 
@@ -78,12 +89,18 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 			this.reterraforged$regionalEntries = new ArrayList<>();
 		}
 		this.reterraforged$bandingPreset = null;
+		this.reterraforged$bandingSeed = seed;
 		this.reterraforged$baseEntries = List.copyOf(this.values);
 		this.reterraforged$pendingRegionalEntries.clear();
 		this.reterraforged$regionalEntries.clear();
 		this.reterraforged$composedValuesReference = null;
-		this.reterraforged$composedOriginalTrees = List.of();
-		this.reterraforged$bandedTrees = List.of();
+		this.reterraforged$compositionSnapshot = null;
+		this.reterraforged$regionalSurfaceTrees = List.of();
+		this.reterraforged$regionalBanding = List.of();
+		this.reterraforged$shallowCandidateValues = List.of();
+		this.reterraforged$deepCandidateValues = List.of();
+		this.reterraforged$replacedCaveSlotCount = 0;
+		this.reterraforged$compositionFallbackReason = null;
 		if (regionType == RegionType.OVERWORLD) {
 			registryAccess.lookup(RTFRegistries.PRESET)
 				.flatMap(registry -> registry.get(Preset.KEY))
@@ -133,27 +150,29 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 			return;
 		}
 		if (this.reterraforged$bandingPreset == null) {
+			this.reterraforged$compositionFallbackReason = "missing_overworld_preset";
 			this.reterraforged$bandingInitialized = true;
 			return;
 		}
 
 		try {
-			Field uniqueTreesField = this.getClass().getDeclaredField("uniqueTrees");
-			uniqueTreesField.setAccessible(true);
-			Object uniqueTrees = uniqueTreesField.get(this);
-			int pendingIndex = 0;
-
-			for (int index = 0; index < Array.getLength(uniqueTrees); index++) {
-				this.reterraforged$regionalEntries.add(
-					Array.get(uniqueTrees, index) == null
-						? null
-						: this.reterraforged$pendingRegionalEntries.get(pendingIndex++)
+			int treeCount = this.getTreeCount();
+			int capturedCount = this.reterraforged$pendingRegionalEntries.size();
+			if (capturedCount != treeCount) {
+				this.reterraforged$regionalEntries.clear();
+				this.reterraforged$compositionFallbackReason = "capture_count_mismatch";
+				RTFCommon.LOGGER.error(
+					"TerraBlender region tree count ({}) does not match captured regional entry sets ({}); underground banding disabled",
+					treeCount, capturedCount
 				);
+			} else {
+				this.reterraforged$regionalEntries.addAll(this.reterraforged$pendingRegionalEntries);
 			}
-		} catch (ReflectiveOperationException | RuntimeException exception) {
+		} catch (RuntimeException exception) {
 			this.reterraforged$regionalEntries.clear();
+			this.reterraforged$compositionFallbackReason = "capture_exception";
 			RTFCommon.LOGGER.error(
-				"Failed to capture TerraBlender biome entries; preserving TerraBlender's original biome trees",
+				"Failed to capture TerraBlender biome entries; underground banding disabled",
 				exception
 			);
 		} finally {
@@ -175,65 +194,169 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 		int z,
 		CallbackInfoReturnable<T> callback
 	) {
-		Selection<T> selection = this.reterraforged$select(targetPoint, x, y, z);
-		if (selection != null) {
-			callback.setReturnValue(selection.banded());
+		T banded = this.reterraforged$selectBanded(targetPoint, x, y, z, null, false);
+		if (banded != null) {
+			callback.setReturnValue(banded);
 		}
 	}
 
 	@Override
 	public T reterraforged$applyUndergroundBanding(Climate.TargetPoint targetPoint, int x, int y, int z, T selected) {
-		Selection<T> selection = this.reterraforged$select(targetPoint, x, y, z);
-		if (selection == null || !Objects.equals(selected, selection.original())) {
-			return selected;
-		}
-		return selection.banded();
+		T banded = this.reterraforged$selectBanded(targetPoint, x, y, z, selected, true);
+		return banded == null ? selected : banded;
 	}
 
 	@Unique
-	private Selection<T> reterraforged$select(Climate.TargetPoint targetPoint, int x, int y, int z) {
+	private T reterraforged$selectBanded(
+		Climate.TargetPoint targetPoint,
+		int x,
+		int y,
+		int z,
+		T requiredOriginal,
+		boolean requireOriginalMatch
+	) {
 		if (this.reterraforged$bandingPreset == null || !this.reterraforged$ensureComposedTrees()) {
 			return null;
 		}
-
-		int treeIndex = this.reterraforged$getUniqueness(targetPoint, x, y, z);
-		if (treeIndex < 0 || treeIndex >= this.reterraforged$bandedTrees.size()) {
+		int treeIndex;
+		try {
+			treeIndex = this.reterraforged$getUniqueness(targetPoint, x, y, z);
+		} catch (RuntimeException exception) {
 			return null;
 		}
-		UndergroundBiomeBanding.Layout<T> banding = this.reterraforged$bandedTrees.get(treeIndex);
-		Climate.ParameterList<T> original = this.reterraforged$composedOriginalTrees.get(treeIndex);
-		if (banding == null || original == null) {
+		ClimateParameterListComposition.Snapshot<T> snapshot = this.reterraforged$compositionSnapshot;
+		List<Climate.ParameterList<T>> surfaceTrees = this.reterraforged$regionalSurfaceTrees;
+		List<UndergroundBiomeBanding.Layout<T>> bandingTrees = this.reterraforged$regionalBanding;
+		if (snapshot == null || !snapshot.usableForRegion(treeIndex)
+			|| treeIndex >= surfaceTrees.size() || treeIndex >= bandingTrees.size()) {
 			return null;
+		}
+
+		Climate.ParameterList<T> original = surfaceTrees.get(treeIndex);
+		UndergroundBiomeBanding.Layout<T> banding = bandingTrees.get(treeIndex);
+		if (original == null || banding == null) {
+			return null;
+		}
+		T originalValue = original.findValue(targetPoint);
+		if (reterraforged$isDeferredPlaceholder(originalValue)) {
+			Climate.ParameterList<T> defaultTree = surfaceTrees.getFirst();
+			if (defaultTree == null) {
+				return null;
+			}
+			originalValue = defaultTree.findValue(targetPoint);
+		}
+		if (reterraforged$isDeferredPlaceholder(originalValue)
+			|| (requireOriginalMatch && !Objects.equals(requiredOriginal, originalValue))) {
+			return null;
+		}
+		T bandedValue = banding.appliesAt(targetPoint) ? banding.findValue(targetPoint, x, z) : originalValue;
+		return reterraforged$isDeferredPlaceholder(bandedValue) ? null : bandedValue;
+	}
+
+	@Override
+	public TerraBlenderParameterList.SelectionDiagnostics<T> reterraforged$inspectSelection(
+		Climate.TargetPoint targetPoint,
+		int x,
+		int y,
+		int z
+	) {
+		if (this.reterraforged$bandingPreset == null || !this.reterraforged$ensureComposedTrees()) {
+			return new TerraBlenderParameterList.SelectionDiagnostics<>(
+				-1, null, null, this.reterraforged$fallbackReason("composition_unavailable")
+			);
+		}
+
+		int treeIndex;
+		try {
+			treeIndex = this.reterraforged$getUniqueness(targetPoint, x, y, z);
+		} catch (RuntimeException exception) {
+			return new TerraBlenderParameterList.SelectionDiagnostics<>(-1, null, null, "region_selection_exception");
+		}
+		ClimateParameterListComposition.Snapshot<T> snapshot = this.reterraforged$compositionSnapshot;
+		if (snapshot == null || !snapshot.usableForRegion(treeIndex)) {
+			return new TerraBlenderParameterList.SelectionDiagnostics<>(treeIndex, null, null, "invalid_selected_region");
+		}
+		List<Climate.ParameterList<T>> surfaceTrees = this.reterraforged$regionalSurfaceTrees;
+		List<UndergroundBiomeBanding.Layout<T>> bandingTrees = this.reterraforged$regionalBanding;
+		if (treeIndex >= surfaceTrees.size() || treeIndex >= bandingTrees.size()) {
+			return new TerraBlenderParameterList.SelectionDiagnostics<>(treeIndex, null, null, "missing_composed_index");
+		}
+		UndergroundBiomeBanding.Layout<T> banding = bandingTrees.get(treeIndex);
+		Climate.ParameterList<T> original = surfaceTrees.get(treeIndex);
+		if (banding == null || original == null) {
+			return new TerraBlenderParameterList.SelectionDiagnostics<>(treeIndex, null, null, "missing_regional_index");
 		}
 
 		T originalValue = original.findValue(targetPoint);
 		if (reterraforged$isDeferredPlaceholder(originalValue)) {
-			Climate.ParameterList<T> defaultOriginal = this.reterraforged$composedOriginalTrees.getFirst();
-			if (defaultOriginal == null) {
-				return null;
+			Climate.ParameterList<T> defaultTree = surfaceTrees.getFirst();
+			if (defaultTree == null) {
+				return new TerraBlenderParameterList.SelectionDiagnostics<>(treeIndex, null, null, "missing_default_index");
 			}
-			originalValue = defaultOriginal.findValue(targetPoint);
+			originalValue = defaultTree.findValue(targetPoint);
+			if (reterraforged$isDeferredPlaceholder(originalValue)) {
+				return new TerraBlenderParameterList.SelectionDiagnostics<>(treeIndex, null, null, "deferred_surface_winner");
+			}
 		}
 
 		T bandedValue = banding.appliesAt(targetPoint)
-			? banding.findValue(targetPoint)
+			? banding.findValue(targetPoint, x, z)
 			: originalValue;
 		if (reterraforged$isDeferredPlaceholder(bandedValue)) {
-			UndergroundBiomeBanding.Layout<T> defaultBanding = this.reterraforged$bandedTrees.getFirst();
-			Climate.ParameterList<T> defaultOriginal = this.reterraforged$composedOriginalTrees.getFirst();
-			if (defaultBanding == null || defaultOriginal == null) {
-				return null;
-			}
-			bandedValue = defaultBanding.appliesAt(targetPoint)
-				? defaultBanding.findValue(targetPoint)
-				: defaultOriginal.findValue(targetPoint);
+			return new TerraBlenderParameterList.SelectionDiagnostics<>(treeIndex, originalValue, null, "deferred_banded_winner");
 		}
-		return new Selection<>(originalValue, bandedValue);
+		return new TerraBlenderParameterList.SelectionDiagnostics<>(treeIndex, originalValue, bandedValue, null);
+	}
+
+	@Override
+	public TerraBlenderParameterList.CompositionDiagnostics<T> reterraforged$getCompositionDiagnostics() {
+		if (this.reterraforged$bandingInitialized) {
+			this.reterraforged$ensureComposedTrees();
+		}
+		ClimateParameterListComposition.Snapshot<T> snapshot = this.reterraforged$compositionSnapshot;
+		if (snapshot == null) {
+			return new TerraBlenderParameterList.CompositionDiagnostics<>(
+				this.reterraforged$regionalEntries == null ? 0 : this.reterraforged$regionalEntries.size(),
+				this.reterraforged$regionalEntries == null
+					? List.of()
+					: this.reterraforged$regionalEntries.stream().map(entries -> entries == null ? -1 : entries.size()).toList(),
+				0, 0, 0, 0, 0, List.of(), 0, 0, 0, 0, List.of(), List.of(), 0, 0,
+				this.reterraforged$fallbackReason("composition_not_built")
+			);
+		}
+		return new TerraBlenderParameterList.CompositionDiagnostics<>(
+			snapshot.effectiveRegions().size(),
+			snapshot.effectiveRegions().stream().map(List::size).toList(),
+			snapshot.canonicalEntries().size(),
+			snapshot.duplicateEntryCount(),
+			snapshot.globalAdditions().size(),
+			snapshot.excludedEntryCount(),
+			snapshot.invalidEntryCount(),
+			snapshot.invalidRegions().stream().sorted().toList(),
+			snapshot.alternativePointCount(),
+			this.reterraforged$replacedCaveSlotCount,
+			this.reterraforged$shallowCandidateValues.size(),
+			this.reterraforged$deepCandidateValues.size(),
+			this.reterraforged$shallowCandidateValues,
+			this.reterraforged$deepCandidateValues,
+			0,
+			0,
+			this.reterraforged$compositionFallbackReason
+		);
+	}
+
+	@Unique
+	private String reterraforged$fallbackReason(String defaultReason) {
+		return this.reterraforged$compositionFallbackReason == null
+			? defaultReason
+			: this.reterraforged$compositionFallbackReason;
 	}
 
 	@Inject(method = "getTree", at = @At("HEAD"), require = 1)
 	private void reterraforged$composeBeforeTreeLookup(int uniqueness, CallbackInfoReturnable<Climate.RTree<T>> callback) {
-		this.reterraforged$ensureComposedTrees();
+		if (this.reterraforged$bandingInitialized) {
+			this.reterraforged$ensureComposedTrees();
+		}
 	}
 
 	@Inject(method = "getUniqueness", at = @At("HEAD"), cancellable = true, require = 1)
@@ -247,57 +370,118 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 	private boolean reterraforged$ensureComposedTrees() {
 		List<Pair<Climate.ParameterPoint, T>> currentValues = this.values;
 		if (this.reterraforged$composedValuesReference == currentValues) {
-			return this.reterraforged$bandedTrees != null && !this.reterraforged$bandedTrees.isEmpty();
+			return this.reterraforged$compositionSnapshot != null
+				&& this.reterraforged$compositionSnapshot.usable()
+				&& !this.reterraforged$regionalSurfaceTrees.isEmpty()
+				&& !this.reterraforged$regionalBanding.isEmpty();
 		}
 
 		synchronized (this) {
 			currentValues = this.values;
 			if (this.reterraforged$composedValuesReference == currentValues) {
-				return this.reterraforged$bandedTrees != null && !this.reterraforged$bandedTrees.isEmpty();
+				return this.reterraforged$compositionSnapshot != null
+					&& this.reterraforged$compositionSnapshot.usable()
+					&& !this.reterraforged$regionalSurfaceTrees.isEmpty()
+					&& !this.reterraforged$regionalBanding.isEmpty();
 			}
 			if (this.reterraforged$regionalEntries.isEmpty()) {
+				this.reterraforged$compositionFallbackReason = this.reterraforged$fallbackReason("no_captured_regions");
 				this.reterraforged$composedValuesReference = currentValues;
 				return false;
 			}
 
 			try {
-				List<Pair<Climate.ParameterPoint, T>> globalAdditions = ClimateParameterListComposition.additions(
+				ClimateParameterListComposition.Snapshot<T> snapshot = ClimateParameterListComposition.snapshot(
 					this.reterraforged$baseEntries,
-					currentValues
+					currentValues,
+					this.reterraforged$regionalEntries,
+					MixinParameterList::reterraforged$isDeferredPlaceholder
 				);
-				List<Climate.ParameterList<T>> originalTrees = new ArrayList<>(this.reterraforged$regionalEntries.size());
-				List<UndergroundBiomeBanding.Layout<T>> bandedTrees = new ArrayList<>(this.reterraforged$regionalEntries.size());
-				List<Climate.RTree<T>> regionalTrees = new ArrayList<>(this.reterraforged$regionalEntries.size());
-
-				for (int index = 0; index < this.reterraforged$regionalEntries.size(); index++) {
-					List<Pair<Climate.ParameterPoint, T>> regional = this.reterraforged$regionalEntries.get(index);
-					if (regional == null) {
-						originalTrees.add(null);
-						bandedTrees.add(null);
-						regionalTrees.add(null);
-						continue;
-					}
-					List<Pair<Climate.ParameterPoint, T>> effectiveEntries = index == 0
-						? List.copyOf(currentValues)
-						: ClimateParameterListComposition.append(regional, globalAdditions);
-					originalTrees.add(new Climate.ParameterList<>(effectiveEntries));
-					bandedTrees.add(UndergroundBiomeBanding.apply(this.reterraforged$bandingPreset, effectiveEntries));
-					regionalTrees.add(Climate.RTree.create(effectiveEntries));
+				if (!snapshot.usable()) {
+					this.reterraforged$compositionSnapshot = snapshot;
+					this.reterraforged$regionalSurfaceTrees = List.of();
+					this.reterraforged$regionalBanding = List.of();
+					this.reterraforged$compositionFallbackReason = snapshot.fallbackReason();
+					this.reterraforged$composedValuesReference = currentValues;
+					RTFCommon.LOGGER.error(
+						"TerraBlender composition unavailable ({}); preserving original biome selection",
+						snapshot.fallbackReason()
+					);
+					return false;
 				}
 
-				this.reterraforged$composedOriginalTrees = Collections.unmodifiableList(originalTrees);
-				this.reterraforged$bandedTrees = Collections.unmodifiableList(bandedTrees);
-				this.reterraforged$replaceRegionalTrees(regionalTrees);
+				List<Climate.ParameterList<T>> surfaceTrees = new ArrayList<>(this.reterraforged$regionalEntries.size());
+				List<UndergroundBiomeBanding.Layout<T>> bandingTrees = new ArrayList<>(this.reterraforged$regionalEntries.size());
+				Set<T> shallowCandidates = new LinkedHashSet<>();
+				Set<T> deepCandidates = new LinkedHashSet<>();
+				int replacedCaveSlots = 0;
+
+				for (int index = 0; index < this.reterraforged$regionalEntries.size(); index++) {
+					List<Pair<Climate.ParameterPoint, T>> captured = this.reterraforged$regionalEntries.get(index);
+					if (captured == null) {
+						surfaceTrees.add(null);
+						bandingTrees.add(null);
+						continue;
+					}
+
+					List<Pair<Climate.ParameterPoint, T>> effectiveEntries = index == 0
+						? Collections.unmodifiableList(new ArrayList<>(currentValues))
+						: ClimateParameterListComposition.append(captured, snapshot.globalAdditions());
+					ClimateParameterListComposition.CandidateOverlay<T> overlay =
+						ClimateParameterListComposition.overlayUndergroundCandidates(
+							currentValues,
+							index == 0 ? List.of() : captured,
+							snapshot.globalAdditions(),
+							(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value)),
+							MixinParameterList::reterraforged$isDeferredPlaceholder
+						);
+					if (!overlay.usable()) {
+						surfaceTrees.add(null);
+						bandingTrees.add(null);
+						continue;
+					}
+
+					UndergroundBiomeBanding.Layout<T> layout = UndergroundBiomeBanding.apply(
+						this.reterraforged$bandingPreset,
+						overlay.entries(),
+						this.reterraforged$bandingSeed,
+						(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value))
+					);
+					surfaceTrees.add(new Climate.ParameterList<>(effectiveEntries));
+					bandingTrees.add(layout);
+					shallowCandidates.addAll(layout.shallowCandidateValues());
+					deepCandidates.addAll(layout.deepCandidateValues());
+					replacedCaveSlots += overlay.replacedDefaultSlotCount();
+				}
+
+				this.reterraforged$compositionSnapshot = snapshot;
+				this.reterraforged$regionalSurfaceTrees = Collections.unmodifiableList(surfaceTrees);
+				this.reterraforged$regionalBanding = Collections.unmodifiableList(bandingTrees);
+				this.reterraforged$shallowCandidateValues = List.copyOf(shallowCandidates);
+				this.reterraforged$deepCandidateValues = List.copyOf(deepCandidates);
+				this.reterraforged$replacedCaveSlotCount = replacedCaveSlots;
+				this.reterraforged$compositionFallbackReason = null;
 				this.reterraforged$composedValuesReference = currentValues;
 				RTFCommon.LOGGER.info(
-					"Composed TerraBlender underground biome trees: {} regions, {} late global parameter points",
-					bandedTrees.stream().filter(tree -> tree != null).count(),
-					globalAdditions.size()
+					"Composed TerraBlender biome snapshot: {} weighted regional surface trees ({} invalid), {} diagnostic canonical entries ({} exact duplicates), {} late global entries, {} regional cave-slot replacements, {} shallow / {} deep-stage cave variants",
+					snapshot.effectiveRegions().size(),
+					snapshot.invalidRegions().size(),
+					snapshot.canonicalEntries().size(),
+					snapshot.duplicateEntryCount(),
+					snapshot.globalAdditions().size(),
+					replacedCaveSlots,
+					shallowCandidates.size(),
+					deepCandidates.size()
 				);
 				return true;
-			} catch (ReflectiveOperationException | RuntimeException exception) {
-				this.reterraforged$composedOriginalTrees = List.of();
-				this.reterraforged$bandedTrees = List.of();
+			} catch (RuntimeException exception) {
+				this.reterraforged$compositionSnapshot = null;
+				this.reterraforged$regionalSurfaceTrees = List.of();
+				this.reterraforged$regionalBanding = List.of();
+				this.reterraforged$shallowCandidateValues = List.of();
+				this.reterraforged$deepCandidateValues = List.of();
+				this.reterraforged$replacedCaveSlotCount = 0;
+				this.reterraforged$compositionFallbackReason = "composition_exception";
 				this.reterraforged$composedValuesReference = currentValues;
 				RTFCommon.LOGGER.error(
 					"Failed to compose TerraBlender underground biome trees; preserving TerraBlender's original biome trees",
@@ -309,26 +493,9 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 	}
 
 	@Unique
-	private void reterraforged$replaceRegionalTrees(List<Climate.RTree<T>> regionalTrees) throws ReflectiveOperationException {
-		Field uniqueTreesField = this.getClass().getDeclaredField("uniqueTrees");
-		uniqueTreesField.setAccessible(true);
-		Object uniqueTrees = uniqueTreesField.get(this);
-		int count = Math.min(Array.getLength(uniqueTrees), regionalTrees.size());
-		for (int index = 0; index < count; index++) {
-			Climate.RTree<T> tree = regionalTrees.get(index);
-			if (tree != null) {
-				Array.set(uniqueTrees, index, tree);
-			}
-		}
-	}
-
-	@Unique
 	private static boolean reterraforged$isDeferredPlaceholder(Object value) {
 		return value instanceof Holder<?> holder
 			&& holder.unwrapKey().filter(Region.DEFERRED_PLACEHOLDER::equals).isPresent();
-	}
-
-	private record Selection<T>(T original, T banded) {
 	}
 
 	@Redirect(
@@ -345,20 +512,19 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 
 	@Unique
 	private int reterraforged$getUniqueness(Climate.TargetPoint targetPoint, int x, int y, int z) {
-		if ((Object) targetPoint instanceof TBTargetPoint tbTargetPoint) {
-			return TerraBlenderRegionSelector.select(
-				this.maxIndex,
-				tbTargetPoint.getUniqueness(),
-				() -> this.getUniqueness(x, y, z)
-			);
-		} else {
-			throw new IllegalStateException();
-		}
+		// TerraBlender's initialized uniqueness area owns coherent region shape and weighting.
+		// FTF climate values select a biome inside that region; they must not replace the region API.
+		return this.getUniqueness(x, y, z);
 	}
 
 	@Override
 	public boolean reterraforged$isTerraBlenderInitialized() {
 		return this.reterraforged$bandingInitialized;
+	}
+
+	@Shadow
+	public int getTreeCount() {
+		throw new UnsupportedOperationException();
 	}
 
 	@Shadow

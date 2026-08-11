@@ -23,7 +23,6 @@ import net.minecraft.world.level.levelgen.synth.NormalNoise;
 import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.concurrent.ThreadPools;
 import raccoonman.reterraforged.config.PerformanceConfig;
-import raccoonman.reterraforged.data.worldgen.compat.terrablender.TBNoiseRouterData;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.registries.RTFRegistries;
 import raccoonman.reterraforged.tags.RTFDensityFunctionTags;
@@ -36,8 +35,6 @@ import raccoonman.reterraforged.world.worldgen.densityfunction.NoiseFunction;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noises;
 import raccoonman.reterraforged.world.worldgen.biome.RTFClimateSampler;
-import raccoonman.reterraforged.world.worldgen.terrablender.TBClimateSampler;
-import raccoonman.reterraforged.world.worldgen.terrablender.TBCompat;
 
 @Mixin(RandomState.class)
 @Implements(@Interface(iface = RTFRandomState.class, prefix = "reterraforged$RTFRandomState$"))
@@ -123,7 +120,7 @@ class MixinRandomState {
 		// if the base router mapping verified that this instance is actually an RTF worldgen dimension.
 		if (this.reterraforged$isRTFDimension) {
 			if (this.preset != null && (Object) this.sampler instanceof RTFClimateSampler rtfClimateSampler) {
-				rtfClimateSampler.setUndergroundBiomeBandingPreset(this.preset);
+				rtfClimateSampler.setUndergroundBiomeBandingPreset(this.preset, this.seed);
 			}
 
 			RegistryLookup<Noise> noises = registries.lookupOrThrow(RTFRegistries.NOISE);
@@ -132,12 +129,6 @@ class MixinRandomState {
 			functions.get(RTFDensityFunctionTags.ADDITIONAL_NOISE_ROUTER_FUNCTIONS).ifPresent((set) -> {
 				set.forEach((function) -> function.value().mapAll(this.densityFunctionWrapper));
 			});
-
-			if((Object) this.sampler instanceof TBClimateSampler tbClimateSampler && TBCompat.isEnabled()) {
-				functions.get(TBNoiseRouterData.UNIQUENESS).ifPresent((uniqueness) -> {
-					tbClimateSampler.setUniqueness(uniqueness.value().mapAll(this.densityFunctionWrapper));
-				});
-			}
 
 			if (this.preset != null) {
 				PerformanceConfig config = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
@@ -156,6 +147,10 @@ class MixinRandomState {
 	@Nullable
 	public GeneratorContext reterraforged$RTFRandomState$generatorContext() {
 		return this.generatorContext;
+	}
+
+	public long reterraforged$RTFRandomState$seed() {
+		return this.seed;
 	}
 
 	@Nullable

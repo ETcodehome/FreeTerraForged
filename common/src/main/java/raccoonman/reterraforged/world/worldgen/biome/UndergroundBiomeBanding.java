@@ -6,14 +6,17 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiFunction;
 
 import com.mojang.datafixers.util.Pair;
 
+import net.minecraft.core.QuartPos;
 import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.levelgen.NoiseRouterData;
 import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings;
+import raccoonman.reterraforged.world.worldgen.noise.module.Simplex;
 
 /**
  * Redistributes convention-following underground biomes through the usable world depth.
@@ -35,6 +38,7 @@ public final class UndergroundBiomeBanding {
 	private static final int DEFAULT_WORLD_DEPTH = 64;
 	private static final int DEFAULT_WORLD_HEIGHT = 256;
 	private static final int MAX_BAND_COUNT = 32;
+	private static final int HORIZONTAL_PHASE_SEED_SALT = 0x6E624EB7;
 	static final int MAX_SURFACE_BUFFER_BLOCKS = 24;
 	private static final float DEFAULT_DYNAMIC_STAGE_BLOCKS =
 		DEFAULT_WORLD_DEPTH + DEFAULT_WORLD_HEIGHT - VANILLA_BOTTOM_DEPTH / DEPTH_UNITS_PER_BLOCK;
@@ -47,14 +51,47 @@ public final class UndergroundBiomeBanding {
 	}
 
 	public static <T> Layout<T> apply(Preset preset, List<Pair<Climate.ParameterPoint, T>> entries) {
+		return apply(preset, entries, 0L, (point, value) -> classify(point, false));
+	}
+
+	public static <T> Layout<T> apply(Preset preset, List<Pair<Climate.ParameterPoint, T>> entries, long seed) {
+		return apply(preset, entries, seed, (point, value) -> classify(point, false));
+	}
+
+	public static <T> Layout<T> apply(
+		Preset preset,
+		List<Pair<Climate.ParameterPoint, T>> entries,
+		BiFunction<Climate.ParameterPoint, T, CandidateRole> classifier
+	) {
+		return apply(preset, entries, 0L, classifier);
+	}
+
+	public static <T> Layout<T> apply(
+		Preset preset,
+		List<Pair<Climate.ParameterPoint, T>> entries,
+		long seed,
+		BiFunction<Climate.ParameterPoint, T, CandidateRole> classifier
+	) {
 		Map<T, Candidate<T>> candidates = new LinkedHashMap<>();
+		int unknownEntryCount = 0;
+		int classificationFailureCount = 0;
 		for (Pair<Climate.ParameterPoint, T> entry : entries) {
 			Climate.ParameterPoint point = entry.getFirst();
-			if (!isVanillaConventionUnderground(point)) {
+			CandidateRole role;
+			try {
+				role = classifier.apply(point, entry.getSecond());
+			} catch (RuntimeException exception) {
+				classificationFailureCount++;
+				continue;
+			}
+			if (role != CandidateRole.SHALLOW_CAVE && role != CandidateRole.DEEP_CAVE) {
+				if (role == CandidateRole.UNKNOWN) {
+					unknownEntryCount++;
+				}
 				continue;
 			}
 			Candidate<T> candidate = candidates.computeIfAbsent(entry.getSecond(), Candidate::new);
-			if (point.depth().equals(VANILLA_UNDERGROUND_DEPTH)) {
+			if (role == CandidateRole.SHALLOW_CAVE) {
 				candidate.addShallow(point);
 			} else {
 				candidate.addBottom(point);
@@ -63,7 +100,7 @@ public final class UndergroundBiomeBanding {
 
 		Climate.ParameterList<T> original = new Climate.ParameterList<>(entries);
 		if (candidates.size() < 2) {
-			return Layout.unmodified(original);
+			return Layout.unmodified(original, candidates, unknownEntryCount, classificationFailureCount);
 		}
 
 		List<StageCandidate<T>> shallowCandidates = candidates.values().stream()
@@ -81,15 +118,15 @@ public final class UndergroundBiomeBanding {
 		int shallowBandCount = bandCount(preset, shallowCandidates.size(), bandingStart, shallowEnd);
 		int deepBandCount = bandCount(preset, deepCandidates.size(), VANILLA_BOTTOM_DEPTH, endDepth);
 		if (shallowBandCount == 0 && deepBandCount == 0) {
-			return Layout.unmodified(original);
+			return Layout.unmodified(original, candidates, unknownEntryCount, classificationFailureCount);
 		}
 
 		Stage<T> shallowStage = shallowBandCount == 0
 			? null
-			: new Stage<>(shallowCandidates, bandingStart, shallowEnd, shallowBandCount, true);
+			: new Stage<>(shallowCandidates, bandingStart, shallowEnd, shallowBandCount, true, preset.climate().biomeShape.undergroundBiomeSize(), seed);
 		Stage<T> deepStage = deepBandCount == 0
 			? null
-			: new Stage<>(deepCandidates, VANILLA_BOTTOM_DEPTH, endDepth, deepBandCount, shallowStage == null);
+			: new Stage<>(deepCandidates, VANILLA_BOTTOM_DEPTH, endDepth, deepBandCount, shallowStage == null, preset.climate().biomeShape.undergroundBiomeSize(), seed);
 
 		RTFCommon.LOGGER.info(
 			"Applied staged underground biome rotation: {} shallow candidates / {} bands, {} total deep-stage candidates ({} bottom-role) / {} bands, surface buffer {} blocks, depth {}..{}, {} source parameter points",
@@ -108,13 +145,67 @@ public final class UndergroundBiomeBanding {
 			shallowStage,
 			deepStage,
 			Climate.quantizeCoord(bandingStart),
-			Climate.quantizeCoord(VANILLA_BOTTOM_DEPTH)
+			Climate.quantizeCoord(VANILLA_BOTTOM_DEPTH),
+			shallowCandidates.size(),
+			deepCandidates.size(),
+			unknownEntryCount,
+			classificationFailureCount,
+			shallowCandidates.stream().map(StageCandidate::value).toList(),
+			deepCandidates.stream().map(StageCandidate::value).toList()
 		);
 	}
 
-	public static double undergroundNoiseScale(Preset preset) {
-		int biomeSize = Math.max(1, preset.climate().biomeShape.biomeSize);
-		return 0.25D * DEFAULT_BIOME_SIZE / biomeSize;
+	/**
+	 * Classifies an entry from its vertical registration shape. Horizontal axes, including
+	 * weirdness, deliberately do not decide whether an otherwise conventional cave is eligible.
+	 * A common cave tag can corroborate a nonstandard positive-depth shape, but cannot turn a
+	 * surface registration into a cave.
+	 */
+	public static CandidateRole classify(Climate.ParameterPoint point, boolean caveTagged) {
+		if (!isWellFormed(point)) {
+			return CandidateRole.UNKNOWN;
+		}
+		Climate.Parameter depth = point.depth();
+		if (depth.equals(VANILLA_UNDERGROUND_DEPTH)) {
+			return CandidateRole.SHALLOW_CAVE;
+		}
+		if (depth.equals(VANILLA_BOTTOM)) {
+			return CandidateRole.DEEP_CAVE;
+		}
+
+		long surface = Climate.quantizeCoord(0.0F);
+		long bottom = Climate.quantizeCoord(VANILLA_BOTTOM_DEPTH);
+		if (depth.max() <= surface) {
+			return CandidateRole.SURFACE;
+		}
+		if (caveTagged && depth.min() > surface) {
+			return depth.min() >= bottom ? CandidateRole.DEEP_CAVE : CandidateRole.SHALLOW_CAVE;
+		}
+		return CandidateRole.UNKNOWN;
+	}
+
+	private static boolean isWellFormed(Climate.ParameterPoint point) {
+		return point != null
+			&& isWellFormed(point.temperature())
+			&& isWellFormed(point.humidity())
+			&& isWellFormed(point.continentalness())
+			&& isWellFormed(point.erosion())
+			&& isWellFormed(point.depth())
+			&& isWellFormed(point.weirdness());
+	}
+
+	private static boolean isWellFormed(Climate.Parameter parameter) {
+		return parameter != null && parameter.min() <= parameter.max();
+	}
+
+	static float horizontalPhase(Preset preset, long seed, int quartX, int quartZ) {
+		return horizontalPhase(preset.climate().biomeShape.undergroundBiomeSize(), seed, quartX, quartZ);
+	}
+
+	private static float horizontalPhase(int biomeSize, long seed, int quartX, int quartZ) {
+		float x = (float) QuartPos.toBlock(quartX) / biomeSize;
+		float z = (float) QuartPos.toBlock(quartZ) / biomeSize;
+		return Math.clamp(Simplex.sample(x, z, (int) seed + HORIZONTAL_PHASE_SEED_SALT) * 0.5F + 0.5F, 0.0F, 1.0F);
 	}
 
 	static int bandCount(Preset preset, int candidateCount, float startDepth, float endDepth) {
@@ -123,7 +214,7 @@ public final class UndergroundBiomeBanding {
 		}
 		float stageBlocks = (endDepth - startDepth) / DEPTH_UNITS_PER_BLOCK;
 		float verticalScale = (float) Math.sqrt(Math.max(1.0F, stageBlocks) / DEFAULT_DYNAMIC_STAGE_BLOCKS);
-		float biomeScale = (float) Math.sqrt((float) DEFAULT_BIOME_SIZE / Math.max(1, preset.climate().biomeShape.biomeSize));
+		float biomeScale = (float) Math.sqrt((float) DEFAULT_BIOME_SIZE / preset.climate().biomeShape.undergroundBiomeSize());
 		return Math.clamp(Math.round(candidateCount * verticalScale * biomeScale), 1, MAX_BAND_COUNT);
 	}
 
@@ -146,19 +237,11 @@ public final class UndergroundBiomeBanding {
 		return SURFACE_DEPTH + cappedBuffer;
 	}
 
-	private static boolean isVanillaConventionUnderground(Climate.ParameterPoint point) {
-		return point.weirdness().equals(VANILLA_FULL_RANGE)
-			&& (point.depth().equals(VANILLA_UNDERGROUND_DEPTH) || point.depth().equals(VANILLA_BOTTOM));
-	}
-
-	private static int phase(long weirdness, int count) {
+	private static int phase(float horizontalPhase, int count) {
 		if (count <= 1) {
 			return 0;
 		}
-		long min = VANILLA_FULL_RANGE.min();
-		long span = VANILLA_FULL_RANGE.max() - min + 1L;
-		long position = Math.clamp(weirdness - min, 0L, span - 1L);
-		return (int) (position * count / span);
+		return Math.min((int) (Math.clamp(horizontalPhase, 0.0F, 1.0F) * count), count - 1);
 	}
 
 	private static long horizontalFitness(Climate.ParameterPoint point, Climate.TargetPoint target) {
@@ -220,6 +303,19 @@ public final class UndergroundBiomeBanding {
 			}
 			return fitness;
 		}
+
+		private boolean matchesHorizontally(Climate.TargetPoint target) {
+			for (Climate.ParameterPoint registration : this.registrations) {
+				if (registration.temperature().distance(target.temperature()) == 0L
+					&& registration.humidity().distance(target.humidity()) == 0L
+					&& registration.continentalness().distance(target.continentalness()) == 0L
+					&& registration.erosion().distance(target.erosion()) == 0L
+					&& registration.weirdness().distance(target.weirdness()) == 0L) {
+					return true;
+				}
+			}
+			return false;
+		}
 	}
 
 	private static final class Stage<T> {
@@ -228,30 +324,53 @@ public final class UndergroundBiomeBanding {
 		private final long endDepth;
 		private final int bandCount;
 		private final boolean climateEntryBand;
+		private final int horizontalBiomeSize;
+		private final int seed;
 
 		private Stage(
 			List<StageCandidate<T>> candidates,
 			float startDepth,
 			float endDepth,
 			int bandCount,
-			boolean climateEntryBand
+			boolean climateEntryBand,
+			int horizontalBiomeSize,
+			long seed
 		) {
 			this.candidates = List.copyOf(candidates);
 			this.startDepth = Climate.quantizeCoord(startDepth);
 			this.endDepth = Climate.quantizeCoord(endDepth);
 			this.bandCount = bandCount;
 			this.climateEntryBand = climateEntryBand;
+			this.horizontalBiomeSize = horizontalBiomeSize;
+			this.seed = (int) seed;
 		}
 
-		private T findValue(Climate.TargetPoint target) {
+		private T findValue(Climate.TargetPoint target, int quartX, int quartZ) {
+			float horizontalPhase = UndergroundBiomeBanding.horizontalPhase(
+				this.horizontalBiomeSize, this.seed, quartX, quartZ
+			);
 			int band = this.band(target.depth());
 			if (this.climateEntryBand && band == 0) {
-				return this.findEntryValue(target);
+				return this.findEntryValue(target, horizontalPhase);
 			}
 
 			int rotationBand = band - (this.climateEntryBand ? 1 : 0);
-			int candidate = Math.floorMod(rotationBand + phase(target.weirdness(), this.candidates.size()), this.candidates.size());
-			return this.candidates.get(candidate).value();
+			int eligibleCount = 0;
+			for (StageCandidate<T> candidate : this.candidates) {
+				if (candidate.matchesHorizontally(target)) {
+					eligibleCount++;
+				}
+			}
+			if (eligibleCount == 0) {
+				return this.findEntryValue(target, horizontalPhase);
+			}
+			int selected = Math.floorMod(rotationBand + phase(horizontalPhase, eligibleCount), eligibleCount);
+			for (StageCandidate<T> candidate : this.candidates) {
+				if (candidate.matchesHorizontally(target) && selected-- == 0) {
+					return candidate.value();
+				}
+			}
+			throw new IllegalStateException("No eligible underground candidate");
 		}
 
 		private int band(long depth) {
@@ -264,7 +383,7 @@ public final class UndergroundBiomeBanding {
 			return (int) ((depth - this.startDepth) * this.bandCount / (this.endDepth - this.startDepth));
 		}
 
-		private T findEntryValue(Climate.TargetPoint target) {
+		private T findEntryValue(Climate.TargetPoint target, float horizontalPhase) {
 			long bestFitness = Long.MAX_VALUE;
 			int tieCount = 0;
 			for (StageCandidate<T> candidate : this.candidates) {
@@ -277,7 +396,7 @@ public final class UndergroundBiomeBanding {
 				}
 			}
 
-			int tie = phase(target.weirdness(), tieCount);
+			int tie = phase(horizontalPhase, tieCount);
 			for (StageCandidate<T> candidate : this.candidates) {
 				if (candidate.fitness(target) == bestFitness && tie-- == 0) {
 					return candidate.value();
@@ -293,23 +412,56 @@ public final class UndergroundBiomeBanding {
 		private final Stage<T> deepStage;
 		private final long bandingStart;
 		private final long deepStart;
+		private final int shallowCandidateCount;
+		private final int deepCandidateCount;
+		private final int unknownEntryCount;
+		private final int classificationFailureCount;
+		private final List<T> shallowCandidateValues;
+		private final List<T> deepCandidateValues;
 
 		private Layout(
 			Climate.ParameterList<T> original,
 			Stage<T> shallowStage,
 			Stage<T> deepStage,
 			long bandingStart,
-			long deepStart
+			long deepStart,
+			int shallowCandidateCount,
+			int deepCandidateCount,
+			int unknownEntryCount,
+			int classificationFailureCount,
+			List<T> shallowCandidateValues,
+			List<T> deepCandidateValues
 		) {
 			this.original = original;
 			this.shallowStage = shallowStage;
 			this.deepStage = deepStage;
 			this.bandingStart = bandingStart;
 			this.deepStart = deepStart;
+			this.shallowCandidateCount = shallowCandidateCount;
+			this.deepCandidateCount = deepCandidateCount;
+			this.unknownEntryCount = unknownEntryCount;
+			this.classificationFailureCount = classificationFailureCount;
+			this.shallowCandidateValues = List.copyOf(shallowCandidateValues);
+			this.deepCandidateValues = List.copyOf(deepCandidateValues);
 		}
 
-		private static <T> Layout<T> unmodified(Climate.ParameterList<T> original) {
-			return new Layout<>(original, null, null, Long.MAX_VALUE, Long.MAX_VALUE);
+		private static <T> Layout<T> unmodified(
+			Climate.ParameterList<T> original,
+			Map<T, Candidate<T>> candidates,
+			int unknownEntryCount,
+			int classificationFailureCount
+		) {
+			int shallowCandidates = (int) candidates.values().stream().filter(Candidate::hasShallow).count();
+			List<T> shallowValues = candidates.values().stream()
+				.filter(Candidate::hasShallow)
+				.map(candidate -> candidate.value)
+				.toList();
+			List<T> deepValues = candidates.values().stream().map(candidate -> candidate.value).toList();
+			return new Layout<>(
+				original, null, null, Long.MAX_VALUE, Long.MAX_VALUE,
+				shallowCandidates, candidates.size(), unknownEntryCount, classificationFailureCount,
+				shallowValues, deepValues
+			);
 		}
 
 		public long bandingStart() {
@@ -320,17 +472,52 @@ public final class UndergroundBiomeBanding {
 			return target.depth() >= this.bandingStart;
 		}
 
-		public T findValue(Climate.TargetPoint target) {
+		public int shallowCandidateCount() {
+			return this.shallowCandidateCount;
+		}
+
+		public int deepCandidateCount() {
+			return this.deepCandidateCount;
+		}
+
+		public int unknownEntryCount() {
+			return this.unknownEntryCount;
+		}
+
+		public int classificationFailureCount() {
+			return this.classificationFailureCount;
+		}
+
+		public List<T> shallowCandidateValues() {
+			return this.shallowCandidateValues;
+		}
+
+		public List<T> deepCandidateValues() {
+			return this.deepCandidateValues;
+		}
+
+		public T findValue(Climate.TargetPoint target, int quartX, int quartZ) {
 			if (!this.appliesAt(target)) {
 				return this.original.findValue(target);
 			}
 			if (target.depth() < this.deepStart && this.shallowStage != null) {
-				return this.shallowStage.findValue(target);
+				return this.shallowStage.findValue(target, quartX, quartZ);
 			}
 			if (this.deepStage != null) {
-				return this.deepStage.findValue(target);
+				return this.deepStage.findValue(target, quartX, quartZ);
 			}
-			return this.shallowStage.findValue(target);
+			return this.shallowStage.findValue(target, quartX, quartZ);
 		}
+
+		public T findValue(Climate.TargetPoint target) {
+			return this.findValue(target, 0, 0);
+		}
+	}
+
+	public enum CandidateRole {
+		SURFACE,
+		SHALLOW_CAVE,
+		DEEP_CAVE,
+		UNKNOWN
 	}
 }

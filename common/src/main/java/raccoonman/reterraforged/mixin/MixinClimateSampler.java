@@ -18,6 +18,7 @@ import raccoonman.reterraforged.world.worldgen.biome.RTFClimateSampler;
 class MixinClimateSampler {
 	private BlockPos spawnSearchCenter = BlockPos.ZERO;
 	private Preset undergroundBiomeBandingPreset;
+	private long undergroundBiomeBandingSeed;
 
 	@Inject(method = "sample", at = @At("HEAD"), cancellable = true)
 	private void reterraforged$reuseClimatePoint(int x, int y, int z, CallbackInfoReturnable<Climate.TargetPoint> callback) {
@@ -40,11 +41,16 @@ class MixinClimateSampler {
 		return this.spawnSearchCenter;
 	}
 
-	public void reterraforged$RTFClimateSampler$setUndergroundBiomeBandingPreset(Preset preset) {
+	public void reterraforged$RTFClimateSampler$setUndergroundBiomeBandingPreset(Preset preset, long seed) {
 		this.undergroundBiomeBandingPreset = preset;
+		this.undergroundBiomeBandingSeed = seed;
 	}
 
 	public Preset reterraforged$RTFClimateSampler$getUndergroundBiomeBandingPreset() {
 		return this.undergroundBiomeBandingPreset;
+	}
+
+	public long reterraforged$RTFClimateSampler$getUndergroundBiomeBandingSeed() {
+		return this.undergroundBiomeBandingSeed;
 	}
 }

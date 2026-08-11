@@ -27,6 +27,8 @@ public abstract class MixinMultiNoiseBiomeSource {
     private volatile UndergroundBiomeBanding.Layout<Holder<Biome>> rtf$undergroundBanding;
     @Unique
     private Preset rtf$undergroundBandingPreset;
+    @Unique
+    private long rtf$undergroundBandingSeed;
 
     @Shadow
     protected abstract Climate.ParameterList<Holder<Biome>> parameters();
@@ -63,18 +65,22 @@ public abstract class MixinMultiNoiseBiomeSource {
         }
 
         UndergroundBiomeBanding.Layout<Holder<Biome>> banding = this.rtf$undergroundBanding;
-        if (banding == null || this.rtf$undergroundBandingPreset != preset) {
+        long seed = rtfSampler.getUndergroundBiomeBandingSeed();
+        if (banding == null || this.rtf$undergroundBandingPreset != preset || this.rtf$undergroundBandingSeed != seed) {
             synchronized (this) {
                 banding = this.rtf$undergroundBanding;
-                if (banding == null || this.rtf$undergroundBandingPreset != preset) {
-                    banding = UndergroundBiomeBanding.apply(preset, parameters.values());
+                if (banding == null || this.rtf$undergroundBandingPreset != preset || this.rtf$undergroundBandingSeed != seed) {
+                    banding = UndergroundBiomeBanding.apply(
+						preset, parameters.values(), seed
+					);
                     this.rtf$undergroundBandingPreset = preset;
+					this.rtf$undergroundBandingSeed = seed;
                     this.rtf$undergroundBanding = banding;
                 }
             }
         }
         if (banding.appliesAt(target)) {
-            cir.setReturnValue(banding.findValue(target));
+            cir.setReturnValue(banding.findValue(target, x, z));
         }
     }
 }
