@@ -14,6 +14,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.world.worldgen.biome.RTFClimateSampler;
+import raccoonman.reterraforged.world.worldgen.biome.RTFMultiNoiseBiomeSource;
 import raccoonman.reterraforged.world.worldgen.biome.UndergroundBiomeBanding;
 import raccoonman.reterraforged.world.worldgen.terrablender.TerraBlenderParameterList;
 
@@ -22,7 +23,7 @@ import raccoonman.reterraforged.world.worldgen.terrablender.TerraBlenderParamete
  * A third-party replacement remains authoritative; an unchanged base result receives banding.
  */
 @Mixin(MultiNoiseBiomeSource.class)
-public abstract class MixinMultiNoiseBiomeSource {
+public abstract class MixinMultiNoiseBiomeSource implements RTFMultiNoiseBiomeSource {
     @Unique
     private volatile UndergroundBiomeBanding.Layout<Holder<Biome>> rtf$undergroundBanding;
     @Unique
@@ -32,6 +33,11 @@ public abstract class MixinMultiNoiseBiomeSource {
 
     @Shadow
     protected abstract Climate.ParameterList<Holder<Biome>> parameters();
+
+    @Override
+    public Climate.ParameterList<Holder<Biome>> reterraforged$getParameters() {
+        return this.parameters();
+    }
 
     @Inject(
             method = "getNoiseBiome(IIILnet/minecraft/world/level/biome/Climate$Sampler;)Lnet/minecraft/core/Holder;",

@@ -1,7 +1,8 @@
 package raccoonman.reterraforged.client.gui.screen.presetconfig;
 
-import java.awt.Color;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -21,7 +22,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.client.data.RTFTranslationKeys;
-import raccoonman.reterraforged.concurrent.cache.CacheManager;
 import raccoonman.reterraforged.config.PerformanceConfig;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.data.worldgen.preset.settings.SpawnType;
@@ -39,15 +39,19 @@ public class Preview2D extends Button {
     private static final int FACTOR = 4;
     public static final int SIZE = (1 << 4) << FACTOR;
     private static final float[] LEGEND_SCALES = { 1, 0.9F, 0.75F, 0.6F };
+    private static final long REFRESH_DEBOUNCE_MILLIS = 75L;
 
     // Static cache to hold pixels between UI page transitions to prevent black flickering
     private static int[] LAST_SUCCESSFUL_PIXELS = null;
+    private static BiomePreview.CacheKey LAST_SUCCESSFUL_KEY = null;
 
     private final PresetEditorPage page;
     private final DynamicTexture texture = new DynamicTexture(new NativeImage(SIZE, SIZE, false));
     private final ResourceLocation textureId = Minecraft.getInstance().getTextureManager().register(RTFCommon.MOD_ID + "-preview-framebuffer", this.texture);
 
     private Tile tile;
+    private BiomePreview.Sidecar biomes;
+    private BiomePreview.CacheKey cacheKey;
     private int centerX, centerZ;
     private int hoveredCoordX = 0;
     private int hoveredCoordZ = 0;
@@ -64,11 +68,13 @@ public class Preview2D extends Button {
     static boolean globalNavigated = false;
 
     private CompletableFuture<FrameResult> pendingGeneration = null;
+    private volatile PreparedContext preparedContext;
 
     // State Gates
     private boolean isRunning = false;
     private boolean isDirty = false;
     private boolean closed = false;
+    private long refreshRequestNanos = 0L;
 
     public Preview2D(PresetEditorPage parent, int x, int y, int width, int height) {
         super(x, y, width, height, CommonComponents.EMPTY, (b) -> {
@@ -95,6 +101,8 @@ public class Preview2D extends Button {
         }, DEFAULT_NARRATION);
         this.page = parent;
 
+        this.cacheKey = BiomePreview.cacheKey(parent.getScreen().getSettings(), parent.preset.getPreset());
+
         NativeImage pixels = this.texture.getPixels();
         if (pixels != null) {
             // If we have cached pixels from a previous page view, populate immediately to hide the loading window
@@ -113,10 +121,31 @@ public class Preview2D extends Button {
 
     public void regenerate() {
         this.isDirty = true;
+        this.refreshRequestNanos = System.nanoTime();
+        this.scheduleRegeneration();
+    }
 
-        if (!this.isRunning) {
-            this.executeRegenerate();
+    private void scheduleRegeneration() {
+        long requestNanos = this.refreshRequestNanos;
+        long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - requestNanos);
+        long delayMillis = Math.max(0L, REFRESH_DEBOUNCE_MILLIS - elapsedMillis);
+        CompletableFuture.delayedExecutor(delayMillis, TimeUnit.MILLISECONDS).execute(() ->
+            Minecraft.getInstance().execute(() -> {
+                if (!this.closed && requestNanos == this.refreshRequestNanos && !this.isRunning) {
+                    this.executeRegenerate();
+                }
+            })
+        );
+    }
+
+    public void refreshRenderMode(RenderMode mode) {
+        if (this.tile == null || (mode == RenderMode.BIOME && this.biomes == null)) {
+            this.regenerate();
+            return;
         }
+        WorldSettings.Properties properties = this.page.preset.getPreset().world().properties;
+        Levels levels = new Levels(properties.terrainScaler(), properties.worldDepth, properties.seaLevel);
+        this.uploadPixelData(this.createPixelData(this.tile, this.biomes, mode, levels, properties));
     }
 
     private void executeRegenerate() {
@@ -126,11 +155,25 @@ public class Preview2D extends Button {
         this.isDirty = false;
 
         WorldCreationContext settings = this.page.getScreen().getSettings();
-        RegistryAccess.Frozen registries = settings.worldgenLoadContext();
-        HolderLookup.Provider provider = this.page.preset.getPreset().buildPatch(registries);
-        HolderGetter<Preset> presets = provider.lookupOrThrow(RTFRegistries.PRESET);
-        HolderGetter<Noise> noises = provider.lookupOrThrow(RTFRegistries.NOISE);
-        Preset presetObj = presets.getOrThrow(Preset.KEY).value();
+        Preset requestedPreset = this.page.preset.getPreset();
+        BiomePreview.CacheKey requestedKey = BiomePreview.cacheKey(settings, requestedPreset);
+        PreparedContext reusable = this.preparedContext;
+        HolderLookup.Provider provider = null;
+        HolderGetter<Noise> noises = null;
+        Preset presetObj = requestedPreset;
+        if (reusable == null || !Objects.equals(reusable.cacheKey, requestedKey)) {
+            RegistryAccess.Frozen registries = settings.worldgenLoadContext();
+            provider = requestedPreset.buildPatch(registries);
+            HolderGetter<Preset> presets = provider.lookupOrThrow(RTFRegistries.PRESET);
+            noises = provider.lookupOrThrow(RTFRegistries.NOISE);
+            presetObj = presets.getOrThrow(Preset.KEY).value();
+        }
+        HolderLookup.Provider preparedProvider = provider;
+        HolderGetter<Noise> preparedNoises = noises;
+        Preset preparedPreset = presetObj;
+        if (!Objects.equals(this.cacheKey, requestedKey)) {
+            this.cacheKey = requestedKey;
+        }
         WorldSettings.Properties properties = presetObj.world().properties;
 
         int seed = (int) settings.options().seed();
@@ -143,16 +186,22 @@ public class Preview2D extends Button {
 
         // Stage 1: Run clear, config loading, and structure lookups off the main thread
         CompletableFuture<PreGenContext> setupStage = CompletableFuture.supplyAsync(() -> {
-            try {
-                CacheManager.clear();
-            } catch (Exception e) {
-                e.printStackTrace();
+            PreparedContext prepared = reusable;
+            if (prepared == null || !Objects.equals(prepared.cacheKey, requestedKey)) {
+                PerformanceConfig config = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
+                        .resultOrPartial(RTFCommon.LOGGER::error)
+                        .orElseGet(PerformanceConfig::makeDefault);
+                GeneratorContext generatorContext = GeneratorContext.makeUncached(
+                    preparedPreset, preparedNoises, seed, FACTOR, 0, config.batchCount()
+                );
+                prepared = new PreparedContext(
+                    requestedKey,
+                    generatorContext,
+                    BiomePreview.create(settings, preparedProvider, preparedPreset, generatorContext)
+                );
+                this.preparedContext = prepared;
             }
-            PerformanceConfig config = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
-                    .resultOrPartial(RTFCommon.LOGGER::error)
-                    .orElseGet(PerformanceConfig::makeDefault);
-
-            GeneratorContext generatorContext = GeneratorContext.makeUncached(presetObj, noises, seed, FACTOR, 0, config.batchCount());
+            GeneratorContext generatorContext = prepared.context;
             if (properties.spawnType == SpawnType.CONTINENT_CENTER) {
                 long baseContinentCenter = generatorContext.lookup.getHeightmap().continent().getNearestCenter(0, 0);
                 properties.spawnX = PosUtil.unpackLeft(baseContinentCenter);
@@ -163,7 +212,7 @@ public class Preview2D extends Button {
             int cz = 0;
 
             // Generalize coordinate selection for all spawn types
-            if (presetObj.world().properties.spawnType == SpawnType.CONTINENT_CENTER) {
+            if (preparedPreset.world().properties.spawnType == SpawnType.CONTINENT_CENTER) {
                 long nearestContinentCenter = generatorContext.lookup.getHeightmap().continent().getNearestCenter(
                         localNavigated ? localOffsetX : 0,
                         localNavigated ? localOffsetZ : 0
@@ -172,34 +221,27 @@ public class Preview2D extends Button {
                 cz = PosUtil.unpackRight(nearestContinentCenter);
             } else {
                 // If navigated, center on the clicked spot; otherwise fallback to spawn values or origin depending on type
-                cx = localNavigated ? localOffsetX : (presetObj.world().properties.spawnType == SpawnType.USER_SELECTED ? presetObj.world().properties.spawnX : 0);
-                cz = localNavigated ? localOffsetZ : (presetObj.world().properties.spawnType == SpawnType.USER_SELECTED ? presetObj.world().properties.spawnZ : 0);
+                cx = localNavigated ? localOffsetX : (preparedPreset.world().properties.spawnType == SpawnType.USER_SELECTED ? preparedPreset.world().properties.spawnX : 0);
+                cz = localNavigated ? localOffsetZ : (preparedPreset.world().properties.spawnType == SpawnType.USER_SELECTED ? preparedPreset.world().properties.spawnZ : 0);
             }
 
-            return new PreGenContext(generatorContext, cx, cz, zoomLevel);
+            return new PreGenContext(generatorContext, prepared.biomePreview, cx, cz, zoomLevel);
         }, net.minecraft.Util.backgroundExecutor());
 
         // Stage 2: Handle calculation maps and evaluate visual color tables entirely on worker pool
         this.pendingGeneration = setupStage.thenCompose(preGen ->
                 preGen.context.generator.generateZoomed(preGen.cx, preGen.cz, preGen.zoomLevel, false)
                         .thenApply(newTile -> {
-                            int stroke = 2;
-                            int tileWidth = newTile.getBlockSize().size();
-                            int[] bufferedPixels = new int[tileWidth * tileWidth];
+                            BiomePreview.Sidecar biomes = null;
+                            if (mode == RenderMode.BIOME) {
+                                biomes = preGen.biomePreview.resolve(
+                                    newTile, preGen.cx, preGen.cz, preGen.zoomLevel, levels
+                                );
+                            }
 
-                            newTile.iterate((cell, bx, bz) -> {
-                                int color;
-                                if (bx < stroke || bz < stroke || bx >= tileWidth - stroke || bz >= tileWidth - stroke) {
-                                    color = 0xFF000000; // Opaque Black
-                                } else if (levels.scale(cell.height) > properties.worldHeight) {
-                                    color = 0xFFFF00FF; // Missing asset purple (#FF00FF)
-                                } else {
-                                    color = mode.getColor(cell, levels);
-                                }
-                                bufferedPixels[bz * tileWidth + bx] = color;
-                            });
+                            int[] bufferedPixels = this.createPixelData(newTile, biomes, mode, levels, properties);
 
-                            return new FrameResult(newTile, preGen.cx, preGen.cz, bufferedPixels);
+                            return new FrameResult(newTile, biomes, preGen.cx, preGen.cz, bufferedPixels);
                         })
         );
 
@@ -211,37 +253,73 @@ public class Preview2D extends Button {
 
             if (throwable != null) {
                 RTFCommon.LOGGER.error("Failed handling 2D preview generation pipeline", throwable);
-            } else if (result != null && result.tile != null) {
+            } else if (!this.isDirty && result != null && result.tile != null
+                    && Objects.equals(requestedKey, this.cacheKey)
+                    && mode == this.page.renderMode2D.getValue()) {
+                Tile previousTile = this.tile;
                 this.tile = result.tile;
+                this.biomes = result.biomes;
                 this.centerX = result.centerX;
                 this.centerZ = result.centerZ;
                 this.legendValues[3] = getSpawnCoords();
 
                 // Safe structural upload across to GPU
-                NativeImage pixels = this.texture.getPixels();
-                if (pixels != null && result.pixelData != null) {
-                    int tileWidth = this.tile.getBlockSize().size();
-
-                    // Maintain global static cache frame arrays
-                    if (LAST_SUCCESSFUL_PIXELS == null || LAST_SUCCESSFUL_PIXELS.length != result.pixelData.length) {
-                        LAST_SUCCESSFUL_PIXELS = new int[result.pixelData.length];
-                    }
-                    System.arraycopy(result.pixelData, 0, LAST_SUCCESSFUL_PIXELS, 0, result.pixelData.length);
-
-                    for (int bz = 0; bz < tileWidth; bz++) {
-                        for (int bx = 0; bx < tileWidth; bx++) {
-                            pixels.setPixelRGBA(bx, bz, result.pixelData[bz * tileWidth + bx]);
-                        }
-                    }
-                    this.texture.upload();
+                this.uploadPixelData(result.pixelData);
+                if (previousTile != null && previousTile != result.tile) {
+                    previousTile.close();
                 }
+            } else if (result != null && result.tile != null) {
+                result.tile.close();
             }
 
             // Consume trailing-edge loop calls if input shifted during calculations
             if (this.isDirty) {
-                this.executeRegenerate();
+                this.scheduleRegeneration();
             }
         }, Minecraft.getInstance());
+    }
+
+    private int[] createPixelData(
+        Tile tile,
+        BiomePreview.Sidecar biomes,
+        RenderMode mode,
+        Levels levels,
+        WorldSettings.Properties properties
+    ) {
+        int stroke = 2;
+        int tileWidth = tile.getBlockSize().size();
+        int[] pixels = new int[tileWidth * tileWidth];
+        tile.iterate((cell, bx, bz) -> {
+            int color;
+            if (bx < stroke || bz < stroke || bx >= tileWidth - stroke || bz >= tileWidth - stroke) {
+                color = 0xFF000000;
+            } else if (levels.scale(cell.height) > properties.worldHeight) {
+                color = 0xFFFF00FF;
+            } else {
+                int biomeColor = biomes == null ? 0xFFFF00FF : biomes.color(bx, bz);
+                color = mode.getColor(cell, levels, biomeColor);
+            }
+            pixels[bz * tileWidth + bx] = color;
+        });
+        return pixels;
+    }
+
+    private void uploadPixelData(int[] pixelData) {
+        NativeImage pixels = this.texture.getPixels();
+        if (pixels == null || pixelData == null) return;
+
+        int tileWidth = (int) Math.sqrt(pixelData.length);
+        if (LAST_SUCCESSFUL_PIXELS == null || LAST_SUCCESSFUL_PIXELS.length != pixelData.length) {
+            LAST_SUCCESSFUL_PIXELS = new int[pixelData.length];
+        }
+        System.arraycopy(pixelData, 0, LAST_SUCCESSFUL_PIXELS, 0, pixelData.length);
+        LAST_SUCCESSFUL_KEY = this.cacheKey;
+        for (int bz = 0; bz < tileWidth; bz++) {
+            for (int bx = 0; bx < tileWidth; bx++) {
+                pixels.setPixelRGBA(bx, bz, pixelData[bz * tileWidth + bx]);
+            }
+        }
+        this.texture.upload();
     }
 
     public void close() throws Exception {
@@ -250,11 +328,7 @@ public class Preview2D extends Button {
             this.pendingGeneration.cancel(true);
         }
         this.texture.close();
-        try {
-            CacheManager.clear();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        this.preparedContext = null;
     }
 
     @Override
@@ -377,11 +451,21 @@ public class Preview2D extends Button {
             if (mx >= left && mx <= left + size && my >= top && my <= top + size) {
                 float fx = (mx - left) / size;
                 float fz = (my - top) / size;
-                int ix = NoiseUtil.round(fx * this.tile.getBlockSize().size());
-                int iz = NoiseUtil.round(fz * this.tile.getBlockSize().size());
+                int maxIndex = this.tile.getBlockSize().size() - 1;
+                int ix = Math.max(0, Math.min(maxIndex, NoiseUtil.round(fx * maxIndex)));
+                int iz = Math.max(0, Math.min(maxIndex, NoiseUtil.round(fz * maxIndex)));
                 Cell cell = this.tile.lookup(ix, iz);
                 this.legendValues[1] = getTerrainName(cell);
-                this.legendValues[2] = getBiomeName(cell);
+                String biomeId = this.biomes == null ? null : this.biomes.id(ix, iz);
+                PreviewDetails.Detail detail = PreviewDetails.forCell(
+                    this.page.renderMode2D.getValue(), cell, new Levels(
+                        this.page.preset.getPreset().world().properties.terrainScaler(),
+                        this.page.preset.getPreset().world().properties.worldDepth,
+                        this.page.preset.getPreset().world().properties.seaLevel
+                    ), biomeId
+                );
+                this.legendLabels[2] = detail.label();
+                this.legendValues[2] = detail.value();
                 this.legendValues[3] = getSpawnCoords();
 
                 int dx = (ix - (this.tile.getBlockSize().size() / 2)) * currentZoom;
@@ -470,45 +554,44 @@ public class Preview2D extends Button {
         return "x0 z0";
     }
 
-    private static String getBiomeName(Cell cell) {
-        String terrain = cell.terrain.getName().toLowerCase();
-        if (terrain.contains("ocean")) {
-            if (cell.temperature < 0.3F) {
-                return "cold_" + terrain;
-            }
-            if (cell.temperature > 0.6F) {
-                return "warm_" + terrain;
-            }
-            return terrain;
-        }
-        if (terrain.contains("river")) {
-            return "river";
-        }
-        return cell.biome.name().toLowerCase();
-    }
-
     private static class PreGenContext {
         final GeneratorContext context;
+        final BiomePreview biomePreview;
         final int cx;
         final int cz;
         final int zoomLevel;
 
-        PreGenContext(GeneratorContext context, int cx, int cz, int zoomLevel) {
+        PreGenContext(GeneratorContext context, BiomePreview biomePreview, int cx, int cz, int zoomLevel) {
             this.context = context;
+            this.biomePreview = biomePreview;
             this.cx = cx;
             this.cz = cz;
             this.zoomLevel = zoomLevel;
         }
     }
 
+    private static class PreparedContext {
+        final BiomePreview.CacheKey cacheKey;
+        final GeneratorContext context;
+        final BiomePreview biomePreview;
+
+        PreparedContext(BiomePreview.CacheKey cacheKey, GeneratorContext context, BiomePreview biomePreview) {
+            this.cacheKey = cacheKey;
+            this.context = context;
+            this.biomePreview = biomePreview;
+        }
+    }
+
     private static class FrameResult {
         final Tile tile;
+        final BiomePreview.Sidecar biomes;
         final int centerX;
         final int centerZ;
         final int[] pixelData;
 
-        FrameResult(Tile tile, int centerX, int centerZ, int[] pixelData) {
+        FrameResult(Tile tile, BiomePreview.Sidecar biomes, int centerX, int centerZ, int[] pixelData) {
             this.tile = tile;
+            this.biomes = biomes;
             this.centerX = centerX;
             this.centerZ = centerZ;
             this.pixelData = pixelData;

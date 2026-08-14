@@ -31,7 +31,7 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	public static int maxZoom = 100;
 	public static double staticZoom2D = 68.0D;
 	public static double staticZoom3D = 95.0D;
-	public static RenderMode staticMode2D = RenderMode.BIOME_TYPE;
+	public static RenderMode staticMode2D = RenderMode.BIOME;
 	public static RenderMode staticMode3D = RenderMode.HYPSOMETRIC;
 
 	private EditBox seedEdit;
@@ -118,7 +118,7 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		double initZoom2D = Optional.ofNullable(this.zoom2D).map(Slider::getLerpedValue).orElse(staticZoom2D);
 		this.zoom2D = PresetWidgets.createIntSlider((int) Math.round(initZoom2D), minZoom, maxZoom, RTFTranslationKeys.GUI_SLIDER_ZOOM, (slider, value) -> {
 			staticZoom2D = ((Slider) slider).getLerpedValue();
-			this.regenerate();
+			if (this.preview2D != null) this.preview2D.regenerate();
 			return value;
 		});
 		this.zoom2D.setValue((initZoom2D - 1.0D) / (100.0D - 1.0D));
@@ -127,19 +127,19 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		double initZoom3D = Optional.ofNullable(this.zoom3D).map(Slider::getLerpedValue).orElse(staticZoom3D);
 		this.zoom3D = PresetWidgets.createIntSlider((int) Math.round(initZoom3D), minZoom, maxZoom, RTFTranslationKeys.GUI_SLIDER_ZOOM, (slider, value) -> {
 			staticZoom3D = ((Slider) slider).getLerpedValue();
-			this.regenerate();
+			if (this.preview3D != null) this.preview3D.regenerate();
 			return value;
 		});
 		this.zoom3D.setValue((initZoom3D - 1.0D) / (100.0D - 1.0D));
 
 		this.renderMode2D = PresetWidgets.createCycle(ImmutableList.copyOf(RenderMode.values()), this.renderMode2D != null ? this.renderMode2D.getValue() : staticMode2D, RTFTranslationKeys.GUI_BUTTON_RENDER_MODE, (button, value) -> {
 			staticMode2D = value;
-			this.regenerate();
+			if (this.preview2D != null) this.preview2D.refreshRenderMode(value);
 		}, RenderMode::name);
 
 		this.renderMode3D = PresetWidgets.createCycle(ImmutableList.copyOf(RenderMode.values()), this.renderMode3D != null ? this.renderMode3D.getValue() : staticMode3D, RTFTranslationKeys.GUI_BUTTON_RENDER_MODE, (button, value) -> {
 			staticMode3D = value;
-			this.regenerate();
+			if (this.preview3D != null) this.preview3D.refreshRenderMode(value);
 		}, RenderMode::name);
 
 		// Seed Text Input

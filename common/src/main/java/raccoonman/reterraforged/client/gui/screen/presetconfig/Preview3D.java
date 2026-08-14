@@ -1,7 +1,9 @@
 package raccoonman.reterraforged.client.gui.screen.presetconfig;
 
 import java.awt.Color;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -19,7 +21,6 @@ import com.mojang.blaze3d.platform.NativeImage;
 
 import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.client.data.RTFTranslationKeys;
-import raccoonman.reterraforged.concurrent.cache.CacheManager;
 import raccoonman.reterraforged.config.PerformanceConfig;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.data.worldgen.preset.settings.SpawnType;
@@ -37,16 +38,21 @@ public class Preview3D extends Button {
     private static final int FACTOR = 4;
     public static final int SIZE = (1 << 4) << FACTOR;
     private static final float[] LEGEND_SCALES = { 1, 0.9F, 0.75F, 0.6F };
+    private static final long REFRESH_DEBOUNCE_MILLIS = 75L;
 
-    public static RenderMode currentMode = RenderMode.BIOME_TYPE;
+	public static RenderMode currentMode = RenderMode.BIOME;
 
     // Static cache fields to bridge across instances during page preset updates
     private static Tile LAST_GLOBAL_TILE = null;
+    private static BiomePreview.Sidecar LAST_GLOBAL_BIOMES = null;
+    private static BiomePreview.CacheKey LAST_GLOBAL_KEY = null;
     private static int LAST_GLOBAL_CENTER_X = 0;
     private static int LAST_GLOBAL_CENTER_Z = 0;
 
     private PresetEditorPage page;
     private Tile tile;
+    private BiomePreview.Sidecar biomes;
+    private BiomePreview.CacheKey cacheKey;
     private int centerX, centerZ;
 
     private int hoveredCoordX = 0;
@@ -70,11 +76,13 @@ public class Preview3D extends Button {
     private final float[] hsbCache = new float[3];
 
     private CompletableFuture<FrameResult> pendingGeneration = null;
+    private volatile PreparedContext preparedContext;
 
     // Concurrency Gates
     private boolean isRunning = false;
     private boolean isDirty = false;
     private boolean closed = false;
+    private long refreshRequestNanos = 0L;
 
     public Preview3D(PresetEditorPage page, int x, int y, int width, int height) {
         super(x, y, width, height, CommonComponents.EMPTY, (b) -> {
@@ -101,15 +109,37 @@ public class Preview3D extends Button {
         }, DEFAULT_NARRATION);
 
         this.page = page;
+        this.cacheKey = BiomePreview.cacheKey(page.getScreen().getSettings(), page.preset.getPreset());
     }
 
     public void regenerate() {
         this.isDirty = true;
+        this.refreshRequestNanos = System.nanoTime();
+        this.scheduleRegeneration();
+    }
 
-        // If the worker is already running, it will automatically consume the dirty flag upon completion
-        if (!this.isRunning) {
-            this.executeRegenerate();
+    private void scheduleRegeneration() {
+        long requestNanos = this.refreshRequestNanos;
+        long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - requestNanos);
+        long delayMillis = Math.max(0L, REFRESH_DEBOUNCE_MILLIS - elapsedMillis);
+        CompletableFuture.delayedExecutor(delayMillis, TimeUnit.MILLISECONDS).execute(() ->
+            Minecraft.getInstance().execute(() -> {
+                if (!this.closed && requestNanos == this.refreshRequestNanos && !this.isRunning) {
+                    this.executeRegenerate();
+                }
+            })
+        );
+    }
+
+    public void refreshRenderMode(RenderMode mode) {
+        currentMode = mode;
+        Tile activeTile = this.tile != null ? this.tile : LAST_GLOBAL_TILE;
+        BiomePreview.Sidecar activeBiomes = this.tile != null ? this.biomes : LAST_GLOBAL_BIOMES;
+        if (activeTile == null || (mode == RenderMode.BIOME && activeBiomes == null)) {
+            this.regenerate();
+            return;
         }
+        this.needsTextureRefresh = true;
     }
 
     private void executeRegenerate() {
@@ -119,31 +149,52 @@ public class Preview3D extends Button {
         this.isDirty = false;
 
         WorldCreationContext settings = this.page.getScreen().getSettings();
-        RegistryAccess.Frozen registries = settings.worldgenLoadContext();
-        HolderLookup.Provider provider = this.page.preset.getPreset().buildPatch(registries);
-        HolderGetter<Preset> presets = provider.lookupOrThrow(RTFRegistries.PRESET);
-        HolderGetter<Noise> noises = provider.lookupOrThrow(RTFRegistries.NOISE);
-        Preset currentPreset = presets.getOrThrow(Preset.KEY).value();
+        Preset requestedPreset = this.page.preset.getPreset();
+        BiomePreview.CacheKey requestedKey = BiomePreview.cacheKey(settings, requestedPreset);
+        PreparedContext reusable = this.preparedContext;
+        HolderLookup.Provider provider = null;
+        HolderGetter<Noise> noises = null;
+        Preset currentPreset = requestedPreset;
+        if (reusable == null || !Objects.equals(reusable.cacheKey, requestedKey)) {
+            RegistryAccess.Frozen registries = settings.worldgenLoadContext();
+            provider = requestedPreset.buildPatch(registries);
+            HolderGetter<Preset> presets = provider.lookupOrThrow(RTFRegistries.PRESET);
+            noises = provider.lookupOrThrow(RTFRegistries.NOISE);
+            currentPreset = presets.getOrThrow(Preset.KEY).value();
+        }
+        HolderLookup.Provider preparedProvider = provider;
+        HolderGetter<Noise> preparedNoises = noises;
+        Preset preparedPreset = currentPreset;
+        if (!Objects.equals(this.cacheKey, requestedKey)) {
+            this.cacheKey = requestedKey;
+        }
 
         int seed = (int) settings.options().seed();
         int zoomLevel = this.getZoom();
         int localOffsetX = Preview2D.globalOffsetX;
         int localOffsetZ = Preview2D.globalOffsetZ;
         boolean localNavigated = Preview2D.globalNavigated;
+        RenderMode requestedMode = this.page.renderMode3D == null ? currentMode : this.page.renderMode3D.getValue();
 
         // Step 1: Offload disk IO and heavy context calculations to background executor
         CompletableFuture<PreGenContext> setupStage = CompletableFuture.supplyAsync(() -> {
-            try {
-                CacheManager.clear();
-            } catch (Exception e) {
-                e.printStackTrace();
+            PreparedContext prepared = reusable;
+            if (prepared == null || !Objects.equals(prepared.cacheKey, requestedKey)) {
+                PerformanceConfig config = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
+                        .resultOrPartial(RTFCommon.LOGGER::error)
+                        .orElseGet(PerformanceConfig::makeDefault);
+                GeneratorContext generatorContext = GeneratorContext.makeUncached(
+                    preparedPreset, preparedNoises, seed, FACTOR, 0, config.batchCount()
+                );
+                prepared = new PreparedContext(
+                    requestedKey,
+                    generatorContext,
+                    BiomePreview.create(settings, preparedProvider, preparedPreset, generatorContext)
+                );
+                this.preparedContext = prepared;
             }
-            PerformanceConfig config = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
-                    .resultOrPartial(RTFCommon.LOGGER::error)
-                    .orElseGet(PerformanceConfig::makeDefault);
-
-            GeneratorContext generatorContext = GeneratorContext.makeUncached(currentPreset, noises, seed, FACTOR, 0, config.batchCount());
-            WorldSettings.Properties properties = currentPreset.world().properties;
+            GeneratorContext generatorContext = prepared.context;
+            WorldSettings.Properties properties = preparedPreset.world().properties;
             if (properties.spawnType == SpawnType.CONTINENT_CENTER) {
                 long baseContinentCenter = generatorContext.lookup.getHeightmap().continent().getNearestCenter(0, 0);
                 properties.spawnX = PosUtil.unpackLeft(baseContinentCenter);
@@ -154,7 +205,7 @@ public class Preview3D extends Button {
             int cz = 0;
 
             // Generalize coordinate selection for all spawn types
-            if (currentPreset.world().properties.spawnType == SpawnType.CONTINENT_CENTER) {
+            if (preparedPreset.world().properties.spawnType == SpawnType.CONTINENT_CENTER) {
                 long nearestContinentCenter = generatorContext.lookup.getHeightmap().continent().getNearestCenter(
                         localNavigated ? localOffsetX : 0,
                         localNavigated ? localOffsetZ : 0
@@ -163,17 +214,27 @@ public class Preview3D extends Button {
                 cz = PosUtil.unpackRight(nearestContinentCenter);
             } else {
                 // If navigated, center on the clicked spot; otherwise fallback to spawn values or origin depending on type
-                cx = localNavigated ? localOffsetX : (currentPreset.world().properties.spawnType == SpawnType.USER_SELECTED ? currentPreset.world().properties.spawnX : 0);
-                cz = localNavigated ? localOffsetZ : (currentPreset.world().properties.spawnType == SpawnType.USER_SELECTED ? currentPreset.world().properties.spawnZ : 0);
+                cx = localNavigated ? localOffsetX : (preparedPreset.world().properties.spawnType == SpawnType.USER_SELECTED ? preparedPreset.world().properties.spawnX : 0);
+                cz = localNavigated ? localOffsetZ : (preparedPreset.world().properties.spawnType == SpawnType.USER_SELECTED ? preparedPreset.world().properties.spawnZ : 0);
             }
 
-            return new PreGenContext(generatorContext, cx, cz, zoomLevel);
+            return new PreGenContext(generatorContext, prepared.biomePreview, cx, cz, zoomLevel);
         }, net.minecraft.Util.backgroundExecutor());
 
         // Step 2: Compose into the chunk generator's pipeline
         this.pendingGeneration = setupStage.thenCompose(preGen ->
                 preGen.context.generator.generateZoomed(preGen.cx, preGen.cz, preGen.zoomLevel, false)
-                        .thenApply(tile -> new FrameResult(tile, preGen.cx, preGen.cz))
+                        .thenApply(tile -> {
+                            WorldSettings.Properties properties = preparedPreset.world().properties;
+                            Levels levels = new Levels(properties.terrainScaler(), properties.worldDepth, properties.seaLevel);
+                            BiomePreview.Sidecar biomes = null;
+                            if (requestedMode == RenderMode.BIOME) {
+                                biomes = preGen.biomePreview.resolve(
+                                    tile, preGen.cx, preGen.cz, preGen.zoomLevel, levels
+                                );
+                            }
+                            return new FrameResult(tile, biomes, preGen.cx, preGen.cz);
+                        })
         );
 
         // Step 3: Handle execution complete back on the client main render thread
@@ -184,13 +245,19 @@ public class Preview3D extends Button {
 
             if (throwable != null) {
                 RTFCommon.LOGGER.error("Failed handling 3D preview generation pipeline", throwable);
-            } else if (result != null && result.tile != null) {
+            } else if (!this.isDirty && result != null && result.tile != null
+                    && Objects.equals(requestedKey, this.cacheKey)
+                    && requestedMode == this.page.renderMode3D.getValue()) {
+                Tile previousTile = this.tile != null ? this.tile : LAST_GLOBAL_TILE;
                 this.tile = result.tile;
+                this.biomes = result.biomes;
                 this.centerX = result.centerX;
                 this.centerZ = result.centerZ;
 
                 // Sync context parameters out to global tracking pointers
                 LAST_GLOBAL_TILE = result.tile;
+                LAST_GLOBAL_BIOMES = result.biomes;
+                LAST_GLOBAL_KEY = this.cacheKey;
                 LAST_GLOBAL_CENTER_X = result.centerX;
                 LAST_GLOBAL_CENTER_Z = result.centerZ;
 
@@ -199,17 +266,23 @@ public class Preview3D extends Button {
 
                 this.lastHoveredIx = -1;
                 this.lastHoveredIz = -1;
+                if (previousTile != null && previousTile != result.tile) {
+                    previousTile.close();
+                }
+            } else if (result != null && result.tile != null) {
+                result.tile.close();
             }
 
             // If the user modified values while this task was running, consume the change state immediately
             if (this.isDirty) {
-                this.executeRegenerate();
+                this.scheduleRegeneration();
             }
         }, Minecraft.getInstance());
     }
 
     private void rebuildTexture() {
         Tile activeTile = this.tile != null ? this.tile : LAST_GLOBAL_TILE;
+        BiomePreview.Sidecar activeBiomes = this.tile != null ? this.biomes : LAST_GLOBAL_BIOMES;
         if (activeTile == null || this.width <= 0 || this.height <= 0) return;
 
         if (this.textureCache == null || this.textureCache.getPixels().getWidth() != this.width || this.textureCache.getPixels().getHeight() != this.height) {
@@ -264,18 +337,22 @@ public class Preview3D extends Button {
                     color = 0xFFFF00FF; // Missing asset purple (#FF00FF)
                     effectiveHeight = maxCellHeight;
                 } else {
-                    color = mode.getColor(cell, levels);
+                    color = mode.getColor(cell, levels, activeBiomes == null ? 0xFFFF00FF : activeBiomes.color(ix, iz));
                 }
 
-                int r = (color >> 16) & 0xFF;
+                int r = color & 0xFF;
                 int g = (color >> 8) & 0xFF;
-                int b = color & 0xFF;
+                int b = (color >> 16) & 0xFF;
                 Color.RGBtoHSB(r, g, b, this.hsbCache);
 
                 int hash = ix * 31 + iz * 17;
                 float jitter = ((hash % 100) / 100.0f) * 0.06f - 0.03f;
                 this.hsbCache[2] = Math.max(0.0f, Math.min(1.0f, this.hsbCache[2] + jitter));
-                int jitteredColor = (color & 0xFF000000) | (Color.HSBtoRGB(this.hsbCache[0], this.hsbCache[1], this.hsbCache[2]) & 0x00FFFFFF);
+                int jitteredRgb = Color.HSBtoRGB(this.hsbCache[0], this.hsbCache[1], this.hsbCache[2]);
+                int jitteredColor = (color & 0xFF000000)
+                    | (jitteredRgb >> 16 & 0xFF)
+                    | (jitteredRgb >> 8 & 0xFF) << 8
+                    | (jitteredRgb & 0xFF) << 16;
                 int dx = ix - halfTile;
                 int dz = iz - halfTile;
                 int isoX = centerVisualX + (dx - dz) * halfW;
@@ -330,11 +407,7 @@ public class Preview3D extends Button {
             this.textureCache = null;
             this.cacheLocation = null;
         }
-        try {
-            CacheManager.clear();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        this.preparedContext = null;
     }
 
     @Override
@@ -500,6 +573,7 @@ public class Preview3D extends Button {
 
     private boolean updateLegend(int mx, int my) {
         Tile activeTile = this.tile != null ? this.tile : LAST_GLOBAL_TILE;
+        BiomePreview.Sidecar activeBiomes = this.tile != null ? this.biomes : LAST_GLOBAL_BIOMES;
         if (activeTile != null) {
             int left = this.getX();
             int top = this.getY();
@@ -541,7 +615,15 @@ public class Preview3D extends Button {
 
                     Cell cell = activeTile.lookup(ix, iz);
                     this.legendValues[1] = getTerrainName(cell);
-                    this.legendValues[2] = getBiomeName(cell);
+                    String biomeId = activeBiomes == null ? null : activeBiomes.id(ix, iz);
+                    WorldSettings.Properties properties = this.page.preset.getPreset().world().properties;
+                    PreviewDetails.Detail detail = PreviewDetails.forCell(
+                        this.page.renderMode3D.getValue(), cell,
+                        new Levels(properties.terrainScaler(), properties.worldDepth, properties.seaLevel),
+                        biomeId
+                    );
+                    this.legendLabels[2] = detail.label();
+                    this.legendValues[2] = detail.value();
 
                     int activeCX = this.tile != null ? this.centerX : LAST_GLOBAL_CENTER_X;
                     int activeCZ = this.tile != null ? this.centerZ : LAST_GLOBAL_CENTER_Z;
@@ -641,44 +723,43 @@ public class Preview3D extends Button {
         return "x0 z0";
     }
 
-    private static String getBiomeName(Cell cell) {
-        String terrain = cell.terrain.getName().toLowerCase();
-        if (terrain.contains("ocean")) {
-            if (cell.temperature < 0.3F) {
-                return "cold_" + terrain;
-            }
-            if (cell.temperature > 0.6F) {
-                return "warm_" + terrain;
-            }
-            return terrain;
-        }
-        if (terrain.contains("river")) {
-            return "river";
-        }
-        return cell.biome.name().toLowerCase();
-    }
-
     private static class PreGenContext {
         final GeneratorContext context;
+        final BiomePreview biomePreview;
         final int cx;
         final int cz;
         final int zoomLevel;
 
-        PreGenContext(GeneratorContext context, int cx, int cz, int zoomLevel) {
+        PreGenContext(GeneratorContext context, BiomePreview biomePreview, int cx, int cz, int zoomLevel) {
             this.context = context;
+            this.biomePreview = biomePreview;
             this.cx = cx;
             this.cz = cz;
             this.zoomLevel = zoomLevel;
         }
     }
 
+    private static class PreparedContext {
+        final BiomePreview.CacheKey cacheKey;
+        final GeneratorContext context;
+        final BiomePreview biomePreview;
+
+        PreparedContext(BiomePreview.CacheKey cacheKey, GeneratorContext context, BiomePreview biomePreview) {
+            this.cacheKey = cacheKey;
+            this.context = context;
+            this.biomePreview = biomePreview;
+        }
+    }
+
     private static class FrameResult {
         final Tile tile;
+        final BiomePreview.Sidecar biomes;
         final int centerX;
         final int centerZ;
 
-        FrameResult(Tile tile, int centerX, int centerZ) {
+        FrameResult(Tile tile, BiomePreview.Sidecar biomes, int centerX, int centerZ) {
             this.tile = tile;
+            this.biomes = biomes;
             this.centerX = centerX;
             this.centerZ = centerZ;
         }

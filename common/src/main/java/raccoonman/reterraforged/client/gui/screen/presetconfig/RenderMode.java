@@ -8,37 +8,41 @@ import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainType;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 
 public enum RenderMode {
-    BIOME_TYPE {
+	BIOME {
     	
         @Override
         public boolean handlesWater() {
             return true;
         }
 
+		@Override
+		public int getColor(Cell cell, Levels levels, int biomeColor) {
+			float shade;
+			if (cell.height < levels.water) {
+				float depthRange = Math.max(0.0001F, levels.water - levels.min);
+				float depth = NoiseUtil.clamp((levels.water - cell.height) / depthRange, 0.0F, 1.0F);
+				shade = 1.0F - depth * 0.4F;
+			} else {
+				float elevation = NoiseUtil.clamp(levels.elevation(cell.height), 0.0F, 1.0F);
+				shade = 0.88F + elevation * 0.12F;
+			}
+			return this.getColor(cell, levels, shade, 0.0F, biomeColor);
+		}
+
         @Override
         public int getColor(Cell cell, Levels levels, float scale, float bias) {
-            switch (cell.terrain.getCategory()) {
-                case DEEP_OCEAN:
-                    return rgba(0.63F, 0.65F, 0.8F);
-                case SHALLOW_OCEAN:
-                    return rgba(0.6F, 0.6F, 0.8F);
-                case BEACH:
-                    return rgba(0.2F, 0.4F, 0.75F);
-                case RIVER:
-                case LAKE:
-                    return RenderMode.getWaterColor();
+			return 0xFFFF00FF;
+		}
 
-                default:
-                    if (cell.height < levels.water) {
-                        return RenderMode.getWaterColor();
-                    } else {
-                        Color color = cell.biome.getColor();
-                        float[] hsb = Color.RGBtoHSB(color.getRed(), color.getGreen(), color.getBlue(), new float[3]);
-                        return rgba(hsb[0], hsb[1], (hsb[2] * scale) + bias);
-                    }
-            }
-        }
-    },
+		@Override
+		public int getColor(Cell cell, Levels levels, float scale, float bias, int biomeColor) {
+			int red = biomeColor & 0xFF;
+			int green = biomeColor >>> 8 & 0xFF;
+			int blue = biomeColor >>> 16 & 0xFF;
+			float[] hsb = Color.RGBtoHSB(red, green, blue, new float[3]);
+			return rgba(hsb[0], hsb[1], NoiseUtil.clamp((hsb[2] * scale) + bias, 0.0F, 1.0F));
+		}
+	},
     TRANSITION_POINTS {
     	
         @Override
@@ -83,7 +87,12 @@ public enum RenderMode {
             return rgba(step(cell.regionMoisture, 8) * 0.65F, saturation, brightness);
         }
     },
-    BIOME {
+    BIOME_CELLS {
+
+		@Override
+		public boolean handlesWater() {
+			return true;
+		}
     	
         @Override
         public int getColor(Cell cell, Levels levels, float scale, float bias) {
@@ -269,9 +278,13 @@ public enum RenderMode {
         }
     };
 
-    public int getColor(Cell cell, Levels levels) {
-        if (!this.handlesWater() && cell.height < levels.water) {
-            return getWaterColor();
+	public int getColor(Cell cell, Levels levels) {
+		return this.getColor(cell, levels, 0xFFFF00FF);
+	}
+
+	public int getColor(Cell cell, Levels levels, int biomeColor) {
+		if (!this.handlesWater() && cell.height < levels.water) {
+			return getWaterColor();
         }
         float bands = 10.0F;
         float alpha = 0.2F;
@@ -279,8 +292,12 @@ public enum RenderMode {
         int band = NoiseUtil.round(elevation * bands);
         float scale = 1.0F - alpha;
         float bias = alpha * (band / bands);
-        return getColor(cell, levels, scale, bias);
-    }
+		return getColor(cell, levels, scale, bias, biomeColor);
+	}
+
+	public int getColor(Cell cell, Levels levels, float scale, float bias, int biomeColor) {
+		return getColor(cell, levels, scale, bias);
+	}
 
     public abstract int getColor(Cell cell, Levels levels, float scale, float bias);
 
@@ -297,7 +314,7 @@ public enum RenderMode {
     }
 
     private static int rgba(float h, float s, float b) {
-        int argb = Color.HSBtoRGB(h, s, b);
+		int argb = Color.HSBtoRGB(h, NoiseUtil.clamp(s, 0.0F, 1.0F), NoiseUtil.clamp(b, 0.0F, 1.0F));
         int red = (argb >> 16) & 0xFF;
         int green = (argb >> 8) & 0xFF;
         int blue =  argb & 0xFF;
