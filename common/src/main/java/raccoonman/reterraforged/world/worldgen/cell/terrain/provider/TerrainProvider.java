@@ -13,6 +13,7 @@ import raccoonman.reterraforged.data.worldgen.preset.settings.TerrainSettings;
 import raccoonman.reterraforged.world.worldgen.cell.CellPopulator;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.RegionConfig;
+import raccoonman.reterraforged.world.worldgen.cell.terrain.ClimateParameterSampler;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.Populators;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.Terrain;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainType;
@@ -25,7 +26,7 @@ import raccoonman.reterraforged.world.worldgen.util.Seed;
 
 public class TerrainProvider {
 
-    public static List<CellPopulator> generateTerrain(Seed seed, TerrainSettings settings, RegionConfig config, Levels levels, HolderGetter<Noise> noiseLookup) {
+    public static List<CellPopulator> generateTerrain(Seed seed, ClimateParameterSampler climate, TerrainSettings settings, RegionConfig config, Levels levels, HolderGetter<Noise> noiseLookup) {
     	TerrainSettings.General general = settings.general;
     	float verticalScale = general.globalVerticalScale;
     	boolean fancyMountains = general.fancyMountains;
@@ -36,27 +37,27 @@ public class TerrainProvider {
     	Noise ground = PresetNoiseData.getNoise(noiseLookup, PresetTerrainTypeNoise.GROUND);
 
     	List<TerrainPopulator> mixable = new ArrayList<>();
-    	mixable.add(Populators.makeSteppe(terrainSeed, ground, settings.steppe));
-    	mixable.add(Populators.makePlains(terrainSeed, ground, settings.plains, verticalScale));
-        mixable.add(Populators.makeDales(terrainSeed, ground, settings.dales));
-        mixable.add(Populators.makeHills1(terrainSeed, ground, settings.hills, verticalScale));
-        mixable.add(Populators.makeHills2(terrainSeed, ground, settings.hills, verticalScale));
-        mixable.add(Populators.makeTorridonian(terrainSeed, ground, settings.torridonian));
-        mixable.add(Populators.makePlateau(terrainSeed, ground, settings.plateau, verticalScale));
-        mixable.add(Populators.makeBadlands(terrainSeed, ground, settings.badlands));
+        mixable.add(Populators.makeSteppe(terrainSeed, climate, ground, settings.steppe));
+        mixable.add(Populators.makePlains(terrainSeed, climate, ground, settings.plains, verticalScale));
+        mixable.add(Populators.makeDales(terrainSeed, climate, ground, settings.dales));
+        mixable.add(Populators.makeHills1(terrainSeed, climate, ground, settings.hills, verticalScale));
+        mixable.add(Populators.makeHills2(terrainSeed, climate, ground, settings.hills, verticalScale));
+        mixable.add(Populators.makeTorridonian(terrainSeed, climate, ground, settings.torridonian));
+        mixable.add(Populators.makePlateau(terrainSeed, climate, ground, settings.plateau, verticalScale));
+        mixable.add(Populators.makeBadlands(terrainSeed, climate, ground, settings.badlands));
     	mixable = mixable.stream().filter((populator) -> {
     		return populator.weight() > 0.0F;
     	}).toList();
 
         List<CellPopulator> unmixable = new ArrayList<>();
-        unmixable.add(Populators.makeBadlands(terrainSeed, ground, settings.badlands));
+        unmixable.add(Populators.makeBadlands(terrainSeed, climate, ground, settings.badlands));
 
         if (mountainVariety > 0.0F) {
-        	addVariedMountains(unmixable, terrainSeed, ground, settings.mountains, verticalScale, fancyMountains, legacyMountainScaling, mountainVariety);
+            addVariedMountains(unmixable, terrainSeed, climate, ground, settings.mountains, verticalScale, fancyMountains, legacyMountainScaling, mountainVariety);
         } else {
-        	unmixable.add(Populators.makeMountains(terrainSeed, ground, settings.mountains, 1.0F, verticalScale, fancyMountains, legacyMountainScaling));
-        	unmixable.add(Populators.makeMountains2(terrainSeed, ground, settings.mountains, verticalScale, fancyMountains, legacyMountainScaling));
-        	unmixable.add(Populators.makeMountains3(terrainSeed, ground, settings.mountains, verticalScale, fancyMountains, legacyMountainScaling));
+            unmixable.add(Populators.makeMountains(terrainSeed, climate, ground, settings.mountains, 1.0F, verticalScale, fancyMountains, legacyMountainScaling));
+            unmixable.add(Populators.makeMountains2(terrainSeed, climate, ground, settings.mountains, verticalScale, fancyMountains, legacyMountainScaling));
+            unmixable.add(Populators.makeMountains3(terrainSeed, climate, ground, settings.mountains, verticalScale, fancyMountains, legacyMountainScaling));
         }
 
         unmixable.add(new VolcanoPopulator(terrainSeed, config, levels, settings.volcano.weight));
@@ -79,10 +80,10 @@ public class TerrainProvider {
     private static final float EROSION_SPREAD_LOW = 0.25F;
     private static final float EROSION_SPREAD_HIGH = 0.20F;
 
-    private static void addVariedMountains(List<CellPopulator> unmixable, Seed seed, Noise ground, TerrainSettings.Terrain mountains, float verticalScale, boolean fancyMountains, boolean legacyMountainScaling, float variety) {
-    	TerrainPopulator m1Center = Populators.makeMountains(seed, ground, mountains, 1.0F, verticalScale, fancyMountains, legacyMountainScaling);
-    	TerrainPopulator m2Center = Populators.makeMountains2(seed, ground, mountains, verticalScale, fancyMountains, legacyMountainScaling);
-    	TerrainPopulator m3Center = Populators.makeMountains3(seed, ground, mountains, verticalScale, fancyMountains, legacyMountainScaling);
+    private static void addVariedMountains(List<CellPopulator> unmixable, Seed seed, ClimateParameterSampler climate, Noise ground, TerrainSettings.Terrain mountains, float verticalScale, boolean fancyMountains, boolean legacyMountainScaling, float variety) {
+        TerrainPopulator m1Center = Populators.makeMountains(seed, climate, ground, mountains, 1.0F, verticalScale, fancyMountains, legacyMountainScaling);
+        TerrainPopulator m2Center = Populators.makeMountains2(seed, climate, ground, mountains, verticalScale, fancyMountains, legacyMountainScaling);
+        TerrainPopulator m3Center = Populators.makeMountains3(seed, climate, ground, mountains, verticalScale, fancyMountains, legacyMountainScaling);
 
     	Seed varietySeed = seed.offset(713);
 
@@ -93,9 +94,9 @@ public class TerrainProvider {
     		mountains.horizontalScale * (1.0F + MAX_SPREAD_HORIZONTAL * variety)
     	);
     	float lowErosion = EROSION_CENTER + EROSION_SPREAD_HIGH * variety;
-    	TerrainPopulator m1Low = Populators.makeMountains(varietySeed, ground, lowSettings, 1.0F, verticalScale, fancyMountains, legacyMountainScaling, lowErosion);
-    	TerrainPopulator m2Low = Populators.makeMountains2(varietySeed, ground, lowSettings, verticalScale, fancyMountains, legacyMountainScaling, lowErosion);
-    	TerrainPopulator m3Low = Populators.makeMountains3(varietySeed, ground, lowSettings, verticalScale, fancyMountains, legacyMountainScaling, lowErosion);
+        TerrainPopulator m1Low = Populators.makeMountains(varietySeed, climate, ground, lowSettings, 1.0F, verticalScale, fancyMountains, legacyMountainScaling, lowErosion);
+        TerrainPopulator m2Low = Populators.makeMountains2(varietySeed, climate, ground, lowSettings, verticalScale, fancyMountains, legacyMountainScaling, lowErosion);
+        TerrainPopulator m3Low = Populators.makeMountains3(varietySeed, climate, ground, lowSettings, verticalScale, fancyMountains, legacyMountainScaling, lowErosion);
 
     	TerrainSettings.Terrain highSettings = new TerrainSettings.Terrain(
     		mountains.weight,
@@ -104,9 +105,9 @@ public class TerrainProvider {
     		mountains.horizontalScale * (1.0F - MAX_SPREAD_HORIZONTAL * variety)
     	);
     	float highErosion = EROSION_CENTER - EROSION_SPREAD_LOW * variety;
-    	TerrainPopulator m1High = Populators.makeMountains(varietySeed, ground, highSettings, 1.0F, verticalScale, fancyMountains, legacyMountainScaling, highErosion);
-    	TerrainPopulator m2High = Populators.makeMountains2(varietySeed, ground, highSettings, verticalScale, fancyMountains, legacyMountainScaling, highErosion);
-    	TerrainPopulator m3High = Populators.makeMountains3(varietySeed, ground, highSettings, verticalScale, fancyMountains, legacyMountainScaling, highErosion);
+        TerrainPopulator m1High = Populators.makeMountains(varietySeed, climate, ground, highSettings, 1.0F, verticalScale, fancyMountains, legacyMountainScaling, highErosion);
+        TerrainPopulator m2High = Populators.makeMountains2(varietySeed, climate, ground, highSettings, verticalScale, fancyMountains, legacyMountainScaling, highErosion);
+        TerrainPopulator m3High = Populators.makeMountains3(varietySeed, climate, ground, highSettings, verticalScale, fancyMountains, legacyMountainScaling, highErosion);
 
     	unmixable.add(new VariedMountainPopulator(new TerrainPopulator[]{m1Low, m1Center, m1High}, mountains.weight));
     	unmixable.add(new VariedMountainPopulator(new TerrainPopulator[]{m2Low, m2Center, m2High}, mountains.weight));
