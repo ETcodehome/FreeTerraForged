@@ -19,7 +19,7 @@ import raccoonman.reterraforged.world.worldgen.IFlowFieldHolder;
 
 public class FlowFieldDebugRenderer {
 
-    public static boolean ENABLED = true;
+    public static boolean ENABLED = false;
     private static final int LINE_RADIUS_BLOCKS = 64;
     private static final int TEXT_RADIUS_BLOCKS = 8;
 
