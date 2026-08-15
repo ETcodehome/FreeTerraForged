@@ -8,12 +8,6 @@ architectury {
 }
 
 subprojects {
-
-    // Skips Mercury source remapping to prevent Eclipse JDT AbortCompilation crashes
-    tasks.matching { it.name == "remapSourcesJar" }.configureEach {
-        enabled = false
-    }
-
     apply plugin: "dev.architectury.loom"
 
     loom {
@@ -38,9 +32,6 @@ allprojects {
     repositories {
         maven { url "https://maven.shedaniel.me" }
         maven { url 'https://maven.minecraftforge.net/' }
-        maven { url "https://maven.architectury.dev/" }
-        maven { url "https://maven.fabricmc.net/" }
-        gradlePluginPortal()
     }
 
     tasks.withType(JavaCompile) {

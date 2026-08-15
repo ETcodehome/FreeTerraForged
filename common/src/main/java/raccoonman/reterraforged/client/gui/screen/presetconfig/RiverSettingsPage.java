@@ -2,7 +2,6 @@ package raccoonman.reterraforged.client.gui.screen.presetconfig;
 
 import java.util.Optional;
 
-import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.network.chat.Component;
 import raccoonman.reterraforged.client.data.RTFTranslationKeys;
 import raccoonman.reterraforged.client.gui.screen.page.LinkedPageScreen.Page;
@@ -10,7 +9,6 @@ import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetListPage.Pr
 import raccoonman.reterraforged.client.gui.widget.Slider;
 import raccoonman.reterraforged.client.gui.widget.ValueButton;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
-import raccoonman.reterraforged.data.worldgen.preset.settings.FlowSettings;
 import raccoonman.reterraforged.data.worldgen.preset.settings.RiverSettings;
 import raccoonman.reterraforged.data.worldgen.preset.settings.RiverSettings.Lake;
 import raccoonman.reterraforged.data.worldgen.preset.settings.RiverSettings.River;
@@ -46,9 +44,6 @@ class RiverSettingsPage extends PresetEditorPage {
 	private Slider wetlandChance;
 	private Slider wetlandSizeMin;
 	private Slider wetlandSizeMax;
-	private CycleButton<Boolean> toggleFlowParticles;
-	private CycleButton<Boolean> toggleBoatFlowDynamics;
-	private CycleButton<Boolean> toggleNavigableWaterfalls;
 	
 	public RiverSettingsPage(PresetConfigScreen screen, PresetEntry preset) {
 		super(screen, preset);
@@ -64,21 +59,6 @@ class RiverSettingsPage extends PresetEditorPage {
 		super.init();
 		
 		Preset preset = this.preset.getPreset();
-
-		FlowSettings flow = preset.flow();
-
-		this.toggleFlowParticles = PresetWidgets.createToggle(flow.flowParticles, RTFTranslationKeys.GUI_BUTTON_FLOW_PARTICLES, (button, value) -> {
-			flow.flowParticles = value;
-		});
-
-		this.toggleBoatFlowDynamics = PresetWidgets.createToggle(flow.boatFlowDynamics, RTFTranslationKeys.GUI_BUTTON_BOAT_FLOW_DYNAMICS, (button, value) -> {
-			flow.boatFlowDynamics = value;
-		});
-
-		this.toggleNavigableWaterfalls = PresetWidgets.createToggle(flow.navigableWaterfalls, RTFTranslationKeys.GUI_BUTTON_NAVIGABLE_WATERFALLS, (button, value) -> {
-			flow.navigableWaterfalls = value;
-		});
-
 		RiverSettings river = preset.rivers();
 		
 		this.seedOffset = PresetWidgets.createRandomButton(RTFTranslationKeys.GUI_BUTTON_RIVER_SEED_OFFSET, river.seedOffset, (value) -> {
@@ -213,15 +193,9 @@ class RiverSettingsPage extends PresetEditorPage {
 			this.regenerate();
 			return value;
 		});
-
+		
 		this.left.addWidget(this.seedOffset);
 		this.left.addWidget(this.riverCount);
-
-		this.left.addWidget(PresetWidgets.createLabel(RTFTranslationKeys.GUI_LABEL_RIVER_FLOW_DYNAMICS));
-		this.left.addWidget(this.toggleFlowParticles);
-		this.left.addWidget(this.toggleBoatFlowDynamics);
-		this.left.addWidget(this.toggleNavigableWaterfalls);
-
 		this.left.addWidget(PresetWidgets.createLabel(RTFTranslationKeys.GUI_LABEL_MAIN_RIVERS));
 		this.left.addWidget(this.mainRiverBedDepth);
 		this.left.addWidget(this.mainRiverMinBankHeight);

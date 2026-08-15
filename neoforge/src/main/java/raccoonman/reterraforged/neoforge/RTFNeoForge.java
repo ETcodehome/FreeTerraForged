@@ -9,7 +9,6 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.common.world.BiomeModifier;
 import net.neoforged.neoforge.data.event.GatherDataEvent;
@@ -22,7 +21,7 @@ import raccoonman.reterraforged.platform.neoforge.RegistryUtilImpl;
 import raccoonman.reterraforged.world.worldgen.biome.modifier.neoforge.AddModifier;
 import raccoonman.reterraforged.world.worldgen.biome.modifier.neoforge.ReplaceModifier;
 
-@Mod(RTFCommon.MOD_ID)
+@Mod("reterraforged")
 public class RTFNeoForge {
 
 	public RTFNeoForge(IEventBus modEventBus, ModContainer container) {
@@ -39,11 +38,9 @@ public class RTFNeoForge {
 		biomeModifierSerializers.register("replace", () -> ReplaceModifier.CODEC);
 		biomeModifierSerializers.register(modEventBus);
 
-		// Register client-only listeners safely when running on the physical client
 		if (FMLEnvironment.dist == Dist.CLIENT) {
 			modEventBus.addListener(RTFNeoForgeClient::registerPresetEditors);
 		}
-
 		modEventBus.addListener(RTFNeoForge::gatherData);
 		RegistryUtilImpl.register(modEventBus);
 	}

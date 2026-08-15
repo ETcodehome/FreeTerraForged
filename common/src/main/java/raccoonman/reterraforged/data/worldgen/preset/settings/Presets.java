@@ -51,7 +51,6 @@ public class Presets {
 				new Lake(0.3F, 0.0F, 0.03F, 10, 75, 150, 2, 10),
 				new Wetland(0.6F, 175, 225)
 			),
-			FlowSettings.makeDefault(),
 			IslandSettings.makeDefault(),
 			new FilterSettings(
 				new Erosion(135, 12, 0.7F, 0.7F, 0.5F, 0.5F),
@@ -96,7 +95,6 @@ public class Presets {
 				new Lake(0.3F, 0.0F, 0.03F, 10, 75, 150, 2, 10),
 				new Wetland(0.6F, 175, 225)
 			),
-			FlowSettings.makeDefault(),
 			IslandSettings.makeDefault(),
 			new FilterSettings(
 				new Erosion(135, 12, 0.7F, 0.7F, 0.5F, 0.5F),
@@ -141,7 +139,6 @@ public class Presets {
 				new Lake(0.462F, 0.0F, 0.028F, 10, 75, 150, 2, 10),
 				new Wetland(0.796F, 196, 255)
 			),
-			FlowSettings.makeDefault(),
 			IslandSettings.makeDefault(),
 			new FilterSettings(
 				new Erosion(100, 12, 0.699F, 0.699F, 0.5F, 0.5F),
@@ -187,7 +184,6 @@ public class Presets {
 				new Lake(0.671F, 0.0F, 0.028F, 8, 75, 150, 2, 7),
 				new Wetland(0.865F, 134, 201)
 			),
-			FlowSettings.makeDefault(),
 			IslandSettings.makeDefault(),
 			new FilterSettings(
 				new Erosion(175, 12, 0.648F, 0.657F, 0.5F, 0.5F),
@@ -232,7 +228,6 @@ public class Presets {
 				new Lake(0.462F, 0.0F, 0.028F, 10, 75, 150, 2, 10),
 				new Wetland(0.796F, 196, 255)
 			),
-			FlowSettings.makeDefault(),
 			IslandSettings.makeDefault(),
 			new FilterSettings(
 				new Erosion(100, 12, 0.699F, 0.699F, 0.5F, 0.5F),
@@ -277,7 +272,6 @@ public class Presets {
 				new Lake(0.595F, 0.0F, 0.028F, 10, 75, 150, 2, 10),
 				new Wetland(0.86F, 175, 225)
 			),
-			FlowSettings.makeDefault(),
 			IslandSettings.makeDefault(),
 			new FilterSettings(
 				new Erosion(165, 15, 0.612F, 0.652F, 0.5F, 0.5F),
@@ -467,7 +461,6 @@ public class Presets {
 								50,
 								500)
 				),
-				FlowSettings.makeDefault(),
 				new IslandSettings(
 						true,
 						0.5224F,
@@ -692,7 +685,6 @@ public class Presets {
 								50,
 								500)
 				),
-				FlowSettings.makeDefault(),
 				IslandSettings.makeDefault(),
 				new FilterSettings(
 

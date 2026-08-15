@@ -20,9 +20,6 @@
     "main": [
       "raccoonman.reterraforged.fabric.RTFFabric"
     ],
-    "client": [
-      "raccoonman.reterraforged.fabric.RTFFabricClient"
-    ],
     "fabric-datagen": [
       "raccoonman.reterraforged.fabric.RTFFabric"
     ]

@@ -56,8 +56,6 @@ public class Cell {
 
     public float beachNoise;
     public RiverCarverSettings.RiverZone riverZone = RiverCarverSettings.RiverZone.None;
-    public byte flowAngle;
-    public boolean hasFlow;
 
     public Cell() {
         this.regionMoisture = 0.5F;
@@ -104,8 +102,6 @@ public class Cell {
         this.riverWaterLevel = other.riverWaterLevel;
         this.riverZone = other.riverZone;
         this.waterTable = other.waterTable;
-        this.flowAngle = other.flowAngle;
-        this.hasFlow = other.hasFlow;
         this.globalContinentScale = other.globalContinentScale;
     }
 
