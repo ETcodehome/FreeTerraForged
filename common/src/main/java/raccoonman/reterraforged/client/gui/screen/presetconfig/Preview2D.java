@@ -404,6 +404,15 @@ public class Preview2D extends Button {
         }
 
         renderSpawnMarker(guiGraphics);
+        if (this.biomes != null && this.biomes.warning() != null) {
+            guiGraphics.drawCenteredString(
+                Minecraft.getInstance().font,
+                this.biomes.warning(),
+                xPos + this.width / 2,
+                yPos + 4,
+                0xFFFF5555
+            );
+        }
         this.updateLegend(mx, my);
         this.renderLegend(guiGraphics, mx, my, this.legendLabels, this.legendValues, xPos, yPos + this.width + 30, 10, 0xFFFFFF);
     }

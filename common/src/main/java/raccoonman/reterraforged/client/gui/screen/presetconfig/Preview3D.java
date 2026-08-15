@@ -490,6 +490,16 @@ public class Preview3D extends Button {
         }
 
         renderSpawnMarker(guiGraphics);
+        BiomePreview.Sidecar activeBiomes = this.tile != null ? this.biomes : LAST_GLOBAL_BIOMES;
+        if (activeBiomes != null && activeBiomes.warning() != null) {
+            guiGraphics.drawCenteredString(
+                Minecraft.getInstance().font,
+                activeBiomes.warning(),
+                x + this.width / 2,
+                y + 4,
+                0xFFFF5555
+            );
+        }
         this.updateLegend(mx, my);
         this.renderLegend(guiGraphics, mx, my, this.legendLabels, this.legendValues, x, y + this.width + 30, 10, 0xFFFFFF);
     }

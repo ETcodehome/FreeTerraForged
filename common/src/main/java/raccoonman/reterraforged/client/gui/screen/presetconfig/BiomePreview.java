@@ -16,6 +16,7 @@ import net.minecraft.client.gui.screens.worldselection.WorldCreationContext;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.biome.BiomePreviewResolver;
+import raccoonman.reterraforged.world.worldgen.biome.BiomePreviewIntegration;
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
@@ -58,25 +59,27 @@ final class BiomePreview {
         Map<ResourceLocation, Entry> entries = new HashMap<>();
         int halfSize = size / 2;
 
-        tile.iterate((cell, x, z) -> {
-            int blockX = centerX + (x - halfSize) * zoom;
-            int blockZ = centerZ + (z - halfSize) * zoom;
-            int surfaceY = surfaceY(cell, levels);
-            Holder<Biome> biome = this.resolver.resolveQuart(
-                QuartPos.fromBlock(blockX),
-                QuartPos.fromBlock(surfaceY),
-                QuartPos.fromBlock(blockZ)
-            );
-            ResourceLocation id = biome.unwrapKey().map(key -> key.location()).orElse(UNREGISTERED);
-            Entry entry = entries.computeIfAbsent(
-                id,
-                key -> new Entry(key.toString(), BiomePreviewColors.color(biome, key))
-            );
-            int index = z * size + x;
-            ids[index] = entry.id;
-            colors[index] = entry.color;
-        });
-        return new Sidecar(this.cacheKey, size, ids, colors);
+        try (BiomePreviewIntegration.Session ignored = this.resolver.openIntegrationSession()) {
+            tile.iterate((cell, x, z) -> {
+                int blockX = centerX + (x - halfSize) * zoom;
+                int blockZ = centerZ + (z - halfSize) * zoom;
+                int surfaceY = surfaceY(cell, levels);
+                Holder<Biome> biome = this.resolver.resolveQuart(
+                    QuartPos.fromBlock(blockX),
+                    QuartPos.fromBlock(surfaceY),
+                    QuartPos.fromBlock(blockZ)
+                );
+                ResourceLocation id = biome.unwrapKey().map(key -> key.location()).orElse(UNREGISTERED);
+                Entry entry = entries.computeIfAbsent(
+                    id,
+                    key -> new Entry(key.toString(), BiomePreviewColors.color(biome, key))
+                );
+                int index = z * size + x;
+                ids[index] = entry.id;
+                colors[index] = entry.color;
+            });
+        }
+        return new Sidecar(this.cacheKey, size, ids, colors, this.resolver.warning());
     }
 
     static CacheKey cacheKey(WorldCreationContext settings, Preset preset) {
@@ -115,12 +118,14 @@ final class BiomePreview {
         private final int size;
         private final String[] ids;
         private final int[] colors;
+        private final String warning;
 
-        private Sidecar(CacheKey cacheKey, int size, String[] ids, int[] colors) {
+        private Sidecar(CacheKey cacheKey, int size, String[] ids, int[] colors, String warning) {
             this.cacheKey = cacheKey;
             this.size = size;
             this.ids = ids;
             this.colors = colors;
+            this.warning = warning;
         }
 
         String id(int x, int z) {
@@ -133,6 +138,10 @@ final class BiomePreview {
 
         CacheKey cacheKey() {
             return this.cacheKey;
+        }
+
+        String warning() {
+            return this.warning;
         }
 
         private int index(int x, int z) {
