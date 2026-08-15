@@ -40,10 +40,6 @@ public class FlowFieldDebugRenderer {
         // perform rendering passes
         renderLines(poseStack, camera, bufferSource, level, playerPos);
         renderTextMagnitudes(poseStack, bufferSource, level, playerPos);
-
-        // actually render by ending batch operation
-        poseStack.popPose();
-        bufferSource.endBatch(RenderType.lines());
     }
 
     private static void renderLines(PoseStack poseStack, Camera camera, MultiBufferSource.BufferSource bufferSource, Level level, BlockPos playerPos) {
@@ -97,6 +93,10 @@ public class FlowFieldDebugRenderer {
                         endZ + (float) Math.sin(headAngle2) * arrowLen, r, g, b, 1.0f);
             }
         }
+
+        // actually render by ending batch operation
+        poseStack.popPose();
+        bufferSource.endBatch(RenderType.lines());
     }
 
     private static void renderTextMagnitudes(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource, Level level, BlockPos playerPos) {

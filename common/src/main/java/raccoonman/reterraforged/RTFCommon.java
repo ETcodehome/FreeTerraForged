@@ -5,7 +5,6 @@ import org.apache.logging.log4j.Logger;
 
 import net.minecraft.resources.ResourceLocation;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
-import raccoonman.reterraforged.network.RTFNetworking;
 import raccoonman.reterraforged.platform.RegistryUtil;
 import raccoonman.reterraforged.registries.RTFBuiltInRegistries;
 import raccoonman.reterraforged.registries.RTFRegistries;
@@ -25,13 +24,6 @@ import raccoonman.reterraforged.world.worldgen.noise.module.Noises;
 import raccoonman.reterraforged.world.worldgen.structure.rule.StructureRule;
 import raccoonman.reterraforged.world.worldgen.structure.rule.StructureRules;
 import raccoonman.reterraforged.world.worldgen.surface.rule.RTFSurfaceRules;
-
-import dev.architectury.networking.NetworkManager;
-import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.world.level.chunk.ChunkAccess;
-import net.minecraft.world.level.chunk.status.ChunkStatus;
-import raccoonman.reterraforged.network.FlowFieldSyncPayload;
-import raccoonman.reterraforged.world.worldgen.IFlowFieldHolder;
 
 public class RTFCommon {
 	public static final String MOD_ID = "reterraforged";
@@ -58,8 +50,6 @@ public class RTFCommon {
 		RegistryUtil.createDataRegistry(RTFRegistries.NOISE, Noise.DIRECT_CODEC, false);
 		RegistryUtil.createDataRegistry(RTFRegistries.PRESET, Preset.DIRECT_CODEC, false);
 		RegistryUtil.createDataRegistry(RTFRegistries.STRUCTURE_RULE, StructureRule.DIRECT_CODEC, false);
-
-		RTFNetworking.init();
 	}
 
 	public static ResourceLocation location(String name) {
