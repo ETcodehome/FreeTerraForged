@@ -4,11 +4,14 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.Minecraft;
 import raccoonman.reterraforged.client.debug.FlowFieldDebugRenderer;
+import raccoonman.reterraforged.fabric.network.RTFFabricClientNetworking;
 
 public class RTFFabricClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+
+        RTFFabricClientNetworking.init();
 
         Minecraft mc = Minecraft.getInstance();
         WorldRenderEvents.AFTER_TRANSLUCENT.register(context -> {
