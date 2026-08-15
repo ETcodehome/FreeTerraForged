@@ -1,6 +1,6 @@
 package raccoonman.reterraforged.mixin;
 
-import dev.architectury.networking.NetworkManager;
+import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.network.PlayerChunkSender;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
@@ -25,11 +25,9 @@ public class MixinPlayerChunkSender {
             ChunkFlowField flowField = holder.reterraforged$getFlowField();
 
             if (flowField != null && flowField.hasRivers()) {
-                // Now accessing 'listener' directly from the static method parameters
-                NetworkManager.sendToPlayer(
-                        listener.player,
+                listener.send(new ClientboundCustomPayloadPacket(
                         new FlowFieldSyncPayload(chunk.getPos(), flowField.getRawGrid())
-                );
+                ));
             }
         }
     }
