@@ -156,8 +156,11 @@ public final class BiomePreviewResolver {
 	}
 
 	public Holder<Biome> resolveQuart(int quartX, int quartY, int quartZ) {
-		Holder<Biome> selected;
+		Holder<Biome> selected = null;
+		Holder<Biome> composedOriginal = null;
+		boolean composedSelection = false;
 		if (this.positionalSelectionEnabled.get()) {
+			PreviewBiomeQueryContext.begin(quartX, quartY, quartZ);
 			try {
 				selected = this.integrationContext.generator().getBiomeSource()
 					.getNoiseBiome(quartX, quartY, quartZ, this.sampler);
@@ -167,6 +170,14 @@ public final class BiomePreviewResolver {
 			} catch (RuntimeException | LinkageError error) {
 				this.disablePositionalSelection(error);
 				selected = this.resolveFallback(quartX, quartY, quartZ);
+			} finally {
+				composedSelection = PreviewBiomeQueryContext.matches(quartX, quartY, quartZ, selected);
+				if (composedSelection && PreviewBiomeQueryContext.original() instanceof Holder<?> holder) {
+					@SuppressWarnings("unchecked")
+					Holder<Biome> original = (Holder<Biome>) holder;
+					composedOriginal = original;
+				}
+				PreviewBiomeQueryContext.end();
 			}
 		} else {
 			selected = this.resolveFallback(quartX, quartY, quartZ);
@@ -175,7 +186,11 @@ public final class BiomePreviewResolver {
 			return selected;
 		}
 		Climate.TargetPoint target = this.sampler.sample(quartX, quartY, quartZ);
-		if (this.terraBlenderParameters != null) {
+		if (composedSelection) {
+			if (composedOriginal != null && !this.surfaceFilter.isUnderground(composedOriginal)) {
+				return composedOriginal;
+			}
+		} else if (this.terraBlenderParameters != null) {
 			Holder<Biome> regionalSurface = this.terraBlenderParameters
 				.reterraforged$inspectSelection(target, quartX, quartY, quartZ)
 				.original();

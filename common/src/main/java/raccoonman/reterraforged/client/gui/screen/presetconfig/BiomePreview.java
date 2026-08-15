@@ -52,7 +52,14 @@ final class BiomePreview {
         return new BiomePreview(resolver, cacheKey(settings, preset));
     }
 
-    Sidecar resolve(Tile tile, int centerX, int centerZ, int zoom, Levels levels) {
+    Sidecar resolve(
+        Tile tile,
+        int centerX,
+        int centerZ,
+        int zoom,
+        Levels levels,
+        PreviewCancellation cancellation
+    ) {
         int size = tile.getBlockSize().size();
         String[] ids = new String[size * size];
         int[] colors = new int[size * size];
@@ -61,6 +68,7 @@ final class BiomePreview {
 
         try (BiomePreviewIntegration.Session ignored = this.resolver.openIntegrationSession()) {
             tile.iterate((cell, x, z) -> {
+                cancellation.check();
                 int blockX = centerX + (x - halfSize) * zoom;
                 int blockZ = centerZ + (z - halfSize) * zoom;
                 int surfaceY = surfaceY(cell, levels);
@@ -80,6 +88,26 @@ final class BiomePreview {
             });
         }
         return new Sidecar(this.cacheKey, size, ids, colors, this.resolver.warning());
+    }
+
+    Sidecar resolveCached(
+        PreviewComputationCache cache,
+        Tile tile,
+        int centerX,
+        int centerZ,
+        int zoom,
+        Levels levels,
+        PreviewCancellation cancellation
+    ) {
+        int size = tile.getBlockSize().size();
+        PreviewComputationCache.SidecarKey key = new PreviewComputationCache.SidecarKey(
+            this.cacheKey,
+            centerX,
+            centerZ,
+            zoom,
+            size
+        );
+        return cache.sidecar(key, () -> this.resolve(tile, centerX, centerZ, zoom, levels, cancellation)).join();
     }
 
     static CacheKey cacheKey(WorldCreationContext settings, Preset preset) {

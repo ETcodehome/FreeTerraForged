@@ -16,6 +16,7 @@ import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.world.worldgen.biome.RTFClimateSampler;
 import raccoonman.reterraforged.world.worldgen.biome.RTFMultiNoiseBiomeSource;
 import raccoonman.reterraforged.world.worldgen.biome.UndergroundBiomeBanding;
+import raccoonman.reterraforged.world.worldgen.biome.PreviewBiomeQueryContext;
 import raccoonman.reterraforged.world.worldgen.terrablender.TerraBlenderParameterList;
 
 /**
@@ -48,6 +49,13 @@ public abstract class MixinMultiNoiseBiomeSource implements RTFMultiNoiseBiomeSo
                                                 final CallbackInfoReturnable<Holder<Biome>> cir) {
         Holder<Biome> selected = cir.getReturnValue();
         if (selected == null) {
+            return;
+        }
+
+        // The parameter-list mixin already composed this exact result.  A
+        // replacement biome that changed the return value intentionally falls
+        // through so the replacement remains authoritative.
+        if (PreviewBiomeQueryContext.matches(x, y, z, selected)) {
             return;
         }
 

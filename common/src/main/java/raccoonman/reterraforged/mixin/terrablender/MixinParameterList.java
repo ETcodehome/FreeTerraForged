@@ -27,6 +27,7 @@ import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.registries.RTFRegistries;
 import raccoonman.reterraforged.world.worldgen.biome.ClimateParameterListComposition;
 import raccoonman.reterraforged.world.worldgen.biome.UndergroundBiomeBanding;
+import raccoonman.reterraforged.world.worldgen.biome.PreviewBiomeQueryContext;
 import raccoonman.reterraforged.world.worldgen.biome.UndergroundBiomeTags;
 import raccoonman.reterraforged.world.worldgen.terrablender.TerraBlenderParameterList;
 import terrablender.api.Region;
@@ -262,7 +263,11 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 			return null;
 		}
 		T bandedValue = banding.appliesAt(targetPoint) ? banding.findValue(targetPoint, x, z) : originalValue;
-		return reterraforged$isDeferredPlaceholder(bandedValue) ? null : bandedValue;
+		if (reterraforged$isDeferredPlaceholder(bandedValue)) {
+			return null;
+		}
+		PreviewBiomeQueryContext.record(x, y, z, originalValue, bandedValue);
+		return bandedValue;
 	}
 
 	@Override

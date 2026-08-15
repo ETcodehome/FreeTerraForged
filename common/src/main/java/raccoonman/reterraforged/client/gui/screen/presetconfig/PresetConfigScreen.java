@@ -33,6 +33,7 @@ import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 
 public class PresetConfigScreen extends LinkedPageScreen {
 	private CreateWorldScreen parent;
+	private final PreviewComputationCache previewCache = new PreviewComputationCache();
 	private String seed;
 	private boolean seedInitialized;
 	private boolean applySeedOnClose;
@@ -44,12 +45,17 @@ public class PresetConfigScreen extends LinkedPageScreen {
 	
 	@Override
 	public void onClose() {
+		this.previewCache.close();
 		super.onClose();
 		if(this.applySeedOnClose) {
 			this.applySeedToParent();
 		}
 
 		this.minecraft.setScreen(this.parent);
+	}
+
+	PreviewComputationCache previewCache() {
+		return this.previewCache;
 	}
 
 	public <T extends GuiEventListener & Renderable & NarratableEntry> T addWidgetToScreen(T widget) {

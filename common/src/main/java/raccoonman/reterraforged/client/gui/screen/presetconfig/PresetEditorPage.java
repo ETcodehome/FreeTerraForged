@@ -36,8 +36,8 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 
 	private EditBox seedEdit;
 	private Button seedRandomize;
-	public static Preview3D preview3D;
-	public static Preview2D preview2D;
+	private Preview3D preview3D;
+	private Preview2D preview2D;
 
 	public PresetEditorPage(PresetConfigScreen screen, PresetEntry preset) {
 		super(screen);
@@ -58,6 +58,10 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 
 	PresetConfigScreen getScreen() {
 		return this.screen;
+	}
+
+	PreviewComputationCache previewCache() {
+		return this.screen.previewCache();
 	}
 
 	@Override
@@ -256,10 +260,12 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		if (this.preview3D != null) {
 			this.screen.removeWidgetFromScreen(this.preview3D);
 			try { this.preview3D.close(); } catch (Exception e) { e.printStackTrace(); }
+			this.preview3D = null;
 		}
 		if (this.preview2D != null) {
 			this.screen.removeWidgetFromScreen(this.preview2D);
 			try { this.preview2D.close(); } catch (Exception e) { e.printStackTrace(); }
+			this.preview2D = null;
 		}
 	}
 
@@ -270,6 +276,8 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 			if (this.preview3D != null) this.preview3D.close();
 			if (this.preview2D != null) this.preview2D.close();
 		} catch (Exception e) { e.printStackTrace(); }
+		this.preview3D = null;
+		this.preview2D = null;
 	}
 
 	@Override
