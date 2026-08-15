@@ -1,6 +1,5 @@
 package raccoonman.reterraforged.client.data;
 
-import net.minecraft.network.chat.Component;
 import raccoonman.reterraforged.RTFCommon;
 
 public final class RTFTranslationKeys {

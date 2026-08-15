@@ -8,7 +8,6 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.debug.DebugRenderer;
 import net.minecraft.core.BlockPos;
-import net.minecraft.tags.BiomeTags;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.ChunkAccess;
@@ -19,121 +18,118 @@ import raccoonman.reterraforged.world.worldgen.IFlowFieldHolder;
 
 public class FlowFieldDebugRenderer {
 
-    public static boolean ENABLED = false;
-    private static final int LINE_RADIUS_BLOCKS = 64;
-    private static final int TEXT_RADIUS_BLOCKS = 8;
+    private static boolean ENABLED = false;
+    private static final int renderVectorRadius = 64;
+    private static final int renderMagnitudeRadius = 8;
+    private static final int maxDistSq = renderMagnitudeRadius * renderMagnitudeRadius;
+    private static final int textColor = 0xFFFFFFFF;
+    private static final float fontScale = 0.010f;
 
     public static void render(PoseStack poseStack, Camera camera, MultiBufferSource.BufferSource bufferSource) {
+
+        // Only render if the flag has been set in code.
+        // There is intentionally no runtime toggle.
         if (!ENABLED) return;
 
         Minecraft mc = Minecraft.getInstance();
         Player player = mc.player;
         Level level = mc.level;
         if (player == null || level == null) return;
-
         BlockPos playerPos = player.blockPosition();
 
+        // perform rendering passes
         renderLines(poseStack, camera, bufferSource, level, playerPos);
         renderTextMagnitudes(poseStack, bufferSource, level, playerPos);
+
+        // actually render by ending batch operation
+        poseStack.popPose();
+        bufferSource.endBatch(RenderType.lines());
     }
 
     private static void renderLines(PoseStack poseStack, Camera camera, MultiBufferSource.BufferSource bufferSource, Level level, BlockPos playerPos) {
+
+        // Get the perspective to render from
         Vec3 camPos = camera.getPosition();
         VertexConsumer buffer = bufferSource.getBuffer(RenderType.lines());
-
         poseStack.pushPose();
         poseStack.translate(-camPos.x, -camPos.y, -camPos.z);
         PoseStack.Pose lastPose = poseStack.last();
 
-        for (int x = -LINE_RADIUS_BLOCKS; x <= LINE_RADIUS_BLOCKS; x++) {
-            for (int z = -LINE_RADIUS_BLOCKS; z <= LINE_RADIUS_BLOCKS; z++) {
+        for (int x = -renderVectorRadius; x <= renderVectorRadius; x++) {
+            for (int z = -renderVectorRadius; z <= renderVectorRadius; z++) {
+
+                // Guard against rendering for non rtf chunks
                 int worldX = playerPos.getX() + x;
                 int worldZ = playerPos.getZ() + z;
-
                 ChunkAccess chunk = level.getChunk(worldX >> 4, worldZ >> 4);
                 if (!(chunk instanceof IFlowFieldHolder holder)) continue;
 
-                ChunkFlowField flowField = holder.reterraforged$getFlowField();
+                // Guard against rendering zero flow flowfields
                 int localX = worldX & 15;
                 int localZ = worldZ & 15;
+                ChunkFlowField flowField = holder.reterraforged$getFlowField();
+                if (!flowField.hasFlow(localX, localZ)) continue;
 
-                int surfaceY = level.getHeight(Heightmap.Types.WORLD_SURFACE, worldX, worldZ);
-                BlockPos samplePos = new BlockPos(worldX, surfaceY, worldZ);
-
-                boolean hasFlow = flowField.hasFlow(localX, localZ);
-                boolean isRiver = level.getBiome(samplePos).is(BiomeTags.IS_RIVER);
-
-                float startX = worldX + 0.5f;
-                float startY = surfaceY + 0.1f;
-                float startZ = worldZ + 0.5f;
-
-                if (!hasFlow) {
-                    if (isRiver) {
-                        drawRedDot(lastPose, buffer, startX, startY, startZ);
-                    }
-                    continue;
-                }
-
+                // Calculate rendering positions
                 double radians = flowField.getAngleRadians(localX, localZ);
                 float strength = flowField.getNormalizedMagnitude(localX, localZ);
-
                 float lineLength = 0.10f + (strength * 0.28f);
+                float startX = worldX + 0.5f;
+                int surfaceY = level.getHeight(Heightmap.Types.WORLD_SURFACE, worldX, worldZ);
+                float startY = surfaceY + 0.1f;
+                float startZ = worldZ + 0.5f;
                 float endX = startX + (float) Math.cos(radians) * lineLength;
                 float endZ = startZ + (float) Math.sin(radians) * lineLength;
-
                 float r = strength;
                 float g = 1.0f - (strength * 0.5f);
                 float b = 1.0f - strength;
-
-                drawLine(lastPose, buffer, startX, startY, startZ, endX, startY, endZ, r, g, b, 1.0f);
-
                 double headAngle1 = radians + Math.toRadians(150);
                 double headAngle2 = radians - Math.toRadians(150);
                 float arrowLen = lineLength * 0.30f;
 
+                // actually draw the arrow
+                drawLine(lastPose, buffer, startX, startY, startZ, endX, startY, endZ, r, g, b, 1.0f);
                 drawLine(lastPose, buffer, endX, startY, endZ,
                         endX + (float) Math.cos(headAngle1) * arrowLen, startY,
                         endZ + (float) Math.sin(headAngle1) * arrowLen, r, g, b, 1.0f);
-
                 drawLine(lastPose, buffer, endX, startY, endZ,
                         endX + (float) Math.cos(headAngle2) * arrowLen, startY,
                         endZ + (float) Math.sin(headAngle2) * arrowLen, r, g, b, 1.0f);
             }
         }
-
-        poseStack.popPose();
-        bufferSource.endBatch(RenderType.lines());
     }
 
     private static void renderTextMagnitudes(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource, Level level, BlockPos playerPos) {
-        int maxDistSq = TEXT_RADIUS_BLOCKS * TEXT_RADIUS_BLOCKS;
 
-        for (int x = -TEXT_RADIUS_BLOCKS; x <= TEXT_RADIUS_BLOCKS; x++) {
-            for (int z = -TEXT_RADIUS_BLOCKS; z <= TEXT_RADIUS_BLOCKS; z++) {
-                // Circular radius check to clip corners cleanly at 16 blocks
+        for (int x = -renderMagnitudeRadius; x <= renderMagnitudeRadius; x++) {
+            for (int z = -renderMagnitudeRadius; z <= renderMagnitudeRadius; z++) {
+
+                // Guard against corners we want clip cleanly
                 if ((x * x + z * z) > maxDistSq) continue;
 
+                // Guard against chunks that don't have any flowfields stored (no op)
                 int worldX = playerPos.getX() + x;
                 int worldZ = playerPos.getZ() + z;
-
                 ChunkAccess chunk = level.getChunk(worldX >> 4, worldZ >> 4);
                 if (!(chunk instanceof IFlowFieldHolder holder)) continue;
 
+                // Guard against this specific position having no flow
                 ChunkFlowField flowField = holder.reterraforged$getFlowField();
                 int localX = worldX & 15;
                 int localZ = worldZ & 15;
-
                 if (!flowField.hasFlow(localX, localZ)) continue;
 
+                // Determine the magnitude string
                 int surfaceY = level.getHeight(Heightmap.Types.WORLD_SURFACE, worldX, worldZ);
                 int strength = flowField.getMagnitude(localX, localZ);
-
-                float startX = worldX + 0.5f;
-                float startY = surfaceY + 0.30f; // Offset above the line shaft
-                float startZ = worldZ + 0.5f;
-
                 String magText = String.valueOf(strength);
 
+                // Determine the rendering location
+                float startX = worldX + 0.5f;
+                float startY = surfaceY + 0.30f;
+                float startZ = worldZ + 0.5f;
+
+                // Actually render the values
                 DebugRenderer.renderFloatingText(
                         poseStack,
                         bufferSource,
@@ -141,22 +137,14 @@ public class FlowFieldDebugRenderer {
                         startX,
                         startY,
                         startZ,
-                        0xFFFFFFFF,
-                        0.010f,  // Compact font scale
+                        textColor,
+                        fontScale,
                         true,    // Center align
                         0.0f,    // Padding
                         true     // See-through depth check
                 );
             }
         }
-    }
-
-    private static void drawRedDot(PoseStack.Pose pose, VertexConsumer buffer, float x, float y, float z) {
-        float r = 1.0f, g = 0.0f, b = 0.0f, a = 1.0f;
-
-        drawLine(pose, buffer, x, y + 0.08f, z, x, y + 0.18f, z, r, g, b, a);
-        drawLine(pose, buffer, x - 0.05f, y + 0.13f, z, x + 0.05f, y + 0.13f, z, r, g, b, a);
-        drawLine(pose, buffer, x, y + 0.13f, z - 0.05f, x, y + 0.13f, z + 0.05f, r, g, b, a);
     }
 
     private static void drawLine(PoseStack.Pose pose, VertexConsumer buffer,
