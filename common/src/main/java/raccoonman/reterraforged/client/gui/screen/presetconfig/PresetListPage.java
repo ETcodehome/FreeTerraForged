@@ -167,8 +167,27 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 
 		this.deletePreset = PresetWidgets.createThrowingButton(RTFTranslationKeys.GUI_BUTTON_DELETE, () -> {
 			if (this.left.getSelected() != null && this.left.getSelected().getWidget() instanceof PresetEntry preset && !preset.isBuiltin()) {
+				// Find all current custom user preset entries in display order
+				List<PresetEntry> userEntries = this.left.children().stream()
+						.map(Entry::getWidget)
+						.filter(w -> w instanceof PresetEntry e && !e.isBuiltin())
+						.map(w -> (PresetEntry) w)
+						.toList();
+
+				int selectedIndex = userEntries.indexOf(preset);
+				String nextSelectedName = null;
+
+				if (selectedIndex != -1) {
+					// Prefer the next preset below; fall back to the preset above if deleting the last entry
+					if (selectedIndex + 1 < userEntries.size()) {
+						nextSelectedName = userEntries.get(selectedIndex + 1).getRawName();
+					} else if (selectedIndex - 1 >= 0) {
+						nextSelectedName = userEntries.get(selectedIndex - 1).getRawName();
+					}
+				}
+
 				Files.deleteIfExists(preset.getPath());
-				this.rebuildPresets();
+				this.rebuildPresets(nextSelectedName);
 			}
 		});
 
