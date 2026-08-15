@@ -10,9 +10,7 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
-
 import com.google.common.base.Suppliers;
-
 import net.minecraft.core.HolderGetter;
 import net.minecraft.core.HolderLookup.RegistryLookup;
 import net.minecraft.core.RegistryAccess;
@@ -23,6 +21,7 @@ import net.minecraft.world.level.levelgen.synth.NormalNoise;
 import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.concurrent.ThreadPools;
 import raccoonman.reterraforged.config.PerformanceConfig;
+import raccoonman.reterraforged.data.worldgen.preset.settings.FlowSettings;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.registries.RTFRegistries;
 import raccoonman.reterraforged.tags.RTFDensityFunctionTags;
@@ -39,23 +38,14 @@ import raccoonman.reterraforged.world.worldgen.biome.RTFClimateSampler;
 @Mixin(RandomState.class)
 @Implements(@Interface(iface = RTFRandomState.class, prefix = "reterraforged$RTFRandomState$"))
 class MixinRandomState {
+
 	private DensityFunction.Visitor densityFunctionWrapper;
-	@Shadow
-	@Final
-	private Climate.Sampler sampler;
-	@Shadow
-	@Final
-	private SurfaceSystem surfaceSystem;
-
-	private boolean hasContext;
-	@Unique private boolean reterraforged$isRTFDimension = false; // Tracks if the BASE router belongs to RTF
-
-	@Nullable
-	private GeneratorContext generatorContext;
-	@Nullable
-	private Preset preset;
-
 	private long seed;
+	private boolean hasContext;
+	@Shadow	@Final private Climate.Sampler sampler;
+	@Unique private boolean reterraforged$isRTFDimension = false; // Tracks if the BASE router belongs to RTF
+	@Nullable private GeneratorContext generatorContext;
+	@Nullable private Preset preset;
 
 	@Redirect(
 			at = @At(
@@ -73,9 +63,11 @@ class MixinRandomState {
 
 			@Override
 			public DensityFunction apply(DensityFunction function) {
+
 				if(function instanceof NoiseFunction.Marker marker) {
 					return new NoiseFunction(marker.noise(), (int) seed);
 				}
+
 				if(function instanceof CellSampler.Marker marker) {
 
 					if (!isVanillaOverworld) {
@@ -136,6 +128,9 @@ class MixinRandomState {
 						.orElseGet(PerformanceConfig::makeDefault);
 				this.generatorContext = GeneratorContext.makeCached(this.preset, noises, (int) this.seed, config.tileSize(), config.batchCount(), ThreadPools.availableProcessors() > 4);
 			}
+
+			// populate static fields needed for mixins
+			FlowSettings.CurrentPresetState.set(preset.flow());
 		}
 	}
 
@@ -149,16 +144,14 @@ class MixinRandomState {
 		return this.generatorContext;
 	}
 
-	public long reterraforged$RTFRandomState$seed() {
-		return this.seed;
+	public Noise reterraforged$RTFRandomState$seed(Noise noise) {
+		return Noises.shiftSeed(noise, (int) this.seed);
 	}
+
+	public long reterraforged$RTFRandomState$seed() { return this.seed;	}
 
 	@Nullable
 	public DensityFunction reterraforged$RTFRandomState$wrap(DensityFunction function) {
 		return this.densityFunctionWrapper != null ? function.mapAll(this.densityFunctionWrapper) : function;
-	}
-
-	public Noise reterraforged$RTFRandomState$seed(Noise noise) {
-		return Noises.shiftSeed(noise, (int) this.seed);
 	}
 }

@@ -31,55 +31,69 @@ import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.MaxHeightUtil;
 import raccoonman.reterraforged.world.worldgen.RTFChunk;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
+import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
+import raccoonman.reterraforged.world.worldgen.IFlowFieldHolder;
+import raccoonman.reterraforged.world.worldgen.ChunkFlowField;
 
 @Mixin(NoiseBasedChunkGenerator.class)
 abstract class MixinNoiseBasedChunkGenerator extends ChunkGenerator {
 	@Shadow
 	@Final
-    private Holder<NoiseGeneratorSettings> settings;
+	private Holder<NoiseGeneratorSettings> settings;
 
 	public MixinNoiseBasedChunkGenerator(BiomeSource biomeSource, Function<Holder<Biome>, BiomeGenerationSettings> settingsGetter) {
 		super(biomeSource, settingsGetter);
 	}
 
 	@Inject(
-		method = "doCreateBiomes",
-		at = @At("HEAD")
+			method = "doCreateBiomes",
+			at = @At("HEAD")
 	)
-    public void doCreateBiomes(Blender blender, RandomState randomState, StructureManager structureManager, ChunkAccess chunk, CallbackInfo callback) {
+	public void doCreateBiomes(Blender blender, RandomState randomState, StructureManager structureManager, ChunkAccess chunk, CallbackInfo callback) {
 		RTFRandomState rtfRandomState = (RTFRandomState) (Object) randomState;
 		GeneratorContext generatorContext = rtfRandomState.generatorContext();
-		
+
 		if(generatorContext == null) {
 			return;
 		}
-		
+
 		RTFChunk rtfChunk = (RTFChunk) chunk;
-		
+
 		ChunkPos chunkPos = chunk.getPos();
 		Tile tile = generatorContext.cache.provideAtChunk(chunkPos.x, chunkPos.z);
 
 		Tile.Chunk tileChunk = tile.getChunkReader(chunkPos.x, chunkPos.z);
 		float maxHeight = Float.MIN_VALUE;
+
+		// Cast the chunk to your interface to access the flow field container
+		ChunkFlowField flowField = (chunk instanceof IFlowFieldHolder holder) ? holder.reterraforged$getFlowField() : null;
+
 		for(int x = 0; x < 16; x++) {
 			for(int z = 0; z < 16; z++) {
-				float cellHeight = tileChunk.getCell(x, z).height * 256.0F;
+				Cell cell = tileChunk.getCell(x, z);
+
+				// STAGE 4 BAKING: If the cell has flow data from UpliftRiverCarver, record it
+				if (flowField != null && cell.hasFlow) {
+					flowField.setFlow(x, z, cell.flowAngle);
+				}
+
+				float cellHeight = cell.height * 256.0F;
 				if(cellHeight > maxHeight) {
 					maxHeight = cellHeight;
 				}
-			}	
+			}
 		}
-		
+
 		rtfChunk.setMaxHeight(Mth.ceil(maxHeight));
-    }
-    
+	}
+
 	@Redirect(
-		method = { "fillFromNoise", "populateNoise" },
-		at = @At(
-			value = "INVOKE",
-			target = "Lnet/minecraft/world/level/levelgen/NoiseSettings;height()I"
-		)
+			method = { "fillFromNoise", "populateNoise" },
+			at = @At(
+					value = "INVOKE",
+					target = "Lnet/minecraft/world/level/levelgen/NoiseSettings;height()I"
+			)
 	)
     public int fillFromNoise(NoiseSettings settings, Blender blender, RandomState randomState, StructureManager structureManager, ChunkAccess chunk) {
 
@@ -107,5 +121,4 @@ abstract class MixinNoiseBasedChunkGenerator extends ChunkGenerator {
 
 		ActiveChunk.set(chunkAccess);
 	}
-
 }
