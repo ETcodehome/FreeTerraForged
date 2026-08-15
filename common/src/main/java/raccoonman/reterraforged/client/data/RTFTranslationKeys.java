@@ -221,7 +221,11 @@ public final class RTFTranslationKeys {
 	public static final String GUI_LABEL_HYDRAULIC_EROSION = resolve("gui.label.hydraulic.erosion");
 	public static final String GUI_LABEL_SMOOTHING = resolve("gui.label.smoothing");
 	public static final String GUI_LABEL_ISLAND = resolve("gui.label.island");
-	
+    public static final String GUI_LABEL_RIVER_FLOW_DYNAMICS = resolve("gui.label.river.flow.dynamics");
+	public static final String GUI_BUTTON_FLOW_PARTICLES = resolve("gui.button.river.flow.particles");
+	public static final String GUI_BUTTON_BOAT_FLOW_DYNAMICS = resolve("gui.button.boat.flow.dynamics");
+	public static final String GUI_BUTTON_NAVIGABLE_WATERFALLS = resolve("gui.button.boat.navigable.waterfalls");
+
 	private static String resolve(String key) {
 		return RTFCommon.MOD_ID + "." + key;
 	}
