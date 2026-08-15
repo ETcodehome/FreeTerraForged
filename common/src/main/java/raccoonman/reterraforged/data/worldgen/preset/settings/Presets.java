@@ -58,7 +58,8 @@ public class Presets {
 				new Smoothing(1, 1.8F, 0.9F)
 			), 
 			new StructureSettings(),
-			new MiscellaneousSettings(true, 600, true, true, true, false, true, true, false, true, false, 0.4F, 0.4F)
+			new MiscellaneousSettings(true, 600, true, true, true, false, true, true, false, true, false, 0.4F, 0.4F),
+			PresentationSettings.makeDefault()
 		); 
 	}
 	
@@ -103,8 +104,9 @@ public class Presets {
 				new Smoothing(1, 1.8F, 0.9F)
 			), 
 			new StructureSettings(),
-			new MiscellaneousSettings(true, 600, true, true, true, false, true, true, true, true, true, 0.4F, 0.4F)
-		); 
+			new MiscellaneousSettings(true, 600, true, true, true, false, true, true, true, true, true, 0.4F, 0.4F),
+			PresentationSettings.makeDefault()
+		);
 	}
 	
 	public static Preset makeLegacyVanillaish() {
@@ -148,11 +150,11 @@ public class Presets {
 				new Smoothing(2, 1.8F, 0.75F)
 			), 
 			new StructureSettings(),
-			new MiscellaneousSettings(false, 600, false, true, false, false, false, false, true, true, true, 1.0F, 0.75F)
-		); 
+			new MiscellaneousSettings(false, 600, false, true, false, false, false, false, true, true, true, 1.0F, 0.75F),
+			PresentationSettings.makeDefault()
+		);
 	}
-	
-	//TODO make mushroom islands bigger
+
 	public static Preset makeLegacyBeautiful() {
 		return new Preset(
 			new WorldSettings(
@@ -194,7 +196,8 @@ public class Presets {
 				new Smoothing(1, 1.855F, 0.916F)
 			), 
 			new StructureSettings(),
-			new MiscellaneousSettings(true, 684, true, true, true, false, true, true, true, true, false, 0.853F, 0.855F)
+			new MiscellaneousSettings(true, 684, true, true, true, false, true, true, true, true, false, 0.853F, 0.855F),
+			PresentationSettings.makeDefault()
 		); 
 	}
 	
@@ -239,7 +242,8 @@ public class Presets {
 				new Smoothing(2, 1.799F, 0.75F)
 			), 
 			new StructureSettings(),
-			new MiscellaneousSettings(true, 600, false, true, true, false, true, true, true, true, true, 1.0F, 0.75F)
+			new MiscellaneousSettings(true, 600, false, true, true, false, true, true, true, true, true, 1.0F, 0.75F),
+			PresentationSettings.makeDefault()
 		);
 	}
 	
@@ -284,7 +288,8 @@ public class Presets {
 				new Smoothing(1, 1.799F, 0.898F)
 			), 
 			new StructureSettings(),
-			new MiscellaneousSettings(true, 721, true, true, true, false, true, true, true, true, false, 0.902F, 0.945F)
+			new MiscellaneousSettings(true, 721, true, true, true, false, true, true, true, true, false, 0.902F, 0.945F),
+			PresentationSettings.makeDefault()
 		);
 	}
 
@@ -509,7 +514,8 @@ public class Presets {
 						false,
 						false,
 						0.85438144F,
-						0.855F)
+						0.855F),
+				PresentationSettings.makeDefault()
 		);
 	}
 
@@ -718,7 +724,8 @@ public class Presets {
 						false,
 						false,
 						0.85438144F,
-						0.855F)
+						0.855F),
+				PresentationSettings.makeDefault()
 		);
 	}
 
