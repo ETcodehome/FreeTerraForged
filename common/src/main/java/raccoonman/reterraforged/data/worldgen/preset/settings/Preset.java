@@ -51,6 +51,14 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 	}
 
 	public HolderLookup.Provider buildPatch(RegistryAccess registries) {
+		return this.buildPatchedRegistries(registries).patches();
+	}
+
+	public HolderLookup.Provider buildFullPatch(RegistryAccess registries) {
+		return this.buildPatchedRegistries(registries).full();
+	}
+
+	private RegistrySetBuilder.PatchedRegistries buildPatchedRegistries(RegistryAccess registries) {
 		RegistrySetBuilder builder = new RegistrySetBuilder();
 
 		// 1. Setup Patches
@@ -100,7 +108,7 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 				RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY),
 				safeSource,
 				factory
-		).patches();
+		);
 	}
 
 	/**

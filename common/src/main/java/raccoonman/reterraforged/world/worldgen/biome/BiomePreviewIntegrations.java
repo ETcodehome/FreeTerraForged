@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 import raccoonman.reterraforged.RTFCommon;
 
@@ -27,6 +28,14 @@ public final class BiomePreviewIntegrations {
 	}
 
 	static BiomePreviewIntegration.Session open(BiomePreviewIntegration.Context context) {
+		return open(context, error -> {
+		});
+	}
+
+	static BiomePreviewIntegration.Session open(
+		BiomePreviewIntegration.Context context,
+		Consumer<Throwable> failureHandler
+	) {
 		List<BiomePreviewIntegration.Session> sessions = new ArrayList<>();
 		for (BiomePreviewIntegration integration : INTEGRATIONS.values()) {
 			try {
@@ -37,6 +46,7 @@ public final class BiomePreviewIntegrations {
 					}
 				}
 			} catch (RuntimeException | LinkageError error) {
+				failureHandler.accept(error);
 				RTFCommon.LOGGER.error(
 					"Failed opening biome preview integration {}; positional selection will use its safe fallback if necessary",
 					integration.id(), error

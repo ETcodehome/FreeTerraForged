@@ -157,7 +157,7 @@ public class Preview3D extends Button {
         Preset currentPreset = requestedPreset;
         if (reusable == null || !Objects.equals(reusable.cacheKey, requestedKey)) {
             RegistryAccess.Frozen registries = settings.worldgenLoadContext();
-            provider = requestedPreset.buildPatch(registries);
+			provider = requestedPreset.buildFullPatch(registries);
             HolderGetter<Preset> presets = provider.lookupOrThrow(RTFRegistries.PRESET);
             noises = provider.lookupOrThrow(RTFRegistries.NOISE);
             currentPreset = presets.getOrThrow(Preset.KEY).value();

@@ -4,6 +4,7 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.world.level.biome.BiomeSource;
 import net.minecraft.world.level.chunk.ChunkGenerator;
+import net.minecraft.world.level.dimension.LevelStem;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 
@@ -27,6 +28,7 @@ public interface BiomePreviewIntegration {
 		HolderLookup.Provider provider,
 		BiomeSource biomeSource,
 		ChunkGenerator generator,
+		LevelStem levelStem,
 		Preset preset,
 		GeneratorContext generatorContext
 	) {

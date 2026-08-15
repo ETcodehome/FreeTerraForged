@@ -36,7 +36,6 @@ import terrablender.util.LevelUtils;
  * replacements and sub-biomes remain authoritative.
  */
 public final class BiomePreviewResolver {
-	private final BiomeSource biomeSource;
 	private final Climate.Sampler sampler;
 	private final SurfaceBiomeFilter<Holder<Biome>> surfaceFilter;
 	private final TerraBlenderParameterList<Holder<Biome>> terraBlenderParameters;
@@ -47,7 +46,6 @@ public final class BiomePreviewResolver {
 	private final AtomicReference<String> warning = new AtomicReference<>();
 
 	private BiomePreviewResolver(
-		BiomeSource biomeSource,
 		Climate.Sampler sampler,
 		SurfaceBiomeFilter<Holder<Biome>> surfaceFilter,
 		TerraBlenderParameterList<Holder<Biome>> terraBlenderParameters,
@@ -55,7 +53,6 @@ public final class BiomePreviewResolver {
 		Holder<Biome> finalFallback,
 		BiomePreviewIntegration.Context integrationContext
 	) {
-		this.biomeSource = biomeSource;
 		this.sampler = sampler;
 		this.surfaceFilter = surfaceFilter;
 		this.terraBlenderParameters = terraBlenderParameters;
@@ -98,10 +95,9 @@ public final class BiomePreviewResolver {
 		);
 		Climate.ParameterList<Holder<Biome>> baseParameters = parameters(biomeSource);
 		BiomePreviewIntegration.Context integrationContext = new BiomePreviewIntegration.Context(
-			seed, registries, provider, biomeSource, previewGenerator, preset, generatorContext
+			seed, registries, provider, biomeSource, previewGenerator, previewStem, preset, generatorContext
 		);
 		return new BiomePreviewResolver(
-			biomeSource,
 			sampler,
 			surfaceFilter,
 			terraBlenderParameters,
@@ -163,7 +159,8 @@ public final class BiomePreviewResolver {
 		Holder<Biome> selected;
 		if (this.positionalSelectionEnabled.get()) {
 			try {
-				selected = this.biomeSource.getNoiseBiome(quartX, quartY, quartZ, this.sampler);
+				selected = this.integrationContext.generator().getBiomeSource()
+					.getNoiseBiome(quartX, quartY, quartZ, this.sampler);
 				if (selected == null) {
 					throw new IllegalStateException("Biome source returned null during preview selection");
 				}
@@ -190,7 +187,7 @@ public final class BiomePreviewResolver {
 	}
 
 	public BiomePreviewIntegration.Session openIntegrationSession() {
-		return BiomePreviewIntegrations.open(this.integrationContext);
+		return BiomePreviewIntegrations.open(this.integrationContext, this::disablePositionalSelection);
 	}
 
 	public String warning() {
