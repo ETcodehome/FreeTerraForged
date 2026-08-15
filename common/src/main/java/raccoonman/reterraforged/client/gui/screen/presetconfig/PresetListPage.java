@@ -5,8 +5,6 @@ import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -53,8 +51,7 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 	private static final Path EXPORT_PATH = ConfigUtil.rtf("exports");
 	private static final Path LEGACY_PRESET_PATH = ConfigUtil.legacy("presets");
 
-	private static final Predicate<String> IS_VALID = Pattern.compile("^[A-Za-z0-9\\-_ ]+$").asPredicate();
-	private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmm");
+	private static final Predicate<String> IS_VALID = Pattern.compile("^[A-Za-z0-9\\-_ ()]+(?<! )$").asPredicate();
 
 	private EditBox input;
 	private Button createPreset;
@@ -93,23 +90,37 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 		// Input field
 		this.input = PresetWidgets.createEditBox(this.screen.font, (text) -> {
 			String trimmed = text.trim();
+			Entry<AbstractWidget> selected = this.left != null ? this.left.getSelected() : null;
+			PresetEntry selectedEntry = (selected != null && selected.getWidget() instanceof PresetEntry e) ? e : null;
+
+			boolean isSameName = selectedEntry != null && selectedEntry.getRawName().equalsIgnoreCase(trimmed);
 			boolean isValid = this.isValidPresetName(trimmed);
+
 			final int white = 14737632;
 			final int red = 0xFFFF3F30;
+			final int darkGray = 0x7E7E7E;
 
-			this.createPreset.active = isValid;
+			if (this.createPreset != null) this.createPreset.active = isValid;
+			if (this.renamePreset != null) this.renamePreset.active = selectedEntry != null && !selectedEntry.isBuiltin() && isValid;
 
-			Entry<AbstractWidget> selected = this.left.getSelected();
-			boolean isCustomSelected = selected != null && selected.getWidget() instanceof PresetEntry entry && !entry.isBuiltin();
-			this.renamePreset.active = isCustomSelected && isValid;
+			if (text.isEmpty() || isValid) {
+				this.input.setTextColor(white);
+			} else if (isSameName) {
+				this.input.setTextColor(darkGray);
+			} else {
+				this.input.setTextColor(red);
+			}
 
-			this.input.setTextColor(text.isEmpty() || isValid ? white : red);
 		}, Component.translatable(RTFTranslationKeys.GUI_INPUT_PROMPT).withStyle(ChatFormatting.DARK_GRAY));
+		this.input.setMaxLength(64);
 
 		// Action Buttons
 		this.createPreset = PresetWidgets.createThrowingButton(RTFTranslationKeys.GUI_BUTTON_CREATE, () -> {
 			String name = this.input.getValue().trim();
-			PresetEntry newEntry = new PresetEntry(name, Component.literal(name).withStyle(ChatFormatting.GOLD), Presets.makeRTFDefault(), false, this);
+			Preset preset = Presets.makeRTFDefault();
+			preset.presentation().updateLastModified();
+
+			PresetEntry newEntry = new PresetEntry(name, Component.literal(name).withStyle(ChatFormatting.GOLD), preset, false, this);
 			newEntry.save();
 			this.input.setValue(StringUtil.EMPTY_STRING);
 			this.rebuildPresets(name);
@@ -121,11 +132,16 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 				String newName = this.input.getValue().trim();
 				if (this.isValidPresetName(newName)) {
 					Path oldPath = entry.getPath();
-					PresetEntry renamedEntry = new PresetEntry(newName, Component.literal(newName).withStyle(ChatFormatting.GOLD), entry.getPreset(), false, this);
+					Preset preset = entry.getPreset();
+					preset.presentation().updateLastModified();
+
+					PresetEntry renamedEntry = new PresetEntry(newName, Component.literal(newName).withStyle(ChatFormatting.GOLD), preset, false, this);
 					renamedEntry.save();
-					if (Files.exists(oldPath)) {
+
+					if (Files.exists(oldPath) && !Files.isSameFile(oldPath, renamedEntry.getPath())) {
 						Files.delete(oldPath);
 					}
+
 					this.input.setValue(StringUtil.EMPTY_STRING);
 					this.rebuildPresets(newName);
 					Toasts.notify(
@@ -140,17 +156,38 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 		this.copyPreset = PresetWidgets.createThrowingButton(RTFTranslationKeys.GUI_BUTTON_COPY, () -> {
 			if (this.left.getSelected() != null && this.left.getSelected().getWidget() instanceof PresetEntry preset) {
 				String baseName = preset.getRawName();
-				String timestamp = LocalDateTime.now().format(DATE_TIME_FORMATTER);
-				String copyName = this.findUniqueName(baseName + " " + timestamp);
-				new PresetEntry(copyName, Component.literal(copyName).withStyle(ChatFormatting.GOLD), preset.getPreset().copy(), false, this).save();
+				String copyName = this.findUniqueName(baseName);
+				Preset copyPreset = preset.getPreset().copy();
+				copyPreset.presentation().updateLastModified();
+
+				new PresetEntry(copyName, Component.literal(copyName).withStyle(ChatFormatting.GOLD), copyPreset, false, this).save();
 				this.rebuildPresets(copyName);
 			}
 		});
 
 		this.deletePreset = PresetWidgets.createThrowingButton(RTFTranslationKeys.GUI_BUTTON_DELETE, () -> {
 			if (this.left.getSelected() != null && this.left.getSelected().getWidget() instanceof PresetEntry preset && !preset.isBuiltin()) {
+				// Find all current custom user preset entries in display order
+				List<PresetEntry> userEntries = this.left.children().stream()
+						.map(Entry::getWidget)
+						.filter(w -> w instanceof PresetEntry e && !e.isBuiltin())
+						.map(w -> (PresetEntry) w)
+						.toList();
+
+				int selectedIndex = userEntries.indexOf(preset);
+				String nextSelectedName = null;
+
+				if (selectedIndex != -1) {
+					// Prefer the next preset below; fall back to the preset above if deleting the last entry
+					if (selectedIndex + 1 < userEntries.size()) {
+						nextSelectedName = userEntries.get(selectedIndex + 1).getRawName();
+					} else if (selectedIndex - 1 >= 0) {
+						nextSelectedName = userEntries.get(selectedIndex - 1).getRawName();
+					}
+				}
+
 				Files.deleteIfExists(preset.getPath());
-				this.rebuildPresets();
+				this.rebuildPresets(nextSelectedName);
 			}
 		});
 
@@ -205,12 +242,14 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 	public Optional<Page> next() {
 		return Optional.ofNullable(this.left).map(WidgetList::getSelected).map(Entry::getWidget).filter(w -> w instanceof PresetEntry).map(w -> (PresetEntry) w).map((entry) -> {
 			if(entry.isBuiltin()) {
-				String timestamp = LocalDateTime.now().format(DATE_TIME_FORMATTER);
-				String presetName = this.findUniqueName(entry.getRawName() + " " + timestamp);
+				String presetName = this.findUniqueName(entry.getRawName());
+				Preset newPreset = entry.getPreset().copy();
+				newPreset.presentation().updateLastModified();
+
 				PresetEntry customEntry = new PresetEntry(
 						presetName,
 						Component.literal(presetName).withStyle(ChatFormatting.GOLD),
-						entry.getPreset().copy(),
+						newPreset,
 						false,
 						this
 				);
@@ -244,11 +283,24 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 
 			// specifically populate the static fields of flow dynamics that are used when resolving mixin state checks
 			FlowSettings.CurrentPresetState.set(presetEntry.preset.flow());
-
 		}
 	}
 
 	private void selectPreset(@Nullable PresetEntry entry) {
+		// Sync list widget selection first so input callbacks recognize the selected entry
+		if (this.left != null) {
+			if (entry != null) {
+				for (Entry<AbstractWidget> e : this.left.children()) {
+					if (e.getWidget() == entry) {
+						this.left.setSelected(e);
+						break;
+					}
+				}
+			} else {
+				this.left.setSelected(null);
+			}
+		}
+
 		boolean active = entry != null;
 		boolean isCustom = active && !entry.isBuiltin();
 
@@ -257,6 +309,11 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 		this.copyPreset.active = active;
 		this.exportAsDatapack.active = active;
 		this.deletePreset.active = isCustom;
+
+		// Populate input box with selected preset name for fast editing/renaming
+		if (this.input != null) {
+			this.input.setValue(entry != null ? entry.getRawName() : StringUtil.EMPTY_STRING);
+		}
 
 		String inputText = this.input != null ? this.input.getValue().trim() : "";
 		boolean validName = !inputText.isEmpty() && this.isValidPresetName(inputText);
@@ -267,7 +324,6 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 			if(entry == null) {
 				this.selectionDetails.setText(Component.translatable(RTFTranslationKeys.GUI_SELECT_PRESET_NO_SELECTION).withStyle(ChatFormatting.DARK_GRAY));
 			} else {
-
 				if(entry.isBuiltin()) {
 					this.selectionDetails.setText(Component.translatable(RTFTranslationKeys.GUI_SELECT_PRESET_TEMPLATE_DESC).withStyle(ChatFormatting.GRAY));
 				} else {
@@ -291,6 +347,15 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 		List<PresetEntry> userPresets = new ArrayList<>();
 		userPresets.addAll(this.listPresets(PRESET_PATH));
 		userPresets.addAll(this.listPresets(LEGACY_PRESET_PATH));
+
+		// Sort user presets by last modified timestamp ascending (oldest first at top, newest last at bottom)
+		userPresets.sort((a, b) -> {
+			String timeA = a.getPreset().presentation().lastModified;
+			String timeB = b.getPreset().presentation().lastModified;
+			if (timeA == null) timeA = "";
+			if (timeB == null) timeB = "";
+			return timeA.compareTo(timeB);
+		});
 
 		if (userPresets.isEmpty()) {
 			widgets.add(new EmptyNoticeLabel(Component.translatable(RTFTranslationKeys.GUI_EMPTY_USER_PRESETS).withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC)));
@@ -340,17 +405,18 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 	}
 
 	private boolean isValidPresetName(String text) {
-		return IS_VALID.test(text) && !this.hasPresetWithName(text);
+		if (!IS_VALID.test(text) || this.hasPresetWithName(text)) {
+			return false;
+		}
+		Path file = PRESET_PATH.resolve(text + ".json");
+		return !Files.exists(file);
 	}
 
 	private String findUniqueName(String baseName) {
-		if (!this.hasPresetWithName(baseName) && !Files.exists(PRESET_PATH.resolve(baseName + ".json"))) {
-			return baseName;
-		}
+		String name = baseName;
 		int counter = 1;
-		String name;
-		while (this.hasPresetWithName(name = baseName + " (" + counter + ")") || Files.exists(PRESET_PATH.resolve(name + ".json"))) {
-			counter++;
+		while (this.hasPresetWithName(name) || Files.exists(PRESET_PATH.resolve(name + ".json"))) {
+			name = baseName + " (" + counter++ + ")";
 		}
 		return name;
 	}
@@ -358,7 +424,7 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 	private boolean hasPresetWithName(String name) {
 		return this.left.children().stream().anyMatch((entry) -> {
 			if (entry.getWidget() instanceof PresetEntry presetEntry) {
-				return presetEntry.getRawName().equalsIgnoreCase(name);
+				return !presetEntry.isBuiltin() && presetEntry.getRawName().equalsIgnoreCase(name);
 			}
 			return false;
 		});
@@ -547,12 +613,17 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 			int textColor = this.isHoveredOrFocused() ? 0xFFFFFF : 0xE0E0E0;
 
 			// 1. Main Title centered near top of entry slot
-			graphics.drawCenteredString(font, this.getMessage(), x + w / 2, y + 2, textColor);
+			graphics.drawCenteredString(font, this.displayName, x + w / 2, y + 2, textColor);
 
-			// 2. Small subtext tag centered underneath
-			Component subtext = this.builtin
-					? Component.translatable(RTFTranslationKeys.GUI_LABEL_TEMPLATE_PRESET).withStyle(ChatFormatting.DARK_GRAY)
-					: Component.translatable(RTFTranslationKeys.GUI_LABEL_USER_PRESET).withStyle(ChatFormatting.DARK_GRAY);
+			// 2. Small subtext tag centered underneath (with last modified timestamp from presentation settings)
+			Component baseSubtext = this.builtin
+					? Component.translatable(RTFTranslationKeys.GUI_LABEL_TEMPLATE_PRESET)
+					: Component.translatable(RTFTranslationKeys.GUI_LABEL_USER_PRESET);
+
+			String lastModified = this.preset.presentation().lastModified;
+			Component subtext = (lastModified != null && !lastModified.isEmpty())
+					? Component.literal(baseSubtext.getString() + " • " + lastModified).withStyle(ChatFormatting.DARK_GRAY)
+					: baseSubtext.copy().withStyle(ChatFormatting.DARK_GRAY);
 
 			graphics.pose().pushPose();
 			graphics.pose().translate(x + w / 2.0f, y + 12.0f, 0.0f);
@@ -565,6 +636,8 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 			RTFCommon.LOGGER.info("Encoding Preset - {}", this.rawName);
 
 			if (!this.builtin) {
+				this.preset.presentation().updateLastModified();
+
 				Path path = this.getPath();
 				Path tempPath = path.resolveSibling(path.getFileName().toString() + ".tmp");
 
