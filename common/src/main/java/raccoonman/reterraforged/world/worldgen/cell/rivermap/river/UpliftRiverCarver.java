@@ -1,6 +1,5 @@
 package raccoonman.reterraforged.world.worldgen.cell.rivermap.river;
 
-import raccoonman.reterraforged.world.worldgen.ChunkFlowField;
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
@@ -169,7 +168,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
         float valleyFloorBumpiness = ((terraceMask * 0.4F) - (drainageMask * 0.6F)) * this.levels.unit;
         float actualValleyFloorHeight = targetValleyFloor + valleyFloorBumpiness;
 
-        // calculate the final cell heights
+        // Calculate the final cell heights
         float finalHeight = cell.height;
         if (currentLinearDist < zone1Radius) {
             finalHeight = carveZone1Riverbed(cell, currT, distSqToCurr, bedDepthOffset, scaleFactor, targetWaterLevel, lakeMultiplier, flatnessFactor, depthVar);
@@ -181,82 +180,17 @@ public class UpliftRiverCarver implements RTFRiverCarver {
             finalHeight = carveZone4Fadeout(cell.height, currentLinearDist, zone3Radius, zone4Radius, actualValleyFloorHeight, terraceMask, drainageMask);
         }
 
-        boolean carvedThisPass = finalHeight < cell.height;
-        if (carvedThisPass) {
+        // Only commit data changes to the cell if our carving operations actually cut down the world
+        if (finalHeight < cell.height) {
             cell.height = finalHeight;
-            cell.riverZone = getRiverZoneTag(cell, currentLinearDist, zone1Radius, zone2Radius, zone3Radius, finalHeight, targetWaterLevel);
-        }
-
-        // Only this river's own zone1 (riverbed), carved on this exact pass, may claim flow.
-        boolean isSubMerged = currentLinearDist < zone1Radius
-                && carvedThisPass
-                && finalHeight < targetWaterLevel;
-
-        if (isSubMerged) {
-            storeFlowDirection(cell, currX, currZ, currT, zone1Radius, currentLinearDist, lakeMultiplier);
+            cell.riverZone = getRiverZoneTag(cell, currentLinearDist, zone1Radius, zone2Radius, zone3Radius);
         }
     }
 
-    private void storeFlowDirection(Cell cell, float currX, float currZ, float currT, float zone1Radius, float currentLinearDist, float lakeMultiplier) {
-        float dx = this.river.dx;
-        float dz = this.river.dz;
-        float segmentLength = (float) Math.sqrt(dx * dx + dz * dz);
-
-        if (segmentLength < 0.0001F) {
-            cell.hasFlow = false;
-            cell.flowAngle = 0;
-            return;
-        }
-
-        // 1. Pure downstream unit vector along the river spine
-        float dsX = dx / segmentLength;
-        float dsZ = dz / segmentLength;
-
-        // 2. Projected point on spine (clamped strictly to segment bounds)
-        float clampedT = NoiseUtil.clamp(currT, 0.0F, 1.0F);
-        float projX = this.river.x1 + clampedT * dx;
-        float projZ = this.river.z1 + clampedT * dz;
-
-        // 3. Compute normalized (unit) inward direction vector
-        float inwardX = projX - currX;
-        float inwardZ = projZ - currZ;
-        float inwardDist = (float) Math.sqrt(inwardX * inwardX + inwardZ * inwardZ);
-
-        if (inwardDist > 0.0001F) {
-            inwardX /= inwardDist;
-            inwardZ /= inwardDist;
-        } else {
-            inwardX = 0.0F;
-            inwardZ = 0.0F;
-        }
-
-        // 4. Inward pull dampening factor (1.0 in standard rivers, drops toward 0.0 in wide lakes)
-        float lakeDampening = 1.0F / Math.max(1.0F, lakeMultiplier);
-
-        // 5. Normalized distance across channel (0.0 at center, 1.0 at bank)
-        float normalizedDist = zone1Radius > 0.0F ? NoiseUtil.clamp(currentLinearDist / zone1Radius, 0.0F, 1.0F) : 0.0F;
-
-        // 6. Inward turn weight: modest at banks, zero at center, suppressed in open lakes
-        float turnWeight = normalizedDist * 0.35F * lakeDampening;
-
-        // 7. Blend downstream vector with capped unit inward vector
-        float flowX = dsX + (inwardX * turnWeight);
-        float flowZ = dsZ + (inwardZ * turnWeight);
-
-        // 8. Calmer current in open lake bodies
-        float velocityMagnitude = (1.0F - (normalizedDist * normalizedDist * 0.50F)) * lakeDampening;
-
-        double radians = Math.atan2(flowZ, flowX);
-
-        cell.flowAngle = ChunkFlowField.pack(velocityMagnitude, radians);
-        cell.hasFlow = cell.flowAngle != 0;
-    }
-
-    private RiverCarverSettings.RiverZone getRiverZoneTag(Cell cell, float currentLinearDist, float zone1Radius, float zone2Radius, float zone3Radius, float finalHeight, float targetWaterLevel) {
+    private RiverCarverSettings.RiverZone getRiverZoneTag(Cell cell, float currentLinearDist, float zone1Radius, float zone2Radius, float zone3Radius){
         RiverCarverSettings.RiverZone prospectiveZone = cell.riverZone;
-        boolean isSubmerged = finalHeight < (targetWaterLevel - 0.01F);
 
-        if (currentLinearDist < zone1Radius && isSubmerged) {
+        if (currentLinearDist < zone1Radius) {
             prospectiveZone = RiverCarverSettings.RiverZone.Riverbed;
         } else if (currentLinearDist < zone2Radius) {
             if (prospectiveZone != RiverCarverSettings.RiverZone.Riverbed) {
@@ -491,6 +425,7 @@ public class UpliftRiverCarver implements RTFRiverCarver {
 
     private float getDistanceAlpha(float t, float dist2, Range range, float sqScaleFactor) {
 
+
         float size2 = this.getScaledSize(t, range) * sqScaleFactor;
 
         // fade is beyond area of maximum influence
@@ -510,10 +445,10 @@ public class UpliftRiverCarver implements RTFRiverCarver {
 
     private void tag(Cell cell, float bedHeight) {
         if (cell.terrain.isLake()) return;
+        cell.erosionMask = true;
+        cell.terrain = TerrainType.RIVER;
         float newMax = Math.max(this.waterLine, bedHeight);
         if (newMax > cell.riverWaterLevel) {
-            cell.erosionMask = true;
-            cell.terrain = TerrainType.RIVER;
             cell.riverWaterLevel = Math.max(this.waterLine, bedHeight);
         }
     }

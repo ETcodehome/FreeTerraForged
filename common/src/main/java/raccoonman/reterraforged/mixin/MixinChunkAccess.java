@@ -2,7 +2,6 @@ package raccoonman.reterraforged.mixin;
 
 import java.util.OptionalInt;
 
-import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -20,21 +19,10 @@ import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.PalettedContainer;
-import raccoonman.reterraforged.world.worldgen.IFlowFieldHolder;
 import raccoonman.reterraforged.world.worldgen.RTFChunk;
-import raccoonman.reterraforged.world.worldgen.ChunkFlowField;
 
 @Mixin(ChunkAccess.class)
-public abstract class MixinChunkAccess implements RTFChunk, LevelHeightAccessor, IFlowFieldHolder {
-
-	@Unique
-	private final ChunkFlowField reterraforged$flowField = new ChunkFlowField();
-
-	@Override
-	public ChunkFlowField reterraforged$getFlowField() {
-		return this.reterraforged$flowField;
-	}
-
+public abstract class MixinChunkAccess implements RTFChunk, LevelHeightAccessor {
 	private OptionalInt maxHeight = OptionalInt.empty();
 
 	@Override
