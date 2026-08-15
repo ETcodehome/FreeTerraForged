@@ -27,7 +27,7 @@ import raccoonman.reterraforged.world.worldgen.structure.rule.StructureRule;
 import java.util.*;
 import java.util.stream.Stream;
 
-public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings caves, ClimateSettings climate, TerrainSettings terrain, RiverSettings rivers, IslandSettings island, FilterSettings filters, StructureSettings structures, MiscellaneousSettings miscellaneous) {
+public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings caves, ClimateSettings climate, TerrainSettings terrain, RiverSettings rivers, FlowSettings flow, IslandSettings island, FilterSettings filters, StructureSettings structures, MiscellaneousSettings miscellaneous) {
 	public static final Codec<Preset> DIRECT_CODEC = RecordCodecBuilder.create(instance -> instance.group(
 			WorldSettings.CODEC.fieldOf("world").forGetter(Preset::world),
 			SurfaceSettings.CODEC.optionalFieldOf("surface", new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F))).forGetter(Preset::surface),
@@ -35,6 +35,7 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 			ClimateSettings.CODEC.fieldOf("climate").forGetter(Preset::climate),
 			TerrainSettings.CODEC.fieldOf("terrain").forGetter(Preset::terrain),
 			RiverSettings.CODEC.fieldOf("rivers").forGetter(Preset::rivers),
+			FlowSettings.CODEC.optionalFieldOf("flow").xmap(optional -> optional.orElseGet(FlowSettings::makeDefault),Optional::of).forGetter(Preset::flow),
 			IslandSettings.CODEC.optionalFieldOf("island").xmap(optional -> optional.orElseGet(IslandSettings::makeDefault),Optional::of).forGetter(Preset::island),
 			FilterSettings.CODEC.fieldOf("filters").forGetter(Preset::filters),
 			StructureSettings.CODEC.fieldOf("structures").forGetter(Preset::structures),
@@ -45,7 +46,7 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 	public static final ResourceKey<Preset> KEY = RTFRegistries.createKey(RTFRegistries.PRESET, "preset");
 
 	public Preset copy() {
-		return new Preset(this.world.copy(), this.surface.copy(), this.caves.copy(), this.climate.copy(), this.terrain.copy(), this.rivers.copy(), this.island.copy(), this.filters.copy(), this.structures.copy(), this.miscellaneous.copy());
+		return new Preset(this.world.copy(), this.surface.copy(), this.caves.copy(), this.climate.copy(), this.terrain.copy(), this.rivers.copy(), this.flow.copy(), this.island.copy(), this.filters.copy(), this.structures.copy(), this.miscellaneous.copy());
 	}
 
 	public HolderLookup.Provider buildPatch(RegistryAccess registries) {
