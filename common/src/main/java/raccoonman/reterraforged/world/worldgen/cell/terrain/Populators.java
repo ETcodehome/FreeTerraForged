@@ -403,7 +403,7 @@ public class Populators {
 			Noises.perlin(seed.next(), 10, 1),
 			Noises.constant(2.0F)
 		);
-		Noise erosion = Noises.erosion(input, seed.next(), 2, 0.65F, 128.0F, 0.15F, 3.1F, 0.8F, BlendMode.CONSTANT);
+		Noise erosion = Noises.erosion(input, seed.next(), 2, DEFAULT_EROSION_STRENGTH, 128.0F, 0.15F, 3.1F, 0.8F, BlendMode.CONSTANT);
 		erosion = Noises.warp(erosion, domain);
 		return erosion;
 	}
