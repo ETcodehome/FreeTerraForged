@@ -105,9 +105,10 @@ class MixinNoiseChunk {
 				Aquifer.FluidStatus lava = new Aquifer.FluidStatus(globalLavaLevel, Blocks.LAVA.defaultBlockState());
 				Aquifer.FluidStatus defaultFluid = new Aquifer.FluidStatus(seaLevel, noiseGeneratorSettings.defaultFluid());
 
-				int oceanLavaLevel = Math.min(globalLavaLevel, seaLevel - oceanDepth - 5);
+				int oceanLavaLevel = seaLevel - oceanDepth - 5;
+				boolean oceanLavaAdjustmentNeeded = globalLavaLevel > oceanLavaLevel;
 
-				if (oceanLavaLevel == globalLavaLevel || globalLavaLevel >= seaLevel) {
+				if (!oceanLavaAdjustmentNeeded) {
 					return (x, y, z) -> {
 						if (y < Math.min(globalLavaLevel, seaLevel)) {
 							return lava;
