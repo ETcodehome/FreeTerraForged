@@ -308,10 +308,10 @@ public class Populators {
 		height = Noises.mul(height, scaler);
 		height = Noises.warpPerlin(height, seed.next(), 350, 1, 150.0F);
 		if(makeFancy) {
-			height = makeFancy(seed, height, erosionStrength);
+			height = makeFancy(seed, height);
 		}
 		height = Noises.cache2d(height);
-		Noise climateErosion = parameterVariation(seed.offset(EROSION_VARIATION_SEED_OFFSET), Erosion.LEVEL_0, Erosion.LEVEL_3, EROSION_VARIATION_SCALE);
+		Noise climateErosion = mountainErosion(seed, erosionStrength);
 		return TerrainPopulator.make(terrainType, ground, Noises.mul(height, (legacyScaling ? 0.7F : MOUNTAINS_V) * verticalScale), climateErosion, Noises.min(Noises.mul(height, Noises.constant(-1.0F)), Noises.constant(-0.08F)), settings);
 	}
 
@@ -348,10 +348,10 @@ public class Populators {
 		height = Noises.mul(height, surface);
 		height = Noises.pow(height, 1.1F);
 		if(makeFancy) {
-			height = makeFancy(seed, height, erosionStrength);
+			height = makeFancy(seed, height);
 		}
 		height = Noises.cache2d(height);
-		Noise climateErosion = parameterVariation(seed.offset(EROSION_VARIATION_SEED_OFFSET), Erosion.LEVEL_0, Erosion.LEVEL_3, EROSION_VARIATION_SCALE);
+		Noise climateErosion = mountainErosion(seed, erosionStrength);
 		return TerrainPopulator.make(TerrainType.MOUNTAINS_2, ground, Noises.mul(height, 0.645F * verticalScale), climateErosion, Noises.min(Noises.mul(height, Noises.constant(-1.0F)), Noises.constant(-0.08F)), settings);
 	}
 
@@ -387,10 +387,10 @@ public class Populators {
 
     	Noise height = Noises.advancedTerrace(mountains, modulation, mask, slope, 0.20000000298023224F, 0.44999998807907104F, 24, 1);
     	if(makeFancy) {
-        	height = makeFancy(seed, height, erosionStrength);
+			height = makeFancy(seed, height);
     	}
 		height = Noises.cache2d(height);
-		Noise climateErosion = parameterVariation(seed.offset(EROSION_VARIATION_SEED_OFFSET), Erosion.LEVEL_0, Erosion.LEVEL_3, EROSION_VARIATION_SCALE);
+		Noise climateErosion = mountainErosion(seed, erosionStrength);
 		return TerrainPopulator.make(TerrainType.MOUNTAINS_3, ground, Noises.mul(height, (legacyScaling ? 0.645F : MOUNTAINS3_V) * verticalScale), climateErosion, Noises.min(Noises.mul(height, Noises.constant(-1.0F)), Noises.constant(-0.08F)), settings);
     }
 
@@ -398,14 +398,22 @@ public class Populators {
     	return makeMountains3(seed, ground, settings, verticalScale, makeFancy, legacyScaling, DEFAULT_EROSION_STRENGTH);
     }
 
-	public static Noise makeFancy(@Deprecated Seed seed, Noise input, float erosionStrength) {
+	public static Noise makeFancy(@Deprecated Seed seed, Noise input) {
 		Domain domain = Domains.direction(
 			Noises.perlin(seed.next(), 10, 1),
 			Noises.constant(2.0F)
 		);
-		Noise erosion = Noises.erosion(input, seed.next(), 2, erosionStrength, 128.0F, 0.15F, 3.1F, 0.8F, BlendMode.CONSTANT);
+		Noise erosion = Noises.erosion(input, seed.next(), 2, 0.65F, 128.0F, 0.15F, 3.1F, 0.8F, BlendMode.CONSTANT);
 		erosion = Noises.warp(erosion, domain);
 		return erosion;
+	}
+
+	private static Noise mountainErosion(Seed seed, float erosionStrength) {
+		Noise climateErosion = parameterVariation(seed.offset(EROSION_VARIATION_SEED_OFFSET), Erosion.LEVEL_0, Erosion.LEVEL_3, EROSION_VARIATION_SCALE);
+		if (erosionStrength == DEFAULT_EROSION_STRENGTH) {
+			return climateErosion;
+		}
+		return Noises.clamp(Noises.add(climateErosion, erosionStrength - DEFAULT_EROSION_STRENGTH), Erosion.LEVEL_0.min(), Erosion.LEVEL_6.max());
 	}
 
 	public static TerrainPopulator makeBorder(@Deprecated Seed seed, Noise ground, TerrainSettings.Terrain plainsSettings, TerrainSettings.Terrain steppeSettings, float verticalScale) {
