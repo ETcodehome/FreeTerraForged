@@ -19,7 +19,6 @@ import raccoonman.reterraforged.world.worldgen.cell.continent.ContinentLerper3;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.Rivermap;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.Blender;
-import raccoonman.reterraforged.world.worldgen.cell.terrain.ClimateParameterSampler;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.IslandBlender;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.Populators;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainType;
@@ -113,11 +112,6 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
         CellPopulator region = new RegionModule(regionConfig);
 
         Seed mountainSeed = ctx.seed.offset(general.terrainSeedOffset);
-        ClimateParameterSampler climateParameters = ClimateParameterSampler.make(
-            mountainSeed,
-            preset.climate().biomeShape.biomeSize(),
-            general.globalHorizontalScale
-        );
         Noise mountainShape = Noises.worleyEdge(mountainSeed.next(), general.legacyMountainScaling ? 1000 : Math.round(1000 * terrainSettings.mountains.horizontalScale * 2.25F), EdgeFunction.DISTANCE_2_ADD, DistanceFunction.EUCLIDEAN);
         mountainShape = Noises.warpPerlin(mountainShape, mountainSeed.next(), 333, 2, 250.0F);
         mountainShape = Noises.curve(mountainShape, Interpolation.CURVE3);
@@ -126,8 +120,8 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
 
         Noise ground = PresetNoiseData.getNoise(noiseLookup, PresetTerrainTypeNoise.GROUND);
         
-        CellPopulator terrainRegions = new RegionSelector(TerrainProvider.generateTerrain(ctx.seed, climateParameters, terrainSettings, regionConfig, levels, noiseLookup));
-        CellPopulator terrainRegionBorders = Populators.makeBorder(ctx.seed, climateParameters, ground, terrainSettings.plains, terrainSettings.steppe, globalVerticalScale);
+        CellPopulator terrainRegions = new RegionSelector(TerrainProvider.generateTerrain(ctx.seed, terrainSettings, regionConfig, levels, noiseLookup));
+        CellPopulator terrainRegionBorders = Populators.makeBorder(ctx.seed, ground, terrainSettings.plains, terrainSettings.steppe, globalVerticalScale);
         CellPopulator terrainBlend = new RegionLerper(terrainRegionBorders, terrainRegions);
         CellPopulator mountains;
         if (general.mountainVariety > 0.0F) {
@@ -137,7 +131,7 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
         	float chainHScale = legacy ? 1.0F : mtnSettings.horizontalScale * 2.25F;
         	float chainVScale = legacy ? globalVerticalScale : globalVerticalScale * mtnSettings.verticalScale;
 
-            TerrainPopulator chainCenter = Populators.makeMountainChain(mountainSeed, climateParameters, ground, mtnSettings, chainHScale, chainVScale, general.fancyMountains, legacy);
+        	TerrainPopulator chainCenter = Populators.makeMountainChain(mountainSeed, ground, mtnSettings, chainHScale, chainVScale, general.fancyMountains, legacy);
 
         	Seed chainVarietySeed = mountainSeed.offset(719);
 
@@ -150,7 +144,7 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
         	float lowChainHScale = legacy ? 1.0F : lowSettings.horizontalScale * 2.25F;
         	float lowChainVScale = legacy ? globalVerticalScale : globalVerticalScale * lowSettings.verticalScale;
         	float lowErosion = 0.65F + 0.20F * variety;
-            TerrainPopulator chainLow = Populators.makeMountainChain(chainVarietySeed, climateParameters, ground, lowSettings, lowChainHScale, lowChainVScale, general.fancyMountains, legacy, lowErosion);
+        	TerrainPopulator chainLow = Populators.makeMountainChain(chainVarietySeed, ground, lowSettings, lowChainHScale, lowChainVScale, general.fancyMountains, legacy, lowErosion);
 
         	TerrainSettings.Terrain highSettings = new TerrainSettings.Terrain(
         		mtnSettings.weight,
@@ -161,11 +155,11 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
         	float highChainHScale = legacy ? 1.0F : highSettings.horizontalScale * 2.25F;
         	float highChainVScale = legacy ? globalVerticalScale : globalVerticalScale * highSettings.verticalScale;
         	float highErosion = 0.65F - 0.25F * variety;
-            TerrainPopulator chainHigh = Populators.makeMountainChain(chainVarietySeed, climateParameters, ground, highSettings, highChainHScale, highChainVScale, general.fancyMountains, legacy, highErosion);
+        	TerrainPopulator chainHigh = Populators.makeMountainChain(chainVarietySeed, ground, highSettings, highChainHScale, highChainVScale, general.fancyMountains, legacy, highErosion);
 
         	mountains = new VariedMountainPopulator(new TerrainPopulator[]{chainLow, chainCenter, chainHigh}, chainCenter, mtnSettings.weight);
         } else {
-            mountains = Populators.makeMountainChain(mountainSeed, climateParameters, ground, terrainSettings.mountains, terrainSettings.general.legacyMountainScaling ? 1.0F : terrainSettings.mountains.horizontalScale * 2.25F, terrainSettings.general.legacyMountainScaling ? globalVerticalScale : globalVerticalScale * terrainSettings.mountains.verticalScale, general.fancyMountains, general.legacyMountainScaling);
+        	mountains = Populators.makeMountainChain(mountainSeed, ground, terrainSettings.mountains, terrainSettings.general.legacyMountainScaling ? 1.0F : terrainSettings.mountains.horizontalScale * 2.25F, terrainSettings.general.legacyMountainScaling ? globalVerticalScale : globalVerticalScale * terrainSettings.mountains.verticalScale, general.fancyMountains, general.legacyMountainScaling);
         }
         Continent continent = world.continent.continentType.create(ctx.seed, ctx);
         Climate climate = Climate.make(continent, ctx);

@@ -9,6 +9,7 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import net.minecraft.core.BlockPos;
@@ -23,6 +24,7 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.StructurePiece;
 import net.minecraft.world.level.levelgen.structure.structures.OceanMonumentPieces;
 import raccoonman.reterraforged.world.worldgen.structure.OceanMonumentBuildingFix;
+import raccoonman.reterraforged.world.worldgen.structure.OceanMonumentSeaLevel;
 
 @Mixin(OceanMonumentPieces.MonumentBuilding.class)
 public class MixinOceanMonumentBuilding implements OceanMonumentBuildingFix {
@@ -36,6 +38,22 @@ public class MixinOceanMonumentBuilding implements OceanMonumentBuildingFix {
 	@Unique
 	private final AtomicBoolean rtf$oceanDepthAdjusted = new AtomicBoolean(false);
 
+	@Unique
+	private volatile int rtf$configuredSeaLevel = Integer.MIN_VALUE;
+
+	@Redirect(
+		method = "postProcess",
+		at = @At(
+			value = "INVOKE",
+			target = "Ljava/lang/Math;max(II)I"
+		)
+	)
+	private int rtf$useConfiguredSeaLevel(int seaLevel, int vanillaMinimum) {
+		return this.rtf$configuredSeaLevel == Integer.MIN_VALUE
+			? Math.max(seaLevel, vanillaMinimum)
+			: this.rtf$configuredSeaLevel;
+	}
+
 	@Inject(method = "postProcess", at = @At("HEAD"))
 	private void rtf$fitToOceanFloor(
 		WorldGenLevel level,
@@ -47,6 +65,8 @@ public class MixinOceanMonumentBuilding implements OceanMonumentBuildingFix {
 		BlockPos blockPos,
 		CallbackInfo ci
 	) {
+		this.rtf$configuredSeaLevel = OceanMonumentSeaLevel.configured(level);
+
 		// CAS guards against concurrent postProcess() calls across this monument's chunks double-moving the piece.
 		if (!this.rtf$oceanDepthAdjusted.compareAndSet(false, true)) {
 			return;

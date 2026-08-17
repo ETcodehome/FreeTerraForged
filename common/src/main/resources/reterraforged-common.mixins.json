@@ -51,6 +51,7 @@
 		"LevelChunkSectionAccessor",
 		"StructurePiecesBuilderAccessor",
 		"MixinOceanMonumentBuilding",
+		"MixinOceanMonumentPiece",
 		"MixinOceanMonumentStructure",
 		"MixinJigsawStructure",
 		"terrablender.MixinParameterList",
