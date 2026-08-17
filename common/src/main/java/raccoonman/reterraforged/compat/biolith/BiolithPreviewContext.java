@@ -1,4 +1,4 @@
-package raccoonman.reterraforged.fabric.compat.biolith;
+package raccoonman.reterraforged.compat.biolith;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -26,21 +26,20 @@ import net.minecraft.util.Mth;
 import net.minecraft.util.InclusiveRange;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Climate;
-import raccoonman.reterraforged.fabric.mixin.BiolithDimensionBiomePlacementAccessor;
-import raccoonman.reterraforged.fabric.mixin.BiolithReplacementRequestAccessor;
-import raccoonman.reterraforged.fabric.mixin.BiolithReplacementRequestSetAccessor;
-import raccoonman.reterraforged.fabric.mixin.BiolithSubBiomeRequestAccessor;
-import raccoonman.reterraforged.fabric.mixin.BiolithSubBiomeRequestSetAccessor;
+import raccoonman.reterraforged.mixin.biolith.BiolithDimensionBiomePlacementAccessor;
+import raccoonman.reterraforged.mixin.biolith.BiolithReplacementRequestAccessor;
+import raccoonman.reterraforged.mixin.biolith.BiolithReplacementRequestSetAccessor;
+import raccoonman.reterraforged.mixin.biolith.BiolithSubBiomeRequestAccessor;
+import raccoonman.reterraforged.mixin.biolith.BiolithSubBiomeRequestSetAccessor;
 import raccoonman.reterraforged.world.worldgen.biome.BiomePreviewIntegration;
 
-/** Thread-confined Biolith state used while a preview tile is resolving biome selections. */
 public final class BiolithPreviewContext {
 	private static final ThreadLocal<State> ACTIVE = new ThreadLocal<>();
 
 	private BiolithPreviewContext() {
 	}
 
-	static BiomePreviewIntegration.Session open(
+	public static BiomePreviewIntegration.Session open(
 		long seed,
 		RegistryAccess registries,
 		HolderLookup.Provider provider
@@ -221,9 +220,27 @@ public final class BiolithPreviewContext {
 		Map<ResourceKey<Biome>, Object> source =
 			((BiolithDimensionBiomePlacementAccessor) placement).reterraforged$getReplacementRequests();
 		for (Map.Entry<ResourceKey<Biome>, Object> entry : source.entrySet()) {
+			BiolithReplacementRequestSetAccessor requestSet =
+				(BiolithReplacementRequestSetAccessor) entry.getValue();
+			if (requestSet.reterraforged$isFinalized()) {
+				List<Replacement> finalized = requestSet.reterraforged$getRequests().stream()
+					.map(rawRequest -> {
+						BiolithReplacementRequestAccessor request = (BiolithReplacementRequestAccessor) rawRequest;
+						return new Replacement(
+							request.reterraforged$getBiome(),
+							request.reterraforged$getRate(),
+							request.reterraforged$getBiomeEntry(),
+							request.reterraforged$getStart(),
+							request.reterraforged$getEnd(),
+							request.reterraforged$isFromData()
+						);
+					})
+					.toList();
+				result.put(entry.getKey(), finalized);
+				continue;
+			}
 			List<Replacement> requests = new ArrayList<>();
-			for (Object rawRequest : ((BiolithReplacementRequestSetAccessor) entry.getValue())
-				.reterraforged$getRequests()) {
+			for (Object rawRequest : requestSet.reterraforged$getRequests()) {
 				BiolithReplacementRequestAccessor request = (BiolithReplacementRequestAccessor) rawRequest;
 				requests.add(new Replacement(
 					request.reterraforged$getBiome(),

@@ -8,14 +8,7 @@
   	"MixinPresetEditor"
   ],
   "mixins": [
-	"BiolithDimensionBiomePlacementAccessor",
-	"BiolithReplacementRequestAccessor",
-	"BiolithReplacementRequestSetAccessor",
-	"BiolithSubBiomeRequestAccessor",
-	"BiolithSubBiomeRequestSetAccessor",
-	"MixinBiolithDimensionBiomePlacement",
 	"MixinBiolithTerraBlenderCompat",
-	"MixinBiolithOverworldBiomePlacement",
   	"MixinChunkStatusTasks",
   	"MixinMinecraftServer",
   	"MixinBiomeModificationImpl"

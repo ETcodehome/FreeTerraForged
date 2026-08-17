@@ -19,6 +19,7 @@ import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.client.data.RTFLanguageProvider;
 import raccoonman.reterraforged.client.data.RTFTranslationKeys;
 import raccoonman.reterraforged.platform.neoforge.RegistryUtilImpl;
+import raccoonman.reterraforged.neoforge.compat.NeoForgeBiomePreviewIntegrations;
 import raccoonman.reterraforged.world.worldgen.biome.modifier.neoforge.AddModifier;
 import raccoonman.reterraforged.world.worldgen.biome.modifier.neoforge.ReplaceModifier;
 
@@ -27,6 +28,7 @@ public class RTFNeoForge {
 
 	public RTFNeoForge(IEventBus modEventBus, ModContainer container) {
 		RTFCommon.bootstrap();
+		NeoForgeBiomePreviewIntegrations.bootstrap();
 
 		// Register RTF's biome modifier codec types into NeoForge's own serialiser
 		// registry so NeoForge can decode neoforge/biome_modifier/*.json at runtime.

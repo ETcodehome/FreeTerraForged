@@ -35,6 +35,7 @@ dependencies {
     shadowCommon(project(path: ":common", configuration: "transformProductionNeoForge")) { transitive false }
     modApi "dev.architectury:architectury-neoforge:${rootProject.architectury_version}"
     modCompileOnly "maven.modrinth:biolith:3.0.14-neoforge"
+    modCompileOnly "maven.modrinth:lithostitched:1.7.13-neoforge-21.1"
 }
 
 repositories {

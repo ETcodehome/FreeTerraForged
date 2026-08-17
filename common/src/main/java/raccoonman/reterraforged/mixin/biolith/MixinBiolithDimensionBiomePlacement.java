@@ -1,4 +1,4 @@
-package raccoonman.reterraforged.fabric.mixin;
+package raccoonman.reterraforged.mixin.biolith;
 
 import com.mojang.datafixers.util.Pair;
 import com.terraformersmc.biolith.api.biome.BiolithFittestNodes;
@@ -16,9 +16,8 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-import raccoonman.reterraforged.fabric.compat.biolith.BiolithPreviewContext;
+import raccoonman.reterraforged.compat.biolith.BiolithPreviewContext;
 
-/** Routes Biolith selection through an isolated, finalized request snapshot during previews. */
 @Pseudo
 @Mixin(targets = "com.terraformersmc.biolith.impl.biome.DimensionBiomePlacement", remap = false)
 public abstract class MixinBiolithDimensionBiomePlacement {

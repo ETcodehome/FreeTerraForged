@@ -6,6 +6,13 @@
   	"minVersion": "0.8",
   	"compatibilityLevel": "JAVA_21",
   	"mixins": [
+		"biolith.BiolithDimensionBiomePlacementAccessor",
+		"biolith.BiolithReplacementRequestAccessor",
+		"biolith.BiolithReplacementRequestSetAccessor",
+		"biolith.BiolithSubBiomeRequestAccessor",
+		"biolith.BiolithSubBiomeRequestSetAccessor",
+		"biolith.MixinBiolithDimensionBiomePlacement",
+		"biolith.MixinBiolithOverworldBiomePlacement",
 		"MixinNoiseChunk",
 		"MixinRandomState",
 		"MixinChunkMap",

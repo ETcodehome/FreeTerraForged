@@ -1,4 +1,4 @@
-package raccoonman.reterraforged.fabric.mixin;
+package raccoonman.reterraforged.mixin.biolith;
 
 import com.terraformersmc.biolith.api.biome.sub.Criterion;
 import net.minecraft.resources.ResourceKey;

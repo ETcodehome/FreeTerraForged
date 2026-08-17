@@ -1,4 +1,4 @@
-package raccoonman.reterraforged.fabric.mixin;
+package raccoonman.reterraforged.mixin.biolith;
 
 import java.util.HashMap;
 

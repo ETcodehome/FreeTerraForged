@@ -10,13 +10,13 @@ dependencies {
     modImplementation "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}"
     modImplementation "com.github.glitchfiend:TerraBlender-neoforge:${rootProject.minecraft_version}-${rootProject.terrablender_version}"
 	compileOnly "com.electronwill.night-config:toml:3.6.7"
-	//compileOnly "lithostitched-forge:1.0.0"
+	modCompileOnly "maven.modrinth:biolith:3.0.14-neoforge"
     modApi "dev.architectury:architectury:${rootProject.architectury_version}"
 	testImplementation "org.junit.jupiter:junit-jupiter:5.11.4"
 }
 
 repositories {
-
+    maven { url "https://api.modrinth.com/maven" }
 }
 
 test {
