@@ -301,11 +301,15 @@ public enum RenderMode {
 
     public abstract int getColor(Cell cell, Levels levels, float scale, float bias);
 
-    public boolean handlesWater() {
-        return false;
-    }
+	public boolean handlesWater() {
+		return false;
+	}
 
-    private static int getWaterColor() {
+	public String displayName() {
+		return this == BIOME_CELLS ? "BIOME_CELLS (RTF diagnostic)" : this.name();
+	}
+
+	private static int getWaterColor() {
         return rgba(40, 140, 200);
     }
 

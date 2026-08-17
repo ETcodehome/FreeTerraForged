@@ -47,6 +47,10 @@ public class TileGenerator {
 	public Heightmap getHeightmap() {
 		return this.heightmap;
 	}
+
+	public int getTileBlockSize() {
+		return this.tileSizeBlocks.size();
+	}
 	
 	public CompletableFuture<Tile> generate(int tileX, int tileZ) {
 		Tile tile = this.makeTile(tileX, tileZ);

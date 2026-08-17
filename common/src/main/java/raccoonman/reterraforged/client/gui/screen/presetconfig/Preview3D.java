@@ -47,6 +47,7 @@ public class Preview3D extends Button {
     private Tile tile;
     private PreviewComputationCache.TileLease tileLease;
     private BiomePreview.Sidecar biomes;
+    private boolean generatedWithBiomePipeline;
     private BiomePreview.CacheKey cacheKey;
     private int centerX, centerZ;
 
@@ -102,7 +103,7 @@ public class Preview3D extends Button {
                         worldPage.spawnType.setValue(SpawnType.USER_SELECTED);
                     }
 
-                    Preview2D.globalNavigated = false;
+                    self.page.resetPreviewNavigation();
                     self.page.regenerate();
                 }
             }
@@ -136,9 +137,12 @@ public class Preview3D extends Button {
 
     public void refreshRenderMode(RenderMode mode) {
         currentMode = mode;
+        boolean biomePipeline = mode == RenderMode.BIOME;
         Tile activeTile = this.tile;
         BiomePreview.Sidecar activeBiomes = this.biomes;
-        if (activeTile == null || (mode == RenderMode.BIOME && activeBiomes == null)) {
+        if (activeTile == null
+                || (mode == RenderMode.BIOME && activeBiomes == null)
+                || this.generatedWithBiomePipeline != biomePipeline) {
             this.regenerate();
             return;
         }
@@ -158,19 +162,40 @@ public class Preview3D extends Button {
         this.isRunning = true;
         this.isDirty = false;
 
-        WorldCreationContext settings = this.page.getScreen().getSettings();
-        Preset requestedPreset = this.page.preset.getPreset();
-        BiomePreview.CacheKey requestedKey = BiomePreview.cacheKey(settings, requestedPreset);
-        PreparedContext reusable = this.preparedContext;
-        HolderLookup.Provider provider = null;
-        HolderGetter<Noise> noises = null;
-        Preset currentPreset = requestedPreset;
-        if (reusable == null || !Objects.equals(reusable.cacheKey, requestedKey)) {
-            RegistryAccess.Frozen registries = settings.worldgenLoadContext();
-			provider = requestedPreset.buildFullPatch(registries);
-            HolderGetter<Preset> presets = provider.lookupOrThrow(RTFRegistries.PRESET);
-            noises = provider.lookupOrThrow(RTFRegistries.NOISE);
-            currentPreset = presets.getOrThrow(Preset.KEY).value();
+        WorldCreationContext settings;
+        Preset requestedPreset;
+        BiomePreview.CacheKey requestedKey;
+        RenderMode requestedMode;
+        boolean biomePipeline;
+        PreparedContext reusable;
+        HolderLookup.Provider provider;
+        HolderGetter<Noise> noises;
+        Preset currentPreset;
+        try {
+            settings = this.page.getScreen().getSettings();
+            requestedPreset = this.page.preset.getPreset();
+            requestedKey = BiomePreview.cacheKey(settings, requestedPreset);
+            requestedMode = this.page.renderMode3D == null ? currentMode : this.page.renderMode3D.getValue();
+            biomePipeline = requestedMode == RenderMode.BIOME;
+            reusable = this.preparedContext;
+            provider = null;
+            noises = null;
+            currentPreset = requestedPreset;
+            if (reusable == null
+                    || !Objects.equals(reusable.cacheKey, requestedKey)
+                    || reusable.biomePipeline != biomePipeline) {
+                RegistryAccess.Frozen registries = settings.worldgenLoadContext();
+                provider = biomePipeline
+                        ? requestedPreset.buildFullPatch(registries)
+                        : requestedPreset.buildPatch(registries);
+                HolderGetter<Preset> presets = provider.lookupOrThrow(RTFRegistries.PRESET);
+                noises = provider.lookupOrThrow(RTFRegistries.NOISE);
+                currentPreset = presets.getOrThrow(Preset.KEY).value();
+            }
+        } catch (RuntimeException | LinkageError error) {
+            this.isRunning = false;
+            RTFCommon.LOGGER.error("Failed to prepare preview provider", error);
+            return;
         }
         HolderLookup.Provider preparedProvider = provider;
         HolderGetter<Noise> preparedNoises = noises;
@@ -181,10 +206,9 @@ public class Preview3D extends Button {
 
         int seed = (int) settings.options().seed();
         int zoomLevel = this.getZoom();
-        int localOffsetX = Preview2D.globalOffsetX;
-        int localOffsetZ = Preview2D.globalOffsetZ;
-        boolean localNavigated = Preview2D.globalNavigated;
-        RenderMode requestedMode = this.page.renderMode3D == null ? currentMode : this.page.renderMode3D.getValue();
+        int localOffsetX = this.page.previewNavigationX();
+        int localOffsetZ = this.page.previewNavigationZ();
+        boolean localNavigated = this.page.previewNavigated();
         int renderWidth = this.width;
         int renderHeight = this.height;
         double renderZoom = this.page.zoom3D == null ? 95.0D : this.page.zoom3D.getLerpedValue();
@@ -192,17 +216,19 @@ public class Preview3D extends Button {
         // Step 1: Offload disk IO and heavy context calculations to background executor
         CompletableFuture<PreGenContext> setupStage = CompletableFuture.supplyAsync(() -> {
             PreparedContext prepared = reusable;
-            if (prepared == null || !Objects.equals(prepared.cacheKey, requestedKey)) {
+            if (prepared == null
+                    || !Objects.equals(prepared.cacheKey, requestedKey)
+                    || prepared.biomePipeline != biomePipeline) {
                 PerformanceConfig config = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
                         .resultOrPartial(RTFCommon.LOGGER::error)
                         .orElseGet(PerformanceConfig::makeDefault);
                 GeneratorContext generatorContext = GeneratorContext.makeUncached(
                     preparedPreset, preparedNoises, seed, FACTOR, 0, config.batchCount()
                 );
-                prepared = new PreparedContext(requestedKey, generatorContext, preparedProvider, preparedPreset);
+                prepared = new PreparedContext(requestedKey, generatorContext, preparedProvider, preparedPreset, biomePipeline);
                 this.preparedContext = prepared;
             }
-            if (requestedMode == RenderMode.BIOME) {
+            if (biomePipeline) {
                 prepared.ensureBiomePreview(settings);
             }
             GeneratorContext generatorContext = prepared.context;
@@ -231,7 +257,7 @@ public class Preview3D extends Button {
             }
 
             PreviewComputationCache.TileKey tileKey = new PreviewComputationCache.TileKey(
-                requestedKey, cx, cz, zoomLevel, Preview3D.SIZE
+                requestedKey, cx, cz, zoomLevel, Preview3D.SIZE, biomePipeline
             );
             return new PreGenContext(generatorContext, prepared.biomePreview(), cx, cz, zoomLevel, tileKey);
         }, net.minecraft.Util.backgroundExecutor());
@@ -245,7 +271,7 @@ public class Preview3D extends Button {
                 tileFuture = CompletableFuture.completedFuture(cached);
             } else {
                 tileFuture = preGen.context.generator.generateZoomed(
-                    preGen.cx, preGen.cz, preGen.zoomLevel, false, cancellation::isCancelled
+					preGen.cx, preGen.cz, preGen.zoomLevel, biomePipeline, cancellation::isCancelled
                 ).thenApply(newTile -> {
                     PreviewComputationCache.TileLease stored = this.page.previewCache().store(preGen.tileKey, newTile);
                     if (stored == null) {
@@ -261,7 +287,7 @@ public class Preview3D extends Button {
                     WorldSettings.Properties properties = preparedPreset.world().properties;
                     Levels levels = new Levels(properties.terrainScaler(), properties.worldDepth, properties.seaLevel);
                     BiomePreview.Sidecar biomes = null;
-                    if (requestedMode == RenderMode.BIOME) {
+                    if (biomePipeline) {
                         biomes = preGen.biomePreview.resolveCached(
                             this.page.previewCache(), generatedTile, preGen.cx, preGen.cz, preGen.zoomLevel, levels, cancellation
                         );
@@ -298,6 +324,7 @@ public class Preview3D extends Button {
                 this.tileLease = result.lease;
                 this.tile = result.lease.tile();
                 this.biomes = result.biomes;
+                this.generatedWithBiomePipeline = biomePipeline;
                 this.centerX = result.centerX;
                 this.centerZ = result.centerZ;
 
@@ -487,6 +514,7 @@ public class Preview3D extends Button {
             this.tileLease = null;
         }
         this.tile = null;
+        this.generatedWithBiomePipeline = false;
         this.preparedContext = null;
     }
 
@@ -507,9 +535,7 @@ public class Preview3D extends Button {
                         }
                     }
 
-                    Preview2D.globalOffsetX = this.hoveredCoordX;
-                    Preview2D.globalOffsetZ = this.hoveredCoordZ;
-                    Preview2D.globalNavigated = true;
+                    this.page.setPreviewNavigation(this.hoveredCoordX, this.hoveredCoordZ);
                     this.regenerate();
                     return true;
                 }
@@ -518,7 +544,7 @@ public class Preview3D extends Button {
             // Middle Click: Reset to current spawn coordinates
             else if (button == 2) {
                 this.playDownSound(Minecraft.getInstance().getSoundManager());
-                Preview2D.globalNavigated = false;
+                this.page.resetPreviewNavigation();
                 this.regenerate();
                 return true;
             }
@@ -836,11 +862,14 @@ public class Preview3D extends Button {
         final Preset preset;
         private BiomePreview biomePreview;
 
-        PreparedContext(BiomePreview.CacheKey cacheKey, GeneratorContext context, HolderLookup.Provider provider, Preset preset) {
+        final boolean biomePipeline;
+
+        PreparedContext(BiomePreview.CacheKey cacheKey, GeneratorContext context, HolderLookup.Provider provider, Preset preset, boolean biomePipeline) {
             this.cacheKey = cacheKey;
             this.context = context;
             this.provider = provider;
             this.preset = preset;
+            this.biomePipeline = biomePipeline;
         }
 
         synchronized void ensureBiomePreview(WorldCreationContext settings) {

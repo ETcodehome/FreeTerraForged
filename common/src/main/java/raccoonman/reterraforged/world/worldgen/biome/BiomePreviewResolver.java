@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.Set;
 
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
@@ -25,6 +27,7 @@ import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.densityfunction.CellSampler;
+import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
 import raccoonman.reterraforged.world.worldgen.terrablender.TBCompat;
 import raccoonman.reterraforged.world.worldgen.terrablender.TBClimateSampler;
 import raccoonman.reterraforged.world.worldgen.terrablender.TerraBlenderParameterList;
@@ -44,6 +47,7 @@ public final class BiomePreviewResolver {
 	private final BiomePreviewIntegration.Context integrationContext;
 	private final AtomicBoolean positionalSelectionEnabled = new AtomicBoolean(true);
 	private final AtomicReference<String> warning = new AtomicReference<>();
+	private final Set<String> activeIntegrations = ConcurrentHashMap.newKeySet();
 
 	private BiomePreviewResolver(
 		Climate.Sampler sampler,
@@ -156,6 +160,10 @@ public final class BiomePreviewResolver {
 	}
 
 	public Holder<Biome> resolveQuart(int quartX, int quartY, int quartZ) {
+		return this.resolveQuart(quartX, quartY, quartZ, this.sampler);
+	}
+
+	public Holder<Biome> resolveQuart(int quartX, int quartY, int quartZ, Climate.Sampler sampler) {
 		Holder<Biome> selected = null;
 		Holder<Biome> composedOriginal = null;
 		boolean composedSelection = false;
@@ -163,13 +171,13 @@ public final class BiomePreviewResolver {
 			PreviewBiomeQueryContext.begin(quartX, quartY, quartZ);
 			try {
 				selected = this.integrationContext.generator().getBiomeSource()
-					.getNoiseBiome(quartX, quartY, quartZ, this.sampler);
+					.getNoiseBiome(quartX, quartY, quartZ, sampler);
 				if (selected == null) {
 					throw new IllegalStateException("Biome source returned null during preview selection");
 				}
 			} catch (RuntimeException | LinkageError error) {
 				this.disablePositionalSelection(error);
-				selected = this.resolveFallback(quartX, quartY, quartZ);
+				selected = this.resolveFallback(quartX, quartY, quartZ, sampler);
 			} finally {
 				composedSelection = PreviewBiomeQueryContext.matches(quartX, quartY, quartZ, selected);
 				if (composedSelection && PreviewBiomeQueryContext.original() instanceof Holder<?> holder) {
@@ -180,12 +188,12 @@ public final class BiomePreviewResolver {
 				PreviewBiomeQueryContext.end();
 			}
 		} else {
-			selected = this.resolveFallback(quartX, quartY, quartZ);
+			selected = this.resolveFallback(quartX, quartY, quartZ, sampler);
 		}
 		if (!this.surfaceFilter.isUnderground(selected)) {
 			return selected;
 		}
-		Climate.TargetPoint target = this.sampler.sample(quartX, quartY, quartZ);
+		Climate.TargetPoint target = sampler.sample(quartX, quartY, quartZ);
 		if (composedSelection) {
 			if (composedOriginal != null && !this.surfaceFilter.isUnderground(composedOriginal)) {
 				return composedOriginal;
@@ -201,16 +209,74 @@ public final class BiomePreviewResolver {
 		return this.surfaceFilter.resolve(target, selected);
 	}
 
+	public Climate.Sampler tileClimateSampler(Tile tile, int centerX, int centerZ, int zoom) {
+		float originX = centerX - tile.getBlockSize().size() * zoom / 2.0F;
+		float originZ = centerZ - tile.getBlockSize().size() * zoom / 2.0F;
+		return this.tileClimateSamplerAtOrigin(tile, originX, originZ, zoom);
+	}
+
+	public Climate.Sampler tileClimateSamplerAtOrigin(Tile tile, int originX, int originZ, int zoom) {
+		return this.tileClimateSamplerAtOrigin(tile, (float) originX, (float) originZ, zoom);
+	}
+	private Climate.Sampler tileClimateSamplerAtOrigin(Tile tile, float originX, float originZ, int zoom) {
+		NoiseBasedChunkGenerator previewGenerator = (NoiseBasedChunkGenerator) this.integrationContext.generator();
+		var heightmap = this.integrationContext.generatorContext().lookup.getHeightmap();
+		Climate.Sampler sampler = new Climate.Sampler(
+			new PreviewTileClimateSampler(tile, heightmap, originX, originZ, zoom, CellSampler.Field.TEMPERATURE),
+			new PreviewTileClimateSampler(tile, heightmap, originX, originZ, zoom, CellSampler.Field.MOISTURE),
+			new PreviewTileClimateSampler(tile, heightmap, originX, originZ, zoom, CellSampler.Field.CONTINENT),
+			new PreviewTileClimateSampler(tile, heightmap, originX, originZ, zoom, CellSampler.Field.EROSION),
+			DensityFunctions.constant(0.0D),
+			new PreviewTileClimateSampler(tile, heightmap, originX, originZ, zoom, CellSampler.Field.WEIRDNESS),
+			previewGenerator.generatorSettings().value().spawnTarget()
+		);
+		((RTFClimateSampler) (Object) sampler).setUndergroundBiomeBandingPreset(this.integrationContext.preset(), this.integrationContext.seed());
+		if (TBCompat.isEnabled() && (Object) sampler instanceof TBClimateSampler terraBlenderSampler) {
+			terraBlenderSampler.setUniqueness(new PreviewTileClimateSampler(
+				tile, heightmap, originX, originZ, zoom, CellSampler.Field.BIOME_REGION
+			));
+		}
+		return sampler;
+	}
+
 	public BiomePreviewIntegration.Session openIntegrationSession() {
-		return BiomePreviewIntegrations.open(this.integrationContext, this::disablePositionalSelection);
+		return BiomePreviewIntegrations.open(this.integrationContext, error -> {}, this.activeIntegrations::add);
+	}
+
+	public List<String> activeIntegrations() {
+		return this.activeIntegrations.stream().sorted().toList();
+	}
+
+	public TerraBlenderParameterList.SelectionDiagnostics<Holder<Biome>> inspectTerraBlenderSelection(
+		int quartX,
+		int quartY,
+		int quartZ
+	) {
+		return this.inspectTerraBlenderSelection(quartX, quartY, quartZ, this.sampler);
+	}
+
+	public TerraBlenderParameterList.SelectionDiagnostics<Holder<Biome>> inspectTerraBlenderSelection(
+		int quartX,
+		int quartY,
+		int quartZ,
+		Climate.Sampler sampler
+	) {
+		if (this.terraBlenderParameters == null) {
+			return new TerraBlenderParameterList.SelectionDiagnostics<>(
+				-1, null, null, "terra_blender_parameter_list_unavailable"
+			);
+		}
+		return this.terraBlenderParameters.reterraforged$inspectSelection(
+			sampler.sample(quartX, quartY, quartZ), quartX, quartY, quartZ
+		);
 	}
 
 	public String warning() {
 		return this.warning.get();
 	}
 
-	private Holder<Biome> resolveFallback(int quartX, int quartY, int quartZ) {
-		Climate.TargetPoint target = this.sampler.sample(quartX, quartY, quartZ);
+	private Holder<Biome> resolveFallback(int quartX, int quartY, int quartZ, Climate.Sampler sampler) {
+		Climate.TargetPoint target = sampler.sample(quartX, quartY, quartZ);
 		if (this.terraBlenderParameters != null) {
 			Holder<Biome> selected = this.terraBlenderParameters
 				.reterraforged$inspectSelection(target, quartX, quartY, quartZ)

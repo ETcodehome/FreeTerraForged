@@ -125,7 +125,7 @@ final class PreviewComputationCache implements AutoCloseable {
         this.sidecars.clear();
     }
 
-    record TileKey(BiomePreview.CacheKey revision, int centerX, int centerZ, int zoom, int size) {
+    record TileKey(BiomePreview.CacheKey revision, int centerX, int centerZ, int zoom, int size, boolean biomePipeline) {
     }
 
     record SidecarKey(BiomePreview.CacheKey revision, int centerX, int centerZ, int zoom, int size) {

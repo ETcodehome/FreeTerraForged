@@ -24,6 +24,9 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	Slider zoom3D;
 	CycleButton<RenderMode> renderMode2D;
 	CycleButton<RenderMode> renderMode3D;
+	private int previewNavigationX;
+	private int previewNavigationZ;
+	private boolean previewNavigated;
 	protected PresetEntry preset;
 
 	// Static persistent state containers
@@ -62,6 +65,28 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 
 	PreviewComputationCache previewCache() {
 		return this.screen.previewCache();
+	}
+
+	int previewNavigationX() {
+		return this.previewNavigationX;
+	}
+
+	int previewNavigationZ() {
+		return this.previewNavigationZ;
+	}
+
+	boolean previewNavigated() {
+		return this.previewNavigated;
+	}
+
+	void setPreviewNavigation(int x, int z) {
+		this.previewNavigationX = x;
+		this.previewNavigationZ = z;
+		this.previewNavigated = true;
+	}
+
+	void resetPreviewNavigation() {
+		this.previewNavigated = false;
 	}
 
 	@Override
@@ -139,12 +164,12 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		this.renderMode2D = PresetWidgets.createCycle(ImmutableList.copyOf(RenderMode.values()), this.renderMode2D != null ? this.renderMode2D.getValue() : staticMode2D, RTFTranslationKeys.GUI_BUTTON_RENDER_MODE, (button, value) -> {
 			staticMode2D = value;
 			if (this.preview2D != null) this.preview2D.refreshRenderMode(value);
-		}, RenderMode::name);
+		}, RenderMode::displayName);
 
 		this.renderMode3D = PresetWidgets.createCycle(ImmutableList.copyOf(RenderMode.values()), this.renderMode3D != null ? this.renderMode3D.getValue() : staticMode3D, RTFTranslationKeys.GUI_BUTTON_RENDER_MODE, (button, value) -> {
 			staticMode3D = value;
 			if (this.preview3D != null) this.preview3D.refreshRenderMode(value);
-		}, RenderMode::name);
+		}, RenderMode::displayName);
 
 		// Seed Text Input
 		String currentSeed = this.getInitialSeedText();

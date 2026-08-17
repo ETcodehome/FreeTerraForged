@@ -28,6 +28,13 @@ import java.util.*;
 import java.util.stream.Stream;
 
 public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings caves, ClimateSettings climate, TerrainSettings terrain, RiverSettings rivers, FlowSettings flow, IslandSettings island, FilterSettings filters, StructureSettings structures, MiscellaneousSettings miscellaneous, PresentationSettings presentation) {
+	private static final Set<ResourceKey<? extends Registry<?>>> PREVIEW_REGISTRIES = Set.of(
+		RTFRegistries.PRESET,
+		RTFRegistries.NOISE,
+		Registries.DENSITY_FUNCTION,
+		Registries.NOISE_SETTINGS
+	);
+
 	public static final Codec<Preset> DIRECT_CODEC = RecordCodecBuilder.create(instance -> instance.group(
 			WorldSettings.CODEC.fieldOf("world").forGetter(Preset::world),
 			SurfaceSettings.CODEC.optionalFieldOf("surface", new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F))).forGetter(Preset::surface),
@@ -55,7 +62,18 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 	}
 
 	public HolderLookup.Provider buildFullPatch(RegistryAccess registries) {
-		return this.buildPatchedRegistries(registries).full();
+		return materialize(this.buildPatchedRegistries(registries).full());
+	}
+
+	private static final Set<String> PREVIEW_NAMESPACES = Set.of("minecraft", "reterraforged");
+
+	private static HolderLookup.Provider materialize(HolderLookup.Provider provider) {
+		provider.listRegistries()
+			.filter(PREVIEW_REGISTRIES::contains)
+			.forEach(key -> provider.lookupOrThrow(key).listElements()
+				.filter(holder -> PREVIEW_NAMESPACES.contains(holder.key().location().getNamespace()))
+				.forEach(holder -> holder.value()));
+		return provider;
 	}
 
 	private RegistrySetBuilder.PatchedRegistries buildPatchedRegistries(RegistryAccess registries) {

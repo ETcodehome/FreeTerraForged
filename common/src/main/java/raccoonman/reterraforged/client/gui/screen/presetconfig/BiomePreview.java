@@ -11,6 +11,7 @@ import net.minecraft.core.QuartPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.dimension.LevelStem;
 import net.minecraft.client.gui.screens.worldselection.WorldCreationContext;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
@@ -62,9 +63,10 @@ final class BiomePreview {
     ) {
         int size = tile.getBlockSize().size();
         String[] ids = new String[size * size];
-        int[] colors = new int[size * size];
-        Map<ResourceLocation, Entry> entries = new HashMap<>();
-        int halfSize = size / 2;
+		int[] colors = new int[size * size];
+		Map<ResourceLocation, Entry> entries = new HashMap<>();
+		int halfSize = size / 2;
+		Climate.Sampler sampler = this.resolver.tileClimateSampler(tile, centerX, centerZ, zoom);
 
         try (BiomePreviewIntegration.Session ignored = this.resolver.openIntegrationSession()) {
             tile.iterate((cell, x, z) -> {
@@ -72,11 +74,12 @@ final class BiomePreview {
                 int blockX = centerX + (x - halfSize) * zoom;
                 int blockZ = centerZ + (z - halfSize) * zoom;
                 int surfaceY = surfaceY(cell, levels);
-                Holder<Biome> biome = this.resolver.resolveQuart(
-                    QuartPos.fromBlock(blockX),
-                    QuartPos.fromBlock(surfaceY),
-                    QuartPos.fromBlock(blockZ)
-                );
+				Holder<Biome> biome = this.resolver.resolveQuart(
+					QuartPos.fromBlock(blockX),
+					QuartPos.fromBlock(surfaceY),
+					QuartPos.fromBlock(blockZ),
+					sampler
+				);
                 ResourceLocation id = biome.unwrapKey().map(key -> key.location()).orElse(UNREGISTERED);
                 Entry entry = entries.computeIfAbsent(
                     id,

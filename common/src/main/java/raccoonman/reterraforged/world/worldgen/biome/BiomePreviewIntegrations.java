@@ -36,6 +36,15 @@ public final class BiomePreviewIntegrations {
 		BiomePreviewIntegration.Context context,
 		Consumer<Throwable> failureHandler
 	) {
+		return open(context, failureHandler, integration -> {
+		});
+	}
+
+	static BiomePreviewIntegration.Session open(
+		BiomePreviewIntegration.Context context,
+		Consumer<Throwable> failureHandler,
+		Consumer<String> activityHandler
+	) {
 		List<BiomePreviewIntegration.Session> sessions = new ArrayList<>();
 		for (BiomePreviewIntegration integration : INTEGRATIONS.values()) {
 			try {
@@ -43,6 +52,7 @@ public final class BiomePreviewIntegrations {
 					BiomePreviewIntegration.Session session = integration.open(context);
 					if (session != null && session != BiomePreviewIntegration.Session.NONE) {
 						sessions.add(session);
+						activityHandler.accept(integration.id());
 					}
 				}
 			} catch (RuntimeException | LinkageError error) {
