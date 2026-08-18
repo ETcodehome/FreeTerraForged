@@ -1,6 +1,7 @@
 package raccoonman.reterraforged.world.worldgen.densityfunction.tile.generation;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BooleanSupplier;
 
 import raccoonman.reterraforged.concurrent.ThreadPools;
 import raccoonman.reterraforged.concurrent.pool.ArrayPool;
@@ -46,6 +47,10 @@ public class TileGenerator {
 	public Heightmap getHeightmap() {
 		return this.heightmap;
 	}
+
+	public int getTileBlockSize() {
+		return this.tileSizeBlocks.size();
+	}
 	
 	public CompletableFuture<Tile> generate(int tileX, int tileZ) {
 		Tile tile = this.makeTile(tileX, tileZ);
@@ -86,6 +91,17 @@ public class TileGenerator {
 	}
 	
 	public CompletableFuture<Tile> generateZoomed(float centerX, float centerZ, float zoom, boolean applyOptionalFilters) {
+		return this.generateZoomed(centerX, centerZ, zoom, applyOptionalFilters, () -> false);
+	}
+
+	/** Generates a preview tile while allowing superseded UI requests to stop work promptly. */
+	public CompletableFuture<Tile> generateZoomed(
+		float centerX,
+		float centerZ,
+		float zoom,
+		boolean applyOptionalFilters,
+		BooleanSupplier cancelled
+	) {
 		Tile tile = this.makeTile(0, 0);
 		CompletableFuture<?>[] futures = new CompletableFuture<?>[this.batchCount * this.batchCount];
         float translateX = centerX - this.tileSizeBlocks.size() * zoom / 2.0F;
@@ -95,34 +111,49 @@ public class TileGenerator {
 				int chunkX = batchX * this.batchSize;
 				int chunkZ = batchZ * this.batchSize;
 				futures[batchX * this.batchCount + batchZ] = CompletableFuture.runAsync(() -> {
-			        int maxX = Math.min(this.tileSizeChunks.total(), chunkX + this.batchSize);
-			        int maxZ = Math.min(this.tileSizeChunks.total(), chunkZ + this.batchSize);
-			        for (int cZ = chunkZ; cZ < maxZ; cZ++) {
-			            for (int cX = chunkX; cX < maxX; cX++) {
-			            	Chunk chunk = tile.getChunkWriter(cX, cZ);
-			            	
-			                Rivermap rivers = null;
-	                    	for (int dz = 0; dz < 16; dz++) {
-	                    		for (int dx = 0; dx < 16; dx++) {
-		                    		float worldX = (chunk.getBlockX() + dx) * zoom + translateX;
-		                    		float worldZ = (chunk.getBlockZ() + dz) * zoom + translateZ;
-		                    		Cell cell = chunk.getCell(dx, dz);
-		                    		
-			                        this.heightmap.applyTerrain(cell, worldX, worldZ);
-			                        rivers = Rivermap.get(cell, rivers, this.heightmap);
-			                        this.heightmap.applyRivers(cell, worldX, worldZ, rivers);
-			                        this.heightmap.applyClimate(cell, worldX, worldZ, true);
-			                    }
-			                }
-			            }
-			        }
+					checkCancelled(cancelled);
+						int maxX = Math.min(this.tileSizeChunks.total(), chunkX + this.batchSize);
+						int maxZ = Math.min(this.tileSizeChunks.total(), chunkZ + this.batchSize);
+						for (int cZ = chunkZ; cZ < maxZ; cZ++) {
+							for (int cX = chunkX; cX < maxX; cX++) {
+								checkCancelled(cancelled);
+								Chunk chunk = tile.getChunkWriter(cX, cZ);
+
+								Rivermap rivers = null;
+								for (int dz = 0; dz < 16; dz++) {
+									for (int dx = 0; dx < 16; dx++) {
+										checkCancelled(cancelled);
+										float worldX = (chunk.getBlockX() + dx) * zoom + translateX;
+										float worldZ = (chunk.getBlockZ() + dz) * zoom + translateZ;
+										Cell cell = chunk.getCell(dx, dz);
+
+										this.heightmap.applyTerrain(cell, worldX, worldZ);
+										rivers = Rivermap.get(cell, rivers, this.heightmap);
+										this.heightmap.applyRivers(cell, worldX, worldZ, rivers);
+										this.heightmap.applyClimate(cell, worldX, worldZ, true);
+									}
+								}
+							}
+						}
 				}, ThreadPools.WORLD_GEN);
 	        }
 	    }
 		return CompletableFuture.allOf(futures).thenApply((v) -> {
+			checkCancelled(cancelled);
 			this.filters.apply(tile, applyOptionalFilters);
+			checkCancelled(cancelled);
 			return tile;
+		}).whenComplete((result, throwable) -> {
+			if (throwable != null) {
+				tile.close();
+			}
 		});
+	}
+
+	private static void checkCancelled(BooleanSupplier cancelled) {
+		if (cancelled.getAsBoolean()) {
+			throw new java.util.concurrent.CancellationException("Preview tile generation superseded");
+		}
 	}
     
 	private Tile makeTile(int x, int z) {

@@ -11,6 +11,7 @@ import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.client.data.RTFLanguageProvider;
 import raccoonman.reterraforged.client.data.RTFTranslationKeys;
 import raccoonman.reterraforged.fabric.network.RTFFabricNetworking;
+import raccoonman.reterraforged.fabric.compat.FabricBiomePreviewIntegrations;
 import raccoonman.reterraforged.platform.RegistryUtil;
 import raccoonman.reterraforged.registries.RTFRegistries;
 import raccoonman.reterraforged.world.worldgen.biome.modifier.BiomeModifier;
@@ -20,6 +21,7 @@ public class RTFFabric implements ModInitializer, DataGeneratorEntrypoint {
 	@Override
 	public void onInitialize() {
 		RTFCommon.bootstrap();
+		FabricBiomePreviewIntegrations.bootstrap();
 		RTFFabricNetworking.init();
 
 		RegistryUtil.createDataRegistry(RTFRegistries.BIOME_MODIFIER, BiomeModifier.DIRECT_CODEC, false);

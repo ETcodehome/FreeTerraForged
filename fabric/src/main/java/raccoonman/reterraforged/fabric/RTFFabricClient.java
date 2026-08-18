@@ -10,7 +10,6 @@ public class RTFFabricClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
-
         RTFFabricClientNetworking.init();
 
         Minecraft mc = Minecraft.getInstance();

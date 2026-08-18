@@ -24,6 +24,9 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	Slider zoom3D;
 	CycleButton<RenderMode> renderMode2D;
 	CycleButton<RenderMode> renderMode3D;
+	private int previewNavigationX;
+	private int previewNavigationZ;
+	private boolean previewNavigated;
 	protected PresetEntry preset;
 
 	// Static persistent state containers
@@ -31,13 +34,13 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	public static int maxZoom = 100;
 	public static double staticZoom2D = 68.0D;
 	public static double staticZoom3D = 95.0D;
-	public static RenderMode staticMode2D = RenderMode.BIOME_TYPE;
+	public static RenderMode staticMode2D = RenderMode.BIOME;
 	public static RenderMode staticMode3D = RenderMode.HYPSOMETRIC;
 
 	private EditBox seedEdit;
 	private Button seedRandomize;
-	public static Preview3D preview3D;
-	public static Preview2D preview2D;
+	private Preview3D preview3D;
+	private Preview2D preview2D;
 
 	public PresetEditorPage(PresetConfigScreen screen, PresetEntry preset) {
 		super(screen);
@@ -58,6 +61,32 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 
 	PresetConfigScreen getScreen() {
 		return this.screen;
+	}
+
+	PreviewComputationCache previewCache() {
+		return this.screen.previewCache();
+	}
+
+	int previewNavigationX() {
+		return this.previewNavigationX;
+	}
+
+	int previewNavigationZ() {
+		return this.previewNavigationZ;
+	}
+
+	boolean previewNavigated() {
+		return this.previewNavigated;
+	}
+
+	void setPreviewNavigation(int x, int z) {
+		this.previewNavigationX = x;
+		this.previewNavigationZ = z;
+		this.previewNavigated = true;
+	}
+
+	void resetPreviewNavigation() {
+		this.previewNavigated = false;
 	}
 
 	@Override
@@ -118,7 +147,7 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		double initZoom2D = Optional.ofNullable(this.zoom2D).map(Slider::getLerpedValue).orElse(staticZoom2D);
 		this.zoom2D = PresetWidgets.createIntSlider((int) Math.round(initZoom2D), minZoom, maxZoom, RTFTranslationKeys.GUI_SLIDER_ZOOM, (slider, value) -> {
 			staticZoom2D = ((Slider) slider).getLerpedValue();
-			this.regenerate();
+			if (this.preview2D != null) this.preview2D.regenerate();
 			return value;
 		});
 		this.zoom2D.setValue((initZoom2D - 1.0D) / (100.0D - 1.0D));
@@ -127,20 +156,20 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		double initZoom3D = Optional.ofNullable(this.zoom3D).map(Slider::getLerpedValue).orElse(staticZoom3D);
 		this.zoom3D = PresetWidgets.createIntSlider((int) Math.round(initZoom3D), minZoom, maxZoom, RTFTranslationKeys.GUI_SLIDER_ZOOM, (slider, value) -> {
 			staticZoom3D = ((Slider) slider).getLerpedValue();
-			this.regenerate();
+			if (this.preview3D != null) this.preview3D.regenerate();
 			return value;
 		});
 		this.zoom3D.setValue((initZoom3D - 1.0D) / (100.0D - 1.0D));
 
 		this.renderMode2D = PresetWidgets.createCycle(ImmutableList.copyOf(RenderMode.values()), this.renderMode2D != null ? this.renderMode2D.getValue() : staticMode2D, RTFTranslationKeys.GUI_BUTTON_RENDER_MODE, (button, value) -> {
 			staticMode2D = value;
-			this.regenerate();
-		}, RenderMode::name);
+			if (this.preview2D != null) this.preview2D.refreshRenderMode(value);
+		}, RenderMode::displayName);
 
 		this.renderMode3D = PresetWidgets.createCycle(ImmutableList.copyOf(RenderMode.values()), this.renderMode3D != null ? this.renderMode3D.getValue() : staticMode3D, RTFTranslationKeys.GUI_BUTTON_RENDER_MODE, (button, value) -> {
 			staticMode3D = value;
-			this.regenerate();
-		}, RenderMode::name);
+			if (this.preview3D != null) this.preview3D.refreshRenderMode(value);
+		}, RenderMode::displayName);
 
 		// Seed Text Input
 		String currentSeed = this.getInitialSeedText();
@@ -256,10 +285,12 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		if (this.preview3D != null) {
 			this.screen.removeWidgetFromScreen(this.preview3D);
 			try { this.preview3D.close(); } catch (Exception e) { e.printStackTrace(); }
+			this.preview3D = null;
 		}
 		if (this.preview2D != null) {
 			this.screen.removeWidgetFromScreen(this.preview2D);
 			try { this.preview2D.close(); } catch (Exception e) { e.printStackTrace(); }
+			this.preview2D = null;
 		}
 	}
 
@@ -270,6 +301,8 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 			if (this.preview3D != null) this.preview3D.close();
 			if (this.preview2D != null) this.preview2D.close();
 		} catch (Exception e) { e.printStackTrace(); }
+		this.preview3D = null;
+		this.preview2D = null;
 	}
 
 	@Override

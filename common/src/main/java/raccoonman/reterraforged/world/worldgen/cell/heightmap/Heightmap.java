@@ -64,11 +64,6 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
 	
 	public void applyClimate(Cell cell, float x, float z, boolean applyClimate) {
 		float riverValleyThreshold = 0.675F;
-        if(cell.riverMask < riverValleyThreshold && !isIslandTerrain(cell)) {
-        	cell.erosion = 0.445F;
-        	cell.weirdness = 0.34F;
-        }
-        
         if(cell.terrain.isRiver()) {
             cell.erosion = -0.05F;
             cell.weirdness = -0.03F;
@@ -194,9 +189,5 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
         Noise beachNoise = Noises.perlin2(ctx.seed.next(), 20, 1);
         beachNoise = Noises.mul(beachNoise, ctx.levels.scale(5));
         return new Heightmap(terrain, region, continent, climate, levels, controlPoints, terrainFrequency, beachNoise);
-	}
-	
-	private static boolean isIslandTerrain(Cell cell) {
-	    return cell.terrain == TerrainType.ISLAND || cell.terrain == TerrainType.ISLAND_BEACH || cell.terrain == TerrainType.ISLAND_MOUNTAINS;
 	}
 }

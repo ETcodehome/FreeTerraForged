@@ -3,11 +3,14 @@ package raccoonman.reterraforged.world.worldgen.terrablender;
 import java.util.List;
 
 import net.minecraft.world.level.biome.Climate;
+import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 
 /**
  * Source-local marker used by the ordinary biome-source path without linking it to TerraBlender.
  */
 public interface TerraBlenderParameterList<T> {
+	void reterraforged$preparePreview(Preset preset, long seed);
+
 	boolean reterraforged$isTerraBlenderInitialized();
 
 	T reterraforged$applyUndergroundBanding(Climate.TargetPoint target, int x, int y, int z, T selected);

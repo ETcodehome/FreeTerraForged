@@ -3,7 +3,8 @@
   "package": "raccoonman.reterraforged.neoforge.mixin",
   "minVersion": "0.8",
   "compatibilityLevel": "JAVA_21",
-  "mixins": [
+  "plugin": "raccoonman.reterraforged.neoforge.mixin.NeoForgeOptionalMixinPlugin",
+	"mixins": [
 	"MixinBiolithTerraBlenderCompat",
   	"MixinTagsProvider",
   	"MixinBiomeGenerationSettingsPlainsBuilder",

@@ -6,7 +6,6 @@ import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings.Cont
 import raccoonman.reterraforged.world.worldgen.biome.Humidity;
 import raccoonman.reterraforged.world.worldgen.biome.Temperature;
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
-import raccoonman.reterraforged.world.worldgen.cell.biome.type.BiomeType;
 import raccoonman.reterraforged.world.worldgen.cell.continent.Continent;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainCategory;
@@ -139,7 +138,6 @@ public class ClimateModule {
 		}
 		cell.regionMoisture = this.modifyMoisture(cell.regionMoisture, continentEdge);
 
-		cell.biome = BiomeType.get(cell.regionTemperature, cell.regionMoisture);
 		cell.regionTemperature = this.modifyTemp(cell.height, cell.regionTemperature, originalX, originalZ);
 
 		float queryTemp = this.temperature.compute(x, z, 0);
@@ -155,8 +153,6 @@ public class ClimateModule {
 
 			float mtnTemp = this.temperature.compute(mtnFreqX, mtnFreqZ, 0);
 			float mtnMoist = this.moisture.compute(mtnFreqX, mtnFreqZ, 0);
-			cell.biome = BiomeType.get(mtnTemp, mtnMoist);
-
 			mtnMoist = this.modifyMoisture(mtnMoist, continentEdge);
 			mtnTemp = this.modifyTemp(cell.height, mtnTemp, originalX, originalZ);
 			cell.temperature = mtnTemp * 2.0F - 1.0F;
@@ -169,7 +165,6 @@ public class ClimateModule {
 
 			float islTemp = this.temperature.compute(centerX, centerZ, 0);
 			float islMoist = this.moisture.compute(centerX, centerZ, 0);
-			cell.biome = BiomeType.get(islTemp, islMoist);
 			islMoist = this.modifyMoisture(islMoist, continentEdge);
 			islTemp = this.modifyTemp(cell.height, islTemp, originalX, originalZ);
 			cell.temperature = islTemp * 2.0F - 1.0F;

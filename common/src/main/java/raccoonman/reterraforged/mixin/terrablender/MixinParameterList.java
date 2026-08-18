@@ -27,6 +27,7 @@ import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.registries.RTFRegistries;
 import raccoonman.reterraforged.world.worldgen.biome.ClimateParameterListComposition;
 import raccoonman.reterraforged.world.worldgen.biome.UndergroundBiomeBanding;
+import raccoonman.reterraforged.world.worldgen.biome.PreviewBiomeQueryContext;
 import raccoonman.reterraforged.world.worldgen.biome.UndergroundBiomeTags;
 import raccoonman.reterraforged.world.worldgen.terrablender.TerraBlenderParameterList;
 import terrablender.api.Region;
@@ -45,6 +46,10 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 
 	@Unique
 	private Preset reterraforged$bandingPreset;
+	@Unique
+	private Preset reterraforged$previewPreset;
+	@Unique
+	private long reterraforged$previewSeed;
 	@Unique
 	private long reterraforged$bandingSeed;
 	@Unique
@@ -88,8 +93,8 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 		if (this.reterraforged$regionalEntries == null) {
 			this.reterraforged$regionalEntries = new ArrayList<>();
 		}
-		this.reterraforged$bandingPreset = null;
-		this.reterraforged$bandingSeed = seed;
+		this.reterraforged$bandingPreset = this.reterraforged$previewPreset;
+		this.reterraforged$bandingSeed = this.reterraforged$previewPreset == null ? seed : this.reterraforged$previewSeed;
 		this.reterraforged$baseEntries = List.copyOf(this.values);
 		this.reterraforged$pendingRegionalEntries.clear();
 		this.reterraforged$regionalEntries.clear();
@@ -101,7 +106,7 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 		this.reterraforged$deepCandidateValues = List.of();
 		this.reterraforged$replacedCaveSlotCount = 0;
 		this.reterraforged$compositionFallbackReason = null;
-		if (regionType == RegionType.OVERWORLD) {
+		if (this.reterraforged$bandingPreset == null && regionType == RegionType.OVERWORLD) {
 			registryAccess.lookup(RTFRegistries.PRESET)
 				.flatMap(registry -> registry.get(Preset.KEY))
 				.ifPresent(holder -> this.reterraforged$bandingPreset = holder.value());
@@ -115,6 +120,14 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 //        		return RTFSurfaceRuleData.overworld(preset, registryAccess.lookupOrThrow(Registries.DENSITY_FUNCTION), registryAccess.lookupOrThrow(RTFRegistries.NOISE), defaultRules);
 //            });
 //    	});
+	}
+
+	@Override
+	public void reterraforged$preparePreview(Preset preset, long seed) {
+		if (!this.reterraforged$bandingInitialized) {
+			this.reterraforged$previewPreset = preset;
+			this.reterraforged$previewSeed = seed;
+		}
 	}
 
 	@ModifyArg(
@@ -250,7 +263,11 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 			return null;
 		}
 		T bandedValue = banding.appliesAt(targetPoint) ? banding.findValue(targetPoint, x, z) : originalValue;
-		return reterraforged$isDeferredPlaceholder(bandedValue) ? null : bandedValue;
+		if (reterraforged$isDeferredPlaceholder(bandedValue)) {
+			return null;
+		}
+		PreviewBiomeQueryContext.record(x, y, z, originalValue, bandedValue);
+		return bandedValue;
 	}
 
 	@Override

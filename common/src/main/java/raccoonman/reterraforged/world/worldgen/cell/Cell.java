@@ -3,7 +3,6 @@ package raccoonman.reterraforged.world.worldgen.cell;
 import raccoonman.reterraforged.concurrent.Resource;
 import raccoonman.reterraforged.concurrent.SimpleResource;
 import raccoonman.reterraforged.concurrent.pool.ThreadLocalPool;
-import raccoonman.reterraforged.world.worldgen.cell.biome.type.BiomeType;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.RiverCarverSettings;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.Terrain;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainType;
@@ -46,7 +45,6 @@ public class Cell {
     public float globalContinentScale;
     public boolean erosionMask;
     public Terrain terrain;
-    public BiomeType biome;
     public float erosion;
     public float weirdness;
     // Terrain-selected erosion before rivers and climate apply biome-specific overrides.
@@ -66,7 +64,6 @@ public class Cell {
         this.riverMask = 1.0F;
         this.erosionMask = false;
         this.terrain = TerrainType.NONE;
-        this.biome = BiomeType.GRASSLAND;
         this.waterTable = 0.0F;
         this.continentSizeModifier = 1.0F;
     }
@@ -93,7 +90,6 @@ public class Cell {
         this.continentZ = other.continentZ;
         this.erosionMask = other.erosionMask;
         this.terrain = other.terrain;
-        this.biome = other.biome;
         this.erosion = other.erosion;
         this.weirdness = other.weirdness;
         this.terrainErosion = other.terrainErosion;
