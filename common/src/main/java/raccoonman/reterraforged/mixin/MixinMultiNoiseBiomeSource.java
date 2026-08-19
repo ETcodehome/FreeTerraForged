@@ -1,11 +1,15 @@
 package raccoonman.reterraforged.mixin;
 
 import java.util.Objects;
+import java.util.function.Function;
 
+import com.mojang.datafixers.util.Either;
 import net.minecraft.core.Holder;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.biome.MultiNoiseBiomeSource;
+import net.minecraft.world.level.biome.MultiNoiseBiomeSourceParameterList;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -25,6 +29,10 @@ import raccoonman.reterraforged.world.worldgen.terrablender.TerraBlenderParamete
  */
 @Mixin(MultiNoiseBiomeSource.class)
 public abstract class MixinMultiNoiseBiomeSource implements RTFMultiNoiseBiomeSource {
+    @Shadow
+    @Final
+    private Either<Climate.ParameterList<Holder<Biome>>, Holder<MultiNoiseBiomeSourceParameterList>> parameters;
+
     @Unique
     private volatile UndergroundBiomeBanding.Layout<Holder<Biome>> rtf$undergroundBanding;
     @Unique
@@ -37,7 +45,7 @@ public abstract class MixinMultiNoiseBiomeSource implements RTFMultiNoiseBiomeSo
 
     @Override
     public Climate.ParameterList<Holder<Biome>> reterraforged$getParameters() {
-        return this.parameters();
+        return this.parameters.map(Function.identity(), holder -> holder.value().parameters());
     }
 
     @Inject(

@@ -28,6 +28,8 @@ import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.densityfunction.CellSampler;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
+import raccoonman.reterraforged.compat.biolith.BiolithCompat;
+import raccoonman.reterraforged.compat.biolith.BiolithPreviewContext;
 import raccoonman.reterraforged.world.worldgen.terrablender.TBCompat;
 import raccoonman.reterraforged.world.worldgen.terrablender.TBClimateSampler;
 import raccoonman.reterraforged.world.worldgen.terrablender.TerraBlenderParameterList;
@@ -78,11 +80,16 @@ public final class BiomePreviewResolver {
 		Holder<NoiseGeneratorSettings> noiseSettings = provider.lookupOrThrow(Registries.NOISE_SETTINGS)
 			.getOrThrow(NoiseGeneratorSettings.OVERWORLD);
 		NoiseBasedChunkGenerator previewGenerator = new NoiseBasedChunkGenerator(biomeSource, noiseSettings);
-		LevelStem previewStem = new LevelStem(dimensionType, previewGenerator);
+
+		if (BiolithCompat.isEnabled()) {
+			BiolithPreviewContext.preInitializeBiomeLookup(registries);
+		}
 
 		if (TBCompat.isEnabled()) {
-			initializeTerraBlender(registries, previewStem, previewGenerator, biomeSource, preset, seed);
+			initializeTerraBlender(registries, dimensionType, previewGenerator, biomeSource, preset, seed);
 		}
+
+		LevelStem previewStem = new LevelStem(dimensionType, previewGenerator);
 
 		Climate.Sampler sampler = surfaceClimateSampler(noiseSettings.value(), preset, generatorContext, seed);
 		TerraBlenderParameterList<Holder<Biome>> terraBlenderParameters = terraBlenderParameters(biomeSource);
@@ -139,7 +146,7 @@ public final class BiomePreviewResolver {
 
 	private static void initializeTerraBlender(
 		RegistryAccess registries,
-		LevelStem previewStem,
+		Holder<DimensionType> dimensionType,
 		NoiseBasedChunkGenerator previewGenerator,
 		BiomeSource biomeSource,
 		Preset preset,
@@ -152,7 +159,7 @@ public final class BiomePreviewResolver {
 		}
 		LevelUtils.initializeBiomes(
 			registries,
-			previewStem.type(),
+			dimensionType,
 			LevelStem.OVERWORLD,
 			previewGenerator,
 			seed
