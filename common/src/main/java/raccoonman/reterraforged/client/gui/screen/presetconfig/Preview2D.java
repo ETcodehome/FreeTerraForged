@@ -66,6 +66,7 @@ public class Preview2D extends Button {
     private CompletableFuture<FrameResult> pendingGeneration = null;
     private volatile PreparedContext preparedContext;
     private volatile PreviewCancellation generationCancellation;
+    private volatile PreviewFailure previewFailure;
     private final AtomicLong pixelRequestVersion = new AtomicLong();
     private volatile PreviewCancellation pixelCancellation;
     private CompletableFuture<?> pendingPixelRasterization;
@@ -192,7 +193,10 @@ public class Preview2D extends Button {
             }
         } catch (RuntimeException | LinkageError error) {
             this.isRunning = false;
-            RTFCommon.LOGGER.error("Failed to prepare preview provider", error);
+            this.previewFailure = PreviewFailure.log("Failed to prepare 2D preview provider", error);
+            if (this.isDirty) {
+                this.scheduleRegeneration();
+            }
             return;
         }
         HolderLookup.Provider preparedProvider = provider;
@@ -225,8 +229,15 @@ public class Preview2D extends Button {
                 prepared = new PreparedContext(requestedKey, generatorContext, preparedProvider, preparedPreset, biomePipeline);
                 this.preparedContext = prepared;
             }
+            BiomePreview biomePreview = null;
+            PreviewFailure biomeFailure = null;
             if (biomePipeline) {
-                prepared.ensureBiomePreview(settings);
+                try {
+                    prepared.ensureBiomePreview(settings);
+                    biomePreview = prepared.biomePreview;
+                } catch (RuntimeException | LinkageError error) {
+                    biomeFailure = PreviewFailure.log("Failed to prepare 2D biome preview", error);
+                }
             }
             GeneratorContext generatorContext = prepared.context;
             if (properties.spawnType == SpawnType.CONTINENT_CENTER) {
@@ -255,7 +266,7 @@ public class Preview2D extends Button {
             PreviewComputationCache.TileKey tileKey = new PreviewComputationCache.TileKey(
                 requestedKey, cx, cz, zoomLevel, Preview2D.SIZE, biomePipeline
             );
-            return new PreGenContext(generatorContext, prepared.biomePreview, cx, cz, zoomLevel, tileKey);
+            return new PreGenContext(generatorContext, biomePreview, cx, cz, zoomLevel, tileKey, biomeFailure);
         }, net.minecraft.Util.backgroundExecutor());
 
         // Stage 2: Handle calculation maps and evaluate visual color tables entirely on worker pool
@@ -281,14 +292,17 @@ public class Preview2D extends Button {
                 Tile generatedTile = lease.tile();
                 try {
                     BiomePreview.Sidecar biomes = null;
-                    if (biomePipeline) {
+                    PreviewFailure failure = preGen.biomeFailure;
+                    if (failure == null && biomePipeline) {
                         biomes = preGen.biomePreview.resolveCached(
                             this.page.previewCache(), generatedTile, preGen.cx, preGen.cz, preGen.zoomLevel, levels, cancellation
                         );
                     }
 
-                    int[] bufferedPixels = this.createPixelData(generatedTile, biomes, mode, levels, properties);
-                    return new FrameResult(lease, biomes, preGen.cx, preGen.cz, bufferedPixels);
+                    int[] bufferedPixels = failure == null
+                        ? this.createPixelData(generatedTile, biomes, mode, levels, properties)
+                        : null;
+                    return new FrameResult(lease, biomes, preGen.cx, preGen.cz, bufferedPixels, failure);
                 } catch (Throwable throwable) {
                     lease.close();
                     throw throwable;
@@ -307,7 +321,7 @@ public class Preview2D extends Button {
 
             if (throwable != null) {
                 if (!PreviewCancellation.isCancellation(throwable)) {
-                RTFCommon.LOGGER.error("Failed handling 2D preview generation pipeline", throwable);
+                    this.previewFailure = PreviewFailure.log("Failed handling 2D preview generation pipeline", throwable);
                 }
             } else if (!this.isDirty && result != null && result.tile != null
                     && !cancellation.isCancelled()
@@ -320,10 +334,13 @@ public class Preview2D extends Button {
                 this.generatedWithBiomePipeline = biomePipeline;
                 this.centerX = result.centerX;
                 this.centerZ = result.centerZ;
+                this.previewFailure = result.failure;
                 this.legendValues[3] = getSpawnCoords();
 
                 // Safe structural upload across to GPU
-                this.uploadPixelData(result.pixelData);
+                if (result.failure == null) {
+                    this.uploadPixelData(result.pixelData);
+                }
                 if (previousLease != null) previousLease.close();
             } else if (result != null && result.tile != null) {
                 result.lease.close();
@@ -389,9 +406,14 @@ public class Preview2D extends Button {
             return this.createPixelData(retained.tile(), sidecar, mode, levels, properties);
         }, net.minecraft.Util.backgroundExecutor()).whenCompleteAsync((pixels, throwable) -> {
             try {
-                if (!this.closed && throwable == null && !cancellation.isCancelled()
+                if (!this.closed && throwable != null && !PreviewCancellation.isCancellation(throwable)
                         && version == this.pixelRequestVersion.get()
                         && mode == this.page.renderMode2D.getValue()) {
+                    this.previewFailure = PreviewFailure.log("Failed rasterizing 2D preview", throwable);
+                } else if (!this.closed && throwable == null && !cancellation.isCancelled()
+                        && version == this.pixelRequestVersion.get()
+                        && mode == this.page.renderMode2D.getValue()) {
+                    this.previewFailure = null;
                     this.uploadPixelData(pixels);
                 }
             } finally {
@@ -412,6 +434,7 @@ public class Preview2D extends Button {
             this.tileLease = null;
         }
         this.tile = null;
+        this.previewFailure = null;
         this.generatedWithBiomePipeline = false;
         this.preparedContext = null;
     }
@@ -475,6 +498,11 @@ public class Preview2D extends Button {
     public void renderWidget(GuiGraphics guiGraphics, int mx, int my, float partialTicks) {
         int xPos = this.getX();
         int yPos = this.getY();
+
+        if (this.previewFailure != null) {
+            PreviewFailure.renderUnavailable(guiGraphics, xPos, yPos, this.width, this.height);
+            return;
+        }
 
         if (this.tile == null) {
             guiGraphics.fill(xPos, yPos, xPos + this.width, yPos + this.height, 0xFF000000);
@@ -653,13 +681,16 @@ public class Preview2D extends Button {
         final int zoomLevel;
         final PreviewComputationCache.TileKey tileKey;
 
-        PreGenContext(GeneratorContext context, BiomePreview biomePreview, int cx, int cz, int zoomLevel, PreviewComputationCache.TileKey tileKey) {
+        final PreviewFailure biomeFailure;
+
+        PreGenContext(GeneratorContext context, BiomePreview biomePreview, int cx, int cz, int zoomLevel, PreviewComputationCache.TileKey tileKey, PreviewFailure biomeFailure) {
             this.context = context;
             this.biomePreview = biomePreview;
             this.cx = cx;
             this.cz = cz;
             this.zoomLevel = zoomLevel;
             this.tileKey = tileKey;
+            this.biomeFailure = biomeFailure;
         }
     }
 
@@ -698,14 +729,16 @@ public class Preview2D extends Button {
         final int centerX;
         final int centerZ;
         final int[] pixelData;
+        final PreviewFailure failure;
 
-        FrameResult(PreviewComputationCache.TileLease lease, BiomePreview.Sidecar biomes, int centerX, int centerZ, int[] pixelData) {
+        FrameResult(PreviewComputationCache.TileLease lease, BiomePreview.Sidecar biomes, int centerX, int centerZ, int[] pixelData, PreviewFailure failure) {
             this.lease = lease;
             this.tile = lease.tile();
             this.biomes = biomes;
             this.centerX = centerX;
             this.centerZ = centerZ;
             this.pixelData = pixelData;
+            this.failure = failure;
         }
     }
 }

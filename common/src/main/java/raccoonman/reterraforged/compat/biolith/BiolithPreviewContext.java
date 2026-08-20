@@ -14,6 +14,7 @@ import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.JsonOps;
 import com.terraformersmc.biolith.api.biome.BiolithFittestNodes;
 import com.terraformersmc.biolith.api.biome.sub.Criterion;
+import com.terraformersmc.biolith.impl.biome.BiomeCoordinator;
 import com.terraformersmc.biolith.impl.biome.DimensionBiomePlacement;
 import com.terraformersmc.biolith.impl.noise.OpenSimplexNoise2;
 import net.minecraft.core.Holder;
@@ -37,6 +38,13 @@ public final class BiolithPreviewContext {
 	private static final ThreadLocal<State> ACTIVE = new ThreadLocal<>();
 
 	private BiolithPreviewContext() {
+	}
+
+	public static void preInitializeBiomeLookup(RegistryAccess registries) {
+		try {
+			BiomeCoordinator.setEarlyBiomeLookup(registries.lookupOrThrow(Registries.BIOME));
+		} catch (RuntimeException | LinkageError ignored) {
+		}
 	}
 
 	public static BiomePreviewIntegration.Session open(
