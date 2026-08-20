@@ -25,8 +25,6 @@ class DynamicOreVerticalTransformTest {
 	@Test
 	void deepDiamondMatchesTheOfflineLocalIntensityModel() {
 		VerticalTransform transform = DynamicOreVerticalTransform.derive(
-			"minecraft:ore_diamond",
-			"contract",
 			DIAMOND,
 			new VerticalFrame(-624, 383, 63)
 		).transform().orElseThrow();
@@ -50,8 +48,6 @@ class DynamicOreVerticalTransformTest {
 	@Test
 	void contractionBelowOneUsesUnbiasedStochasticThinning() {
 		VerticalTransform transform = DynamicOreVerticalTransform.derive(
-			"minecraft:ore_diamond",
-			"contract",
 			DIAMOND,
 			new VerticalFrame(-16, 383, 63)
 		).transform().orElseThrow();
@@ -67,7 +63,7 @@ class DynamicOreVerticalTransformTest {
 	}
 
 	@Test
-	void fixedGeologicalSegmentDelegatesWithoutChangingItsRandomSampling() {
+	void unchangedVerticalMappingsDelegateWithoutChangingRandomSampling() {
 		HeightSemantics fixed = new HeightSemantics(
 			HeightProviderShape.UNIFORM,
 			new Anchor(AnchorType.ABSOLUTE, 0),
@@ -75,27 +71,20 @@ class DynamicOreVerticalTransformTest {
 			0
 		);
 		var derivation = DynamicOreVerticalTransform.derive(
-			"test:fixed",
-			"contract",
 			fixed,
 			new VerticalFrame(-1024, 1023, 63)
 		);
 
 		assertTrue(derivation.transform().isEmpty());
 		assertEquals("FEATURE_VERTICAL_MAPPING_IS_IDENTITY", derivation.reasonCode());
-	}
 
-	@Test
-	void unchangedDefaultDepthDiamondDelegatesEvenWhenTheWorldTopIsHigher() {
-		var derivation = DynamicOreVerticalTransform.derive(
-			"minecraft:ore_diamond",
-			"contract",
+		var defaultDepth = DynamicOreVerticalTransform.derive(
 			DIAMOND,
 			new VerticalFrame(-64, 383, 63)
 		);
 
-		assertTrue(derivation.transform().isEmpty());
-		assertEquals("FEATURE_VERTICAL_MAPPING_IS_IDENTITY", derivation.reasonCode());
+		assertTrue(defaultDepth.transform().isEmpty());
+		assertEquals("FEATURE_VERTICAL_MAPPING_IS_IDENTITY", defaultDepth.reasonCode());
 	}
 
 	@Test
@@ -107,8 +96,6 @@ class DynamicOreVerticalTransformTest {
 			0
 		);
 		VerticalTransform transform = DynamicOreVerticalTransform.derive(
-			"minecraft:ore_iron_upper",
-			"contract",
 			upperIron,
 			new VerticalFrame(-64, 127, 63)
 		).transform().orElseThrow();
@@ -122,7 +109,7 @@ class DynamicOreVerticalTransformTest {
 	@Test
 	void malformedFramesAndEmptyAuthoredRangesFailClosed() {
 		assertFalse(DynamicOreVerticalTransform.derive(
-			"test:bad_frame", "contract", DIAMOND, new VerticalFrame(-64, 319, 7)
+			DIAMOND, new VerticalFrame(-64, 319, 7)
 		).transform().isPresent());
 		HeightSemantics empty = new HeightSemantics(
 			HeightProviderShape.UNIFORM,
@@ -133,7 +120,7 @@ class DynamicOreVerticalTransformTest {
 		assertEquals(
 			"EMPTY_REFERENCE_HEIGHT_RANGE",
 			DynamicOreVerticalTransform.derive(
-				"test:empty", "contract", empty, new VerticalFrame(-64, 383, 63)
+				empty, new VerticalFrame(-64, 383, 63)
 			).reasonCode()
 		);
 	}

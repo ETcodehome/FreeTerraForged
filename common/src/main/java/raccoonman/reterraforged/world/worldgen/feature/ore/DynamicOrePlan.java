@@ -1,77 +1,39 @@
 package raccoonman.reterraforged.world.worldgen.feature.ore;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 
-/**
- * Immutable, registry-epoch-local description of ore contracts in the final
- * Overworld biome feature graph. This model deliberately stores no registry
- * holders or world-generation objects.
- */
 public record DynamicOrePlan(
-	String schemaFingerprint,
-	String graphFingerprint,
-	List<Occurrence> occurrences,
 	Optional<VerticalFrame> verticalFrame,
-	Map<String, VerticalTransform> verticalTransforms
+	Map<String, VerticalTransform> verticalTransforms,
+	int activeFeatures,
+	int standardOres,
+	int delegatedFeatures,
+	Map<String, Integer> skippedReasons,
+	List<String> failures
 ) {
 	public DynamicOrePlan {
-		occurrences = List.copyOf(occurrences);
 		verticalFrame = verticalFrame == null ? Optional.empty() : verticalFrame;
-		verticalTransforms = Map.copyOf(verticalTransforms);
+		verticalTransforms = Collections.unmodifiableMap(new TreeMap<>(verticalTransforms));
+		skippedReasons = Collections.unmodifiableMap(new TreeMap<>(skippedReasons));
+		failures = List.copyOf(failures);
 	}
 
-	public DynamicOrePlan(String schemaFingerprint, String graphFingerprint, List<Occurrence> occurrences) {
-		this(schemaFingerprint, graphFingerprint, occurrences, Optional.empty(), Map.of());
-	}
-
-	public static DynamicOrePlan empty(String schemaFingerprint) {
-		return new DynamicOrePlan(schemaFingerprint, DynamicOrePlanner.fingerprint(List.of()), List.of());
-	}
-
-	public long count(Contract contract) {
-		return this.occurrences.stream().filter(occurrence -> occurrence.contract() == contract).count();
-	}
-
-	public long count(InspectionStatus status) {
-		return this.occurrences.stream().filter(occurrence -> occurrence.inspection().status() == status).count();
+	public static DynamicOrePlan empty() {
+		return new DynamicOrePlan(Optional.empty(), Map.of(), 0, 0, 0, Map.of(), List.of());
 	}
 
 	public String summary() {
-		return "schema=" + this.schemaFingerprint
-			+ ", graph=" + this.graphFingerprint
-			+ ", occurrences=" + this.occurrences.size()
-			+ ", standard=" + this.count(Contract.SUPPORTED_STANDARD)
-			+ ", custom_filters=" + this.count(Contract.STANDARD_WITH_CUSTOM_FILTER)
-			+ ", custom=" + this.count(Contract.CUSTOM_DIAGNOSTIC)
-			+ ", preserved=" + this.count(Contract.PRESERVE_UNKNOWN)
-			+ ", inactive=" + this.count(Contract.NO_ACTIVE_MEMBERSHIP)
-			+ ", inspection_failed=" + this.count(InspectionStatus.FAILED)
-			+ ", inspection_unsupported=" + this.count(InspectionStatus.UNSUPPORTED)
+		return "active_features=" + this.activeFeatures
+			+ ", standard_ores=" + this.standardOres
 			+ ", dynamic_transforms=" + this.verticalTransforms.size()
+			+ ", delegated=" + this.delegatedFeatures
+			+ ", skipped=" + this.skippedReasons
+			+ ", failures=" + this.failures.size()
 			+ ", frame=" + this.verticalFrame.map(Object::toString).orElse("none");
-	}
-
-	public enum Contract {
-		SUPPORTED_STANDARD,
-		STANDARD_WITH_CUSTOM_FILTER,
-		CUSTOM_DIAGNOSTIC,
-		PRESERVE_UNKNOWN,
-		NO_ACTIVE_MEMBERSHIP
-	}
-
-	public enum InspectionStatus {
-		CLASSIFIED,
-		UNSUPPORTED,
-		FAILED
-	}
-
-	public enum Action {
-		REPORT_ONLY,
-		DYNAMIC_VERTICAL_DENSITY,
-		DELEGATE_REFERENCE_IDENTITY,
-		PRESERVE_UNCHANGED
 	}
 
 	public enum HeightProviderShape {
@@ -90,9 +52,6 @@ public record DynamicOrePlan(
 		RARITY,
 		IN_SQUARE,
 		HEIGHT
-	}
-
-	public record Membership(String biomeId, String step, int stepIndex, int order) {
 	}
 
 	public record Anchor(AnchorType type, int value) {
@@ -114,14 +73,7 @@ public record DynamicOrePlan(
 		}
 	}
 
-	/**
-	 * Value-only cumulative intensity table for one registered placed feature.
-	 * The final cumulative value is the expected number of output positions per
-	 * input position at the authored height modifier.
-	 */
 	public record VerticalTransform(
-		String placedFeatureId,
-		String contractFingerprint,
 		double expectedOutputsPerInput,
 		FanoutStage fanoutStage,
 		int fanoutModifierIndex,
@@ -153,74 +105,5 @@ public record DynamicOrePlan(
 	}
 
 	public record WeightedY(int y, double cumulativeIntensity) {
-	}
-
-	public record Inspection(
-		InspectionStatus status,
-		String phase,
-		Optional<String> failureType,
-		Optional<String> failureMessage
-	) {
-		public Inspection {
-			failureType = failureType == null ? Optional.empty() : failureType;
-			failureMessage = failureMessage == null ? Optional.empty() : failureMessage;
-		}
-
-		public static Inspection classified() {
-			return new Inspection(InspectionStatus.CLASSIFIED, "complete", Optional.empty(), Optional.empty());
-		}
-
-		public static Inspection unsupported(String phase) {
-			return new Inspection(InspectionStatus.UNSUPPORTED, phase, Optional.empty(), Optional.empty());
-		}
-
-		public static Inspection failed(String phase, Throwable failure) {
-			return new Inspection(
-				InspectionStatus.FAILED,
-				phase,
-				Optional.of(failure.getClass().getName()),
-				Optional.ofNullable(failure.getMessage())
-			);
-		}
-	}
-
-	public record Occurrence(
-		String placedFeatureId,
-		Optional<Membership> membership,
-		String configuredFeatureType,
-		List<String> placementModifierTypes,
-		List<String> placementModifierConfigurations,
-		Optional<String> oreConfiguration,
-		Optional<HeightSemantics> height,
-		Contract contract,
-		Inspection inspection,
-		Action action,
-		String reasonCode,
-		String contractFingerprint
-	) {
-		public Occurrence {
-			membership = membership == null ? Optional.empty() : membership;
-			placementModifierTypes = List.copyOf(placementModifierTypes);
-			placementModifierConfigurations = List.copyOf(placementModifierConfigurations);
-			oreConfiguration = oreConfiguration == null ? Optional.empty() : oreConfiguration;
-			height = height == null ? Optional.empty() : height;
-		}
-
-		public Occurrence withAction(Action nextAction, String nextReasonCode) {
-			return new Occurrence(
-				this.placedFeatureId,
-				this.membership,
-				this.configuredFeatureType,
-				this.placementModifierTypes,
-				this.placementModifierConfigurations,
-				this.oreConfiguration,
-				this.height,
-				this.contract,
-				this.inspection,
-				nextAction,
-				nextReasonCode,
-				this.contractFingerprint
-			);
-		}
 	}
 }

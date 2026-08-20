@@ -1,36 +1,32 @@
 package raccoonman.reterraforged.world.worldgen.feature.ore;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Stream;
 
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 
 import com.mojang.serialization.MapCodec;
 
+import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.SharedConstants;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.levelgen.VerticalAnchor;
+import net.minecraft.world.level.levelgen.blockpredicates.BlockPredicate;
 import net.minecraft.world.level.levelgen.feature.ConfiguredFeature;
 import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConfiguration;
 import net.minecraft.world.level.levelgen.feature.configurations.OreConfiguration;
 import net.minecraft.world.level.levelgen.heightproviders.ConstantHeight;
 import net.minecraft.world.level.levelgen.heightproviders.TrapezoidHeight;
-import net.minecraft.world.level.levelgen.blockpredicates.BlockPredicate;
-import net.minecraft.world.level.levelgen.structure.templatesystem.BlockMatchTest;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.levelgen.placement.BiomeFilter;
 import net.minecraft.world.level.levelgen.placement.BlockPredicateFilter;
 import net.minecraft.world.level.levelgen.placement.CountPlacement;
@@ -42,18 +38,14 @@ import net.minecraft.world.level.levelgen.placement.PlacementFilter;
 import net.minecraft.world.level.levelgen.placement.PlacementModifier;
 import net.minecraft.world.level.levelgen.placement.PlacementModifierType;
 import net.minecraft.world.level.levelgen.placement.RarityFilter;
-import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan.Action;
+import net.minecraft.world.level.levelgen.structure.templatesystem.BlockMatchTest;
 import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan.Anchor;
 import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan.AnchorType;
-import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan.Contract;
 import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan.HeightProviderShape;
-import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan.InspectionStatus;
-import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan.Membership;
-import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan.Occurrence;
+import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan.HeightSemantics;
+import raccoonman.reterraforged.world.worldgen.feature.ore.OreContractClassifier.Status;
 
 class OreContractClassifierTest {
-	private static final Membership MEMBERSHIP = new Membership("minecraft:plains", "underground_ores", 6, 3);
-
 	@BeforeAll
 	static void bootstrapMinecraft() {
 		SharedConstants.tryDetectVersion();
@@ -69,75 +61,69 @@ class OreContractClassifierTest {
 			BiomeFilter.biome()
 		);
 
-		Occurrence result = new OreContractClassifier().classify("minecraft:test", MEMBERSHIP, feature);
+		OreContractClassifier.Result result = new OreContractClassifier().classify(feature);
 
-		assertEquals(Contract.SUPPORTED_STANDARD, result.contract());
-		assertEquals(InspectionStatus.CLASSIFIED, result.inspection().status());
-		assertEquals(Action.REPORT_ONLY, result.action());
+		assertEquals(Status.SUPPORTED, result.status());
 		assertEquals(
-			Optional.of(new DynamicOrePlan.HeightSemantics(
+			new HeightSemantics(
 				HeightProviderShape.UNIFORM,
 				new Anchor(AnchorType.ABOVE_BOTTOM, 12),
 				new Anchor(AnchorType.ABSOLUTE, 48),
 				0
-			)),
-			result.height()
+			),
+			result.contract().orElseThrow().height()
 		);
-		assertTrue(result.oreConfiguration().orElseThrow().contains("\"size\":9"));
-		assertTrue(result.oreConfiguration().orElseThrow().contains("minecraft:stone"));
-		assertTrue(result.oreConfiguration().orElseThrow().contains("minecraft:iron_ore"));
 	}
 
 	@Test
-	void classifiesTriangularAndTrapezoidProvidersWithoutPrivateAccess() {
-		PlacedFeature triangle = ore(HeightRangePlacement.triangle(VerticalAnchor.absolute(-32), VerticalAnchor.belowTop(8)));
+	void classifiesTriangularAndTrapezoidProviders() {
+		PlacedFeature triangle = ore(HeightRangePlacement.triangle(
+			VerticalAnchor.absolute(-32), VerticalAnchor.belowTop(8)
+		));
 		PlacedFeature trapezoid = ore(HeightRangePlacement.of(
 			TrapezoidHeight.of(VerticalAnchor.absolute(-16), VerticalAnchor.absolute(80), 12)
 		));
 
-		Occurrence triangleResult = new OreContractClassifier().classify("test:triangle", MEMBERSHIP, triangle);
-		Occurrence trapezoidResult = new OreContractClassifier().classify("test:trapezoid", MEMBERSHIP, trapezoid);
+		var triangleHeight = new OreContractClassifier().classify(triangle).contract().orElseThrow().height();
+		var trapezoidHeight = new OreContractClassifier().classify(trapezoid).contract().orElseThrow().height();
 
-		assertEquals(HeightProviderShape.TRAPEZOID, triangleResult.height().orElseThrow().provider());
-		assertEquals(AnchorType.BELOW_TOP, triangleResult.height().orElseThrow().maxInclusive().type());
-		assertEquals(0, triangleResult.height().orElseThrow().plateau());
-		assertEquals(12, trapezoidResult.height().orElseThrow().plateau());
+		assertEquals(HeightProviderShape.TRAPEZOID, triangleHeight.provider());
+		assertEquals(AnchorType.BELOW_TOP, triangleHeight.maxInclusive().type());
+		assertEquals(0, triangleHeight.plateau());
+		assertEquals(12, trapezoidHeight.plateau());
 	}
 
 	@Test
-	void acceptsActualCustomPlacementFilterWithoutLinkingItsConcreteClass() {
-		PlacedFeature feature = ore(
+	void classifiesCustomModifiersByTheirActualPlacementContract() {
+		PlacedFeature downstreamFilter = ore(
 			CountPlacement.of(4),
 			HeightRangePlacement.uniform(VerticalAnchor.bottom(), VerticalAnchor.absolute(32)),
 			TestPlacementFilter.INSTANCE
 		);
-
-		Occurrence result = new OreContractClassifier().classify("example:filtered_ore", MEMBERSHIP, feature);
-
-		assertEquals(Contract.STANDARD_WITH_CUSTOM_FILTER, result.contract());
-		assertEquals("SUPPORTED_CUSTOM_PLACEMENT_FILTER", result.reasonCode());
-		assertEquals(Action.REPORT_ONLY, result.action());
-		assertTrue(result.placementModifierTypes().getLast().contains("TestPlacementFilter"));
-	}
-
-	@Test
-	void preservesAFilterThatWouldRunBeforeTheSafeFanoutBoundary() {
-		PlacedFeature feature = ore(
+		PlacedFeature upstreamFilter = ore(
 			TestPlacementFilter.INSTANCE,
 			CountPlacement.of(4),
 			InSquarePlacement.spread(),
 			HeightRangePlacement.uniform(VerticalAnchor.bottom(), VerticalAnchor.absolute(32))
 		);
+		PlacedFeature transformer = ore(
+			HeightRangePlacement.uniform(VerticalAnchor.bottom(), VerticalAnchor.absolute(32)),
+			FilterNamedPositionTransformer.INSTANCE
+		);
 
-		Occurrence result = new OreContractClassifier().classify("example:upstream_filter", MEMBERSHIP, feature);
-
-		assertEquals(Contract.PRESERVE_UNKNOWN, result.contract());
-		assertEquals("UPSTREAM_FILTER_BEFORE_SAFE_FANOUT", result.reasonCode());
-		assertEquals(Action.PRESERVE_UNCHANGED, result.action());
+		assertEquals(Status.SUPPORTED, new OreContractClassifier().classify(downstreamFilter).status());
+		assertEquals(
+			"UPSTREAM_FILTER_BEFORE_SAFE_FANOUT",
+			new OreContractClassifier().classify(upstreamFilter).reasonCode()
+		);
+		assertEquals(
+			"UNSUPPORTED_POSITION_MODIFIER",
+			new OreContractClassifier().classify(transformer).reasonCode()
+		);
 	}
 
 	@Test
-	void usesRegistryAwareCodecOpsForRegistryBackedModifierConfiguration() {
+	void acceptsRegistryBackedBuiltInFilters() {
 		PlacedFeature feature = ore(
 			HeightRangePlacement.uniform(VerticalAnchor.bottom(), VerticalAnchor.absolute(32)),
 			BlockPredicateFilter.forPredicate(BlockPredicate.matchesBlocks(Blocks.STONE))
@@ -146,45 +132,23 @@ class OreContractClassifierTest {
 			RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY)
 		);
 
-		Occurrence result = classifier.classify("example:registry_codec", MEMBERSHIP, feature);
-
-		assertEquals(Contract.SUPPORTED_STANDARD, result.contract());
-		assertEquals(InspectionStatus.CLASSIFIED, result.inspection().status());
-		assertTrue(result.placementModifierConfigurations().getLast().contains("minecraft:stone"));
+		assertEquals(Status.SUPPORTED, classifier.classify(feature).status());
 	}
 
 	@Test
-	void rejectsAFilterNamedPositionTransformerThatIsNotAPlacementFilter() {
-		PlacedFeature feature = ore(
-			HeightRangePlacement.uniform(VerticalAnchor.bottom(), VerticalAnchor.absolute(32)),
-			FilterNamedPositionTransformer.INSTANCE
-		);
-
-		Occurrence result = new OreContractClassifier().classify("example:not_a_filter", MEMBERSHIP, feature);
-
-		assertEquals(Contract.PRESERVE_UNKNOWN, result.contract());
-		assertEquals("UNSUPPORTED_POSITION_MODIFIER", result.reasonCode());
-		assertEquals(Action.PRESERVE_UNCHANGED, result.action());
-	}
-
-	@Test
-	void preservesCustomConfiguredFeaturesAndUnsupportedHeightForms() {
+	void preservesCustomFeaturesAndUnsupportedHeightForms() {
 		PlacedFeature custom = new PlacedFeature(
 			Holder.direct(new ConfiguredFeature<>(Feature.NO_OP, NoneFeatureConfiguration.INSTANCE)),
 			List.of(HeightRangePlacement.uniform(VerticalAnchor.bottom(), VerticalAnchor.top()))
 		);
 		PlacedFeature constant = ore(HeightRangePlacement.of(ConstantHeight.of(VerticalAnchor.absolute(12))));
 
-		Occurrence customResult = new OreContractClassifier().classify("example:custom", MEMBERSHIP, custom);
-		Occurrence constantResult = new OreContractClassifier().classify("example:constant", MEMBERSHIP, constant);
-
-		assertEquals(Contract.CUSTOM_DIAGNOSTIC, customResult.contract());
-		assertEquals("CUSTOM_CONFIGURED_FEATURE", customResult.reasonCode());
-		assertEquals(Action.PRESERVE_UNCHANGED, customResult.action());
-		assertEquals(Contract.PRESERVE_UNKNOWN, constantResult.contract());
-		assertEquals("UNSUPPORTED_HEIGHT_PROVIDER:minecraft:constant", constantResult.reasonCode());
-		assertEquals(InspectionStatus.UNSUPPORTED, constantResult.inspection().status());
-		assertEquals(Action.PRESERVE_UNCHANGED, constantResult.action());
+		assertEquals(Status.NOT_ORE, new OreContractClassifier().classify(custom).status());
+		assertEquals(Status.SKIPPED, new OreContractClassifier().classify(constant).status());
+		assertEquals(
+			"UNSUPPORTED_HEIGHT_PROVIDER:minecraft:constant",
+			new OreContractClassifier().classify(constant).reasonCode()
+		);
 	}
 
 	@Test
@@ -195,39 +159,12 @@ class OreContractClassifierTest {
 			HeightRangePlacement.uniform(VerticalAnchor.absolute(0), VerticalAnchor.top())
 		);
 
-		assertEquals(
-			"MISSING_HEIGHT_RANGE",
-			new OreContractClassifier().classify("test:missing", MEMBERSHIP, missing).reasonCode()
-		);
-		assertEquals(
-			"MULTIPLE_HEIGHT_RANGES",
-			new OreContractClassifier().classify("test:multiple", MEMBERSHIP, repeated).reasonCode()
-		);
+		assertEquals("MISSING_HEIGHT_RANGE", new OreContractClassifier().classify(missing).reasonCode());
+		assertEquals("MULTIPLE_HEIGHT_RANGES", new OreContractClassifier().classify(repeated).reasonCode());
 	}
 
 	@Test
-	void attributesRuntimeAndLinkageFailuresToOnlyTheInspectedOccurrence() {
-		PlacedFeature feature = ore(HeightRangePlacement.uniform(VerticalAnchor.bottom(), VerticalAnchor.top()));
-		OreContractClassifier runtimeFailure = new OreContractClassifier(height -> {
-			throw new IllegalStateException("bad codec shape");
-		});
-		OreContractClassifier linkageFailure = new OreContractClassifier(height -> {
-			throw new NoClassDefFoundError("missing optional type");
-		});
-
-		Occurrence runtime = runtimeFailure.classify("test:runtime", MEMBERSHIP, feature);
-		Occurrence linkage = linkageFailure.classify("test:linkage", MEMBERSHIP, feature);
-		Occurrence independent = new OreContractClassifier().classify("test:independent", MEMBERSHIP, feature);
-
-		assertEquals(InspectionStatus.FAILED, runtime.inspection().status());
-		assertEquals("java.lang.IllegalStateException", runtime.inspection().failureType().orElseThrow());
-		assertEquals(InspectionStatus.FAILED, linkage.inspection().status());
-		assertEquals("java.lang.NoClassDefFoundError", linkage.inspection().failureType().orElseThrow());
-		assertEquals(Contract.SUPPORTED_STANDARD, independent.contract());
-	}
-
-	@Test
-	void reportingDoesNotMutateTheConfiguredFeatureOrPlacementChain() {
+	void classifyingScatteredOreDoesNotMutateItsPlacementChain() {
 		ConfiguredFeature<?, ?> configured = new ConfiguredFeature<>(Feature.SCATTERED_ORE, configuration());
 		List<PlacementModifier> modifiers = List.of(
 			RarityFilter.onAverageOnceEvery(3),
@@ -237,13 +174,10 @@ class OreContractClassifierTest {
 		);
 		PlacedFeature feature = new PlacedFeature(Holder.direct(configured), modifiers);
 
-		Occurrence result = new OreContractClassifier().classify("test:identity", MEMBERSHIP, feature);
-
-		assertEquals(Contract.SUPPORTED_STANDARD, result.contract());
+		assertEquals(Status.SUPPORTED, new OreContractClassifier().classify(feature).status());
 		assertSame(configured, feature.feature().value());
 		assertSame(modifiers, feature.placement());
 		assertSame(configured.config(), feature.feature().value().config());
-		assertFalse(result.oreConfiguration().isEmpty());
 	}
 
 	private static PlacedFeature ore(PlacementModifier... modifiers) {

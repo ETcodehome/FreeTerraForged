@@ -11,7 +11,6 @@ import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan.Anchor
 import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan.HeightProviderShape;
 import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan.HeightSemantics;
 
-/** Reads height semantics through the vanilla codec instead of private fields. */
 final class OreHeightInspector {
 	private final DynamicOps<JsonElement> ops;
 

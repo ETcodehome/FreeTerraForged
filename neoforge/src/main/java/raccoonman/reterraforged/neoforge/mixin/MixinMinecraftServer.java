@@ -23,14 +23,13 @@ import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.world.level.storage.LevelStorageSource;
 import raccoonman.reterraforged.server.RTFMinecraftServer;
 import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan;
-import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlanner;
 import raccoonman.reterraforged.world.worldgen.feature.template.template.FeatureTemplateManager;
 
 @Implements(@Interface(iface = RTFMinecraftServer.class, prefix = "reterraforged$RTFMinecraftServer$"))
 @Mixin(MinecraftServer.class)
 public class MixinMinecraftServer {
 	private FeatureTemplateManager templateManager;
-	private volatile DynamicOrePlan dynamicOrePlan = DynamicOrePlan.empty(DynamicOrePlanner.schemaFingerprint());
+	private volatile DynamicOrePlan dynamicOrePlan = DynamicOrePlan.empty();
 
 	@Inject(
 		method = "<init>(Ljava/lang/Thread;Lnet/minecraft/world/level/storage/LevelStorageSource$LevelStorageAccess;Lnet/minecraft/server/packs/repository/PackRepository;Lnet/minecraft/server/WorldStem;Ljava/net/Proxy;Lcom/mojang/datafixers/DataFixer;Lnet/minecraft/server/Services;Lnet/minecraft/server/level/progress/ChunkProgressListenerFactory;)V",

@@ -1,9 +1,5 @@
 package raccoonman.reterraforged.world.worldgen.feature.ore;
 
-import java.util.Map;
-import java.util.TreeMap;
-import java.util.stream.Collectors;
-
 import dev.architectury.event.events.common.LifecycleEvent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -14,7 +10,6 @@ import raccoonman.reterraforged.server.RTFMinecraftServer;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
 import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan.VerticalFrame;
 
-/** Publishes one server-owned immutable plan for the current registry epoch. */
 public final class DynamicOreLifecycle {
 	private static boolean bootstrapped;
 
@@ -38,7 +33,7 @@ public final class DynamicOreLifecycle {
 
 	private static void onServerStarted(MinecraftServer server) {
 		if (server instanceof RTFMinecraftServer owner
-			&& owner.getDynamicOrePlan().occurrences().isEmpty()) {
+			&& owner.getDynamicOrePlan().verticalFrame().isEmpty()) {
 			refresh(server);
 		}
 	}
@@ -49,7 +44,7 @@ public final class DynamicOreLifecycle {
 		}
 		ServerLevel overworld = server.getLevel(Level.OVERWORLD);
 		if (overworld == null) {
-			owner.publishDynamicOrePlan(DynamicOrePlan.empty(DynamicOrePlanner.schemaFingerprint()));
+			owner.publishDynamicOrePlan(DynamicOrePlan.empty());
 			return;
 		}
 		refresh(overworld);
@@ -62,7 +57,7 @@ public final class DynamicOreLifecycle {
 		}
 		if (!((Object)overworld.getChunkSource().randomState() instanceof RTFRandomState randomState)
 			|| randomState.generatorContext() == null) {
-			owner.publishDynamicOrePlan(DynamicOrePlan.empty(DynamicOrePlanner.schemaFingerprint()));
+			owner.publishDynamicOrePlan(DynamicOrePlan.empty());
 			return;
 		}
 
@@ -79,22 +74,8 @@ public final class DynamicOreLifecycle {
 		);
 		owner.publishDynamicOrePlan(plan);
 		RTFCommon.LOGGER.info("Dynamic ore contract inventory: {}", plan.summary());
-		Map<String, Long> failures = plan.occurrences().stream()
-			.filter(occurrence -> occurrence.inspection().status() == DynamicOrePlan.InspectionStatus.FAILED)
-			.collect(Collectors.groupingBy(
-				occurrence -> occurrence.inspection().phase()
-					+ " | " + occurrence.inspection().failureType().orElse("<unknown>")
-					+ " | " + occurrence.inspection().failureMessage().orElse("<no message>"),
-				TreeMap::new,
-				Collectors.counting()
-			));
-		failures.forEach((failure, count) -> RTFCommon.LOGGER.warn(
-			"Dynamic ore contract inspection failure ({} occurrence(s)): {}", count, failure
+		plan.failures().forEach(failure -> RTFCommon.LOGGER.warn(
+			"Dynamic ore contract inspection failure: {}", failure
 		));
-		if (RTFCommon.LOGGER.isDebugEnabled()) {
-			for (DynamicOrePlan.Occurrence occurrence : plan.occurrences()) {
-				RTFCommon.LOGGER.debug("Dynamic ore contract occurrence: {}", occurrence);
-			}
-		}
 	}
 }

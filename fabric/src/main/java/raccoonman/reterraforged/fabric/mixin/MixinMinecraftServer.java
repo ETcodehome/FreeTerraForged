@@ -12,14 +12,13 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.packs.resources.ResourceManager;
 import raccoonman.reterraforged.server.RTFMinecraftServer;
 import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan;
-import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlanner;
 import raccoonman.reterraforged.world.worldgen.feature.template.template.FeatureTemplateManager;
 
 @Implements(@Interface(iface = RTFMinecraftServer.class, prefix = "reterraforged$RTFMinecraftServer$"))
 @Mixin(MinecraftServer.class)
 public class MixinMinecraftServer {
 	private FeatureTemplateManager templateManager;
-	private volatile DynamicOrePlan dynamicOrePlan = DynamicOrePlan.empty(DynamicOrePlanner.schemaFingerprint());
+	private volatile DynamicOrePlan dynamicOrePlan = DynamicOrePlan.empty();
 
 	@Inject(
 		method = "<init>",

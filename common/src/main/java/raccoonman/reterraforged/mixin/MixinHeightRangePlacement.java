@@ -35,9 +35,6 @@ class MixinHeightRangePlacement {
 			return;
 		}
 		if (DynamicOrePlacement.isStandardOrePlacement((HeightRangePlacement)(Object)this, context)) {
-			// A standard ore occurrence is either handled by its exact epoch plan or
-			// deliberately left to vanilla. It must not fall into the unrelated
-			// canonical surface-feature expansion path.
 			return;
 		}
 		DynamicHeightRangePlacement.getPositions(

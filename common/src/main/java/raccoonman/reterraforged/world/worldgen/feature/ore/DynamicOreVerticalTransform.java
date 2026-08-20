@@ -14,7 +14,6 @@ import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan.Vertic
 import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan.VerticalTransform;
 import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan.WeightedY;
 
-/** Pure derivation of the reference-to-live vertical candidate-intensity map. */
 final class DynamicOreVerticalTransform {
 	static final int REFERENCE_MIN_Y = -64;
 	static final int REFERENCE_DEEPSLATE_START_Y = 0;
@@ -33,17 +32,13 @@ final class DynamicOreVerticalTransform {
 	}
 
 	static Derivation derive(
-		String placedFeatureId,
-		String contractFingerprint,
 		HeightSemantics height,
 		VerticalFrame frame
 	) {
-		return derive(placedFeatureId, contractFingerprint, height, frame, FanoutStage.HEIGHT, 0, 0);
+		return derive(height, frame, FanoutStage.HEIGHT, 0, 0);
 	}
 
 	static Derivation derive(
-		String placedFeatureId,
-		String contractFingerprint,
 		HeightSemantics height,
 		VerticalFrame frame,
 		FanoutStage fanoutStage,
@@ -117,8 +112,6 @@ final class DynamicOreVerticalTransform {
 			return Derivation.unsupported("INVALID_MAPPED_INTENSITY");
 		}
 		return Derivation.supported(new VerticalTransform(
-			placedFeatureId,
-			contractFingerprint,
 			cumulative,
 			fanoutStage,
 			fanoutModifierIndex,
@@ -184,9 +177,7 @@ final class DynamicOreVerticalTransform {
 	}
 
 	private static double map(double referenceY, VerticalFrame frame) {
-		// These are boundaries between inclusive integer block bands, not block
-		// centers. In particular, seaLevel is the first non-global-fluid block
-		// (vanilla fills y < seaLevel), so its boundary is seaLevel - 0.5.
+		// Inclusive integer bands meet at half-block boundaries; seaLevel is the first non-fluid block.
 		double[] reference = {
 			REFERENCE_MIN_Y - 0.5,
 			REFERENCE_DEEPSLATE_START_Y - 0.5,

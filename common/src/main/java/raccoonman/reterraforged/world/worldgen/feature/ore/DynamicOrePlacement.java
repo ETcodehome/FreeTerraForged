@@ -21,7 +21,6 @@ import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan.Vertic
 import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan.VerticalTransform;
 import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan.WeightedY;
 
-/** Applies only a precomputed, server-owned standard-ore vertical transform. */
 public final class DynamicOrePlacement {
 	private static final double INTEGER_TOLERANCE = 1.0E-12;
 
@@ -96,7 +95,6 @@ public final class DynamicOrePlacement {
 		)));
 	}
 
-	/** True only for the same public configured-feature contract owned here. */
 	public static boolean isStandardOrePlacement(HeightRangePlacement placement, PlacementContext context) {
 		return context.topFeature()
 			.filter(feature -> feature.placement().stream().anyMatch(modifier -> modifier == placement))
