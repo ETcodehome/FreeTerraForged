@@ -1,5 +1,5 @@
 {
-  
+
   	"required": true,
   	"plugin": "raccoonman.reterraforged.mixin.plugin.MixinPlugin",
   	"package": "raccoonman.reterraforged.mixin",
@@ -45,6 +45,9 @@
 		"BlockPredicateFilterAccessor",
 		"MixinHeightRangePlacement",
 		"MixinCountPlacement",
+		"MixinRepeatingPlacement",
+		"MixinPlacementFilter",
+		"MixinInSquarePlacement",
 		"MixinEnvironmentScanPlacement",
 		"MixinPlacedFeature",
 		"BeardifierAccessor",

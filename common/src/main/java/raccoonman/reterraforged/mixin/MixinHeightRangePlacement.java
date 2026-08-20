@@ -12,6 +12,7 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.levelgen.placement.HeightRangePlacement;
 import net.minecraft.world.level.levelgen.placement.PlacementContext;
 import raccoonman.reterraforged.world.worldgen.feature.placement.DynamicHeightRangePlacement;
+import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlacement;
 
 @Mixin(HeightRangePlacement.class)
 class MixinHeightRangePlacement {
@@ -23,6 +24,22 @@ class MixinHeightRangePlacement {
 		BlockPos origin,
 		CallbackInfoReturnable<Stream<BlockPos>> callback
 	) {
+		var orePositions = DynamicOrePlacement.getHeightPositions(
+			(HeightRangePlacement)(Object)this,
+			context,
+			random,
+			origin
+		);
+		if (orePositions.isPresent()) {
+			callback.setReturnValue(orePositions.orElseThrow());
+			return;
+		}
+		if (DynamicOrePlacement.isStandardOrePlacement((HeightRangePlacement)(Object)this, context)) {
+			// A standard ore occurrence is either handled by its exact epoch plan or
+			// deliberately left to vanilla. It must not fall into the unrelated
+			// canonical surface-feature expansion path.
+			return;
+		}
 		DynamicHeightRangePlacement.getPositions(
 			(HeightRangePlacement)(Object)this,
 			context,

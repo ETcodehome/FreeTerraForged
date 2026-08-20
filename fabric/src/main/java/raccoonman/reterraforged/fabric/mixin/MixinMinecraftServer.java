@@ -11,12 +11,15 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.packs.resources.ResourceManager;
 import raccoonman.reterraforged.server.RTFMinecraftServer;
+import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan;
+import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlanner;
 import raccoonman.reterraforged.world.worldgen.feature.template.template.FeatureTemplateManager;
 
 @Implements(@Interface(iface = RTFMinecraftServer.class, prefix = "reterraforged$RTFMinecraftServer$"))
 @Mixin(MinecraftServer.class)
 public class MixinMinecraftServer {
 	private FeatureTemplateManager templateManager;
+	private volatile DynamicOrePlan dynamicOrePlan = DynamicOrePlan.empty(DynamicOrePlanner.schemaFingerprint());
 
 	@Inject(
 		method = "<init>",
@@ -25,11 +28,19 @@ public class MixinMinecraftServer {
 	public void MinecraftServer(CallbackInfo callback) {
 		this.templateManager = new FeatureTemplateManager(this.getResourceManager());
 	}
-	
+
 	public FeatureTemplateManager reterraforged$RTFMinecraftServer$getFeatureTemplateManager() {
 		return this.templateManager;
 	}
-	
+
+	public DynamicOrePlan reterraforged$RTFMinecraftServer$getDynamicOrePlan() {
+		return this.dynamicOrePlan;
+	}
+
+	public void reterraforged$RTFMinecraftServer$publishDynamicOrePlan(DynamicOrePlan plan) {
+		this.dynamicOrePlan = plan;
+	}
+
 	@Inject(
 		method = { "method_29440" },
 		require = 0,
