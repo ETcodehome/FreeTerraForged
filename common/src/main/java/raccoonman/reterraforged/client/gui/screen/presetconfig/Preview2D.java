@@ -482,11 +482,16 @@ public class Preview2D extends Button {
             if (this.page.zoom2D != null) {
                 double currentVal = this.page.zoom2D.getValue();
                 double step = 0.05;
+                double newVal = currentVal;
+
                 if (scrollY > 0) {
-                    this.page.zoom2D.setValue(Math.min(1.0, currentVal + step));
+                    newVal = Math.min(1.0, currentVal + step);
                 } else if (scrollY < 0) {
-                    this.page.zoom2D.setValue(Math.max(0.0, currentVal - step));
+                    newVal = Math.max(0.0, currentVal - step);
                 }
+
+                this.page.zoom2D.setValue(newVal);
+                this.page.zoom2D.applyValue();
                 this.regenerate();
             }
             return true;
