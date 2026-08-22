@@ -23,7 +23,7 @@ public enum RenderMode {
 				shade = 1.0F - depth * 0.4F;
 			} else {
 				float elevation = levels.getNormalizedInlandElevation(cell.height);
-                elevation = (float) cubicHermite(0.0, 1.0, 3.0, 0.0, elevation);
+                elevation = (float) cubicHermite(0.0, 1.0, 2.0, 0.0, elevation);
 				shade = 0.88F + elevation * 0.12F;
 			}
 			return this.getColor(cell, levels, shade, 0.0F, biomeColor);
@@ -142,17 +142,16 @@ public enum RenderMode {
             // Normalize height relative to sea level
             // 'elevation' will now be 0.0 at the shoreline and 1.0 at the highest peak
             float elevation = levels.getNormalizedInlandElevation(cell.height);
-            elevation = (float) cubicHermite(0.0, 1.0, 3.0, 0.0, elevation);
+            elevation = (float) cubicHermite(0.0, 1.0, 2.0, 0.0, elevation);
 
             // Map Normalized Height to Hue
-            // We start the hue at 0.35F (Green/Spring) for lowlands
-            // and transition to 0.0F (Red) for mountain peaks.
+            // Strictly transitions from 0.35F (Green) down to 0.0F (Red) for mountain peaks
             float hue = 0.35F * (1.0F - elevation);
 
-            // Adjust Saturation and Brightness for depth
-            // Lowlands (near coast) are softer; peaks are more intense.
-            float saturation = 0.4F + (elevation * 0.4F);
-            float brightness = 0.6F + (elevation * 0.3F);
+            // Adjust Saturation and Brightness
+            // Boosted lowlands base saturation (0.60F) scaling up to full saturation (1.0F) at high peaks
+            float saturation = 0.60F + (elevation * 0.40F);
+            float brightness = 0.60F + (elevation * 0.35F);
 
             return rgba(hue, saturation, brightness);
         }
@@ -192,7 +191,7 @@ public enum RenderMode {
 
             // Normalize land height (0.0 at water level, 1.0 at peak)
             float elevation = levels.getNormalizedInlandElevation(cell.height);
-            elevation = (float) cubicHermite(0.0, 1.0, 3.0, 0.0, elevation);
+            elevation = (float) cubicHermite(0.0, 1.0, 2.0, 0.0, elevation);
             float landStep = step(elevation, contourSteps);
 
             float hue = 0.05F;
@@ -331,6 +330,7 @@ public enum RenderMode {
 
     /**
      * General Cubic Hermite Interpolation.
+     * We use it here in rendermode to shift the normalized elevations more into the midrange rather than the extremes
      *
      * @param p0 Start point (value at t = 0)
      * @param p1 End point (value at t = 1)
