@@ -294,4 +294,14 @@ public class Preview2D extends Button implements IPreviewHandler {
         }
         return false;
     }
+
+    public static void resetToBlack() {
+        if (STATIC_TEXTURE != null) {
+            NativeImage pixels = STATIC_TEXTURE.getPixels();
+            if (pixels != null) {
+                pixels.fillRect(0, 0, SIZE, SIZE, 0xFF000000);
+                STATIC_TEXTURE.upload();
+            }
+        }
+    }
 }

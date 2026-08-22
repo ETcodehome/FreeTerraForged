@@ -463,4 +463,14 @@ public class Preview3D extends Button implements IPreviewHandler {
         }
         return false;
     }
+
+    public static void resetToBlack() {
+        if (STATIC_TEXTURE_CACHE != null) {
+            NativeImage pixels = STATIC_TEXTURE_CACHE.getPixels();
+            if (pixels != null) {
+                pixels.fillRect(0, 0, pixels.getWidth(), pixels.getHeight(), 0xFF000000);
+                STATIC_TEXTURE_CACHE.upload();
+            }
+        }
+    }
 }
