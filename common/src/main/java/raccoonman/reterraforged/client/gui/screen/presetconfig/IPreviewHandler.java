@@ -223,7 +223,7 @@ public interface IPreviewHandler {
             state.cacheKey = requestedKey;
         }
         WorldSettings.Properties properties = presetObj.world().properties;
-        Levels levels = new Levels(properties.terrainScaler(), properties.worldDepth, properties.seaLevel);
+        Levels levels = new Levels(properties.terrainScaler(), properties.worldHeight, properties.worldDepth, properties.seaLevel);
 
         int seed = (int) settings.options().seed();
         int zoomLevel = getZoom();
@@ -381,7 +381,7 @@ public interface IPreviewHandler {
         PreviewComputationCache.TileLease retained = current.retain();
         RenderMode mode = getRenderMode();
         WorldSettings.Properties properties = page().preset.getPreset().world().properties;
-        Levels levels = new Levels(properties.terrainScaler(), properties.worldDepth, properties.seaLevel);
+        Levels levels = new Levels(properties.terrainScaler(), properties.worldHeight, properties.worldDepth, properties.seaLevel);
         RasterParams params = captureRasterParams();
         BiomePreview.Sidecar sidecar = state.biomes;
         state.pendingRasterization = CompletableFuture.supplyAsync(() -> {

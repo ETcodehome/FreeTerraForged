@@ -4,7 +4,6 @@ import java.awt.Color;
 
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
-import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainType;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 
 public enum RenderMode {
@@ -23,7 +22,7 @@ public enum RenderMode {
 				float depth = NoiseUtil.clamp((levels.water - cell.height) / depthRange, 0.0F, 1.0F);
 				shade = 1.0F - depth * 0.4F;
 			} else {
-				float elevation = NoiseUtil.clamp(levels.elevation(cell.height), 0.0F, 1.0F);
+				float elevation = levels.getNormalizedInlandElevation(cell.height);
 				shade = 0.88F + elevation * 0.12F;
 			}
 			return this.getColor(cell, levels, shade, 0.0F, biomeColor);
@@ -141,8 +140,7 @@ public enum RenderMode {
 
             // Normalize height relative to sea level
             // 'h' will now be 0.0 at the shoreline and 1.0 at the highest peak
-            float h = (cell.height - levels.water) / (1.0F - levels.water);
-            h = NoiseUtil.clamp(h, 0.0F, 1.0F);
+            float h = levels.getNormalizedInlandElevation(cell.height);
 
             // Map Normalized Height to Hue
             // We start the hue at 0.35F (Green/Spring) for lowlands
@@ -191,8 +189,7 @@ public enum RenderMode {
             }
 
             // Normalize land height (0.0 at water level, 1.0 at peak)
-            float landRange = 1.0F - levels.water;
-            float landHeight = (cell.height - levels.water) / landRange;
+            float landHeight = levels.getNormalizedInlandElevation(cell.height);
             float landStep = step(landHeight, contourSteps);
 
             float hue = 0.05F;

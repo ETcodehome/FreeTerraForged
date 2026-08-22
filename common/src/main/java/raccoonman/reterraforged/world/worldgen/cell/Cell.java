@@ -20,6 +20,10 @@ public class Cell {
     public static final ThreadLocal<Resource<Cell>> LOCAL = ThreadLocal.withInitial(() -> {
         return new SimpleResource<>(new Cell(), Cell::reset);
     });
+
+    /**
+     * THIS IS NOT A NORMALIZED 0-1 RANGED VALUE - MAX IS PRESET WORLD HEIGHT / 256
+     */
     public float height;
     public float heightErosion;
     public float sediment;

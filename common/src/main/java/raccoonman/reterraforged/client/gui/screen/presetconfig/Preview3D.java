@@ -437,7 +437,7 @@ public class Preview3D extends Button implements IPreviewHandler {
                     WorldSettings.Properties properties = this.page.preset.getPreset().world().properties;
                     PreviewDetails.Detail detail = PreviewDetails.forCell(
                             getRenderMode(), cell,
-                            new Levels(properties.terrainScaler(), properties.worldDepth, properties.seaLevel),
+                            new Levels(properties.terrainScaler(), properties.worldHeight, properties.worldDepth, properties.seaLevel),
                             biomeId
                     );
                     this.state.legendLabels[2] = detail.label();

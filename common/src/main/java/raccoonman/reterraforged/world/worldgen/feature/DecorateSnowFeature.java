@@ -139,7 +139,7 @@ public class DecorateSnowFeature extends Feature<Config> {
     }
     
     private static void smoothSnow(ChunkAccess chunk, BlockPos.MutableBlockPos pos, Cell cell, Levels levels, float min) {
-        float height = cell.height * levels.worldHeight;
+        float height = cell.height * levels.terrainScaleFactor;
         float depth = getDepth(height);
         if (depth > min) {
             int level = getLevel(depth);

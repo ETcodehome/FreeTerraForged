@@ -134,7 +134,7 @@ final class BiomePreview {
 
     private static int surfaceY(Cell cell, Levels levels) {
         int minY = -levels.worldDepth;
-        int maxY = Math.max(minY, levels.worldHeight - 1);
+        int maxY = Math.max(minY, levels.terrainScaleFactor - 1);
         return Math.max(minY, Math.min(maxY, levels.scale(cell.height)));
     }
 
