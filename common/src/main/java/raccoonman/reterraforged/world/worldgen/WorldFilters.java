@@ -7,7 +7,6 @@ import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.filter.BeachDetect;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.filter.Erosion;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.filter.Filterable;
-import raccoonman.reterraforged.world.worldgen.densityfunction.tile.filter.NoiseCorrection;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.filter.Smoothing;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.filter.Steepness;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.filter.TerrainCeiling;
@@ -17,7 +16,6 @@ public class WorldFilters {
     private Steepness steepness;
     private TerrainCeiling terrainCeiling;
     private BeachDetect beach;
-    private NoiseCorrection corrections;
     private FilterSettings settings;
     private WorldErosion<Erosion> erosion;
     private int erosionIterations;
@@ -32,7 +30,6 @@ public class WorldFilters {
         if (context.preset.terrain().general.mountainVariety > 0.0F) {
             this.terrainCeiling = TerrainCeiling.make(context.preset.world().properties);
         }
-        this.corrections = new NoiseCorrection(context.levels);
         this.erosion = new WorldErosion<>(factory, (e, size) -> e.getSize() == size);
         this.erosionIterations = context.preset.filters().erosion.dropletsPerChunk;
         this.smoothingIterations = context.preset.filters().smoothing.iterations;
@@ -50,9 +47,6 @@ public class WorldFilters {
             this.applyOptionalFilters(tile, regionX, regionZ);
         }
         this.applyRequiredFilters(tile, regionX, regionZ);
-        if(optionalFilters) {
-        	this.applyCorrections(tile, regionX, regionZ);
-        }
         if (this.terrainCeiling != null) {
             this.terrainCeiling.apply(tile, regionX, regionZ, 1);
         }
@@ -67,9 +61,5 @@ public class WorldFilters {
         Erosion erosion = this.erosion.get(map.getBlockSize().total());
         erosion.apply(map, seedX, seedZ, this.erosionIterations);
         this.smoothing.apply(map, seedX, seedZ, this.smoothingIterations);
-    }
-    
-    public void applyCorrections(Filterable map, int seedX, int seedZ) {
-        this.corrections.apply(map, seedX, seedZ, 1);
     }
 }
