@@ -275,7 +275,7 @@ public class Preview2D extends Button implements IPreviewHandler {
                 String biomeId = this.state.biomes == null ? null : this.state.biomes.id(ix, iz);
                 WorldSettings.Properties properties = this.page.preset.getPreset().world().properties;
                 PreviewDetails.Detail detail = PreviewDetails.forCell(
-                        getRenderMode(), cell, new Levels(properties.terrainScaler(), properties.worldDepth, properties.seaLevel), biomeId
+                        getRenderMode(), cell, new Levels(properties.terrainScaler(), properties.worldHeight, properties.worldDepth, properties.seaLevel), biomeId
                 );
                 this.state.legendLabels[2] = detail.label();
                 this.state.legendValues[2] = detail.value();
