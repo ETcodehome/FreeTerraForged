@@ -61,17 +61,17 @@ public class ArchipelagoPopulator implements CellPopulator {
         densityN = Noises.clamp(densityN, 0.0F, 1.0F);
         this.densityNoise = densityN;
 
-        Noise ridge = Noises.perlinRidge(4829 + salt, Math.max(1, Math.round(size * 1.6F / hScale)), 4, 2.1F, 0.82F);
-        ridge = Noises.warpPerlin(ridge, 4830 + salt, Math.max(1, Math.round(size * 0.9F / hScale)), 2, size * 0.35F / hScale);
+        Noise ridge = Noises.perlinRidge(4829 + salt, Math.max(1, Math.round(size * 1.6F * settings.mountainHorizontalScale / hScale)), 4, 2.1F, 0.82F);
+        ridge = Noises.warpPerlin(ridge, 4830 + salt, Math.max(1, Math.round(size * 0.9F * settings.mountainHorizontalScale / hScale)), 2, size * 0.35F / hScale);
         ridge = Noises.clamp(ridge, 0.0F, 1.0F);
         this.ridgeHeight = ridge;
 
-        Noise hills = Noises.billow(3811 + salt, Math.max(1, Math.round(size * 0.35F / hScale)), 3, 2.25F, 0.55F);
+        Noise hills = Noises.billow(3811 + salt, Math.max(1, Math.round(size * 0.35F * settings.mountainHorizontalScale / hScale)), 3, 2.25F, 0.55F);
         hills = Noises.warpPerlin(hills, 3812 + salt, Math.max(1, Math.round(size * 0.7F / hScale)), 1, size * 0.2F / hScale);
         hills = Noises.clamp(hills, 0.0F, 1.0F);
         this.hillHeight = hills;
 
-        Noise volcano = Noises.perlinRidge(6721 + salt, Math.max(1, Math.round(size * 0.45F / hScale)), 3, 2.4F, 0.9F);
+        Noise volcano = Noises.perlinRidge(6721 + salt, Math.max(1, Math.round(size * 0.45F * settings.volcanismHorizontalScale / hScale)), 3, 2.4F, 0.9F);
         volcano = Noises.powCurve(volcano, 1.8F);
         volcano = Noises.clamp(volcano, 0.0F, 1.0F);
         this.volcanoHeight = volcano;

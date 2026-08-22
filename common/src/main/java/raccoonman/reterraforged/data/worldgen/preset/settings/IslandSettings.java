@@ -18,7 +18,9 @@ public class IslandSettings {
 		Codec.FLOAT.fieldOf("beachWidth").forGetter((o) -> o.beachWidth),
 		Codec.FLOAT.fieldOf("beachCoverage").forGetter((o) -> o.beachCoverage),
 		Codec.FLOAT.fieldOf("volcanismScale").forGetter((o) -> o.volcanismScale),
-		Codec.FLOAT.fieldOf("mountainScale").forGetter((o) -> o.mountainScale)
+		Codec.FLOAT.fieldOf("mountainScale").forGetter((o) -> o.mountainScale),
+		Codec.FLOAT.fieldOf("volcanismHorizontalScale").forGetter((o) -> o.volcanismHorizontalScale),
+		Codec.FLOAT.fieldOf("mountainHorizontalScale").forGetter((o) -> o.mountainHorizontalScale)
 	).apply(instance, IslandSettings::new));
 	
 	public boolean enableArchipelago;
@@ -32,11 +34,13 @@ public class IslandSettings {
 	public float mountainScale;
 	public float volcanoChance;
 	public float volcanismScale;
+	public float volcanismHorizontalScale;
+	public float mountainHorizontalScale;
 	public float offshoreDepth;
 	public float beachWidth;
 	public float beachCoverage;
 	
-	public IslandSettings(boolean enableArchipelago, float islandDensity, float islandSize, float islandHeight, float islandBaseScale, float islandVerticalScale, float islandHorizontalScale, float mountainChance, float volcanoChance, float offshoreDepth, float beachWidth, float beachCoverage, float volcanismScale, float mountainScale) {
+	public IslandSettings(boolean enableArchipelago, float islandDensity, float islandSize, float islandHeight, float islandBaseScale, float islandVerticalScale, float islandHorizontalScale, float mountainChance, float volcanoChance, float offshoreDepth, float beachWidth, float beachCoverage, float volcanismScale, float mountainScale, float volcanismHorizontalScale, float mountainHorizontalScale) {
 		this.enableArchipelago = enableArchipelago;
 		this.islandDensity = islandDensity;
 		this.islandSize = islandSize;
@@ -51,6 +55,8 @@ public class IslandSettings {
 		this.beachCoverage = beachCoverage;
 		this.mountainScale = mountainScale;
 		this.volcanismScale = volcanismScale;
+		this.mountainHorizontalScale = mountainHorizontalScale;
+		this.volcanismHorizontalScale = volcanismHorizontalScale;
 	}
 	
 	public IslandSettings copy() {
@@ -68,7 +74,10 @@ public class IslandSettings {
 				this.beachWidth,
 				this.beachCoverage,
 				this.mountainScale,
-				this.volcanismScale);
+				this.volcanismScale,
+				this.mountainHorizontalScale,
+				this.volcanismHorizontalScale
+				);
 	}
 	
 	public static IslandSettings makeDefault() {
@@ -85,6 +94,9 @@ public class IslandSettings {
 				0.125F,
 				0.125F,
 				0.5F,
-				0.5F);
+				0.5F,
+				1.0F,
+				1.0F
+		);
 	}
 }
