@@ -21,13 +21,15 @@ import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 public class Preview3D extends Button implements IPreviewHandler {
     public static final int SIZE = IPreviewHandler.SIZE;
 
+    // Statically cached backing texture shared across widget instances
+    private static DynamicTexture STATIC_TEXTURE_CACHE;
+    private static ResourceLocation STATIC_CACHE_LOCATION;
+
     private final PresetEditorPage page;
     private final PreviewState state = new PreviewState();
 
     private RenderMode currentMode = RenderMode.BIOME;
 
-    private DynamicTexture textureCache;
-    private ResourceLocation cacheLocation;
     private boolean needsTextureRefresh = false;
     private volatile int[] pendingTexturePixels;
     private volatile int pendingTextureWidth;
@@ -210,22 +212,26 @@ public class Preview3D extends Button implements IPreviewHandler {
     private void uploadPendingTexture() {
         int[] pixels = this.pendingTexturePixels;
         if (pixels == null || this.pendingTextureWidth <= 0 || this.pendingTextureHeight <= 0) return;
-        if (this.textureCache == null || this.textureCache.getPixels().getWidth() != this.pendingTextureWidth
-                || this.textureCache.getPixels().getHeight() != this.pendingTextureHeight) {
-            if (this.textureCache != null) {
-                this.textureCache.close();
-                Minecraft.getInstance().getTextureManager().release(this.cacheLocation);
+
+        if (STATIC_TEXTURE_CACHE == null
+                || STATIC_TEXTURE_CACHE.getPixels().getWidth() != this.pendingTextureWidth
+                || STATIC_TEXTURE_CACHE.getPixels().getHeight() != this.pendingTextureHeight) {
+
+            if (STATIC_TEXTURE_CACHE != null) {
+                STATIC_TEXTURE_CACHE.close();
+                Minecraft.getInstance().getTextureManager().release(STATIC_CACHE_LOCATION);
             }
-            this.textureCache = new DynamicTexture(new NativeImage(this.pendingTextureWidth, this.pendingTextureHeight, true));
-            this.cacheLocation = Minecraft.getInstance().getTextureManager().register("rtf_preview_cache_" + this.hashCode(), this.textureCache);
+            STATIC_TEXTURE_CACHE = new DynamicTexture(new NativeImage(this.pendingTextureWidth, this.pendingTextureHeight, true));
+            STATIC_CACHE_LOCATION = Minecraft.getInstance().getTextureManager().register("rtf_preview_cache_3d", STATIC_TEXTURE_CACHE);
         }
-        NativeImage image = this.textureCache.getPixels();
+
+        NativeImage image = STATIC_TEXTURE_CACHE.getPixels();
         for (int y = 0; y < this.pendingTextureHeight; y++) {
             for (int x = 0; x < this.pendingTextureWidth; x++) {
                 image.setPixelRGBA(x, y, pixels[y * this.pendingTextureWidth + x]);
             }
         }
-        this.textureCache.upload();
+        STATIC_TEXTURE_CACHE.upload();
         this.pendingTexturePixels = null;
         this.needsTextureRefresh = false;
     }
@@ -240,12 +246,7 @@ public class Preview3D extends Button implements IPreviewHandler {
 
     @Override
     public void closeResources() {
-        if (this.textureCache != null) {
-            this.textureCache.close();
-            Minecraft.getInstance().getTextureManager().release(this.cacheLocation);
-            this.textureCache = null;
-            this.cacheLocation = null;
-        }
+        // Keep STATIC_TEXTURE_CACHE alive across page rebuilds.
     }
 
     @Override
@@ -288,8 +289,8 @@ public class Preview3D extends Button implements IPreviewHandler {
             this.uploadPendingTexture();
         }
 
-        if (this.cacheLocation != null) {
-            guiGraphics.blit(this.cacheLocation, x, y, 0.0F, 0.0F, this.width, this.height, this.width, this.height);
+        if (STATIC_CACHE_LOCATION != null) {
+            guiGraphics.blit(STATIC_CACHE_LOCATION, x, y, 0.0F, 0.0F, this.width, this.height, this.width, this.height);
         } else {
             guiGraphics.fill(x, y, x + this.width, y + this.height, 0xFF000000);
         }
@@ -461,5 +462,15 @@ public class Preview3D extends Button implements IPreviewHandler {
             }
         }
         return false;
+    }
+
+    public static void resetToBlack() {
+        if (STATIC_TEXTURE_CACHE != null) {
+            NativeImage pixels = STATIC_TEXTURE_CACHE.getPixels();
+            if (pixels != null) {
+                pixels.fillRect(0, 0, pixels.getWidth(), pixels.getHeight(), 0xFF000000);
+                STATIC_TEXTURE_CACHE.upload();
+            }
+        }
     }
 }
