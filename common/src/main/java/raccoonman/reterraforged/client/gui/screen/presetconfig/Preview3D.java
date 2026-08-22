@@ -1,66 +1,30 @@
 package raccoonman.reterraforged.client.gui.screen.presetconfig;
 
 import java.awt.Color;
-import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
+
+import com.mojang.blaze3d.platform.NativeImage;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.screens.worldselection.WorldCreationContext;
 import net.minecraft.client.renderer.texture.DynamicTexture;
-import net.minecraft.core.HolderGetter;
-import net.minecraft.core.HolderLookup;
-import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.chat.CommonComponents;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.platform.NativeImage;
-
-import raccoonman.reterraforged.RTFCommon;
-import raccoonman.reterraforged.client.data.RTFTranslationKeys;
-import raccoonman.reterraforged.config.PerformanceConfig;
-import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.data.worldgen.preset.settings.SpawnType;
 import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings;
-import raccoonman.reterraforged.registries.RTFRegistries;
-import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
-import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
-import raccoonman.reterraforged.world.worldgen.util.PosUtil;
 
-public class Preview3D extends Button {
-    private static final int FACTOR = 4;
-    public static final int SIZE = (1 << 4) << FACTOR;
-    private static final float[] LEGEND_SCALES = { 1, 0.9F, 0.75F, 0.6F };
-    private static final long REFRESH_DEBOUNCE_MILLIS = 75L;
+public class Preview3D extends Button implements IPreviewHandler {
+    public static final int SIZE = IPreviewHandler.SIZE;
 
-	private RenderMode currentMode = RenderMode.BIOME;
+    private final PresetEditorPage page;
+    private final PreviewState state = new PreviewState();
 
-    private PresetEditorPage page;
-    private Tile tile;
-    private PreviewComputationCache.TileLease tileLease;
-    private BiomePreview.Sidecar biomes;
-    private boolean generatedWithBiomePipeline;
-    private BiomePreview.CacheKey cacheKey;
-    private int centerX, centerZ;
-
-    private int hoveredCoordX = 0;
-    private int hoveredCoordZ = 0;
-    private String hoveredCoords = "";
-    private String[] legendValues = {"", "", "", ""};
-    private final Component[] legendLabels = {
-            Component.translatable(RTFTranslationKeys.GUI_LABEL_PREVIEW_AREA),
-            Component.translatable(RTFTranslationKeys.GUI_LABEL_PREVIEW_TERRAIN),
-            Component.translatable(RTFTranslationKeys.GUI_LABEL_PREVIEW_BIOME),
-            Component.translatable(RTFTranslationKeys.GUI_LABEL_PREVIEW_SPAWN)
-    };
+    private RenderMode currentMode = RenderMode.BIOME;
 
     private DynamicTexture textureCache;
     private ResourceLocation cacheLocation;
@@ -68,315 +32,86 @@ public class Preview3D extends Button {
     private volatile int[] pendingTexturePixels;
     private volatile int pendingTextureWidth;
     private volatile int pendingTextureHeight;
-    private final AtomicLong textureRequestVersion = new AtomicLong();
-    private volatile PreviewCancellation textureCancellation;
-    private CompletableFuture<?> pendingTextureRasterization;
 
     private int lastHoveredIx = -1;
     private int lastHoveredIz = -1;
 
-    private CompletableFuture<FrameResult> pendingGeneration = null;
-    private volatile PreparedContext preparedContext;
-    private volatile PreviewCancellation generationCancellation;
-    private volatile PreviewFailure previewFailure;
-
-    // Concurrency Gates
-    private boolean isRunning = false;
-    private boolean isDirty = false;
-    private boolean closed = false;
-    private long refreshRequestNanos = 0L;
-
     public Preview3D(PresetEditorPage page, int x, int y, int width, int height) {
-        super(x, y, width, height, CommonComponents.EMPTY, (b) -> {
-            if (b instanceof Preview3D self) {
-                Minecraft mc = Minecraft.getInstance();
-                double guiX = mc.mouseHandler.xpos() * (double) mc.getWindow().getGuiScaledWidth() / (double) mc.getWindow().getWidth();
-                double guiY = mc.mouseHandler.ypos() * (double) mc.getWindow().getGuiScaledHeight() / (double) mc.getWindow().getHeight();
-
-                if (self.updateLegend((int) guiX, (int) guiY) && !self.hoveredCoords.isEmpty()) {
-                    self.playDownSound(Minecraft.getInstance().getSoundManager());
-                    WorldSettings.Properties props = self.page.preset.getPreset().world().properties;
-                    props.spawnType = SpawnType.USER_SELECTED;
-                    props.spawnX = self.hoveredCoordX;
-                    props.spawnZ = self.hoveredCoordZ;
-
-                    if (self.page instanceof WorldSettingsPage worldPage) {
-                        worldPage.spawnType.setValue(SpawnType.USER_SELECTED);
-                    }
-
-                    self.page.resetPreviewNavigation();
-                    self.page.regenerate();
-                }
-            }
-        }, DEFAULT_NARRATION);
-
+        super(x, y, width, height, CommonComponents.EMPTY, IPreviewHandler.onPress(), DEFAULT_NARRATION);
         this.page = page;
-        this.cacheKey = BiomePreview.cacheKey(page.getScreen().getSettings(), page.preset.getPreset());
+        this.state.cacheKey = BiomePreview.cacheKey(page.getScreen().getSettings(), page.preset.getPreset());
     }
 
-    public void regenerate() {
-        PreviewCancellation previous = this.generationCancellation;
-        if (previous != null) previous.cancel();
-        this.generationCancellation = new PreviewCancellation();
-        this.isDirty = true;
-        this.refreshRequestNanos = System.nanoTime();
-        this.scheduleRegeneration();
+    @Override
+    public PreviewState state() {
+        return this.state;
     }
 
-    private void scheduleRegeneration() {
-        long requestNanos = this.refreshRequestNanos;
-        long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - requestNanos);
-        long delayMillis = Math.max(0L, REFRESH_DEBOUNCE_MILLIS - elapsedMillis);
-        CompletableFuture.delayedExecutor(delayMillis, TimeUnit.MILLISECONDS).execute(() ->
-            Minecraft.getInstance().execute(() -> {
-                if (!this.closed && requestNanos == this.refreshRequestNanos && !this.isRunning) {
-                    this.executeRegenerate();
-                }
-            })
-        );
+    @Override
+    public PresetEditorPage page() {
+        return this.page;
     }
 
-    public void refreshRenderMode(RenderMode mode) {
-        currentMode = mode;
-        boolean biomePipeline = mode == RenderMode.BIOME;
-        Tile activeTile = this.tile;
-        BiomePreview.Sidecar activeBiomes = this.biomes;
-        if (activeTile == null
-                || (mode == RenderMode.BIOME && activeBiomes == null)
-                || this.generatedWithBiomePipeline != biomePipeline) {
-            this.regenerate();
-            return;
-        }
-        this.requestTextureRasterization();
+    @Override
+    public void playClickSound() {
+        this.playDownSound(Minecraft.getInstance().getSoundManager());
     }
 
-    private void executeRegenerate() {
-        if (this.closed) return;
-
-        PreviewCancellation request = this.generationCancellation;
-        if (request == null) {
-            request = new PreviewCancellation();
-            this.generationCancellation = request;
-        }
-        final PreviewCancellation cancellation = request;
-
-        this.isRunning = true;
-        this.isDirty = false;
-
-        WorldCreationContext settings;
-        Preset requestedPreset;
-        BiomePreview.CacheKey requestedKey;
-        RenderMode requestedMode;
-        boolean biomePipeline;
-        PreparedContext reusable;
-        HolderLookup.Provider provider;
-        HolderGetter<Noise> noises;
-        Preset currentPreset;
-        try {
-            settings = this.page.getScreen().getSettings();
-            requestedPreset = this.page.preset.getPreset();
-            requestedKey = BiomePreview.cacheKey(settings, requestedPreset);
-            requestedMode = this.page.renderMode3D == null ? currentMode : this.page.renderMode3D.getValue();
-            biomePipeline = requestedMode == RenderMode.BIOME;
-            reusable = this.preparedContext;
-            provider = null;
-            noises = null;
-            currentPreset = requestedPreset;
-            if (reusable == null
-                    || !Objects.equals(reusable.cacheKey, requestedKey)
-                    || reusable.biomePipeline != biomePipeline) {
-                RegistryAccess.Frozen registries = settings.worldgenLoadContext();
-                provider = biomePipeline
-                        ? requestedPreset.buildFullPatch(registries)
-                        : requestedPreset.buildPatch(registries);
-                HolderGetter<Preset> presets = provider.lookupOrThrow(RTFRegistries.PRESET);
-                noises = provider.lookupOrThrow(RTFRegistries.NOISE);
-                currentPreset = presets.getOrThrow(Preset.KEY).value();
-            }
-        } catch (RuntimeException | LinkageError error) {
-            this.isRunning = false;
-            this.previewFailure = PreviewFailure.log("Failed to prepare 3D preview provider", error);
-            if (this.isDirty) {
-                this.scheduleRegeneration();
-            }
-            return;
-        }
-        HolderLookup.Provider preparedProvider = provider;
-        HolderGetter<Noise> preparedNoises = noises;
-        Preset preparedPreset = currentPreset;
-        if (!Objects.equals(this.cacheKey, requestedKey)) {
-            this.cacheKey = requestedKey;
-        }
-
-        int seed = (int) settings.options().seed();
-        int zoomLevel = this.getZoom();
-        int localOffsetX = this.page.previewNavigationX();
-        int localOffsetZ = this.page.previewNavigationZ();
-        boolean localNavigated = this.page.previewNavigated();
-        int renderWidth = this.width;
-        int renderHeight = this.height;
-        double renderZoom = this.page.zoom3D == null ? 95.0D : this.page.zoom3D.getLerpedValue();
-
-        // Step 1: Offload disk IO and heavy context calculations to background executor
-        CompletableFuture<PreGenContext> setupStage = CompletableFuture.supplyAsync(() -> {
-            PreparedContext prepared = reusable;
-            if (prepared == null
-                    || !Objects.equals(prepared.cacheKey, requestedKey)
-                    || prepared.biomePipeline != biomePipeline) {
-                PerformanceConfig config = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
-                        .resultOrPartial(RTFCommon.LOGGER::error)
-                        .orElseGet(PerformanceConfig::makeDefault);
-                GeneratorContext generatorContext = GeneratorContext.makeUncached(
-                    preparedPreset, preparedNoises, seed, FACTOR, 0, config.batchCount()
-                );
-                prepared = new PreparedContext(requestedKey, generatorContext, preparedProvider, preparedPreset, biomePipeline);
-                this.preparedContext = prepared;
-            }
-            BiomePreview biomePreview = null;
-            PreviewFailure biomeFailure = null;
-            if (biomePipeline) {
-                try {
-                    prepared.ensureBiomePreview(settings);
-                    biomePreview = prepared.biomePreview();
-                } catch (RuntimeException | LinkageError error) {
-                    biomeFailure = PreviewFailure.log("Failed to prepare 3D biome preview", error);
-                }
-            }
-            GeneratorContext generatorContext = prepared.context;
-            WorldSettings.Properties properties = preparedPreset.world().properties;
-            if (properties.spawnType == SpawnType.CONTINENT_CENTER) {
-                long baseContinentCenter = generatorContext.lookup.getHeightmap().continent().getNearestCenter(0, 0);
-                properties.spawnX = PosUtil.unpackLeft(baseContinentCenter);
-                properties.spawnZ = PosUtil.unpackRight(baseContinentCenter);
-            }
-
-            int cx = 0;
-            int cz = 0;
-
-            // Generalize coordinate selection for all spawn types
-            if (preparedPreset.world().properties.spawnType == SpawnType.CONTINENT_CENTER) {
-                long nearestContinentCenter = generatorContext.lookup.getHeightmap().continent().getNearestCenter(
-                        localNavigated ? localOffsetX : 0,
-                        localNavigated ? localOffsetZ : 0
-                );
-                cx = PosUtil.unpackLeft(nearestContinentCenter);
-                cz = PosUtil.unpackRight(nearestContinentCenter);
-            } else {
-                // If navigated, center on the clicked spot; otherwise fallback to spawn values or origin depending on type
-                cx = localNavigated ? localOffsetX : (preparedPreset.world().properties.spawnType == SpawnType.USER_SELECTED ? preparedPreset.world().properties.spawnX : 0);
-                cz = localNavigated ? localOffsetZ : (preparedPreset.world().properties.spawnType == SpawnType.USER_SELECTED ? preparedPreset.world().properties.spawnZ : 0);
-            }
-
-            PreviewComputationCache.TileKey tileKey = new PreviewComputationCache.TileKey(
-                requestedKey, cx, cz, zoomLevel, Preview3D.SIZE, biomePipeline
-            );
-            return new PreGenContext(generatorContext, biomePreview, cx, cz, zoomLevel, tileKey, biomeFailure);
-        }, net.minecraft.Util.backgroundExecutor());
-
-        // Step 2: Compose into the chunk generator's pipeline
-        this.pendingGeneration = setupStage.thenCompose(preGen -> {
-            cancellation.check();
-            PreviewComputationCache.TileLease cached = this.page.previewCache().acquire(preGen.tileKey);
-            CompletableFuture<PreviewComputationCache.TileLease> tileFuture;
-            if (cached != null) {
-                tileFuture = CompletableFuture.completedFuture(cached);
-            } else {
-                tileFuture = preGen.context.generator.generateZoomed(
-					preGen.cx, preGen.cz, preGen.zoomLevel, biomePipeline, cancellation::isCancelled
-                ).thenApply(newTile -> {
-                    PreviewComputationCache.TileLease stored = this.page.previewCache().store(preGen.tileKey, newTile);
-                    if (stored == null) {
-                        throw new java.util.concurrent.CancellationException("Preview cache closed");
-                    }
-                    return stored;
-                });
-            }
-            return tileFuture.thenApply(lease -> {
-                cancellation.check();
-                Tile generatedTile = lease.tile();
-                try {
-                    WorldSettings.Properties properties = preparedPreset.world().properties;
-                    Levels levels = new Levels(properties.terrainScaler(), properties.worldDepth, properties.seaLevel);
-                    BiomePreview.Sidecar biomes = null;
-                    PreviewFailure failure = preGen.biomeFailure;
-                    if (failure == null && biomePipeline) {
-                        biomes = preGen.biomePreview.resolveCached(
-                            this.page.previewCache(), generatedTile, preGen.cx, preGen.cz, preGen.zoomLevel, levels, cancellation
-                        );
-                    }
-                    int[] texturePixels = failure == null
-                        ? createTexturePixels(
-                            generatedTile, biomes, requestedMode, levels, properties, renderWidth, renderHeight, renderZoom
-                        )
-                        : null;
-                    return new FrameResult(lease, biomes, preGen.cx, preGen.cz, texturePixels, renderWidth, renderHeight, failure);
-                } catch (Throwable throwable) {
-                    lease.close();
-                    throw throwable;
-                }
-            });
-        });
-
-        // Step 3: Handle execution complete back on the client main render thread
-        this.pendingGeneration.whenCompleteAsync((result, throwable) -> {
-            this.isRunning = false;
-
-            if (this.closed) {
-                if (result != null) result.lease.close();
-                return;
-            }
-
-            if (throwable != null) {
-                if (!PreviewCancellation.isCancellation(throwable)) {
-                    this.previewFailure = PreviewFailure.log("Failed handling 3D preview generation pipeline", throwable);
-                }
-            } else if (!this.isDirty && result != null && result.tile != null
-                    && !cancellation.isCancelled()
-                    && Objects.equals(requestedKey, this.cacheKey)
-                    && requestedMode == this.page.renderMode3D.getValue()) {
-                PreviewComputationCache.TileLease previousLease = this.tileLease;
-                this.tileLease = result.lease;
-                this.tile = result.lease.tile();
-                this.biomes = result.biomes;
-                this.generatedWithBiomePipeline = biomePipeline;
-                this.centerX = result.centerX;
-                this.centerZ = result.centerZ;
-                this.previewFailure = result.failure;
-
-                this.legendValues[3] = getSpawnCoords();
-                if (result.failure == null && result.textureWidth == this.width && result.textureHeight == this.height) {
-                    this.pendingTexturePixels = result.texturePixels;
-                    this.pendingTextureWidth = result.textureWidth;
-                    this.pendingTextureHeight = result.textureHeight;
-                    this.needsTextureRefresh = true;
-                } else if (result.failure == null) {
-                    this.requestTextureRasterization();
-                }
-
-                this.lastHoveredIx = -1;
-                this.lastHoveredIz = -1;
-                if (previousLease != null) previousLease.close();
-            } else if (result != null && result.tile != null) {
-                result.lease.close();
-            }
-
-            // If the user modified values while this task was running, consume the change state immediately
-            if (this.isDirty) {
-                this.scheduleRegeneration();
-            }
-        }, Minecraft.getInstance());
+    @Override
+    public String getFailureLabel() {
+        return "3D";
     }
 
-    private int[] createTexturePixels(
-        Tile activeTile,
-        BiomePreview.Sidecar activeBiomes,
-        RenderMode mode,
-        Levels levels,
-        WorldSettings.Properties properties,
-        int width,
-        int height,
-        double zoomValue
-    ) {
+    @Override
+    public void onRenderModeChanged(RenderMode mode) {
+        this.currentMode = mode;
+    }
+
+    @Override
+    public RenderMode getRenderMode() {
+        return this.page.renderMode3D == null ? this.currentMode : this.page.renderMode3D.getValue();
+    }
+
+    @Override
+    public int getZoom() {
+        return NoiseUtil.round(1.5F * (101 - (float) this.page.zoom3D.getLerpedValue()));
+    }
+
+    @Override
+    public boolean hasZoomControl() {
+        return this.page.zoom3D != null;
+    }
+
+    @Override
+    public double getZoomValue() {
+        return this.page.zoom3D.getValue();
+    }
+
+    @Override
+    public void setZoomValue(double value) {
+        this.page.zoom3D.setValue(value);
+    }
+
+    @Override
+    public void applyZoomValue() {
+        this.page.zoom3D.applyValue();
+    }
+
+    @Override
+    public RasterParams captureRasterParams() {
+        double zoomValue = this.page.zoom3D == null ? 95.0D : this.page.zoom3D.getLerpedValue();
+        return new RasterParams(this.width, this.height, zoomValue);
+    }
+
+    @Override
+    public boolean rasterizationBlocked() {
+        return this.width <= 0 || this.height <= 0;
+    }
+
+    @Override
+    public int[] createRasterData(Tile activeTile, BiomePreview.Sidecar activeBiomes, RenderMode mode, Levels levels, WorldSettings.Properties properties, RasterParams params) {
+        int width = params.width;
+        int height = params.height;
         if (activeTile == null || width <= 0 || height <= 0) return new int[0];
         int[] pixels = new int[width * height];
         java.util.Arrays.fill(pixels, 0xFF000000);
@@ -389,7 +124,7 @@ public class Preview3D extends Button {
         int blockH = halfH * 2;
         int centerVisualX = width / 2;
         int centerVisualY = height / 2;
-        float heightScale = getHeightScale((float) blockW, zoomValue);
+        float heightScale = getHeightScale((float) blockW, params.zoom);
         int halfTile = tileSize / 2;
         float maxCellHeight = properties.worldHeight * levels.unit;
         float[] hsb = new float[3];
@@ -414,9 +149,9 @@ public class Preview3D extends Button {
                 hsb[2] = Math.max(0.0f, Math.min(1.0f, hsb[2] + jitter));
                 int jitteredRgb = Color.HSBtoRGB(hsb[0], hsb[1], hsb[2]);
                 int jitteredColor = (color & 0xFF000000)
-                    | (jitteredRgb >> 16 & 0xFF)
-                    | (jitteredRgb >> 8 & 0xFF) << 8
-                    | (jitteredRgb & 0xFF) << 16;
+                        | (jitteredRgb >> 16 & 0xFF)
+                        | (jitteredRgb >> 8 & 0xFF) << 8
+                        | (jitteredRgb & 0xFF) << 16;
                 int dx = ix - halfTile;
                 int dz = iz - halfTile;
                 int isoX = centerVisualX + (dx - dz) * halfW;
@@ -433,6 +168,32 @@ public class Preview3D extends Button {
         return pixels;
     }
 
+    @Override
+    public void applyGeneratedFrame(FrameResult result) {
+        if (result.rasterWidth == this.width && result.rasterHeight == this.height) {
+            this.pendingTexturePixels = result.rasterPayload;
+            this.pendingTextureWidth = result.rasterWidth;
+            this.pendingTextureHeight = result.rasterHeight;
+            this.needsTextureRefresh = true;
+        } else {
+            requestRasterization();
+        }
+    }
+
+    @Override
+    public void applyRasterizedPixels(int[] pixels, RasterParams params) {
+        this.pendingTexturePixels = pixels;
+        this.pendingTextureWidth = params.width;
+        this.pendingTextureHeight = params.height;
+        this.needsTextureRefresh = true;
+    }
+
+    @Override
+    public void onFrameApplied() {
+        this.lastHoveredIx = -1;
+        this.lastHoveredIz = -1;
+    }
+
     private static void fillPixelRect(int[] pixels, int width, int xStart, int yStart, int xEnd, int yEnd, int nativeColor) {
         int startX = Math.max(0, xStart);
         int endX = Math.min(width, xEnd);
@@ -444,46 +205,6 @@ public class Preview3D extends Button {
                 pixels[y * width + x] = nativeColor;
             }
         }
-    }
-
-    private void requestTextureRasterization() {
-        PreviewComputationCache.TileLease current = this.tileLease;
-        if (current == null || this.closed || this.width <= 0 || this.height <= 0) return;
-        PreviewCancellation previous = this.textureCancellation;
-        if (previous != null) previous.cancel();
-        PreviewCancellation cancellation = new PreviewCancellation();
-        this.textureCancellation = cancellation;
-        long version = this.textureRequestVersion.incrementAndGet();
-        PreviewComputationCache.TileLease retained = current.retain();
-        RenderMode mode = this.page.renderMode3D == null ? currentMode : this.page.renderMode3D.getValue();
-        WorldSettings.Properties properties = this.page.preset.getPreset().world().properties;
-        Levels levels = new Levels(properties.terrainScaler(), properties.worldDepth, properties.seaLevel);
-        int width = this.width;
-        int height = this.height;
-        double zoomValue = this.page.zoom3D == null ? 95.0D : this.page.zoom3D.getLerpedValue();
-        BiomePreview.Sidecar sidecar = this.biomes;
-        this.pendingTextureRasterization = CompletableFuture.supplyAsync(() -> {
-            cancellation.check();
-            return this.createTexturePixels(retained.tile(), sidecar, mode, levels, properties, width, height, zoomValue);
-        }, net.minecraft.Util.backgroundExecutor()).whenCompleteAsync((pixels, throwable) -> {
-            try {
-                if (!this.closed && throwable != null && !PreviewCancellation.isCancellation(throwable)
-                        && version == this.textureRequestVersion.get()
-                        && mode == (this.page.renderMode3D == null ? currentMode : this.page.renderMode3D.getValue())) {
-                    this.previewFailure = PreviewFailure.log("Failed rasterizing 3D preview", throwable);
-                } else if (!this.closed && throwable == null && !cancellation.isCancelled()
-                        && version == this.textureRequestVersion.get()
-                        && mode == (this.page.renderMode3D == null ? currentMode : this.page.renderMode3D.getValue())) {
-                    this.previewFailure = null;
-                    this.pendingTexturePixels = pixels;
-                    this.pendingTextureWidth = width;
-                    this.pendingTextureHeight = height;
-                    this.needsTextureRefresh = true;
-                }
-            } finally {
-                retained.close();
-            }
-        }, Minecraft.getInstance());
     }
 
     private void uploadPendingTexture() {
@@ -517,87 +238,37 @@ public class Preview3D extends Button {
         return (a << 24) | (r << 16) | (g << 8) | b;
     }
 
-    public void close() throws Exception {
-        this.closed = true;
-        PreviewCancellation generation = this.generationCancellation;
-        if (generation != null) generation.cancel();
-        PreviewCancellation texture = this.textureCancellation;
-        if (texture != null) texture.cancel();
+    @Override
+    public void closeResources() {
         if (this.textureCache != null) {
             this.textureCache.close();
             Minecraft.getInstance().getTextureManager().release(this.cacheLocation);
             this.textureCache = null;
             this.cacheLocation = null;
         }
-        if (this.tileLease != null) {
-            this.tileLease.close();
-            this.tileLease = null;
-        }
-        this.tile = null;
-        this.previewFailure = null;
-        this.generatedWithBiomePipeline = false;
-        this.preparedContext = null;
+    }
+
+    @Override
+    public String buildLegendLine(String labelStr, String value) {
+        return value + " \u00a77(" + labelStr + ")";
+    }
+
+    @Override
+    public int legendLineX(Font font, String line, float maxWidth) {
+        return (int) (maxWidth - font.width(line));
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (this.isMouseOver(mouseX, mouseY)) {
-
-            // Right Click: Navigate to specific coordinates
-            if (button == 1) {
-                if (this.updateLegend((int) mouseX, (int) mouseY) && !this.hoveredCoords.isEmpty()) {
-                    this.playDownSound(Minecraft.getInstance().getSoundManager());
-
-                    WorldSettings.Properties props = this.page.preset.getPreset().world().properties;
-                    if (props.spawnType == SpawnType.CONTINENT_CENTER) {
-                        props.spawnType = SpawnType.USER_SELECTED;
-                        if (this.page instanceof WorldSettingsPage worldPage) {
-                            worldPage.spawnType.setValue(SpawnType.USER_SELECTED);
-                        }
-                    }
-
-                    this.page.setPreviewNavigation(this.hoveredCoordX, this.hoveredCoordZ);
-                    this.regenerate();
-                    return true;
-                }
-            }
-
-            // Middle Click: Reset to current spawn coordinates
-            else if (button == 2) {
-                this.playDownSound(Minecraft.getInstance().getSoundManager());
-                this.page.resetPreviewNavigation();
-                this.regenerate();
-                return true;
-            }
+        if (handleClick(mouseX, mouseY, button)) {
+            return true;
         }
-
-        // Left click set spawn coords
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
     @Override
-    public boolean isMouseOver(double mouseX, double mouseY) {
-        return super.isMouseOver(mouseX, mouseY);
-    }
-
-    @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        if (this.isMouseOver(mouseX, mouseY)) {
-            if (this.page.zoom3D != null) {
-                double currentVal = this.page.zoom3D.getValue();
-                double step = 0.05;
-                double newVal = currentVal;
-
-                if (scrollY > 0) {
-                    newVal = Math.min(1.0, currentVal + step);
-                } else if (scrollY < 0) {
-                    newVal = Math.max(0.0, currentVal - step);
-                }
-
-                this.page.zoom3D.setValue(newVal);
-                this.page.zoom3D.applyValue();
-                this.regenerate();
-            }
+        if (handleScroll(mouseX, mouseY, scrollY)) {
             return true;
         }
         return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
@@ -608,12 +279,12 @@ public class Preview3D extends Button {
         int x = this.getX();
         int y = this.getY();
 
-        if (this.previewFailure != null) {
+        if (this.state.previewFailure != null) {
             PreviewFailure.renderUnavailable(guiGraphics, x, y, this.width, this.height);
             return;
         }
 
-        if (this.tile != null && this.needsTextureRefresh) {
+        if (this.state.tile != null && this.needsTextureRefresh) {
             this.uploadPendingTexture();
         }
 
@@ -624,18 +295,18 @@ public class Preview3D extends Button {
         }
 
         renderSpawnMarker(guiGraphics);
-        BiomePreview.Sidecar activeBiomes = this.biomes;
+        BiomePreview.Sidecar activeBiomes = this.state.biomes;
         if (activeBiomes != null && activeBiomes.warning() != null) {
             guiGraphics.drawCenteredString(
-                Minecraft.getInstance().font,
-                activeBiomes.warning(),
-                x + this.width / 2,
-                y + 4,
-                0xFFFF5555
+                    Minecraft.getInstance().font,
+                    activeBiomes.warning(),
+                    x + this.width / 2,
+                    y + 4,
+                    0xFFFF5555
             );
         }
-        this.updateLegend(mx, my);
-        this.renderLegend(guiGraphics, mx, my, this.legendLabels, this.legendValues, x, y + this.width + 30, 10, 0xFFFFFF);
+        updateLegend(mx, my);
+        renderLegend(guiGraphics, mx, my, this.state.legendLabels, this.state.legendValues, x, y + this.width + 30, 10, 0xFFFFFF);
     }
 
     private static float getHeightScale(float blockW, double zoomValue) {
@@ -659,15 +330,15 @@ public class Preview3D extends Button {
 
         if (props.spawnType == SpawnType.USER_SELECTED || props.spawnType == SpawnType.CONTINENT_CENTER) {
             int zoomValue = this.getZoom();
-            Tile activeTile = this.tile;
+            Tile activeTile = this.state.tile;
             int tileSize = activeTile != null ? activeTile.getBlockSize().size() : 0;
 
             if (tileSize > 0) {
-                int activeCX = this.centerX;
-                int activeCZ = this.centerZ;
+                int activeCX = this.state.centerX;
+                int activeCZ = this.state.centerZ;
 
-                int ix = NoiseUtil.round(((float)(props.spawnX - activeCX) / zoomValue) + (tileSize / 2.0f));
-                int iz = NoiseUtil.round(((float)(props.spawnZ - activeCZ) / zoomValue) + (tileSize / 2.0f));
+                int ix = NoiseUtil.round(((float) (props.spawnX - activeCX) / zoomValue) + (tileSize / 2.0f));
+                int iz = NoiseUtil.round(((float) (props.spawnZ - activeCZ) / zoomValue) + (tileSize / 2.0f));
 
                 if (ix >= 0 && ix < tileSize && iz >= 0 && iz < tileSize) {
                     Cell cell = activeTile.lookup(ix, iz);
@@ -712,13 +383,14 @@ public class Preview3D extends Button {
         if (this.width != width || this.height != height) {
             this.width = width;
             this.height = height;
-            this.requestTextureRasterization();
+            requestRasterization();
         }
     }
 
-    private boolean updateLegend(int mx, int my) {
-        Tile activeTile = this.tile;
-        BiomePreview.Sidecar activeBiomes = this.biomes;
+    @Override
+    public boolean updateLegend(int mx, int my) {
+        Tile activeTile = this.state.tile;
+        BiomePreview.Sidecar activeBiomes = this.state.biomes;
         if (activeTile != null) {
             int left = this.getX();
             int top = this.getY();
@@ -728,10 +400,10 @@ public class Preview3D extends Button {
 
             int totalWidth = Math.max(1, tileSize * zoomValue);
             int totalHeight = Math.max(1, tileSize * zoomValue);
-            this.legendValues[0] = totalWidth + "x" + totalHeight;
+            this.state.legendValues[0] = totalWidth + "x" + totalHeight;
 
             if (mx < left || mx >= left + this.width || my < top || my >= top + this.height) {
-                this.hoveredCoords = "";
+                this.state.hoveredCoords = "";
                 this.lastHoveredIx = -1;
                 this.lastHoveredIz = -1;
                 return false;
@@ -759,185 +431,35 @@ public class Preview3D extends Button {
                     this.lastHoveredIz = iz;
 
                     Cell cell = activeTile.lookup(ix, iz);
-                    this.legendValues[1] = getTerrainName(cell);
+                    this.state.legendValues[1] = IPreviewHandler.getTerrainName(cell);
                     String biomeId = activeBiomes == null ? null : activeBiomes.id(ix, iz);
                     WorldSettings.Properties properties = this.page.preset.getPreset().world().properties;
                     PreviewDetails.Detail detail = PreviewDetails.forCell(
-                        this.page.renderMode3D.getValue(), cell,
-                        new Levels(properties.terrainScaler(), properties.worldDepth, properties.seaLevel),
-                        biomeId
+                            getRenderMode(), cell,
+                            new Levels(properties.terrainScaler(), properties.worldDepth, properties.seaLevel),
+                            biomeId
                     );
-                    this.legendLabels[2] = detail.label();
-                    this.legendValues[2] = detail.value();
+                    this.state.legendLabels[2] = detail.label();
+                    this.state.legendValues[2] = detail.value();
 
-                    int activeCX = this.centerX;
-                    int activeCZ = this.centerZ;
-                    this.legendValues[3] = getSpawnCoords(activeCX, activeCZ);
+                    int activeCX = this.state.centerX;
+                    int activeCZ = this.state.centerZ;
+                    this.state.legendValues[3] = getSpawnCoords(activeCX, activeCZ);
 
                     int worldOffsetX = (ix - (tileSize / 2)) * zoomValue;
                     int worldOffsetZ = (iz - (tileSize / 2)) * zoomValue;
 
-                    this.hoveredCoords = (activeCX + worldOffsetX) + ":" + (activeCZ + worldOffsetZ);
-                    this.hoveredCoordX = activeCX + worldOffsetX;
-                    this.hoveredCoordZ = activeCZ + worldOffsetZ;
+                    this.state.hoveredCoords = (activeCX + worldOffsetX) + ":" + (activeCZ + worldOffsetZ);
+                    this.state.hoveredCoordX = activeCX + worldOffsetX;
+                    this.state.hoveredCoordZ = activeCZ + worldOffsetZ;
                 }
                 return true;
             } else {
-                this.hoveredCoords = "";
+                this.state.hoveredCoords = "";
                 this.lastHoveredIx = -1;
                 this.lastHoveredIz = -1;
             }
         }
         return false;
-    }
-
-    private float getLegendScale() {
-        int index = this.page.getScreen().minecraft.options.guiScale().get() - 1;
-        if (index < 0 || index >= LEGEND_SCALES.length) {
-            index = LEGEND_SCALES.length - 1;
-        }
-        return LEGEND_SCALES[index];
-    }
-
-    private void renderLegend(GuiGraphics guiGraphics, int mx, int my, Component[] labels, String[] values, int left, int top, int lineHeight, int color) {
-        float scale = this.getLegendScale();
-        PoseStack pose = guiGraphics.pose();
-
-        pose.pushPose();
-        pose.translate(left + 3.75F * scale, top - lineHeight * (3.2F * scale), 0);
-        pose.scale(scale, scale, 1);
-
-        Minecraft mc = Minecraft.getInstance();
-        Font renderer = mc.font;
-
-        float maxWidth = (this.width - 4) / scale;
-
-        for (int i = 0; i < labels.length && i < values.length; i++) {
-            Component label = labels[i];
-            String value = values[i];
-
-            String labelStr = label.getString();
-            if (labelStr.endsWith(": ")) {
-                labelStr = labelStr.substring(0, labelStr.length() - 2);
-            } else if (labelStr.endsWith(":")) {
-                labelStr = labelStr.substring(0, labelStr.length() - 1);
-            }
-
-            String line = value + " \u00a77(" + labelStr + ")";
-
-            while (line.length() > 0 && renderer.width(line) > maxWidth) {
-                line = line.substring(0, line.length() - 1);
-            }
-
-            int x = (int) (maxWidth - renderer.width(line));
-            guiGraphics.drawString(renderer, line, x, i * lineHeight, color);
-        }
-
-        pose.popPose();
-
-        if (!this.hoveredCoords.isEmpty()) {
-            guiGraphics.drawCenteredString(renderer, this.hoveredCoords, mx, my - 10, 0xFFFFFF);
-        }
-    }
-
-    private int getZoom() {
-        return NoiseUtil.round(1.5F * (101 - (float) this.page.zoom3D.getLerpedValue()));
-    }
-
-    private static String getTerrainName(Cell cell) {
-        if (cell.terrain.isRiver()) {
-            return "river";
-        }
-        return cell.terrain.getName().toLowerCase();
-    }
-
-    private String getSpawnCoords() {
-        int activeCX = this.centerX;
-        int activeCZ = this.centerZ;
-        return getSpawnCoords(activeCX, activeCZ);
-    }
-
-    private String getSpawnCoords(int cx, int cz) {
-        WorldSettings.Properties props = this.page.preset.getPreset().world().properties;
-        if (props.spawnType == SpawnType.USER_SELECTED) {
-            return "x" + props.spawnX + " z" + props.spawnZ;
-        }
-        if (props.spawnType == SpawnType.CONTINENT_CENTER || props.spawnType == SpawnType.ISLANDS) {
-            return "~x" + cx + " ~z" + cz;
-        }
-        return "x0 z0";
-    }
-
-    private static class PreGenContext {
-        final GeneratorContext context;
-        final BiomePreview biomePreview;
-        final int cx;
-        final int cz;
-        final int zoomLevel;
-        final PreviewComputationCache.TileKey tileKey;
-
-        final PreviewFailure biomeFailure;
-
-        PreGenContext(GeneratorContext context, BiomePreview biomePreview, int cx, int cz, int zoomLevel, PreviewComputationCache.TileKey tileKey, PreviewFailure biomeFailure) {
-            this.context = context;
-            this.biomePreview = biomePreview;
-            this.cx = cx;
-            this.cz = cz;
-            this.zoomLevel = zoomLevel;
-            this.tileKey = tileKey;
-            this.biomeFailure = biomeFailure;
-        }
-    }
-
-    private static class PreparedContext {
-        final BiomePreview.CacheKey cacheKey;
-        final GeneratorContext context;
-        final HolderLookup.Provider provider;
-        final Preset preset;
-        private BiomePreview biomePreview;
-
-        final boolean biomePipeline;
-
-        PreparedContext(BiomePreview.CacheKey cacheKey, GeneratorContext context, HolderLookup.Provider provider, Preset preset, boolean biomePipeline) {
-            this.cacheKey = cacheKey;
-            this.context = context;
-            this.provider = provider;
-            this.preset = preset;
-            this.biomePipeline = biomePipeline;
-        }
-
-        synchronized void ensureBiomePreview(WorldCreationContext settings) {
-            if (this.biomePreview == null) {
-                this.biomePreview = BiomePreview.create(settings, this.provider, this.preset, this.context);
-            }
-        }
-
-        BiomePreview biomePreview() {
-            return this.biomePreview;
-        }
-    }
-
-    private static class FrameResult {
-        final PreviewComputationCache.TileLease lease;
-        final Tile tile;
-        final BiomePreview.Sidecar biomes;
-        final int centerX;
-        final int centerZ;
-        final int[] texturePixels;
-        final int textureWidth;
-        final int textureHeight;
-        final PreviewFailure failure;
-
-        FrameResult(PreviewComputationCache.TileLease lease, BiomePreview.Sidecar biomes, int centerX, int centerZ, int[] texturePixels, int textureWidth, int textureHeight, PreviewFailure failure) {
-            this.lease = lease;
-            this.tile = lease.tile();
-            this.biomes = biomes;
-            this.centerX = centerX;
-            this.centerZ = centerZ;
-            this.texturePixels = texturePixels;
-            this.textureWidth = textureWidth;
-            this.textureHeight = textureHeight;
-            this.failure = failure;
-        }
     }
 }
