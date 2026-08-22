@@ -23,6 +23,7 @@ public enum RenderMode {
 				shade = 1.0F - depth * 0.4F;
 			} else {
 				float elevation = levels.getNormalizedInlandElevation(cell.height);
+                elevation = (float) cubicHermite(0.0, 1.0, 3.0, 0.0, elevation);
 				shade = 0.88F + elevation * 0.12F;
 			}
 			return this.getColor(cell, levels, shade, 0.0F, biomeColor);
@@ -139,18 +140,19 @@ public enum RenderMode {
             }
 
             // Normalize height relative to sea level
-            // 'h' will now be 0.0 at the shoreline and 1.0 at the highest peak
-            float h = levels.getNormalizedInlandElevation(cell.height);
+            // 'elevation' will now be 0.0 at the shoreline and 1.0 at the highest peak
+            float elevation = levels.getNormalizedInlandElevation(cell.height);
+            elevation = (float) cubicHermite(0.0, 1.0, 3.0, 0.0, elevation);
 
             // Map Normalized Height to Hue
             // We start the hue at 0.35F (Green/Spring) for lowlands
             // and transition to 0.0F (Red) for mountain peaks.
-            float hue = 0.35F * (1.0F - h);
+            float hue = 0.35F * (1.0F - elevation);
 
             // Adjust Saturation and Brightness for depth
             // Lowlands (near coast) are softer; peaks are more intense.
-            float saturation = 0.4F + (h * 0.4F);
-            float brightness = 0.6F + (h * 0.3F);
+            float saturation = 0.4F + (elevation * 0.4F);
+            float brightness = 0.6F + (elevation * 0.3F);
 
             return rgba(hue, saturation, brightness);
         }
@@ -189,8 +191,9 @@ public enum RenderMode {
             }
 
             // Normalize land height (0.0 at water level, 1.0 at peak)
-            float landHeight = levels.getNormalizedInlandElevation(cell.height);
-            float landStep = step(landHeight, contourSteps);
+            float elevation = levels.getNormalizedInlandElevation(cell.height);
+            elevation = (float) cubicHermite(0.0, 1.0, 3.0, 0.0, elevation);
+            float landStep = step(elevation, contourSteps);
 
             float hue = 0.05F;
             float saturation = 0.5F;
@@ -324,5 +327,28 @@ public enum RenderMode {
 
     private static int rgba(int r, int g, int b) {
         return r + (g << 8) + (b << 16) + (255 << 24);
+    }
+
+    /**
+     * General Cubic Hermite Interpolation.
+     *
+     * @param p0 Start point (value at t = 0)
+     * @param p1 End point (value at t = 1)
+     * @param m0 Start tangent (slope at t = 0)
+     * @param m1 End tangent (slope at t = 1)
+     * @param t  Normalized linear input in [0, 1]
+     */
+    public static double cubicHermite(double p0, double p1, double m0, double m1, double t) {
+        t = Math.max(0.0, Math.min(1.0, t));
+        double t2 = t * t;
+        double t3 = t2 * t;
+
+        // Hermite Basis Functions
+        double h00 =  2 * t3 - 3 * t2 + 1; // Basis for start value p0
+        double h10 =      t3 - 2 * t2 + t; // Basis for start tangent m0
+        double h01 = -2 * t3 + 3 * t2;     // Basis for end value p1
+        double h11 =      t3 -     t2;     // Basis for end tangent m1
+
+        return h00 * p0 + h10 * m0 + h01 * p1 + h11 * m1;
     }
 }
