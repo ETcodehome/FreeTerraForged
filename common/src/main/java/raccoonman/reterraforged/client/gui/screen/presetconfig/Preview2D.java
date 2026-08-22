@@ -22,25 +22,37 @@ import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 public class Preview2D extends Button implements IPreviewHandler {
     public static final int SIZE = IPreviewHandler.SIZE;
 
+    // Statically cached backing texture shared across widget instances
+    private static DynamicTexture STATIC_TEXTURE;
+    private static ResourceLocation STATIC_TEXTURE_ID;
+
     private final PresetEditorPage page;
     private final PreviewState state = new PreviewState();
-
-    private final DynamicTexture texture;
-    private final ResourceLocation textureId;
 
     public Preview2D(PresetEditorPage parent, int x, int y, int width, int height) {
         super(x, y, width, height, CommonComponents.EMPTY, IPreviewHandler.onPress(), DEFAULT_NARRATION);
         this.page = parent;
         this.state.cacheKey = BiomePreview.cacheKey(parent.getScreen().getSettings(), parent.preset.getPreset());
 
-        this.texture = new DynamicTexture(new NativeImage(SIZE, SIZE, false));
-        this.textureId = Minecraft.getInstance().getTextureManager().register(RTFCommon.MOD_ID + "-preview-framebuffer", this.texture);
+        // Ensure static texture is initialized
+        getOrCreateTexture();
+    }
 
-        NativeImage pixels = this.texture.getPixels();
-        if (pixels != null) {
-            pixels.fillRect(0, 0, SIZE, SIZE, 0xFF000000);
-            this.texture.upload();
+    private static ResourceLocation getOrCreateTexture() {
+        if (STATIC_TEXTURE == null) {
+            STATIC_TEXTURE = new DynamicTexture(new NativeImage(SIZE, SIZE, false));
+            STATIC_TEXTURE_ID = Minecraft.getInstance().getTextureManager().register(
+                    RTFCommon.MOD_ID + "-preview-framebuffer",
+                    STATIC_TEXTURE
+            );
+
+            NativeImage pixels = STATIC_TEXTURE.getPixels();
+            if (pixels != null) {
+                pixels.fillRect(0, 0, SIZE, SIZE, 0xFF000000);
+                STATIC_TEXTURE.upload();
+            }
         }
+        return STATIC_TEXTURE_ID;
     }
 
     @Override
@@ -134,7 +146,10 @@ public class Preview2D extends Button implements IPreviewHandler {
     }
 
     private void uploadPixelData(int[] pixelData) {
-        NativeImage pixels = this.texture.getPixels();
+        if (STATIC_TEXTURE == null) {
+            getOrCreateTexture();
+        }
+        NativeImage pixels = STATIC_TEXTURE.getPixels();
         if (pixels == null || pixelData == null) return;
 
         int tileWidth = (int) Math.sqrt(pixelData.length);
@@ -143,7 +158,7 @@ public class Preview2D extends Button implements IPreviewHandler {
                 pixels.setPixelRGBA(bx, bz, pixelData[bz * tileWidth + bx]);
             }
         }
-        this.texture.upload();
+        STATIC_TEXTURE.upload();
     }
 
     @Override
@@ -158,7 +173,7 @@ public class Preview2D extends Button implements IPreviewHandler {
 
     @Override
     public void closeResources() {
-        this.texture.close();
+        // Keep STATIC_TEXTURE alive across page rebuilds.
     }
 
     @Override
@@ -187,14 +202,12 @@ public class Preview2D extends Button implements IPreviewHandler {
             return;
         }
 
-        if (this.state.tile == null) {
-            guiGraphics.fill(xPos, yPos, xPos + this.width, yPos + this.height, 0xFF000000);
-        } else {
-            RenderSystem.enableBlend();
-            RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA, GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
-            RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
-            guiGraphics.blit(this.textureId, xPos, yPos, 0, 0, this.width, this.height, this.width, this.height);
-        }
+        // Always blit the static texture (preserves the previous page's rendered frame
+        // while the new page tile generates in the background)
+        RenderSystem.enableBlend();
+        RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA, GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
+        RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
+        guiGraphics.blit(getOrCreateTexture(), xPos, yPos, 0, 0, this.width, this.height, this.width, this.height);
 
         renderSpawnMarker(guiGraphics);
         if (this.state.biomes != null && this.state.biomes.warning() != null) {
