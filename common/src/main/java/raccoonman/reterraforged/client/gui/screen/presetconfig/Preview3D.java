@@ -586,11 +586,16 @@ public class Preview3D extends Button {
             if (this.page.zoom3D != null) {
                 double currentVal = this.page.zoom3D.getValue();
                 double step = 0.05;
+                double newVal = currentVal;
+
                 if (scrollY > 0) {
-                    this.page.zoom3D.setValue(Math.min(1.0, currentVal + step));
+                    newVal = Math.min(1.0, currentVal + step);
                 } else if (scrollY < 0) {
-                    this.page.zoom3D.setValue(Math.max(0.0, currentVal - step));
+                    newVal = Math.max(0.0, currentVal - step);
                 }
+
+                this.page.zoom3D.setValue(newVal);
+                this.page.zoom3D.applyValue();
                 this.regenerate();
             }
             return true;
