@@ -11,6 +11,7 @@ import raccoonman.reterraforged.registries.RTFRegistries;
 import raccoonman.reterraforged.world.worldgen.biome.modifier.BiomeModifiers;
 import raccoonman.reterraforged.world.worldgen.densityfunction.RTFDensityFunctions;
 import raccoonman.reterraforged.world.worldgen.feature.RTFFeatures;
+import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOreLifecycle;
 import raccoonman.reterraforged.world.worldgen.feature.chance.RTFChanceModifiers;
 import raccoonman.reterraforged.world.worldgen.feature.placement.RTFPlacementModifiers;
 import raccoonman.reterraforged.world.worldgen.feature.template.decorator.TemplateDecorators;
@@ -46,6 +47,7 @@ public class RTFCommon {
 		BiomeModifiers.bootstrap();
 		RTFSurfaceRules.bootstrap();
 		StructureRules.bootstrap();
+		DynamicOreLifecycle.bootstrap();
 
 		RegistryUtil.createDataRegistry(RTFRegistries.NOISE, Noise.DIRECT_CODEC, false);
 		RegistryUtil.createDataRegistry(RTFRegistries.PRESET, Preset.DIRECT_CODEC, false);
@@ -57,4 +59,3 @@ public class RTFCommon {
 		return ResourceLocation.fromNamespaceAndPath(RTFCommon.MOD_ID, name);
 	}
 }
-

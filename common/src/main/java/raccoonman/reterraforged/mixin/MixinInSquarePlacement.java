@@ -9,36 +9,23 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.level.levelgen.placement.HeightRangePlacement;
+import net.minecraft.world.level.levelgen.placement.InSquarePlacement;
 import net.minecraft.world.level.levelgen.placement.PlacementContext;
-import raccoonman.reterraforged.world.worldgen.feature.placement.DynamicHeightRangePlacement;
+import net.minecraft.world.level.levelgen.placement.PlacementModifier;
 import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlacement;
 
-@Mixin(HeightRangePlacement.class)
-class MixinHeightRangePlacement {
+@Mixin(InSquarePlacement.class)
+class MixinInSquarePlacement {
 
 	@Inject(method = "getPositions", at = @At("HEAD"), cancellable = true)
-	private void reterraforged$expandCanonicalTerrainRange(
+	private void reterraforged$fanOutDynamicOreHorizontalSamples(
 		PlacementContext context,
 		RandomSource random,
 		BlockPos origin,
 		CallbackInfoReturnable<Stream<BlockPos>> callback
 	) {
-		var orePositions = DynamicOrePlacement.getHeightPositions(
-			(HeightRangePlacement)(Object)this,
-			context,
-			random,
-			origin
-		);
-		if (orePositions.isPresent()) {
-			callback.setReturnValue(orePositions.orElseThrow());
-			return;
-		}
-		if (DynamicOrePlacement.isStandardOrePlacement((HeightRangePlacement)(Object)this, context)) {
-			return;
-		}
-		DynamicHeightRangePlacement.getPositions(
-			(HeightRangePlacement)(Object)this,
+		DynamicOrePlacement.getInSquarePositions(
+			(PlacementModifier)(Object)this,
 			context,
 			random,
 			origin
