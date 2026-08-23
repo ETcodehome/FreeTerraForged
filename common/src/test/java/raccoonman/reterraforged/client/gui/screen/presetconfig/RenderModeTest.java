@@ -11,7 +11,7 @@ import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
 class RenderModeTest {
     @Test
     void deepOceanShadingDarkensBlueWithoutColorUnderflow() {
-        Levels levels = new Levels(256, 64, 63);
+        Levels levels = new Levels(256, 256, 64, 63);
         Cell cell = new Cell();
         int base = BiomePreviewColors.color(ResourceLocation.withDefaultNamespace("deep_ocean"));
 
