@@ -8,62 +8,85 @@ import net.minecraft.core.SectionPos;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
 import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConfiguration;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
+import raccoonman.reterraforged.world.worldgen.RTFRandomState;
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
-import raccoonman.reterraforged.world.worldgen.cell.heightmap.WorldLookup;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
-
-import java.util.Arrays;
+import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.RiverCarverSettings;
 
 public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
+
+    // One cell allocated PER THREAD, reused indefinitely across feature calls
+    private static final ThreadLocal<Cell> LOCAL_CELL = ThreadLocal.withInitial(Cell::new);
+    private static final ThreadLocal<Cell> NEIGHBOUR_CELL = ThreadLocal.withInitial(Cell::new);
+
+    private static final ThreadLocal<int[]> WATER_Y_CACHE = ThreadLocal.withInitial(() -> new int[40 * 40]);
+    private static final ThreadLocal<Long2ObjectOpenHashMap<BlockState>> PAINT_CACHE =
+            ThreadLocal.withInitial(Long2ObjectOpenHashMap::new);
+    private static final ThreadLocal<PosHolder> POS_HOLDER = ThreadLocal.withInitial(PosHolder::new);
 
     private static final Direction[] HORIZONTAL_DIRECTIONS = {
             Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST
     };
+
+    private static class PosHolder {
+        final BlockPos.MutableBlockPos current = new BlockPos.MutableBlockPos();
+        final BlockPos.MutableBlockPos neighbor = new BlockPos.MutableBlockPos();
+        final BlockPos.MutableBlockPos belowNeighbor = new BlockPos.MutableBlockPos();
+        final BlockPos.MutableBlockPos sample = new BlockPos.MutableBlockPos();
+        final BlockPos.MutableBlockPos testAbove = new BlockPos.MutableBlockPos();
+        final BlockPos.MutableBlockPos testSide = new BlockPos.MutableBlockPos();
+    }
 
     public RiverGasketFeature(Codec<NoneFeatureConfiguration> codec) {
         super(codec);
     }
 
     @Override
-    public boolean place(FeaturePlaceContext<NoneFeatureConfiguration> context) {
-        WorldGenLevel level = context.level();
+    public boolean place(FeaturePlaceContext<NoneFeatureConfiguration> placeContext) {
+        WorldGenLevel level = placeContext.level();
+        RandomState randomState = level.getLevel().getChunkSource().randomState();
 
-        if ( !((Object) level.getLevel().getChunkSource().randomState() instanceof raccoonman.reterraforged.world.worldgen.RTFRandomState rtfRandomState)) {
+        // guard against interfering with non rtf content
+        if (!((Object) randomState instanceof RTFRandomState rtfRandomState)) {
             return false;
         }
 
+        // guard against no rtf generator context
         GeneratorContext generatorContext = rtfRandomState.generatorContext();
         if (generatorContext == null) {
             return false;
         }
 
-        WorldLookup worldLookup = new WorldLookup(generatorContext);
-        Levels levels = worldLookup.getHeightmap().levels();
-        BlockPos origin = context.origin();
+        // get the cell we are checking efficiently
+        Cell cell = LOCAL_CELL.get();
+        generatorContext.lookup.applyCell(cell, placeContext.origin().getX(), placeContext.origin().getZ(), false, false);
+
+        // Performance guard - prevent checking cells that are not near rivers
+        if (cell.riverZone == RiverCarverSettings.RiverZone.None || cell.riverZone == RiverCarverSettings.RiverZone.ValleyFadeout) {
+            return false;
+        }
+
+        Levels levels = generatorContext.lookup.getHeightmap().levels();
+        BlockPos origin = placeContext.origin();
 
         int minBlockX = SectionPos.sectionToBlockCoord(SectionPos.blockToSectionCoord(origin.getX()));
         int minBlockZ = SectionPos.sectionToBlockCoord(SectionPos.blockToSectionCoord(origin.getZ()));
 
-        Cell cell = new Cell();
-        Cell neighborCell = new Cell();
-
-        BlockPos.MutableBlockPos currentPos = new BlockPos.MutableBlockPos();
-        BlockPos.MutableBlockPos neighborPos = new BlockPos.MutableBlockPos();
-        BlockPos.MutableBlockPos belowNeighborPos = new BlockPos.MutableBlockPos();
-        BlockPos.MutableBlockPos samplePos = new BlockPos.MutableBlockPos();
-        BlockPos.MutableBlockPos testAbovePos = new BlockPos.MutableBlockPos();
-        BlockPos.MutableBlockPos testSidePos = new BlockPos.MutableBlockPos();
+        Cell neighborCell = NEIGHBOUR_CELL.get();
+        PosHolder pos = POS_HOLDER.get();
 
         BlockState fallbackState = Blocks.STONE.defaultBlockState();
         float oceanHeightOffset = levels.water;
 
         // CACHE 1: 2D Cache for water cell evaluations
-        int[] neighborWaterYCache = new int[40 * 40];
+        int[] neighborWaterYCache = WATER_Y_CACHE.get();
 
         for (int dz = -12; dz < 28; dz++) {
             for (int dx = -12; dx < 28; dx++) {
@@ -71,7 +94,7 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
                 int worldX = minBlockX + dx;
                 int worldZ = minBlockZ + dz;
 
-                worldLookup.applyCell(
+                generatorContext.lookup.applyCell(
                         neighborCell.reset(),
                         worldX,
                         worldZ,
@@ -94,21 +117,22 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
         }
 
         // CACHE 2: Fast 3D Cache for the horizontal terrain paint lookups
-        Long2ObjectOpenHashMap<BlockState> paintCache = new Long2ObjectOpenHashMap<>();
+        Long2ObjectOpenHashMap<BlockState> paintCache = PAINT_CACHE.get();
+        paintCache.clear();
 
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
                 int blockX = minBlockX + x;
                 int blockZ = minBlockZ + z;
 
-                worldLookup.applyCell(cell.reset(), blockX, blockZ, false, false);
+                generatorContext.lookup.applyCell(cell.reset(), blockX, blockZ, false, false);
 
                 float targetWaterLevel =
-                    (ContinentalHydrology.getComplexWaterHeight(
-                            cell.waterTable,
-                            cell.globalContinentScale,
-                            cell.continentSizeModifier)
-                    ) + oceanHeightOffset;
+                        (ContinentalHydrology.getComplexWaterHeight(
+                                cell.waterTable,
+                                cell.globalContinentScale,
+                                cell.continentSizeModifier)
+                        ) + oceanHeightOffset;
                 int localWaterY = levels.scale(targetWaterLevel);
                 int currentFloorHeight = levels.scale(cell.height);
 
@@ -119,12 +143,12 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
                 // CACHE 3: structural state once per X/Z column using heightmap
                 BlockState structuralState = null;
                 int columnTopY = level.getChunk(origin).getHeight(
-                        net.minecraft.world.level.levelgen.Heightmap.Types.OCEAN_FLOOR_WG,
+                        Heightmap.Types.OCEAN_FLOOR_WG,
                         blockX, blockZ
                 );
                 if (columnTopY >= level.getMinBuildHeight()) {
-                    samplePos.set(blockX, columnTopY, blockZ);
-                    BlockState topState = level.getBlockState(samplePos);
+                    pos.sample.set(blockX, columnTopY, blockZ);
+                    BlockState topState = level.getBlockState(pos.sample);
                     if (!topState.isAir() && !topState.is(Blocks.CAVE_AIR) && !topState.is(Blocks.WATER)) {
                         structuralState = topState;
                     }
@@ -135,19 +159,19 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
 
                 for (int y = scanTopY; y >= scanBottomY; y--) {
 
-                    currentPos.set(blockX, y, blockZ);
-                    BlockState currentState = level.getBlockState(currentPos);
+                    pos.current.set(blockX, y, blockZ);
+                    BlockState currentState = level.getBlockState(pos.current);
 
                     if (currentState.is(Blocks.WATER) && currentState.getFluidState().isSource()) {
 
                         // Ensure air directly below the current water block gets gasketed
-                        belowNeighborPos.set(blockX, y - 1, blockZ);
-                        BlockState belowState = level.getBlockState(belowNeighborPos);
+                        pos.belowNeighbor.set(blockX, y - 1, blockZ);
+                        BlockState belowState = level.getBlockState(pos.belowNeighbor);
                         if (belowState.isAir() || belowState.is(Blocks.CAVE_AIR)) {
-                            level.setBlock(belowNeighborPos, structuralState, 2);
+                            level.setBlock(pos.belowNeighbor, structuralState, 2);
                         }
 
-                        int radius = context.random().nextInt(5) + 3;
+                        int radius = placeContext.random().nextInt(5) + 3;
                         int radiusSq = radius * radius;
 
                         for (int dx = -radius; dx <= radius; dx++) {
@@ -167,20 +191,20 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
                                         continue;
                                     }
 
-                                    neighborPos.set(targetX, y, targetZ);
-                                    BlockState neighborState = level.getBlockState(neighborPos);
+                                    pos.neighbor.set(targetX, y, targetZ);
+                                    BlockState neighborState = level.getBlockState(pos.neighbor);
 
                                     if (neighborState.isAir() || neighborState.is(Blocks.CAVE_AIR)) {
-                                        belowNeighborPos.set(targetX, y - 1, targetZ);
-                                        BlockState belowNeighborState = level.getBlockState(belowNeighborPos);
+                                        pos.belowNeighbor.set(targetX, y - 1, targetZ);
+                                        BlockState belowNeighborState = level.getBlockState(pos.belowNeighbor);
 
                                         if (belowNeighborState.is(Blocks.WATER)) {
                                             continue;
                                         }
 
                                         BlockState finalPlacementState = structuralState;
-                                        testAbovePos.set(targetX, y + 1, targetZ);
-                                        BlockState stateAbove = level.getBlockState(testAbovePos);
+                                        pos.testAbove.set(targetX, y + 1, targetZ);
+                                        BlockState stateAbove = level.getBlockState(pos.testAbove);
 
                                         if (stateAbove.isAir() || stateAbove.is(Blocks.CAVE_AIR) || stateAbove.is(Blocks.WATER)) {
                                             long posHash = BlockPos.asLong(targetX, y, targetZ);
@@ -193,12 +217,12 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
                                                 searchLoop:
                                                 for (int dist = 1; dist <= 4; dist++) {
                                                     for (Direction dir : HORIZONTAL_DIRECTIONS) {
-                                                        testSidePos.set(
+                                                        pos.testSide.set(
                                                                 targetX + (dir.getStepX() * dist),
                                                                 y,
                                                                 targetZ + (dir.getStepZ() * dist)
                                                         );
-                                                        BlockState nearbyState = level.getBlockState(testSidePos);
+                                                        BlockState nearbyState = level.getBlockState(pos.testSide);
 
                                                         if (isTerrainPaint(nearbyState)) {
                                                             foundPaint = nearbyState;
@@ -211,7 +235,7 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
                                             }
                                         }
 
-                                        level.setBlock(neighborPos, finalPlacementState, 2);
+                                        level.setBlock(pos.neighbor, finalPlacementState, 2);
                                     }
                                 }
                             }
