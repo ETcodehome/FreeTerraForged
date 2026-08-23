@@ -47,7 +47,6 @@ public class RTFCommon {
 		BiomeModifiers.bootstrap();
 		RTFSurfaceRules.bootstrap();
 		StructureRules.bootstrap();
-		DynamicOreLifecycle.bootstrap();
 
 		RegistryUtil.createDataRegistry(RTFRegistries.NOISE, Noise.DIRECT_CODEC, false);
 		RegistryUtil.createDataRegistry(RTFRegistries.PRESET, Preset.DIRECT_CODEC, false);
