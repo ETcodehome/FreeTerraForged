@@ -22,10 +22,19 @@ import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.RiverCarverSe
 
 public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
 
-    // One cell allocated PER THREAD, reused indefinitely across feature calls
-    private static final ThreadLocal<Cell> LOCAL_CELL = ThreadLocal.withInitial(Cell::new);
-    private static final ThreadLocal<Cell> NEIGHBOUR_CELL = ThreadLocal.withInitial(Cell::new);
+    // Pre-allocated array of 256 Cells per thread (zero allocation during worldgen)
+    private static final ThreadLocal<Cell[]> CHUNK_CELLS = ThreadLocal.withInitial(() -> {
+        Cell[] cells = new Cell[256];
+        for (int i = 0; i < 256; i++) {
+            cells[i] = new Cell();
+        }
+        return cells;
+    });
 
+    // Holds the indices (0-255) of columns that actually contain rivers
+    private static final ThreadLocal<int[]> RIVER_INDICES = ThreadLocal.withInitial(() -> new int[256]);
+
+    private static final ThreadLocal<Cell> NEIGHBOUR_CELL = ThreadLocal.withInitial(Cell::new);
     private static final ThreadLocal<int[]> WATER_Y_CACHE = ThreadLocal.withInitial(() -> new int[40 * 40]);
     private static final ThreadLocal<Long2ObjectOpenHashMap<BlockState>> PAINT_CACHE =
             ThreadLocal.withInitial(Long2ObjectOpenHashMap::new);
@@ -53,44 +62,58 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
         WorldGenLevel level = placeContext.level();
         RandomState randomState = level.getLevel().getChunkSource().randomState();
 
-        // guard against interfering with non rtf content
         if (!((Object) randomState instanceof RTFRandomState rtfRandomState)) {
             return false;
         }
 
-        // guard against no rtf generator context
         GeneratorContext generatorContext = rtfRandomState.generatorContext();
         if (generatorContext == null) {
             return false;
         }
 
-        // get the cell we are checking efficiently
-        Cell cell = LOCAL_CELL.get();
-        generatorContext.lookup.applyCell(cell, placeContext.origin().getX(), placeContext.origin().getZ(), false, false);
+        BlockPos origin = placeContext.origin();
+        int minBlockX = SectionPos.sectionToBlockCoord(SectionPos.blockToSectionCoord(origin.getX()));
+        int minBlockZ = SectionPos.sectionToBlockCoord(SectionPos.blockToSectionCoord(origin.getZ()));
 
-        // Performance guard - prevent checking cells that are not near rivers
-        if (cell.riverZone == RiverCarverSettings.RiverZone.None || cell.riverZone == RiverCarverSettings.RiverZone.ValleyFadeout) {
+        Cell[] chunkCells = CHUNK_CELLS.get();
+        int[] riverIndices = RIVER_INDICES.get();
+        int riverCount = 0;
+
+        // --- SINGLE-PASS CELL EVALUATION & INDEX FILTER ---
+        for (int z = 0; z < 16; z++) {
+            for (int x = 0; x < 16; x++) {
+                int index = x + (z * 16);
+                int worldX = minBlockX + x;
+                int worldZ = minBlockZ + z;
+
+                Cell cell = chunkCells[index].reset();
+                generatorContext.lookup.applyCell(cell, worldX, worldZ, false, false);
+
+                if (cell.riverZone != RiverCarverSettings.RiverZone.None
+                        && cell.riverZone != RiverCarverSettings.RiverZone.ValleyFadeout) {
+                    riverIndices[riverCount++] = index;
+                }
+            }
+        }
+
+        // Fast exit for ~80%+ of non-river chunks before touching secondary caches or world blocks
+        if (riverCount == 0) {
             return false;
         }
 
         Levels levels = generatorContext.lookup.getHeightmap().levels();
-        BlockPos origin = placeContext.origin();
-
-        int minBlockX = SectionPos.sectionToBlockCoord(SectionPos.blockToSectionCoord(origin.getX()));
-        int minBlockZ = SectionPos.sectionToBlockCoord(SectionPos.blockToSectionCoord(origin.getZ()));
-
         Cell neighborCell = NEIGHBOUR_CELL.get();
         PosHolder pos = POS_HOLDER.get();
 
         BlockState fallbackState = Blocks.STONE.defaultBlockState();
+        BlockState defaultWaterState = Blocks.WATER.defaultBlockState();
         float oceanHeightOffset = levels.water;
 
-        // CACHE 1: 2D Cache for water cell evaluations
+        // --- 2D WATER CACHE (Populated only for chunks with active rivers) ---
         int[] neighborWaterYCache = WATER_Y_CACHE.get();
 
         for (int dz = -12; dz < 28; dz++) {
             for (int dx = -12; dx < 28; dx++) {
-
                 int worldX = minBlockX + dx;
                 int worldZ = minBlockZ + dz;
 
@@ -102,141 +125,150 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
                         false
                 );
 
-                float water =
-                        (ContinentalHydrology.getComplexWaterHeight(
-                                neighborCell.waterTable,
-                                neighborCell.globalContinentScale,
-                                neighborCell.continentSizeModifier)
-                        ) + oceanHeightOffset;
+                float water = (ContinentalHydrology.getComplexWaterHeight(
+                        neighborCell.waterTable,
+                        neighborCell.globalContinentScale,
+                        neighborCell.continentSizeModifier)
+                ) + oceanHeightOffset;
 
                 int waterY = levels.scale(water);
-
                 int cacheIndex = (dx + 12) + ((dz + 12) * 40);
                 neighborWaterYCache[cacheIndex] = waterY;
             }
         }
 
-        // CACHE 2: Fast 3D Cache for the horizontal terrain paint lookups
         Long2ObjectOpenHashMap<BlockState> paintCache = PAINT_CACHE.get();
         paintCache.clear();
 
-        for (int x = 0; x < 16; x++) {
-            for (int z = 0; z < 16; z++) {
-                int blockX = minBlockX + x;
-                int blockZ = minBlockZ + z;
+        // --- SPARSE MAIN ITERATION: Process ONLY river columns ---
+        for (int i = 0; i < riverCount; i++) {
+            int index = riverIndices[i];
+            int x = index & 15;
+            int z = index >> 4;
 
-                generatorContext.lookup.applyCell(cell.reset(), blockX, blockZ, false, false);
+            int blockX = minBlockX + x;
+            int blockZ = minBlockZ + z;
 
-                float targetWaterLevel =
-                        (ContinentalHydrology.getComplexWaterHeight(
-                                cell.waterTable,
-                                cell.globalContinentScale,
-                                cell.continentSizeModifier)
-                        ) + oceanHeightOffset;
-                int localWaterY = levels.scale(targetWaterLevel);
-                int currentFloorHeight = levels.scale(cell.height);
+            // Re-use already evaluated cell directly from cache
+            Cell cell = chunkCells[index];
 
-                int scanTopY = Math.max(localWaterY, currentFloorHeight);
-                int scanBottomY = Math.min(localWaterY, currentFloorHeight) - 8;
-                scanBottomY = Math.max(scanBottomY, levels.scale(levels.water));
+            float targetWaterLevel = (ContinentalHydrology.getComplexWaterHeight(
+                    cell.waterTable,
+                    cell.globalContinentScale,
+                    cell.continentSizeModifier)
+            ) + oceanHeightOffset;
 
-                // CACHE 3: structural state once per X/Z column using heightmap
-                BlockState structuralState = null;
-                int columnTopY = level.getChunk(origin).getHeight(
-                        Heightmap.Types.OCEAN_FLOOR_WG,
-                        blockX, blockZ
-                );
-                if (columnTopY >= level.getMinBuildHeight()) {
-                    pos.sample.set(blockX, columnTopY, blockZ);
-                    BlockState topState = level.getBlockState(pos.sample);
-                    if (!topState.isAir() && !topState.is(Blocks.CAVE_AIR) && !topState.is(Blocks.WATER)) {
-                        structuralState = topState;
+            int localWaterY = levels.scale(targetWaterLevel);
+            int currentFloorHeight = levels.scale(cell.height);
+
+            int scanTopY = Math.max(localWaterY, currentFloorHeight);
+            int scanBottomY = Math.min(localWaterY, currentFloorHeight) - 8;
+            scanBottomY = Math.max(scanBottomY, levels.scale(levels.water));
+
+            // Sample column structural block
+            BlockState structuralState = null;
+            int columnTopY = level.getChunk(origin).getHeight(
+                    Heightmap.Types.OCEAN_FLOOR_WG,
+                    blockX, blockZ
+            );
+            if (columnTopY >= level.getMinBuildHeight()) {
+                pos.sample.set(blockX, columnTopY, blockZ);
+                BlockState topState = level.getBlockState(pos.sample);
+                if (!topState.isAir() && !topState.is(Blocks.CAVE_AIR) && !topState.is(Blocks.WATER)) {
+                    structuralState = topState;
+                }
+            }
+            if (structuralState == null) {
+                structuralState = fallbackState;
+            }
+
+            for (int y = scanTopY; y >= scanBottomY; y--) {
+                pos.current.set(blockX, y, blockZ);
+                BlockState currentState = level.getBlockState(pos.current);
+
+                boolean isWater = currentState.is(Blocks.WATER) && currentState.getFluidState().isSource();
+                boolean isCarvedAir = currentState.isAir() || currentState.is(Blocks.CAVE_AIR);
+
+                // Reconstruct carved water blocks in river channels
+                if (isCarvedAir && y <= localWaterY && y >= currentFloorHeight) {
+                    level.setBlock(pos.current, defaultWaterState, 2);
+                    isWater = true;
+                }
+
+                if (isWater) {
+                    // Gasket BELOW
+                    pos.belowNeighbor.set(blockX, y - 1, blockZ);
+                    BlockState belowState = level.getBlockState(pos.belowNeighbor);
+                    if (belowState.isAir() || belowState.is(Blocks.CAVE_AIR)) {
+                        level.setBlock(pos.belowNeighbor, structuralState, 2);
                     }
-                }
-                if (structuralState == null) {
-                    structuralState = fallbackState;
-                }
 
-                for (int y = scanTopY; y >= scanBottomY; y--) {
+                    // Gasket HORIZONTAL
+                    int radius = placeContext.random().nextInt(5) + 3;
+                    int radiusSq = radius * radius;
 
-                    pos.current.set(blockX, y, blockZ);
-                    BlockState currentState = level.getBlockState(pos.current);
+                    for (int dx = -radius; dx <= radius; dx++) {
+                        for (int dz = -radius; dz <= radius; dz++) {
+                            if (dx * dx + dz * dz <= radiusSq) {
 
-                    if (currentState.is(Blocks.WATER) && currentState.getFluidState().isSource()) {
+                                int targetX = blockX + dx;
+                                int targetZ = blockZ + dz;
 
-                        // Ensure air directly below the current water block gets gasketed
-                        pos.belowNeighbor.set(blockX, y - 1, blockZ);
-                        BlockState belowState = level.getBlockState(pos.belowNeighbor);
-                        if (belowState.isAir() || belowState.is(Blocks.CAVE_AIR)) {
-                            level.setBlock(pos.belowNeighbor, structuralState, 2);
-                        }
+                                int cacheX = (targetX - minBlockX) + 12;
+                                int cacheZ = (targetZ - minBlockZ) + 12;
+                                int cacheIndex = cacheX + (cacheZ * 40);
 
-                        int radius = placeContext.random().nextInt(5) + 3;
-                        int radiusSq = radius * radius;
+                                int neighbourWaterY = neighborWaterYCache[cacheIndex];
 
-                        for (int dx = -radius; dx <= radius; dx++) {
-                            for (int dz = -radius; dz <= radius; dz++) {
-                                if (dx * dx + dz * dz <= radiusSq) {
+                                if (y > neighbourWaterY) {
+                                    continue;
+                                }
 
-                                    int targetX = blockX + dx;
-                                    int targetZ = blockZ + dz;
+                                pos.neighbor.set(targetX, y, targetZ);
+                                BlockState neighborState = level.getBlockState(pos.neighbor);
 
-                                    int cacheX = (targetX - minBlockX) + 12;
-                                    int cacheZ = (targetZ - minBlockZ) + 12;
-                                    int cacheIndex = cacheX + (cacheZ * 40);
+                                if (neighborState.isAir() || neighborState.is(Blocks.CAVE_AIR)) {
+                                    pos.belowNeighbor.set(targetX, y - 1, targetZ);
+                                    BlockState belowNeighborState = level.getBlockState(pos.belowNeighbor);
 
-                                    int neighbourWaterY = neighborWaterYCache[cacheIndex];
-
-                                    if (y > neighbourWaterY) {
+                                    if (belowNeighborState.is(Blocks.WATER)) {
                                         continue;
                                     }
 
-                                    pos.neighbor.set(targetX, y, targetZ);
-                                    BlockState neighborState = level.getBlockState(pos.neighbor);
+                                    BlockState finalPlacementState = structuralState;
+                                    pos.testAbove.set(targetX, y + 1, targetZ);
+                                    BlockState stateAbove = level.getBlockState(pos.testAbove);
 
-                                    if (neighborState.isAir() || neighborState.is(Blocks.CAVE_AIR)) {
-                                        pos.belowNeighbor.set(targetX, y - 1, targetZ);
-                                        BlockState belowNeighborState = level.getBlockState(pos.belowNeighbor);
+                                    if (stateAbove.isAir() || stateAbove.is(Blocks.CAVE_AIR) || stateAbove.is(Blocks.WATER)) {
+                                        long posHash = BlockPos.asLong(targetX, y, targetZ);
 
-                                        if (belowNeighborState.is(Blocks.WATER)) {
-                                            continue;
-                                        }
+                                        if (paintCache.containsKey(posHash)) {
+                                            finalPlacementState = paintCache.get(posHash);
+                                        } else {
+                                            BlockState foundPaint = structuralState;
 
-                                        BlockState finalPlacementState = structuralState;
-                                        pos.testAbove.set(targetX, y + 1, targetZ);
-                                        BlockState stateAbove = level.getBlockState(pos.testAbove);
+                                            searchLoop:
+                                            for (int dist = 1; dist <= 4; dist++) {
+                                                for (Direction dir : HORIZONTAL_DIRECTIONS) {
+                                                    pos.testSide.set(
+                                                            targetX + (dir.getStepX() * dist),
+                                                            y,
+                                                            targetZ + (dir.getStepZ() * dist)
+                                                    );
+                                                    BlockState nearbyState = level.getBlockState(pos.testSide);
 
-                                        if (stateAbove.isAir() || stateAbove.is(Blocks.CAVE_AIR) || stateAbove.is(Blocks.WATER)) {
-                                            long posHash = BlockPos.asLong(targetX, y, targetZ);
-
-                                            if (paintCache.containsKey(posHash)) {
-                                                finalPlacementState = paintCache.get(posHash);
-                                            } else {
-                                                BlockState foundPaint = structuralState;
-
-                                                searchLoop:
-                                                for (int dist = 1; dist <= 4; dist++) {
-                                                    for (Direction dir : HORIZONTAL_DIRECTIONS) {
-                                                        pos.testSide.set(
-                                                                targetX + (dir.getStepX() * dist),
-                                                                y,
-                                                                targetZ + (dir.getStepZ() * dist)
-                                                        );
-                                                        BlockState nearbyState = level.getBlockState(pos.testSide);
-
-                                                        if (isTerrainPaint(nearbyState)) {
-                                                            foundPaint = nearbyState;
-                                                            break searchLoop;
-                                                        }
+                                                    if (isTerrainPaint(nearbyState)) {
+                                                        foundPaint = nearbyState;
+                                                        break searchLoop;
                                                     }
                                                 }
-                                                paintCache.put(posHash, foundPaint);
-                                                finalPlacementState = foundPaint;
                                             }
+                                            paintCache.put(posHash, foundPaint);
+                                            finalPlacementState = foundPaint;
                                         }
-
-                                        level.setBlock(pos.neighbor, finalPlacementState, 2);
                                     }
+
+                                    level.setBlock(pos.neighbor, finalPlacementState, 2);
                                 }
                             }
                         }
