@@ -9,12 +9,14 @@ import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
 
 public interface RTFRandomState {
 	void initialize(RegistryAccess registries);
-	
+
 	@Nullable
 	Preset preset();
 
 	@Nullable
 	GeneratorContext generatorContext();
+
+	long seed();
 	
 	DensityFunction wrap(DensityFunction function);
 

@@ -28,6 +28,7 @@ class ClimateSettingsPage extends PresetEditorPage {
 	private Slider moistureBias;
 	
 	private Slider biomeSize;
+	private Slider undergroundBiomeSize;
 	private Slider macroNoiseSize;
 	private Slider biomeWarpScale;
 	private Slider biomeWarpStrength;
@@ -118,9 +119,13 @@ class ClimateSettingsPage extends PresetEditorPage {
 		});
 
 		ClimateSettings.BiomeShape biomeShape = climate.biomeShape;
-		this.biomeSize = PresetWidgets.createIntSlider(biomeShape.biomeSize, 50, 2000, RTFTranslationKeys.GUI_SLIDER_BIOME_SIZE, (slider, value) -> {
+		this.biomeSize = PresetWidgets.createIntSlider(biomeShape.biomeSize, ClimateSettings.BiomeShape.MIN_BIOME_SIZE, ClimateSettings.BiomeShape.MAX_BIOME_SIZE, RTFTranslationKeys.GUI_SLIDER_BIOME_SIZE, (slider, value) -> {
 			biomeShape.biomeSize = (int) slider.scaleValue(value);
 			this.regenerate();
+			return value;
+		});
+		this.undergroundBiomeSize = PresetWidgets.createIntSlider(biomeShape.undergroundBiomeSize, ClimateSettings.BiomeShape.MIN_BIOME_SIZE, ClimateSettings.BiomeShape.MAX_BIOME_SIZE, RTFTranslationKeys.GUI_SLIDER_UNDERGROUND_BIOME_SIZE, (slider, value) -> {
+			biomeShape.undergroundBiomeSize = (int) slider.scaleValue(value);
 			return value;
 		});
 		this.macroNoiseSize = PresetWidgets.createIntSlider(biomeShape.macroNoiseSize, 1, 20, RTFTranslationKeys.GUI_SLIDER_MACRO_NOISE_SIZE, (slider, value) -> {
@@ -188,6 +193,7 @@ class ClimateSettingsPage extends PresetEditorPage {
 		
 		this.left.addWidget(PresetWidgets.createLabel(RTFTranslationKeys.GUI_LABEL_BIOME_SHAPE));
 		this.left.addWidget(this.biomeSize);
+		this.left.addWidget(this.undergroundBiomeSize);
 		this.left.addWidget(this.macroNoiseSize);
 		this.left.addWidget(this.biomeWarpScale);
 		this.left.addWidget(this.biomeWarpStrength);

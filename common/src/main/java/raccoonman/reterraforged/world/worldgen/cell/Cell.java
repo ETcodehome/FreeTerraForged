@@ -3,7 +3,6 @@ package raccoonman.reterraforged.world.worldgen.cell;
 import raccoonman.reterraforged.concurrent.Resource;
 import raccoonman.reterraforged.concurrent.SimpleResource;
 import raccoonman.reterraforged.concurrent.pool.ThreadLocalPool;
-import raccoonman.reterraforged.world.worldgen.cell.biome.type.BiomeType;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.RiverCarverSettings;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.Terrain;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainType;
@@ -21,6 +20,10 @@ public class Cell {
     public static final ThreadLocal<Resource<Cell>> LOCAL = ThreadLocal.withInitial(() -> {
         return new SimpleResource<>(new Cell(), Cell::reset);
     });
+
+    /**
+     * THIS IS NOT A NORMALIZED 0-1 RANGED VALUE - MAX IS PRESET WORLD HEIGHT / 256
+     */
     public float height;
     public float heightErosion;
     public float sediment;
@@ -43,16 +46,20 @@ public class Cell {
     public float riverWaterLevel = 0.0F;
     public int continentX;
     public int continentZ;
+    public float globalContinentScale;
     public boolean erosionMask;
     public Terrain terrain;
-    public BiomeType biome;
     public float erosion;
     public float weirdness;
+    // Terrain-selected erosion before rivers and climate apply biome-specific overrides.
+    public float terrainErosion;
     public float temperature;
     public float moisture;
 
     public float beachNoise;
     public RiverCarverSettings.RiverZone riverZone = RiverCarverSettings.RiverZone.None;
+    public byte flowAngle;
+    public boolean hasFlow;
 
     public Cell() {
         this.regionMoisture = 0.5F;
@@ -61,7 +68,6 @@ public class Cell {
         this.riverMask = 1.0F;
         this.erosionMask = false;
         this.terrain = TerrainType.NONE;
-        this.biome = BiomeType.GRASSLAND;
         this.waterTable = 0.0F;
         this.continentSizeModifier = 1.0F;
     }
@@ -88,9 +94,9 @@ public class Cell {
         this.continentZ = other.continentZ;
         this.erosionMask = other.erosionMask;
         this.terrain = other.terrain;
-        this.biome = other.biome;
         this.erosion = other.erosion;
         this.weirdness = other.weirdness;
+        this.terrainErosion = other.terrainErosion;
         this.temperature = other.temperature;
         this.moisture = other.moisture;
         this.beachNoise = other.beachNoise;
@@ -98,6 +104,9 @@ public class Cell {
         this.riverWaterLevel = other.riverWaterLevel;
         this.riverZone = other.riverZone;
         this.waterTable = other.waterTable;
+        this.flowAngle = other.flowAngle;
+        this.hasFlow = other.hasFlow;
+        this.globalContinentScale = other.globalContinentScale;
     }
 
     public Cell reset() {

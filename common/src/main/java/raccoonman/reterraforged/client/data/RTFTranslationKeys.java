@@ -3,6 +3,18 @@ package raccoonman.reterraforged.client.data;
 import raccoonman.reterraforged.RTFCommon;
 
 public final class RTFTranslationKeys {
+	public static final String GUI_BUTTON_EDIT = resolve("gui.button.edit");
+	public static final String GUI_BUTTON_RENAME = resolve("gui.button.rename");
+	public static final String GUI_TOAST_PRESET_RENAMED = resolve("gui.toast.preset_renamed");
+	public static final String GUI_TOAST_PRESET_CREATED = resolve("gui.toast.preset_created");
+	public static final String GUI_SELECT_PRESET_NO_SELECTION = resolve("gui.select_preset.no_selection");
+	public static final String GUI_SELECT_PRESET_TEMPLATE_DESC = resolve("gui.select_preset.template_desc");
+	public static final String GUI_SELECT_PRESET_CUSTOM_DESC = resolve("gui.select_preset.custom_desc");
+	public static final String GUI_HEADER_YOUR_PRESETS = resolve("gui.header.your_presets");
+	public static final String GUI_EMPTY_USER_PRESETS = resolve("gui.empty.user_presets");
+	public static final String GUI_HEADER_INCLUDED_TEMPLATES = resolve("gui.header.included_templates");
+	public static final String GUI_LABEL_TEMPLATE_PRESET = resolve("gui.label.template_preset");
+	public static final String GUI_LABEL_USER_PRESET = resolve("gui.label.user_preset");
 	public static final String METADATA_DESCRIPTION = resolve("metadata.description");
 	public static final String PRESET_METADATA_DESCRIPTION = resolve("preset.metadata.description");
 	public static final String MUD_SWAMPS_METADATA_DESCRIPTION = resolve("mudSwamps.metadata.description");
@@ -41,6 +53,7 @@ public final class RTFTranslationKeys {
 	public static final String GUI_BUTTON_EXPORT_AS_DATAPACK = resolve("gui.button.export");
 	public static final String GUI_BUTTON_EXPORT_SUCCESS = resolve("gui.button.export.success");
 	public static final String GUI_BUTTON_SEED = resolve("gui.button.seed");
+	public static final String GUI_BUTTON_RANDOMIZE_SEED = resolve("gui.button.randomize.seed.tooltip");
 	public static final String GUI_BUTTON_CONTINENT_TYPE = resolve("gui.button.continentType");
 	public static final String GUI_BUTTON_CONTINENT_SHAPE = resolve("gui.button.continentShape");
 	public static final String GUI_BUTTON_SPAWN_TYPE = resolve("gui.button.spawnType");
@@ -83,6 +96,7 @@ public final class RTFTranslationKeys {
 	public static final String GUI_SLIDER_INLAND = resolve("gui.slider.inland");
 	public static final String GUI_SLIDER_WORLD_HEIGHT = resolve("gui.slider.worldHeight");
 	public static final String GUI_SLIDER_WORLD_DEPTH = resolve("gui.slider.worldDepth");
+	public static final String GUI_SLIDER_OCEAN_DEPTH = resolve("gui.slider.oceanDepth");
 	public static final String GUI_SLIDER_SEA_LEVEL = resolve("gui.slider.seaLevel");
 	public static final String GUI_SLIDER_LAVA_LEVEL = resolve("gui.slider.lavaLevel");
 	public static final String GUI_SLIDER_ROCK_VARIANCE = resolve("gui.slider.rockVariance");
@@ -111,6 +125,7 @@ public final class RTFTranslationKeys {
 	public static final String GUI_SLIDER_MOISTURE_MAX = resolve("gui.slider.moistureMax");
 	public static final String GUI_SLIDER_MOISTURE_BIAS = resolve("gui.slider.moistureBias");
 	public static final String GUI_SLIDER_BIOME_SIZE = resolve("gui.slider.biomeSize");
+	public static final String GUI_SLIDER_UNDERGROUND_BIOME_SIZE = resolve("gui.slider.undergroundBiomeSize");
 	public static final String GUI_SLIDER_MACRO_NOISE_SIZE = resolve("gui.slider.macroNoiseSize");
 	public static final String GUI_SLIDER_BIOME_WARP_SCALE = resolve("gui.slider.biomeWarpScale");
 	public static final String GUI_SLIDER_BIOME_WARP_STRENGTH = resolve("gui.slider.biomeWarpStrength");
@@ -122,6 +137,7 @@ public final class RTFTranslationKeys {
 	public static final String GUI_SLIDER_TERRAIN_REGION_SIZE = resolve("gui.slider.terrainRegionSize");
 	public static final String GUI_SLIDER_GLOBAL_VERTICAL_SCALE = resolve("gui.slider.globalVerticalScale");
 	public static final String GUI_SLIDER_GLOBAL_HORIZONTAL_SCALE = resolve("gui.slider.globalHorizontalScale");
+	public static final String GUI_SLIDER_MOUNTAIN_VARIETY = resolve("gui.slider.mountainVariety");
 	public static final String GUI_SLIDER_TERRAIN_WEIGHT = resolve("gui.slider.terrain.weight");
 	public static final String GUI_SLIDER_TERRAIN_BASE_SCALE = resolve("gui.slider.terrain.baseScale");
 	public static final String GUI_SLIDER_TERRAIN_VERTICAL_SCALE = resolve("gui.slider.terrain.verticalScale");
@@ -179,6 +195,8 @@ public final class RTFTranslationKeys {
 	public static final String GUI_LABEL_CONTROL_POINTS = resolve("gui.label.controlPoints");
 	public static final String GUI_LABEL_PROPERTIES = resolve("gui.label.properties");
 	public static final String GUI_LABEL_TRANSITIONS = resolve("gui.label.transitions");
+	public static final String GUI_LABEL_SCREE_THRESHOLDS = resolve("gui.label.scree.thresholds");
+	public static final String GUI_LABEL_EROSION_DECORATOR = resolve("gui.label.erosion.decorator");
 	public static final String GUI_LABEL_NOISE_CAVES = resolve("gui.label.noiseCaves");
 	public static final String GUI_LABEL_CARVERS = resolve("gui.label.carvers");
 	public static final String GUI_LABEL_TEMPERATURE = resolve("gui.label.temperature");
@@ -200,9 +218,14 @@ public final class RTFTranslationKeys {
 	public static final String GUI_LABEL_LAKES = resolve("gui.label.lakes");
 	public static final String GUI_LABEL_WETLANDS = resolve("gui.label.wetlands");
 	public static final String GUI_LABEL_EROSION = resolve("gui.label.erosion");
+	public static final String GUI_LABEL_HYDRAULIC_EROSION = resolve("gui.label.hydraulic.erosion");
 	public static final String GUI_LABEL_SMOOTHING = resolve("gui.label.smoothing");
 	public static final String GUI_LABEL_ISLAND = resolve("gui.label.island");
-	
+    public static final String GUI_LABEL_RIVER_FLOW_DYNAMICS = resolve("gui.label.river.flow.dynamics");
+	public static final String GUI_BUTTON_FLOW_PARTICLES = resolve("gui.button.river.flow.particles");
+	public static final String GUI_BUTTON_BOAT_FLOW_DYNAMICS = resolve("gui.button.boat.flow.dynamics");
+	public static final String GUI_BUTTON_NAVIGABLE_WATERFALLS = resolve("gui.button.boat.navigable.waterfalls");
+
 	private static String resolve(String key) {
 		return RTFCommon.MOD_ID + "." + key;
 	}

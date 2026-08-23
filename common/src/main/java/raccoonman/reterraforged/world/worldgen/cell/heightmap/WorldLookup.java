@@ -40,6 +40,9 @@ public class WorldLookup {
 	}
 
 	private boolean computeAccurate(Cell cell, int x, int z) {
+		if (this.cache == null) {
+			return false;
+		}
 		int rx = this.cache.chunkToTile(x >> 4);
 		int rz = this.cache.chunkToTile(z >> 4);
 		Tile tile = this.cache.provide(rx, rz);
@@ -51,6 +54,9 @@ public class WorldLookup {
 	}
 
 	private boolean computeCached(Cell cell, int x, int z) {
+		if (this.cache == null) {
+			return false;
+		}
 		int rx = this.cache.chunkToTile(x >> 4);
 		int rz = this.cache.chunkToTile(z >> 4);
 		Tile tile = this.cache.provideIfPresent(rx, rz);

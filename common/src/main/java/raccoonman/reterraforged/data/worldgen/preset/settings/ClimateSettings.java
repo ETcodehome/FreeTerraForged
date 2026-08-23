@@ -1,5 +1,6 @@
 package raccoonman.reterraforged.data.worldgen.preset.settings;
 
+import java.util.Optional;
 import java.util.function.BiFunction;
 
 import com.mojang.serialization.Codec;
@@ -87,27 +88,63 @@ public class ClimateSettings {
     }
     
     public static class BiomeShape {
+		public static final int MIN_BIOME_SIZE = 50;
+		public static final int MAX_BIOME_SIZE = 2000;
+		private static final Codec<Integer> BIOME_SIZE_CODEC = Codec.intRange(MIN_BIOME_SIZE, MAX_BIOME_SIZE);
+
     	public static final Codec<BiomeShape> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-    		Codec.INT.fieldOf("biomeSize").forGetter((o) -> o.biomeSize),
+			BIOME_SIZE_CODEC.fieldOf("biomeSize").forGetter((o) -> o.biomeSize),
+			BIOME_SIZE_CODEC.optionalFieldOf("undergroundBiomeSize").forGetter((o) -> Optional.of(o.undergroundBiomeSize)),
     		Codec.INT.fieldOf("macroNoiseSize").forGetter((o) -> o.macroNoiseSize),
     		Codec.INT.fieldOf("biomeWarpScale").forGetter((o) -> o.biomeWarpScale),
     		Codec.INT.fieldOf("biomeWarpStrength").forGetter((o) -> o.biomeWarpStrength)    		
-    	).apply(instance, BiomeShape::new));
+		).apply(instance, (biomeSize, undergroundBiomeSize, macroNoiseSize, biomeWarpScale, biomeWarpStrength) ->
+			new BiomeShape(
+				biomeSize,
+				undergroundBiomeSize.orElse(biomeSize),
+				macroNoiseSize,
+				biomeWarpScale,
+				biomeWarpStrength
+			)
+		));
     	
         public int biomeSize;
+		public int undergroundBiomeSize;
         public int macroNoiseSize;
         public int biomeWarpScale;
         public int biomeWarpStrength;
         
         public BiomeShape(int biomeSize, int macroNoiseSize, int biomeWarpScale, int biomeWarpStrength) {
-        	this.biomeSize = biomeSize;
+			this(biomeSize, biomeSize, macroNoiseSize, biomeWarpScale, biomeWarpStrength);
+		}
+
+		public BiomeShape(int biomeSize, int undergroundBiomeSize, int macroNoiseSize, int biomeWarpScale, int biomeWarpStrength) {
+			this.biomeSize = validateBiomeSize(biomeSize);
+			this.undergroundBiomeSize = validateBiomeSize(undergroundBiomeSize);
         	this.macroNoiseSize = macroNoiseSize;
         	this.biomeWarpScale = biomeWarpScale;
         	this.biomeWarpStrength = biomeWarpStrength;
         }
+
+		public int biomeSize() {
+			return validateBiomeSize(this.biomeSize);
+		}
+
+		public int undergroundBiomeSize() {
+			return validateBiomeSize(this.undergroundBiomeSize);
+		}
+
+		private static int validateBiomeSize(int biomeSize) {
+			if (biomeSize < MIN_BIOME_SIZE || biomeSize > MAX_BIOME_SIZE) {
+				throw new IllegalArgumentException(
+					"Biome size must be between " + MIN_BIOME_SIZE + " and " + MAX_BIOME_SIZE + ": " + biomeSize
+				);
+			}
+			return biomeSize;
+		}
         
         public BiomeShape copy() {
-        	return new BiomeShape(this.biomeSize, this.macroNoiseSize, this.biomeWarpScale, this.biomeWarpStrength);
+			return new BiomeShape(this.biomeSize, this.undergroundBiomeSize, this.macroNoiseSize, this.biomeWarpScale, this.biomeWarpStrength);
         }
     }
     

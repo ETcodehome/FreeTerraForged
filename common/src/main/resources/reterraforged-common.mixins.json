@@ -1,11 +1,18 @@
 {
-  
+
   	"required": true,
   	"plugin": "raccoonman.reterraforged.mixin.plugin.MixinPlugin",
   	"package": "raccoonman.reterraforged.mixin",
   	"minVersion": "0.8",
   	"compatibilityLevel": "JAVA_21",
   	"mixins": [
+		"biolith.BiolithDimensionBiomePlacementAccessor",
+		"biolith.BiolithReplacementRequestAccessor",
+		"biolith.BiolithReplacementRequestSetAccessor",
+		"biolith.BiolithSubBiomeRequestAccessor",
+		"biolith.BiolithSubBiomeRequestSetAccessor",
+		"biolith.MixinBiolithDimensionBiomePlacement",
+		"biolith.MixinBiolithOverworldBiomePlacement",
 		"MixinNoiseChunk",
 		"MixinRandomState",
 		"MixinChunkMap",
@@ -22,16 +29,48 @@
 		"MixinLevelChunk",
 		"MixinImposterProtoChunk",
 		"MixinNoiseBasedChunkGenerator",
+		"MixinFloatyBoaty",
+		"MixinChunkSerializer",
+		"MixinBlock",
+		"MixinPlayerChunkSender",
+		"MixinC2MECompilerShield",
+		"MixinMultiNoiseBiomeSource",
+		"MixinWorldGenRegionCache",
+		"MixinNoiseFill",
+		"MixinChunkGeneratorTiming",
+		"HeightRangePlacementAccessor",
+		"UniformHeightAccessor",
+		"EnvironmentScanPlacementAccessor",
+		"RandomOffsetPlacementAccessor",
+		"BlockPredicateFilterAccessor",
+		"MixinHeightRangePlacement",
+		"MixinCountPlacement",
+		"MixinRepeatingPlacement",
+		"MixinPlacementFilter",
+		"MixinInSquarePlacement",
+		"MixinEnvironmentScanPlacement",
+		"MixinPlacedFeature",
 		"BeardifierAccessor",
 		"LevelChunkSectionAccessor",
+		"StructurePiecesBuilderAccessor",
+		"MixinOceanMonumentBuilding",
+		"MixinOceanMonumentPiece",
+		"MixinOceanMonumentStructure",
+		"MixinJigsawStructure",
+		"MixinServerLevel",
+		"MixinServerStarted",
 		"terrablender.MixinParameterList",
 		"terrablender.MixinClimateSampler",
+		"terrablender.MixinNamespacedSurfaceRuleSource",
+		"terrablender.SurfaceRulesContextAccessor",
 		"terrablender.MixinTargetPoint",
 		"terrablender.MixinNoiseChunk"
-  	],
-  	"client": [
-		"ScreenInvoker"
-  	],
+		],
+		"client": [
+			"MixinCreateWorldScreenWorldTab",
+			"MixinGuaranteeData",
+			"ScreenInvoker"
+		],
   	"injectors": {
 		"defaultRequire": 1
   	}

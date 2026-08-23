@@ -22,7 +22,7 @@ public class Presets {
 			new WorldSettings(
 				new Continent(ContinentType.UPLIFT, DistanceFunction.EUCLIDEAN, 3000, 0.7F, 0.25F, 0.25F, 5, 0.26F, 4.33F),
 				new ControlPoints(0.0F, 0.074F, 0.1F, 0.25F, 0.327F, 0.448F, 0.502F),
-				new Properties(SpawnType.CONTINENT_CENTER, 384, 64, 63, -54,0,0)
+				new Properties(SpawnType.CONTINENT_CENTER, 384, 64, 63, -54, 63, 0, 0)
 			), 
 			new SurfaceSettings(new SurfaceSettings.Erosion(30, 256, 40, 95, 0.65F, 0.475F, 0.4F)),
 			new CaveSettings(0.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.05F, 0.07F, 0.0075F, true, false),
@@ -33,7 +33,7 @@ public class Presets {
 				new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.SIMPLEX, 24, 2, 0.5F, 2.65F, 14)
 			), 
 			new TerrainSettings(
-				new General(0, 1200, 1.0F, 1.0F, true, false),
+				new General(0, 1200, 1.0F, 1.0F, true, false, 0.0F),
 				new Terrain(1.0F, 2.0F, 1.0F, 1.0F),
 				new Terrain(2.0F, 2.0F, 1.0F, 1.0F),
 				new Terrain(2.0F, 1.0F, 1.0F, 1.0F),
@@ -51,13 +51,15 @@ public class Presets {
 				new Lake(0.3F, 0.0F, 0.03F, 10, 75, 150, 2, 10),
 				new Wetland(0.6F, 175, 225)
 			),
+			FlowSettings.makeDefault(),
 			IslandSettings.makeDefault(),
 			new FilterSettings(
 				new Erosion(135, 12, 0.7F, 0.7F, 0.5F, 0.5F),
 				new Smoothing(1, 1.8F, 0.9F)
 			), 
 			new StructureSettings(),
-			new MiscellaneousSettings(true, 600, true, true, true, false, true, true, false, true, false, 0.4F, 0.4F)
+			new MiscellaneousSettings(true, 600, true, true, true, false, true, true, false, true, false, 0.4F, 0.4F),
+			PresentationSettings.makeDefault()
 		); 
 	}
 	
@@ -66,8 +68,8 @@ public class Presets {
 			new WorldSettings(
 				new Continent(ContinentType.MULTI_IMPROVED, DistanceFunction.EUCLIDEAN, 3000, 0.7F, 0.25F, 0.25F, 5, 0.26F, 4.33F),
 				new ControlPoints(0.0F, 0.074F, 0.1F, 0.25F, 0.327F, 0.448F, 0.502F),
-				new Properties(SpawnType.CONTINENT_CENTER, 320, 64, 63, -54, 0,0)
-			), 
+				new Properties(SpawnType.CONTINENT_CENTER, 320, 64, 63, -54, 63, 0, 0)
+			),
 			new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
 			new CaveSettings(0.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, true, false),
 			new ClimateSettings(
@@ -77,7 +79,7 @@ public class Presets {
 				new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.SIMPLEX, 24, 2, 0.5F, 2.65F, 14)
 			), 
 			new TerrainSettings(
-				new General(0, 1200, 0.98F, 1.0F, true, true),
+				new General(0, 1200, 0.98F, 1.0F, true, true, 0.0F),
 				new Terrain(1.0F, 1.0F, 1.0F, 1.0F), 
 				new Terrain(2.0F, 1.0F, 1.0F, 1.0F), 
 				new Terrain(2.0F, 1.0F, 1.0F, 1.0F),
@@ -95,14 +97,16 @@ public class Presets {
 				new Lake(0.3F, 0.0F, 0.03F, 10, 75, 150, 2, 10),
 				new Wetland(0.6F, 175, 225)
 			),
+			FlowSettings.makeDefault(),
 			IslandSettings.makeDefault(),
 			new FilterSettings(
 				new Erosion(135, 12, 0.7F, 0.7F, 0.5F, 0.5F),
 				new Smoothing(1, 1.8F, 0.9F)
 			), 
 			new StructureSettings(),
-			new MiscellaneousSettings(true, 600, true, true, true, false, true, true, true, true, true, 0.4F, 0.4F)
-		); 
+			new MiscellaneousSettings(true, 600, true, true, true, false, true, true, true, true, true, 0.4F, 0.4F),
+			PresentationSettings.makeDefault()
+		);
 	}
 	
 	public static Preset makeLegacyVanillaish() {
@@ -110,7 +114,7 @@ public class Presets {
 			new WorldSettings(
 				new Continent(ContinentType.MULTI, DistanceFunction.EUCLIDEAN, 2000, 0.763F, 0.25F, 0.25F, 5, 0.26F, 4.33F),
 				new ControlPoints(0.0F, 0.074F, 0.1F, 0.25F, 0.326F, 0.448F, 0.5F),
-				new Properties(SpawnType.WORLD_ORIGIN, 320, 64, 63, -54, 0, 0)
+				new Properties(SpawnType.WORLD_ORIGIN, 320, 64, 63, -54, 63, 0, 0)
 			), 
 			new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
 			new CaveSettings(1.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.15F, 0.07F, 0.021F, true, false),
@@ -121,7 +125,7 @@ public class Presets {
 				new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.SIMPLEX, 24, 2, 0.5F, 2.65F, 14)
 			), 
 			new TerrainSettings(
-				new General(0, 690, 0.629F, 0.629F, false, true),
+				new General(0, 690, 0.629F, 0.629F, false, true, 0.0F),
 				new Terrain(1.0F, 1.0F, 1.0F, 1.0F), 
 				new Terrain(1.25F, 1.0F, 1.0F, 1.0F), 
 				new Terrain(2.5F, 1.0F, 1.0F, 1.0F),
@@ -139,24 +143,25 @@ public class Presets {
 				new Lake(0.462F, 0.0F, 0.028F, 10, 75, 150, 2, 10),
 				new Wetland(0.796F, 196, 255)
 			),
+			FlowSettings.makeDefault(),
 			IslandSettings.makeDefault(),
 			new FilterSettings(
 				new Erosion(100, 12, 0.699F, 0.699F, 0.5F, 0.5F),
 				new Smoothing(2, 1.8F, 0.75F)
 			), 
 			new StructureSettings(),
-			new MiscellaneousSettings(false, 600, false, true, false, false, false, false, true, true, true, 1.0F, 0.75F)
-		); 
+			new MiscellaneousSettings(false, 600, false, true, false, false, false, false, true, true, true, 1.0F, 0.75F),
+			PresentationSettings.makeDefault()
+		);
 	}
-	
-	//TODO make mushroom islands bigger
+
 	public static Preset makeLegacyBeautiful() {
 		return new Preset(
 			new WorldSettings(
 				new Continent(ContinentType.MULTI, DistanceFunction.EUCLIDEAN, 3000, 0.8F, 0.25F, 0.25F, 5, 0.26F, 4.33F),
 				new ControlPoints(0.0F, 0.074F, 0.1F, 0.25F, 0.326F, 0.448F, 0.5F),
-				new Properties(SpawnType.CONTINENT_CENTER, 320, 64, 63, -54, 0, 0)
-			), 
+				new Properties(SpawnType.CONTINENT_CENTER, 320, 64, 63, -54, 63, 0, 0)
+			),
 			new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
 			new CaveSettings(0.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, true, false),
 			new ClimateSettings(
@@ -166,7 +171,7 @@ public class Presets {
 				new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.SIMPLEX, 24, 2, 0.5F, 2.65F, 14)
 			), 
 			new TerrainSettings(
-				new General(0, 1356, 1.0F, 1.175F, true, true),
+				new General(0, 1356, 1.0F, 1.175F, true, true, 0.0F),
 				new Terrain(1.519F, 1.0F, 1.0F, 1.0F), 
 				new Terrain(2.164F, 1.0F, 1.0F, 1.0F), 
 				new Terrain(2.706F, 1.0F, 1.0F, 1.0F),
@@ -184,13 +189,15 @@ public class Presets {
 				new Lake(0.671F, 0.0F, 0.028F, 8, 75, 150, 2, 7),
 				new Wetland(0.865F, 134, 201)
 			),
+			FlowSettings.makeDefault(),
 			IslandSettings.makeDefault(),
 			new FilterSettings(
 				new Erosion(175, 12, 0.648F, 0.657F, 0.5F, 0.5F),
 				new Smoothing(1, 1.855F, 0.916F)
 			), 
 			new StructureSettings(),
-			new MiscellaneousSettings(true, 684, true, true, true, false, true, true, true, true, false, 0.853F, 0.855F)
+			new MiscellaneousSettings(true, 684, true, true, true, false, true, true, true, true, false, 0.853F, 0.855F),
+			PresentationSettings.makeDefault()
 		); 
 	}
 	
@@ -199,7 +206,7 @@ public class Presets {
 			new WorldSettings(
 				new Continent(ContinentType.MULTI, DistanceFunction.EUCLIDEAN, 2000, 0.765F, 0.25F, 0.25F, 5, 0.26F, 4.33F),
 				new ControlPoints(0.0F, 0.074F, 0.1F, 0.25F, 0.326F, 0.448F, 0.5F),
-				new Properties(SpawnType.CONTINENT_CENTER, 320, 64, 63, -54, 0,0)
+				new Properties(SpawnType.CONTINENT_CENTER, 320, 64, 63, -54, 63, 0, 0)
 			),
 			new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
 			new CaveSettings(0.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, false, false),
@@ -210,7 +217,7 @@ public class Presets {
 				new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.SIMPLEX, 24, 2, 0.5F, 2.65F, 14)
 			), 
 			new TerrainSettings(
-				new General(0, 690, 0.629F, 0.629F, false, true),
+				new General(0, 690, 0.629F, 0.629F, false, true, 0.0F),
 				new Terrain(1.0F, 1.0F, 1.0F, 1.0F), 
 				new Terrain(1.25F, 1.0F, 1.0F, 1.0F), 
 				new Terrain(2.5F, 1.0F, 1.0F, 1.0F),
@@ -228,13 +235,15 @@ public class Presets {
 				new Lake(0.462F, 0.0F, 0.028F, 10, 75, 150, 2, 10),
 				new Wetland(0.796F, 196, 255)
 			),
+			FlowSettings.makeDefault(),
 			IslandSettings.makeDefault(),
 			new FilterSettings(
 				new Erosion(100, 12, 0.699F, 0.699F, 0.5F, 0.5F),
 				new Smoothing(2, 1.799F, 0.75F)
 			), 
 			new StructureSettings(),
-			new MiscellaneousSettings(true, 600, false, true, true, false, true, true, true, true, true, 1.0F, 0.75F)
+			new MiscellaneousSettings(true, 600, false, true, true, false, true, true, true, true, true, 1.0F, 0.75F),
+			PresentationSettings.makeDefault()
 		);
 	}
 	
@@ -243,7 +252,7 @@ public class Presets {
 			new WorldSettings(
 				new Continent(ContinentType.MULTI, DistanceFunction.EUCLIDEAN, 4029, 0.8F, 0.25F, 0.25F, 5, 0.26F, 4.33F),
 				new ControlPoints(0.0F, 0.074F, 0.1F, 0.25F, 0.326F, 0.448F, 0.5F),
-				new Properties(SpawnType.CONTINENT_CENTER, 320, 64, 63, -54, 0,0)
+				new Properties(SpawnType.CONTINENT_CENTER, 320, 64, 63, -54, 63, 0, 0)
 			), 
 			new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
 			new CaveSettings(0.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, true, false),
@@ -254,7 +263,7 @@ public class Presets {
 				new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.PERLIN2, 24, 1, 0.5F, 2.65F, 60)
 			), 
 			new TerrainSettings(
-				new General(0, 1507, 1.0F, 1.175F, true, true),
+				new General(0, 1507, 1.0F, 1.175F, true, true, 0.0F),
 				new Terrain(1.0F, 1.0F, 1.0F, 1.0F), 
 				new Terrain(2.0F, 1.0F, 1.0F, 1.0F), 
 				new Terrain(2.0F, 1.0F, 1.0F, 1.0F),
@@ -272,13 +281,15 @@ public class Presets {
 				new Lake(0.595F, 0.0F, 0.028F, 10, 75, 150, 2, 10),
 				new Wetland(0.86F, 175, 225)
 			),
+			FlowSettings.makeDefault(),
 			IslandSettings.makeDefault(),
 			new FilterSettings(
 				new Erosion(165, 15, 0.612F, 0.652F, 0.5F, 0.5F),
 				new Smoothing(1, 1.799F, 0.898F)
 			), 
 			new StructureSettings(),
-			new MiscellaneousSettings(true, 721, true, true, true, false, true, true, true, true, false, 0.902F, 0.945F)
+			new MiscellaneousSettings(true, 721, true, true, true, false, true, true, true, true, false, 0.902F, 0.945F),
+			PresentationSettings.makeDefault()
 		);
 	}
 
@@ -290,7 +301,7 @@ public class Presets {
 						new Continent(ContinentType.UPLIFT,
 								DistanceFunction.NATURAL,
 								4000,
-								1.0F,
+								0.8F,
 								0.2F,
 								0.6161F,
 								5,
@@ -310,16 +321,17 @@ public class Presets {
 								128,
 								63,
 								-109,
+								63,
 								0,
 								0)
 				),
 				new SurfaceSettings(new SurfaceSettings.Erosion(30,
-						395,
-						40,
-						393,
-						0.65F,
-						0.475F,
-						0.0F)),
+						250,
+						20,
+						10,
+						1.2F,
+						0.4F,
+						0.8F)),
 
 				new CaveSettings(0.05578F,
 						1.5625F,
@@ -369,7 +381,8 @@ public class Presets {
 								1.0F,
 								5.0F,
 								true,
-								false),
+								false,
+								0.0F),
 
 						// steppe
 						new Terrain(2.0366F,
@@ -459,6 +472,7 @@ public class Presets {
 								50,
 								500)
 				),
+				FlowSettings.makeDefault(),
 				new IslandSettings(
 						true,
 						0.5224F,
@@ -478,12 +492,12 @@ public class Presets {
 				),
 				new FilterSettings(
 
-						new Erosion(250,
-								32,
-								0.901F,
-								0.9085F,
-								0.8112F,
-								0.8112F),
+						new Erosion(38,
+								2,
+								0.3F,
+								0.3F,
+								0.2F,
+								0.279F),
 
 						new Smoothing(0, 0.0F, 0.0F)
 				),
@@ -500,11 +514,12 @@ public class Presets {
 						false,
 						false,
 						0.85438144F,
-						0.855F)
+						0.855F),
+				PresentationSettings.makeDefault()
 		);
 	}
 
-	public static Preset makeRivers() {
+	public static Preset modernDefaultWithRivers() {
 		return new Preset(
 
 				new WorldSettings(
@@ -512,7 +527,7 @@ public class Presets {
 						new Continent(ContinentType.UPLIFT,
 								DistanceFunction.EUCLIDEAN,
 								4000,
-								1.0F,
+								0.8F,
 								0.2F,
 								0.6161F,
 								5,
@@ -532,6 +547,7 @@ public class Presets {
 								128,
 								63,
 								-109,
+								63,
 								0,
 								0)
 				),
@@ -539,9 +555,9 @@ public class Presets {
 						400,
 						40,
 						95,
-						0.95F,
-						0.68F,
-						0.4F)),
+						0.8F,
+						0.4F,
+						0.6F)),
 
 				new CaveSettings(0.199F,
 						1.5625F,
@@ -591,7 +607,8 @@ public class Presets {
 								0.6F,
 								1.0F,
 								true,
-								false),
+								false,
+								0.0F),
 
 						// steppe
 						new Terrain(0.5734F,
@@ -681,15 +698,16 @@ public class Presets {
 								50,
 								500)
 				),
+				FlowSettings.makeDefault(),
 				IslandSettings.makeDefault(),
 				new FilterSettings(
 
-						new Erosion(250,
-								32,
-								0.901F,
-								0.901F,
-								0.8112F,
-								0.8112F),
+						new Erosion(38,
+								2,
+								0.3F,
+								0.3F,
+								0.2F,
+								0.279F),
 
 						new Smoothing(1, 1.8F, 0.9F)
 				),
@@ -706,7 +724,8 @@ public class Presets {
 						false,
 						false,
 						0.85438144F,
-						0.855F)
+						0.855F),
+				PresentationSettings.makeDefault()
 		);
 	}
 

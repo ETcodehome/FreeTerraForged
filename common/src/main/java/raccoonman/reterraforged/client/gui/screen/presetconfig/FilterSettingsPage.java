@@ -8,6 +8,7 @@ import raccoonman.reterraforged.client.gui.screen.page.LinkedPageScreen.Page;
 import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
 import raccoonman.reterraforged.client.gui.widget.Slider;
 import raccoonman.reterraforged.data.worldgen.preset.settings.FilterSettings;
+import raccoonman.reterraforged.data.worldgen.preset.settings.MiscellaneousSettings;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.data.worldgen.preset.settings.FilterSettings.Erosion;
 import raccoonman.reterraforged.data.worldgen.preset.settings.FilterSettings.Smoothing;
@@ -75,7 +76,7 @@ class FilterSettingsPage extends PresetEditorPage {
 			return value;
 		});
 		
-		this.left.addWidget(PresetWidgets.createLabel(RTFTranslationKeys.GUI_LABEL_EROSION));
+		this.left.addWidget(PresetWidgets.createLabel(RTFTranslationKeys.GUI_LABEL_HYDRAULIC_EROSION));
 		this.left.addWidget(this.erosionDropletsPerChunk);
 		this.left.addWidget(this.erosionDropletLifetime);
 		this.left.addWidget(this.erosionDropletVolume);
@@ -101,7 +102,7 @@ class FilterSettingsPage extends PresetEditorPage {
 
 	@Override
 	public Optional<Page> next() {
-		return Optional.of(new StructureSettingsPage(this.screen, this.preset));
+		return Optional.of(new MiscellaneousPage(this.screen, this.preset));
 	}
 
 }

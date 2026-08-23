@@ -9,6 +9,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.common.world.BiomeModifier;
 import net.neoforged.neoforge.data.event.GatherDataEvent;
@@ -18,14 +19,16 @@ import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.client.data.RTFLanguageProvider;
 import raccoonman.reterraforged.client.data.RTFTranslationKeys;
 import raccoonman.reterraforged.platform.neoforge.RegistryUtilImpl;
+import raccoonman.reterraforged.neoforge.compat.NeoForgeBiomePreviewIntegrations;
 import raccoonman.reterraforged.world.worldgen.biome.modifier.neoforge.AddModifier;
 import raccoonman.reterraforged.world.worldgen.biome.modifier.neoforge.ReplaceModifier;
 
-@Mod("reterraforged")
+@Mod(RTFCommon.MOD_ID)
 public class RTFNeoForge {
 
 	public RTFNeoForge(IEventBus modEventBus, ModContainer container) {
 		RTFCommon.bootstrap();
+		NeoForgeBiomePreviewIntegrations.bootstrap();
 
 		// Register RTF's biome modifier codec types into NeoForge's own serialiser
 		// registry so NeoForge can decode neoforge/biome_modifier/*.json at runtime.
@@ -38,9 +41,11 @@ public class RTFNeoForge {
 		biomeModifierSerializers.register("replace", () -> ReplaceModifier.CODEC);
 		biomeModifierSerializers.register(modEventBus);
 
+		// Register client-only listeners safely when running on the physical client
 		if (FMLEnvironment.dist == Dist.CLIENT) {
 			modEventBus.addListener(RTFNeoForgeClient::registerPresetEditors);
 		}
+
 		modEventBus.addListener(RTFNeoForge::gatherData);
 		RegistryUtilImpl.register(modEventBus);
 	}

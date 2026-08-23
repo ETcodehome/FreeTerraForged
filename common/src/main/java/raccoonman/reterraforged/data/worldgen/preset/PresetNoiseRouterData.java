@@ -6,6 +6,7 @@ import net.minecraft.core.HolderGetter;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.worldgen.BootstrapContext;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.level.levelgen.DensityFunction;
 import net.minecraft.world.level.levelgen.DensityFunctions;
@@ -18,6 +19,7 @@ import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.data.worldgen.preset.settings.CaveSettings;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings;
+import raccoonman.reterraforged.world.worldgen.biome.UndergroundBiomeBanding;
 import raccoonman.reterraforged.world.worldgen.densityfunction.CellSampler;
 import raccoonman.reterraforged.world.worldgen.densityfunction.RTFDensityFunctions;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
@@ -28,9 +30,14 @@ public class PresetNoiseRouterData {
 	public static final ResourceKey<DensityFunction> GRADIENT = createKey("gradient");
 	public static final ResourceKey<DensityFunction> HEIGHT_EROSION = createKey("erosion");
 	public static final ResourceKey<DensityFunction> SEDIMENT = createKey("sediment");
+	private static final ResourceKey<DensityFunction> VANILLA_SHIFT_X = createMinecraftKey("shift_x");
+	private static final ResourceKey<DensityFunction> VANILLA_SHIFT_Z = createMinecraftKey("shift_z");
 	
 	private static final float SCALER = 128.0F;
 	private static final float UNIT = 1.0F / SCALER;
+	private static final double SURFACE_CLIMATE_DEPTH = 0.03D;
+	private static final double UNDERGROUND_CLIMATE_DEPTH = 0.125D;
+	private static final double UNDERGROUND_EROSION_VARIATION = 0.25D;
 	
     public static void bootstrap(Preset preset, BootstrapContext<DensityFunction> ctx) {
         HolderGetter<DensityFunction> densityFunctions = ctx.lookup(Registries.DENSITY_FUNCTION);
@@ -70,15 +77,17 @@ public class PresetNoiseRouterData {
     	
     	CaveSettings caves = preset.caves();
     	float cheeseCaveDepthOffset = caves.cheeseCaveDepthOffset;
-    	
     	DensityFunction aquiferBarrier = DensityFunctions.noise(noiseParams.getOrThrow(Noises.AQUIFER_BARRIER), 0.5);
         DensityFunction aquiferFluidLevelFloodedness = DensityFunctions.noise(noiseParams.getOrThrow(Noises.AQUIFER_FLUID_LEVEL_FLOODEDNESS), 0.67);
         DensityFunction aquiferFluidLevelSpread = DensityFunctions.noise(noiseParams.getOrThrow(Noises.AQUIFER_FLUID_LEVEL_SPREAD), 0.7142857142857143);
         DensityFunction aquiferLava = DensityFunctions.noise(noiseParams.getOrThrow(Noises.AQUIFER_LAVA));
-        DensityFunction temperature = RTFDensityFunctions.cell(CellSampler.Field.TEMPERATURE);
-        DensityFunction vegetation = RTFDensityFunctions.cell(CellSampler.Field.MOISTURE);
         DensityFunction factor = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.FACTOR);
         DensityFunction depth = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.DEPTH);
+        DensityFunction temperature = RTFDensityFunctions.cell(CellSampler.Field.TEMPERATURE);
+        DensityFunction vegetation = RTFDensityFunctions.cell(CellSampler.Field.MOISTURE);
+        DensityFunction continents = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.CONTINENTS);
+        DensityFunction erosion = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.EROSION);
+        DensityFunction ridges = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.RIDGES);
         DensityFunction initialDensity = NoiseRouterData.noiseGradientDensity(DensityFunctions.cache2d(factor), depth);
         DensityFunction slopedCheese = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.SLOPED_CHEESE);
 //        DensityFunction entrances = DensityFunctions.min(slopedCheese, DensityFunctions.mul(DensityFunctions.constant(5.0), NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.ENTRANCES)));
@@ -97,8 +106,67 @@ public class PresetNoiseRouterData {
         DensityFunction oreVeinB = NoiseRouterData.yLimitedInterpolatable(y, DensityFunctions.noise(noiseParams.getOrThrow(Noises.ORE_VEIN_B), 4.0, 4.0), minY, maxY, 0).abs();
         DensityFunction oreVein = DensityFunctions.add(DensityFunctions.constant(-0.08F), DensityFunctions.max(oreVeinA, oreVeinB));
         DensityFunction oreGap = DensityFunctions.noise(noiseParams.getOrThrow(Noises.ORE_GAP));
-        return new NoiseRouter(aquiferBarrier, aquiferFluidLevelFloodedness, aquiferFluidLevelSpread, aquiferLava, temperature, vegetation, NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.CONTINENTS), NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.EROSION), DensityFunctions.add(depth, DensityFunctions.constant(-0.205D)), NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.RIDGES), slideOverworld(DensityFunctions.add(initialDensity, DensityFunctions.constant(UNIT * -90)).clamp(-64.0, 64.0), -worldDepth), finalDensity, oreVeininess, oreVein, oreGap);
+        return new NoiseRouter(aquiferBarrier, aquiferFluidLevelFloodedness, aquiferFluidLevelSpread, aquiferLava, temperature, vegetation, continents, erosion, depth, ridges, slideOverworld(DensityFunctions.add(initialDensity, DensityFunctions.constant(UNIT * -90)).clamp(-64.0, 64.0), -worldDepth), finalDensity, oreVeininess, oreVein, oreGap);
 	}
+
+    private static DensityFunction blendClimateAxis(DensityFunction depth, DensityFunction surface, DensityFunction underground) {
+        double transitionRange = UNDERGROUND_CLIMATE_DEPTH - SURFACE_CLIMATE_DEPTH;
+        DensityFunction alpha = DensityFunctions.mul(
+            DensityFunctions.add(depth, DensityFunctions.constant(-SURFACE_CLIMATE_DEPTH)),
+            DensityFunctions.constant(1.0D / transitionRange)
+        ).clamp(0.0D, 1.0D);
+        return DensityFunctions.lerp(alpha, surface, underground);
+    }
+
+    private static DensityFunction terrainAlignedUndergroundContinentalness(
+        WorldSettings worldSettings,
+        DensityFunction surfaceContinents,
+        DensityFunction vanillaContinents
+    ) {
+        double squeezeLimit = 11.0D / 24.0D;
+        DensityFunction unitNoise = DensityFunctions.mul(
+            DensityFunctions.add(vanillaContinents.squeeze(), DensityFunctions.constant(squeezeLimit)),
+            DensityFunctions.constant(1.0D / (squeezeLimit * 2.0D))
+        );
+        DensityFunction inland = DensityFunctions.add(
+            DensityFunctions.constant(-0.11D),
+            DensityFunctions.mul(DensityFunctions.constant(1.11D), unitNoise.square())
+        );
+        return blendCoastToInland(worldSettings, surfaceContinents, inland);
+    }
+
+    private static DensityFunction terrainAlignedUndergroundErosion(
+        WorldSettings worldSettings,
+        DensityFunction terrainErosion,
+        DensityFunction vanillaErosion
+    ) {
+        DensityFunction landErosion = DensityFunctions.add(
+            terrainErosion,
+            DensityFunctions.mul(DensityFunctions.constant(UNDERGROUND_EROSION_VARIATION), vanillaErosion)
+        );
+        return blendCoastToInland(worldSettings, vanillaErosion, landErosion);
+    }
+
+    private static DensityFunction blendCoastToInland(
+        WorldSettings worldSettings,
+        DensityFunction coast,
+        DensityFunction inland
+    ) {
+        WorldSettings.ControlPoints controlPoints = worldSettings.controlPoints;
+        double transitionRange = controlPoints.inland - controlPoints.beach;
+        DensityFunction alpha = DensityFunctions.mul(
+            DensityFunctions.add(
+                RTFDensityFunctions.cell(CellSampler.Field.CONTINENT_EDGE),
+                DensityFunctions.constant(-controlPoints.beach)
+            ),
+            DensityFunctions.constant(1.0D / transitionRange)
+        ).clamp(0.0D, 1.0D);
+        return DensityFunctions.lerp(
+            alpha,
+            coast,
+            inland
+        );
+    }
 
     private static DensityFunction underground(float cheeseCaveProbability, HolderGetter<DensityFunction> densityFunctions, HolderGetter<NormalNoise.NoiseParameters> noiseParams, DensityFunction slopedCheese) {
         DensityFunction spaghetti2d = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.SPAGHETTI_2D);
@@ -171,5 +239,9 @@ public class PresetNoiseRouterData {
     
     private static ResourceKey<DensityFunction> createKey(String string) {
         return ResourceKey.create(Registries.DENSITY_FUNCTION, RTFCommon.location(string));
+    }
+
+    private static ResourceKey<DensityFunction> createMinecraftKey(String string) {
+        return ResourceKey.create(Registries.DENSITY_FUNCTION, ResourceLocation.withDefaultNamespace(string));
     }
 }

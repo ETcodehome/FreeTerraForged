@@ -27,7 +27,14 @@ import raccoonman.reterraforged.world.worldgen.structure.rule.StructureRule;
 import java.util.*;
 import java.util.stream.Stream;
 
-public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings caves, ClimateSettings climate, TerrainSettings terrain, RiverSettings rivers, IslandSettings island, FilterSettings filters, StructureSettings structures, MiscellaneousSettings miscellaneous) {
+public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings caves, ClimateSettings climate, TerrainSettings terrain, RiverSettings rivers, FlowSettings flow, IslandSettings island, FilterSettings filters, StructureSettings structures, MiscellaneousSettings miscellaneous, PresentationSettings presentation) {
+	private static final Set<ResourceKey<? extends Registry<?>>> PREVIEW_REGISTRIES = Set.of(
+		RTFRegistries.PRESET,
+		RTFRegistries.NOISE,
+		Registries.DENSITY_FUNCTION,
+		Registries.NOISE_SETTINGS
+	);
+
 	public static final Codec<Preset> DIRECT_CODEC = RecordCodecBuilder.create(instance -> instance.group(
 			WorldSettings.CODEC.fieldOf("world").forGetter(Preset::world),
 			SurfaceSettings.CODEC.optionalFieldOf("surface", new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F))).forGetter(Preset::surface),
@@ -35,20 +42,41 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 			ClimateSettings.CODEC.fieldOf("climate").forGetter(Preset::climate),
 			TerrainSettings.CODEC.fieldOf("terrain").forGetter(Preset::terrain),
 			RiverSettings.CODEC.fieldOf("rivers").forGetter(Preset::rivers),
+			FlowSettings.CODEC.optionalFieldOf("flow").xmap(optional -> optional.orElseGet(FlowSettings::makeDefault),Optional::of).forGetter(Preset::flow),
 			IslandSettings.CODEC.optionalFieldOf("island").xmap(optional -> optional.orElseGet(IslandSettings::makeDefault),Optional::of).forGetter(Preset::island),
 			FilterSettings.CODEC.fieldOf("filters").forGetter(Preset::filters),
 			StructureSettings.CODEC.fieldOf("structures").forGetter(Preset::structures),
-			MiscellaneousSettings.CODEC.fieldOf("miscellaneous").forGetter(Preset::miscellaneous)
+			MiscellaneousSettings.CODEC.fieldOf("miscellaneous").forGetter(Preset::miscellaneous),
+			PresentationSettings.CODEC.optionalFieldOf("presentation").xmap(optional -> optional.orElseGet(PresentationSettings::makeDefault),Optional::of).forGetter(Preset::presentation)
 	).apply(instance, Preset::new));
 
 	@Deprecated
 	public static final ResourceKey<Preset> KEY = RTFRegistries.createKey(RTFRegistries.PRESET, "preset");
 
 	public Preset copy() {
-		return new Preset(this.world.copy(), this.surface.copy(), this.caves.copy(), this.climate.copy(), this.terrain.copy(), this.rivers.copy(), this.island.copy(), this.filters.copy(), this.structures.copy(), this.miscellaneous.copy());
+		return new Preset(this.world.copy(), this.surface.copy(), this.caves.copy(), this.climate.copy(), this.terrain.copy(), this.rivers.copy(), this.flow.copy(), this.island.copy(), this.filters.copy(), this.structures.copy(), this.miscellaneous.copy(), this.presentation.copy());
 	}
 
 	public HolderLookup.Provider buildPatch(RegistryAccess registries) {
+		return this.buildPatchedRegistries(registries).patches();
+	}
+
+	public HolderLookup.Provider buildFullPatch(RegistryAccess registries) {
+		return materialize(this.buildPatchedRegistries(registries).full());
+	}
+
+	private static final Set<String> PREVIEW_NAMESPACES = Set.of("minecraft", "reterraforged");
+
+	private static HolderLookup.Provider materialize(HolderLookup.Provider provider) {
+		provider.listRegistries()
+			.filter(PREVIEW_REGISTRIES::contains)
+			.forEach(key -> provider.lookupOrThrow(key).listElements()
+				.filter(holder -> PREVIEW_NAMESPACES.contains(holder.key().location().getNamespace()))
+				.forEach(holder -> holder.value()));
+		return provider;
+	}
+
+	private RegistrySetBuilder.PatchedRegistries buildPatchedRegistries(RegistryAccess registries) {
 		RegistrySetBuilder builder = new RegistrySetBuilder();
 
 		// 1. Setup Patches
@@ -98,7 +126,7 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 				RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY),
 				safeSource,
 				factory
-		).patches();
+		);
 	}
 
 	/**
@@ -116,14 +144,8 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 		return new RegistryAccess() {
 			@Override
 			public <T> Optional<Registry<T>> registry(ResourceKey<? extends Registry<? extends T>> key) {
-				String namespace = key.location().getNamespace();
-
-				// Always allow standard/internal namespaces so lookups (like STRUCTURE_SET) reliably work
-				if (namespace.equals("minecraft") || namespace.equals("reterraforged")) {
-					return original.registry(key);
-				}
-
-				// For third-party mods, ONLY allow if they explicitly provided a cloner
+				// ONLY allow the registry if we have explicitly armed it with a cloner.
+				// This prevents third-party registries injected into the 'minecraft' namespace from crashing us.
 				if (armed.contains(key)) {
 					return original.registry(key);
 				}
@@ -134,10 +156,8 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 
 			@Override
 			public Stream<RegistryEntry<?>> registries() {
-				return original.registries().filter(entry -> {
-					String ns = entry.key().location().getNamespace();
-					return ns.equals("minecraft") || ns.equals("reterraforged") || armed.contains(entry.key());
-				});
+				// Filter out any registry that hasn't been explicitly armed
+				return original.registries().filter(entry -> armed.contains(entry.key()));
 			}
 		};
 	}

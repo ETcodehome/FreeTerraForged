@@ -4,6 +4,7 @@ import java.util.function.Supplier;
 
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.KeyDispatchCodec;
+import net.minecraft.world.level.levelgen.DensityFunction;
 import org.jetbrains.annotations.Nullable;
 
 import com.mojang.serialization.Codec;
@@ -27,9 +28,27 @@ import raccoonman.reterraforged.world.worldgen.util.PosUtil;
 
 public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) implements MarkerFunction.Mapped {
 	private static final ThreadLocal<Cache2d> CELL = ThreadLocal.withInitial(Cache2d::new);
-	
+	private static final ThreadLocal<Cell> SHARED_FAST_CELL = ThreadLocal.withInitial(Cell::new);
+
 	@Override
-	public double compute(FunctionContext ctx) {
+	public double compute(DensityFunction.FunctionContext ctx) {
+		try {
+			WorldLookup lookup = this.deferredLookup.get();
+			if (lookup != null) {
+				// Grab the reusable cell for this specific worker thread
+				Cell cell = SHARED_FAST_CELL.get();
+
+				// Populate it via the zero-allocation fast path
+				PointCellCache.fill(lookup, ctx.blockX(), ctx.blockZ(), cell);
+
+				// Read and return the data
+				return this.field.read(cell, lookup.getHeightmap());
+			}
+		} catch (Throwable t) {
+			// Intentionally swallowed to fall through to original logic on failure
+		}
+
+		// Fallback to original single-slot Cache2d path if the cache fails/is uninitialized
 		WorldLookup worldLookup = this.deferredLookup.get();
 		Cell cell = CELL.get().getAndUpdate(worldLookup, ctx.blockX(), ctx.blockZ(), true);
 		return this.field.read(cell, worldLookup.getHeightmap());
@@ -142,6 +161,9 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 				}
 				
 				if(cell.terrain.isShallowOcean()) {
+					if(shallowOcean <= deepOcean) {
+						return Continentalness.OCEAN.mid();
+					}
 					float alpha = NoiseUtil.clamp(cell.continentEdge, deepOcean, shallowOcean);
 					alpha = NoiseUtil.lerp(alpha, deepOcean, shallowOcean, 0.0F, 0.98F);
 					return NoiseUtil.lerp(Continentalness.OCEAN.min(), Continentalness.OCEAN.max(), alpha);
@@ -152,11 +174,22 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 					alpha = NoiseUtil.lerp(alpha, shallowOcean, beach, 0.0F, 1.0F);
 					return NoiseUtil.lerp(Continentalness.COAST.min(), Continentalness.COAST.max(), alpha);
 				}
-			
+
+				if(cell.terrain == TerrainType.ISLAND_BEACH) {
+					return Continentalness.COAST.mid();
+				}
+
 				float alpha = NoiseUtil.clamp(cell.continentEdge, beach, inland);
 				alpha = NoiseUtil.lerp(alpha, beach, inland, 0.0F, 1.0F);
 				return NoiseUtil.lerp(Continentalness.NEAR_INLAND.mid(), Continentalness.FAR_INLAND.max(), alpha);
 
+			}
+		},
+		CONTINENT_EDGE("continent_edge") {
+
+			@Override
+			public float read(Cell cell, Heightmap heightmap) {
+				return cell.continentEdge;
 			}
 		},
 		EROSION("erosion") {
@@ -164,6 +197,13 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 			@Override
 			public float read(Cell cell, Heightmap heightmap) {
 				return cell.erosion;
+			}
+		},
+		TERRAIN_EROSION("terrain_erosion") {
+
+			@Override
+			public float read(Cell cell, Heightmap heightmap) {
+				return cell.terrainErosion;
 			}
 		},
 		WEIRDNESS("weirdness") {

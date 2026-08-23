@@ -4,41 +4,45 @@ import java.awt.Color;
 
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
-import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainType;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 
 public enum RenderMode {
-    BIOME_TYPE {
+	BIOME {
     	
         @Override
         public boolean handlesWater() {
             return true;
         }
 
+		@Override
+		public int getColor(Cell cell, Levels levels, int biomeColor) {
+			float shade;
+			if (cell.height < levels.water) {
+				float depthRange = Math.max(0.0001F, levels.water - levels.min);
+				float depth = NoiseUtil.clamp((levels.water - cell.height) / depthRange, 0.0F, 1.0F);
+				shade = 1.0F - depth * 0.4F;
+			} else {
+				float elevation = levels.getNormalizedInlandElevation(cell.height);
+                elevation = (float) cubicHermite(0.0, 1.0, 2.0, 0.0, elevation);
+				shade = 0.88F + elevation * 0.12F;
+			}
+			return this.getColor(cell, levels, shade, 0.0F, biomeColor);
+		}
+
         @Override
         public int getColor(Cell cell, Levels levels, float scale, float bias) {
-            switch (cell.terrain.getCategory()) {
-                case DEEP_OCEAN:
-                    return rgba(0.63F, 0.65F, 0.8F);
-                case SHALLOW_OCEAN:
-                    return rgba(0.6F, 0.6F, 0.8F);
-                case BEACH:
-                    return rgba(0.2F, 0.4F, 0.75F);
-                case RIVER:
-                case LAKE:
-                    return RenderMode.getWaterColor();
+			return 0xFFFF00FF;
+		}
 
-                default:
-                    if (cell.height < levels.water) {
-                        return RenderMode.getWaterColor();
-                    } else {
-                        Color color = cell.biome.getColor();
-                        float[] hsb = Color.RGBtoHSB(color.getRed(), color.getGreen(), color.getBlue(), new float[3]);
-                        return rgba(hsb[0], hsb[1], (hsb[2] * scale) + bias);
-                    }
-            }
-        }
-    },
+		@Override
+		public int getColor(Cell cell, Levels levels, float scale, float bias, int biomeColor) {
+			int red = biomeColor & 0xFF;
+			int green = biomeColor >>> 8 & 0xFF;
+			int blue = biomeColor >>> 16 & 0xFF;
+			float[] hsb = Color.RGBtoHSB(red, green, blue, new float[3]);
+			return rgba(hsb[0], hsb[1], NoiseUtil.clamp((hsb[2] * scale) + bias, 0.0F, 1.0F));
+		}
+	},
     TRANSITION_POINTS {
     	
         @Override
@@ -83,7 +87,12 @@ public enum RenderMode {
             return rgba(step(cell.regionMoisture, 8) * 0.65F, saturation, brightness);
         }
     },
-    BIOME {
+    BIOME_CELLS {
+
+		@Override
+		public boolean handlesWater() {
+			return true;
+		}
     	
         @Override
         public int getColor(Cell cell, Levels levels, float scale, float bias) {
@@ -131,19 +140,18 @@ public enum RenderMode {
             }
 
             // Normalize height relative to sea level
-            // 'h' will now be 0.0 at the shoreline and 1.0 at the highest peak
-            float h = (cell.height - levels.water) / (1.0F - levels.water);
-            h = NoiseUtil.clamp(h, 0.0F, 1.0F);
+            // 'elevation' will now be 0.0 at the shoreline and 1.0 at the highest peak
+            float elevation = levels.getNormalizedInlandElevation(cell.height);
+            elevation = (float) cubicHermite(0.0, 1.0, 2.0, 0.0, elevation);
 
             // Map Normalized Height to Hue
-            // We start the hue at 0.35F (Green/Spring) for lowlands
-            // and transition to 0.0F (Red) for mountain peaks.
-            float hue = 0.35F * (1.0F - h);
+            // Strictly transitions from 0.35F (Green) down to 0.0F (Red) for mountain peaks
+            float hue = 0.35F * (1.0F - elevation);
 
-            // Adjust Saturation and Brightness for depth
-            // Lowlands (near coast) are softer; peaks are more intense.
-            float saturation = 0.4F + (h * 0.4F);
-            float brightness = 0.6F + (h * 0.3F);
+            // Adjust Saturation and Brightness
+            // Boosted lowlands base saturation (0.60F) scaling up to full saturation (1.0F) at high peaks
+            float saturation = 0.60F + (elevation * 0.40F);
+            float brightness = 0.60F + (elevation * 0.35F);
 
             return rgba(hue, saturation, brightness);
         }
@@ -182,9 +190,9 @@ public enum RenderMode {
             }
 
             // Normalize land height (0.0 at water level, 1.0 at peak)
-            float landRange = 1.0F - levels.water;
-            float landHeight = (cell.height - levels.water) / landRange;
-            float landStep = step(landHeight, contourSteps);
+            float elevation = levels.getNormalizedInlandElevation(cell.height);
+            elevation = (float) cubicHermite(0.0, 1.0, 2.0, 0.0, elevation);
+            float landStep = step(elevation, contourSteps);
 
             float hue = 0.05F;
             float saturation = 0.5F;
@@ -269,9 +277,13 @@ public enum RenderMode {
         }
     };
 
-    public int getColor(Cell cell, Levels levels) {
-        if (!this.handlesWater() && cell.height < levels.water) {
-            return getWaterColor();
+	public int getColor(Cell cell, Levels levels) {
+		return this.getColor(cell, levels, 0xFFFF00FF);
+	}
+
+	public int getColor(Cell cell, Levels levels, int biomeColor) {
+		if (!this.handlesWater() && cell.height < levels.water) {
+			return getWaterColor();
         }
         float bands = 10.0F;
         float alpha = 0.2F;
@@ -279,16 +291,24 @@ public enum RenderMode {
         int band = NoiseUtil.round(elevation * bands);
         float scale = 1.0F - alpha;
         float bias = alpha * (band / bands);
-        return getColor(cell, levels, scale, bias);
-    }
+		return getColor(cell, levels, scale, bias, biomeColor);
+	}
+
+	public int getColor(Cell cell, Levels levels, float scale, float bias, int biomeColor) {
+		return getColor(cell, levels, scale, bias);
+	}
 
     public abstract int getColor(Cell cell, Levels levels, float scale, float bias);
 
-    public boolean handlesWater() {
-        return false;
-    }
+	public boolean handlesWater() {
+		return false;
+	}
 
-    private static int getWaterColor() {
+	public String displayName() {
+		return this == BIOME_CELLS ? "BIOME_CELLS (RTF diagnostic)" : this.name();
+	}
+
+	private static int getWaterColor() {
         return rgba(40, 140, 200);
     }
 
@@ -297,7 +317,7 @@ public enum RenderMode {
     }
 
     private static int rgba(float h, float s, float b) {
-        int argb = Color.HSBtoRGB(h, s, b);
+		int argb = Color.HSBtoRGB(h, NoiseUtil.clamp(s, 0.0F, 1.0F), NoiseUtil.clamp(b, 0.0F, 1.0F));
         int red = (argb >> 16) & 0xFF;
         int green = (argb >> 8) & 0xFF;
         int blue =  argb & 0xFF;
@@ -306,5 +326,29 @@ public enum RenderMode {
 
     private static int rgba(int r, int g, int b) {
         return r + (g << 8) + (b << 16) + (255 << 24);
+    }
+
+    /**
+     * General Cubic Hermite Interpolation.
+     * We use it here in rendermode to shift the normalized elevations more into the midrange rather than the extremes
+     *
+     * @param p0 Start point (value at t = 0)
+     * @param p1 End point (value at t = 1)
+     * @param m0 Start tangent (slope at t = 0)
+     * @param m1 End tangent (slope at t = 1)
+     * @param t  Normalized linear input in [0, 1]
+     */
+    public static double cubicHermite(double p0, double p1, double m0, double m1, double t) {
+        t = Math.max(0.0, Math.min(1.0, t));
+        double t2 = t * t;
+        double t3 = t2 * t;
+
+        // Hermite Basis Functions
+        double h00 =  2 * t3 - 3 * t2 + 1; // Basis for start value p0
+        double h10 =      t3 - 2 * t2 + t; // Basis for start tangent m0
+        double h01 = -2 * t3 + 3 * t2;     // Basis for end value p1
+        double h11 =      t3 -     t2;     // Basis for end tangent m1
+
+        return h00 * p0 + h10 * m0 + h01 * p1 + h11 * m1;
     }
 }

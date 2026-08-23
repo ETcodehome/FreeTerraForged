@@ -52,27 +52,30 @@ public class TerrainSettings {
     		Codec.FLOAT.fieldOf("globalVerticalScale").forGetter((o) -> o.globalVerticalScale),
     		Codec.FLOAT.fieldOf("globalHorizontalScale").forGetter((o) -> o.globalHorizontalScale),
     		Codec.BOOL.fieldOf("fancyMountains").forGetter((o) -> o.fancyMountains),
-    		Codec.BOOL.optionalFieldOf("legacyMountainScaling", true).forGetter((o) -> o.legacyMountainScaling)
+    		Codec.BOOL.optionalFieldOf("legacyMountainScaling", true).forGetter((o) -> o.legacyMountainScaling),
+    		Codec.FLOAT.optionalFieldOf("mountainVariety", 0.0F).forGetter((o) -> o.mountainVariety)
     	).apply(instance, General::new));
-    	
+
         public int terrainSeedOffset;
         public int terrainRegionSize;
         public float globalVerticalScale;
         public float globalHorizontalScale;
         public boolean fancyMountains;
         public boolean legacyMountainScaling;
-        
-        public General(int terrainSeedOffset, int terrainRegionSize, float globalVerticalScale, float globalHorizontalScale, boolean fancyMountains, boolean legacyMountainScaling) {
+        public float mountainVariety;
+
+        public General(int terrainSeedOffset, int terrainRegionSize, float globalVerticalScale, float globalHorizontalScale, boolean fancyMountains, boolean legacyMountainScaling, float mountainVariety) {
         	this.terrainSeedOffset = terrainSeedOffset;
         	this.terrainRegionSize = terrainRegionSize;
         	this.globalVerticalScale = globalVerticalScale;
         	this.globalHorizontalScale = globalHorizontalScale;
         	this.fancyMountains = fancyMountains;
         	this.legacyMountainScaling = legacyMountainScaling;
+        	this.mountainVariety = Math.max(0.0F, Math.min(1.0F, mountainVariety));
         }
-        
+
         public General copy() {
-        	return new General(this.terrainSeedOffset, this.terrainRegionSize, this.globalVerticalScale, this.globalHorizontalScale, this.fancyMountains, this.legacyMountainScaling);
+        	return new General(this.terrainSeedOffset, this.terrainRegionSize, this.globalVerticalScale, this.globalHorizontalScale, this.fancyMountains, this.legacyMountainScaling, this.mountainVariety);
         }
     }
     

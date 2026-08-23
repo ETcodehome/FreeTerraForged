@@ -1,292 +1,242 @@
 package raccoonman.reterraforged.client.gui.screen.presetconfig;
 
 import java.awt.Color;
-import java.util.concurrent.CompletableFuture;
+
+import com.mojang.blaze3d.platform.NativeImage;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.screens.worldselection.WorldCreationContext;
 import net.minecraft.client.renderer.texture.DynamicTexture;
-import net.minecraft.core.HolderGetter;
-import net.minecraft.core.HolderLookup;
-import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.chat.CommonComponents;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.platform.NativeImage;
-
-import raccoonman.reterraforged.RTFCommon;
-import raccoonman.reterraforged.client.data.RTFTranslationKeys;
-import raccoonman.reterraforged.concurrent.cache.CacheManager;
-import raccoonman.reterraforged.config.PerformanceConfig;
-import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.data.worldgen.preset.settings.SpawnType;
 import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings;
-import raccoonman.reterraforged.registries.RTFRegistries;
-import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
-import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
-import raccoonman.reterraforged.world.worldgen.util.PosUtil;
 
-public class Preview3D extends Button {
-    private static final int FACTOR = 4;
-    public static final int SIZE = (1 << 4) << FACTOR;
-    private static final float[] LEGEND_SCALES = { 1, 0.9F, 0.75F, 0.6F };
+public class Preview3D extends Button implements IPreviewHandler {
+    public static final int SIZE = IPreviewHandler.SIZE;
 
-    public static RenderMode currentMode = RenderMode.BIOME_TYPE;
+    // Statically cached backing texture shared across widget instances
+    private static DynamicTexture STATIC_TEXTURE_CACHE;
+    private static ResourceLocation STATIC_CACHE_LOCATION;
 
-    // Static cache fields to bridge across instances during page preset updates
-    private static Tile LAST_GLOBAL_TILE = null;
-    private static int LAST_GLOBAL_CENTER_X = 0;
-    private static int LAST_GLOBAL_CENTER_Z = 0;
+    private final PresetEditorPage page;
+    private final PreviewState state = new PreviewState();
 
-    private PresetEditorPage page;
-    private Tile tile;
-    private int centerX, centerZ;
+    private RenderMode currentMode = RenderMode.BIOME;
 
-    private int hoveredCoordX = 0;
-    private int hoveredCoordZ = 0;
-    private String hoveredCoords = "";
-    private String[] legendValues = {"", "", "", ""};
-    private final Component[] legendLabels = {
-            Component.translatable(RTFTranslationKeys.GUI_LABEL_PREVIEW_AREA),
-            Component.translatable(RTFTranslationKeys.GUI_LABEL_PREVIEW_TERRAIN),
-            Component.translatable(RTFTranslationKeys.GUI_LABEL_PREVIEW_BIOME),
-            Component.translatable(RTFTranslationKeys.GUI_LABEL_PREVIEW_SPAWN)
-    };
-
-    private int offsetX, offsetZ;
-
-    private DynamicTexture textureCache;
-    private ResourceLocation cacheLocation;
     private boolean needsTextureRefresh = false;
+    private volatile int[] pendingTexturePixels;
+    private volatile int pendingTextureWidth;
+    private volatile int pendingTextureHeight;
 
     private int lastHoveredIx = -1;
     private int lastHoveredIz = -1;
 
-    private final float[] hsbCache = new float[3];
-
-    private CompletableFuture<FrameResult> pendingGeneration = null;
-
-    // Concurrency Gates
-    private boolean isRunning = false;
-    private boolean isDirty = false;
-    private boolean closed = false;
-
     public Preview3D(PresetEditorPage page, int x, int y, int width, int height) {
-        super(x, y, width, height, CommonComponents.EMPTY, (b) -> {
-            if (b instanceof Preview3D self) {
-                Minecraft mc = Minecraft.getInstance();
-                double guiX = mc.mouseHandler.xpos() * (double) mc.getWindow().getGuiScaledWidth() / (double) mc.getWindow().getWidth();
-                double guiY = mc.mouseHandler.ypos() * (double) mc.getWindow().getGuiScaledHeight() / (double) mc.getWindow().getHeight();
-
-                if (self.updateLegend((int) guiX, (int) guiY) && !self.hoveredCoords.isEmpty()) {
-                    self.playDownSound(Minecraft.getInstance().getSoundManager());
-                    WorldSettings.Properties props = self.page.preset.getPreset().world().properties;
-                    props.spawnType = SpawnType.USER_SELECTED;
-                    props.spawnX = self.hoveredCoordX;
-                    props.spawnZ = self.hoveredCoordZ;
-                    self.page.regenerate();
-                }
-            }
-        }, DEFAULT_NARRATION);
-
+        super(x, y, width, height, CommonComponents.EMPTY, IPreviewHandler.onPress(), DEFAULT_NARRATION);
         this.page = page;
+        this.state.cacheKey = BiomePreview.cacheKey(page.getScreen().getSettings(), page.preset.getPreset());
     }
 
-    public void regenerate() {
-        this.isDirty = true;
-
-        // If the worker is already running, it will automatically consume the dirty flag upon completion
-        if (!this.isRunning) {
-            this.executeRegenerate();
-        }
+    @Override
+    public PreviewState state() {
+        return this.state;
     }
 
-    private void executeRegenerate() {
-        if (this.closed) return;
-
-        this.isRunning = true;
-        this.isDirty = false;
-
-        WorldCreationContext settings = this.page.getScreen().getSettings();
-        RegistryAccess.Frozen registries = settings.worldgenLoadContext();
-        HolderLookup.Provider provider = this.page.preset.getPreset().buildPatch(registries);
-        HolderGetter<Preset> presets = provider.lookupOrThrow(RTFRegistries.PRESET);
-        HolderGetter<Noise> noises = provider.lookupOrThrow(RTFRegistries.NOISE);
-        Preset currentPreset = presets.getOrThrow(Preset.KEY).value();
-
-        int seed = (int) settings.options().seed();
-        int zoomLevel = this.getZoom();
-        int localOffsetX = this.offsetX;
-        int localOffsetZ = this.offsetZ;
-
-        // Step 1: Offload disk IO and heavy context calculations to background executor
-        CompletableFuture<PreGenContext> setupStage = CompletableFuture.supplyAsync(() -> {
-            try {
-                CacheManager.clear();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-            PerformanceConfig config = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
-                    .resultOrPartial(RTFCommon.LOGGER::error)
-                    .orElseGet(PerformanceConfig::makeDefault);
-
-            GeneratorContext generatorContext = GeneratorContext.makeUncached(currentPreset, noises, seed, FACTOR, 0, config.batchCount());
-
-            int cx = 0;
-            int cz = 0;
-            if (currentPreset.world().properties.spawnType == SpawnType.CONTINENT_CENTER) {
-                long nearestContinentCenter = generatorContext.lookup.getHeightmap().continent().getNearestCenter(localOffsetX, localOffsetZ);
-                cx = PosUtil.unpackLeft(nearestContinentCenter);
-                cz = PosUtil.unpackRight(nearestContinentCenter);
-            } else if (currentPreset.world().properties.spawnType == SpawnType.USER_SELECTED) {
-                cx = currentPreset.world().properties.spawnX;
-                cz = currentPreset.world().properties.spawnZ;
-            }
-
-            return new PreGenContext(generatorContext, cx, cz, zoomLevel);
-        }, net.minecraft.Util.backgroundExecutor());
-
-        // Step 2: Compose into the chunk generator's pipeline
-        this.pendingGeneration = setupStage.thenCompose(preGen ->
-                preGen.context.generator.generateZoomed(preGen.cx, preGen.cz, preGen.zoomLevel, false)
-                        .thenApply(tile -> new FrameResult(tile, preGen.cx, preGen.cz))
-        );
-
-        // Step 3: Handle execution complete back on the client main render thread
-        this.pendingGeneration.whenCompleteAsync((result, throwable) -> {
-            this.isRunning = false;
-
-            if (this.closed) return;
-
-            if (throwable != null) {
-                RTFCommon.LOGGER.error("Failed handling 3D preview generation pipeline", throwable);
-            } else if (result != null && result.tile != null) {
-                this.tile = result.tile;
-                this.centerX = result.centerX;
-                this.centerZ = result.centerZ;
-
-                // Sync context parameters out to global tracking pointers
-                LAST_GLOBAL_TILE = result.tile;
-                LAST_GLOBAL_CENTER_X = result.centerX;
-                LAST_GLOBAL_CENTER_Z = result.centerZ;
-
-                this.legendValues[3] = getSpawnCoords();
-                this.needsTextureRefresh = true;
-
-                this.lastHoveredIx = -1;
-                this.lastHoveredIz = -1;
-            }
-
-            // If the user modified values while this task was running, consume the change state immediately
-            if (this.isDirty) {
-                this.executeRegenerate();
-            }
-        }, Minecraft.getInstance());
+    @Override
+    public PresetEditorPage page() {
+        return this.page;
     }
 
-    private void rebuildTexture() {
-        Tile activeTile = this.tile != null ? this.tile : LAST_GLOBAL_TILE;
-        if (activeTile == null || this.width <= 0 || this.height <= 0) return;
+    @Override
+    public void playClickSound() {
+        this.playDownSound(Minecraft.getInstance().getSoundManager());
+    }
 
-        if (this.textureCache == null || this.textureCache.getPixels().getWidth() != this.width || this.textureCache.getPixels().getHeight() != this.height) {
-            if (this.textureCache != null) {
-                this.textureCache.close();
-                Minecraft.getInstance().getTextureManager().release(this.cacheLocation);
-            }
-            NativeImage img = new NativeImage(this.width, this.height, true);
-            this.textureCache = new DynamicTexture(img);
-            this.cacheLocation = Minecraft.getInstance().getTextureManager().register("rtf_preview_cache_" + this.hashCode(), this.textureCache);
-        }
+    @Override
+    public String getFailureLabel() {
+        return "3D";
+    }
 
-        NativeImage img = this.textureCache.getPixels();
+    @Override
+    public void onRenderModeChanged(RenderMode mode) {
+        this.currentMode = mode;
+    }
 
-        for (int y = 0; y < img.getHeight(); y++) {
-            for (int x = 0; x < img.getWidth(); x++) {
-                img.setPixelRGBA(x, y, 0xFF000000);
-            }
-        }
+    @Override
+    public RenderMode getRenderMode() {
+        return this.page.renderMode3D == null ? this.currentMode : this.page.renderMode3D.getValue();
+    }
 
-        if (this.page.renderMode3D != null) {
-            currentMode = this.page.renderMode3D.getValue();
-        }
-        RenderMode mode = currentMode;
+    @Override
+    public int getZoom() {
+        return NoiseUtil.round(1.5F * (101 - (float) this.page.zoom3D.getLerpedValue()));
+    }
 
-        WorldSettings.Properties properties = this.page.preset.getPreset().world().properties;
-        Levels levels = new Levels(properties.terrainScaler(), properties.seaLevel);
+    @Override
+    public boolean hasZoomControl() {
+        return this.page.zoom3D != null;
+    }
+
+    @Override
+    public double getZoomValue() {
+        return this.page.zoom3D.getValue();
+    }
+
+    @Override
+    public void setZoomValue(double value) {
+        this.page.zoom3D.setValue(value);
+    }
+
+    @Override
+    public void applyZoomValue() {
+        this.page.zoom3D.applyValue();
+    }
+
+    @Override
+    public RasterParams captureRasterParams() {
+        double zoomValue = this.page.zoom3D == null ? 95.0D : this.page.zoom3D.getLerpedValue();
+        return new RasterParams(this.width, this.height, zoomValue);
+    }
+
+    @Override
+    public boolean rasterizationBlocked() {
+        return this.width <= 0 || this.height <= 0;
+    }
+
+    @Override
+    public int[] createRasterData(Tile activeTile, BiomePreview.Sidecar activeBiomes, RenderMode mode, Levels levels, WorldSettings.Properties properties, RasterParams params) {
+        int width = params.width;
+        int height = params.height;
+        if (activeTile == null || width <= 0 || height <= 0) return new int[0];
+        int[] pixels = new int[width * height];
+        java.util.Arrays.fill(pixels, 0xFF000000);
 
         int tileSize = activeTile.getBlockSize().size();
-        float rawBlockW = (float) this.width / (float) tileSize * 0.85f;
+        float rawBlockW = (float) width / (float) tileSize * 0.85f;
         int halfW = Math.max(1, (int) (rawBlockW / 2.0f));
         int halfH = Math.max(1, halfW / 2);
-
         int blockW = halfW * 2;
         int blockH = halfH * 2;
-
-        int centerVisualX = this.width / 2;
-        int centerVisualY = this.height / 2;
-        float heightScale = getHeightScale((float) blockW);
+        int centerVisualX = width / 2;
+        int centerVisualY = height / 2;
+        float heightScale = getHeightScale((float) blockW, params.zoom);
         int halfTile = tileSize / 2;
+        float maxCellHeight = properties.worldHeight * levels.unit;
+        float[] hsb = new float[3];
 
         for (int iz = 0; iz < tileSize; iz++) {
             for (int ix = 0; ix < tileSize; ix++) {
                 Cell cell = activeTile.lookup(ix, iz);
-                int color = mode.getColor(cell, levels);
-
-                int r = (color >> 16) & 0xFF;
+                float effectiveHeight = cell.height;
+                int color;
+                if (levels.scale(cell.height) > properties.worldHeight) {
+                    color = 0xFFFF00FF;
+                    effectiveHeight = maxCellHeight;
+                } else {
+                    color = mode.getColor(cell, levels, activeBiomes == null ? 0xFFFF00FF : activeBiomes.color(ix, iz));
+                }
+                int r = color & 0xFF;
                 int g = (color >> 8) & 0xFF;
-                int b = color & 0xFF;
-
-                Color.RGBtoHSB(r, g, b, this.hsbCache);
-
+                int b = (color >> 16) & 0xFF;
+                Color.RGBtoHSB(r, g, b, hsb);
                 int hash = ix * 31 + iz * 17;
                 float jitter = ((hash % 100) / 100.0f) * 0.06f - 0.03f;
-
-                this.hsbCache[2] = Math.max(0.0f, Math.min(1.0f, this.hsbCache[2] + jitter));
-
-                int jitteredColor = (color & 0xFF000000) | (Color.HSBtoRGB(this.hsbCache[0], this.hsbCache[1], this.hsbCache[2]) & 0x00FFFFFF);
-
+                hsb[2] = Math.max(0.0f, Math.min(1.0f, hsb[2] + jitter));
+                int jitteredRgb = Color.HSBtoRGB(hsb[0], hsb[1], hsb[2]);
+                int jitteredColor = (color & 0xFF000000)
+                        | (jitteredRgb >> 16 & 0xFF)
+                        | (jitteredRgb >> 8 & 0xFF) << 8
+                        | (jitteredRgb & 0xFF) << 16;
                 int dx = ix - halfTile;
                 int dz = iz - halfTile;
-
                 int isoX = centerVisualX + (dx - dz) * halfW;
                 int isoY = centerVisualY + (dx + dz) * halfH;
-                int renderY = isoY - Math.round(cell.height * heightScale);
-
+                int renderY = isoY - Math.round(effectiveHeight * heightScale);
                 int topColor = jitteredColor;
                 int leftColor = getSideColor(jitteredColor, 0.75f, true, ix, iz, tileSize);
                 int rightColor = getSideColor(jitteredColor, 0.60f, false, ix, iz, tileSize);
-
-                fillPixelRect(img, isoX, renderY, isoX + blockW, renderY + blockH, topColor);
-                fillPixelRect(img, isoX, renderY + blockH, isoX + halfW, isoY + blockH, leftColor);
-                fillPixelRect(img, isoX + halfW, renderY + blockH, isoX + blockW, isoY + blockH, rightColor);
+                fillPixelRect(pixels, width, isoX, renderY, isoX + blockW, renderY + blockH, topColor);
+                fillPixelRect(pixels, width, isoX, renderY + blockH, isoX + halfW, isoY + blockH, leftColor);
+                fillPixelRect(pixels, width, isoX + halfW, renderY + blockH, isoX + blockW, isoY + blockH, rightColor);
             }
         }
-
-        this.textureCache.upload();
-        this.needsTextureRefresh = false;
+        return pixels;
     }
 
-    private void fillPixelRect(NativeImage img, int xStart, int yStart, int xEnd, int yEnd, int nativeColor) {
+    @Override
+    public void applyGeneratedFrame(FrameResult result) {
+        if (result.rasterWidth == this.width && result.rasterHeight == this.height) {
+            this.pendingTexturePixels = result.rasterPayload;
+            this.pendingTextureWidth = result.rasterWidth;
+            this.pendingTextureHeight = result.rasterHeight;
+            this.needsTextureRefresh = true;
+        } else {
+            requestRasterization();
+        }
+    }
+
+    @Override
+    public void applyRasterizedPixels(int[] pixels, RasterParams params) {
+        this.pendingTexturePixels = pixels;
+        this.pendingTextureWidth = params.width;
+        this.pendingTextureHeight = params.height;
+        this.needsTextureRefresh = true;
+    }
+
+    @Override
+    public void onFrameApplied() {
+        this.lastHoveredIx = -1;
+        this.lastHoveredIz = -1;
+    }
+
+    private static void fillPixelRect(int[] pixels, int width, int xStart, int yStart, int xEnd, int yEnd, int nativeColor) {
         int startX = Math.max(0, xStart);
-        int endX = Math.min(img.getWidth(), xEnd);
+        int endX = Math.min(width, xEnd);
         int startY = Math.max(0, yStart);
-        int endY = Math.min(img.getHeight(), yEnd);
+        int endY = Math.min(pixels.length / width, yEnd);
 
         for (int y = startY; y < endY; y++) {
             for (int x = startX; x < endX; x++) {
-                img.setPixelRGBA(x, y, nativeColor);
+                pixels[y * width + x] = nativeColor;
             }
         }
     }
 
-    private int darkenColor(int argb, float factor) {
+    private void uploadPendingTexture() {
+        int[] pixels = this.pendingTexturePixels;
+        if (pixels == null || this.pendingTextureWidth <= 0 || this.pendingTextureHeight <= 0) return;
+
+        if (STATIC_TEXTURE_CACHE == null
+                || STATIC_TEXTURE_CACHE.getPixels().getWidth() != this.pendingTextureWidth
+                || STATIC_TEXTURE_CACHE.getPixels().getHeight() != this.pendingTextureHeight) {
+
+            if (STATIC_TEXTURE_CACHE != null) {
+                STATIC_TEXTURE_CACHE.close();
+                Minecraft.getInstance().getTextureManager().release(STATIC_CACHE_LOCATION);
+            }
+            STATIC_TEXTURE_CACHE = new DynamicTexture(new NativeImage(this.pendingTextureWidth, this.pendingTextureHeight, true));
+            STATIC_CACHE_LOCATION = Minecraft.getInstance().getTextureManager().register("rtf_preview_cache_3d", STATIC_TEXTURE_CACHE);
+        }
+
+        NativeImage image = STATIC_TEXTURE_CACHE.getPixels();
+        for (int y = 0; y < this.pendingTextureHeight; y++) {
+            for (int x = 0; x < this.pendingTextureWidth; x++) {
+                image.setPixelRGBA(x, y, pixels[y * this.pendingTextureWidth + x]);
+            }
+        }
+        STATIC_TEXTURE_CACHE.upload();
+        this.pendingTexturePixels = null;
+        this.needsTextureRefresh = false;
+    }
+
+    private static int darkenColor(int argb, float factor) {
         int a = (argb >> 24) & 0xFF;
         int r = Math.max(0, (int) (((argb >> 16) & 0xFF) * factor));
         int g = Math.max(0, (int) (((argb >> 8) & 0xFF) * factor));
@@ -294,47 +244,32 @@ public class Preview3D extends Button {
         return (a << 24) | (r << 16) | (g << 8) | b;
     }
 
-    public void close() throws Exception {
-        this.closed = true;
-        if (this.pendingGeneration != null) {
-            this.pendingGeneration.cancel(true);
-        }
-        if (this.textureCache != null) {
-            this.textureCache.close();
-            Minecraft.getInstance().getTextureManager().release(this.cacheLocation);
-            this.textureCache = null;
-            this.cacheLocation = null;
-        }
-        try {
-            CacheManager.clear();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+    @Override
+    public void closeResources() {
+        // Keep STATIC_TEXTURE_CACHE alive across page rebuilds.
+    }
+
+    @Override
+    public String buildLegendLine(String labelStr, String value) {
+        return value + " \u00a77(" + labelStr + ")";
+    }
+
+    @Override
+    public int legendLineX(Font font, String line, float maxWidth) {
+        return (int) (maxWidth - font.width(line));
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (handleClick(mouseX, mouseY, button)) {
+            return true;
+        }
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
     @Override
-    public boolean isMouseOver(double mouseX, double mouseY) {
-        return super.isMouseOver(mouseX, mouseY);
-    }
-
-    @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        if (this.isMouseOver(mouseX, mouseY)) {
-            if (this.page.zoom3D != null) {
-                double currentVal = this.page.zoom3D.getValue();
-                double step = 0.05;
-                if (scrollY > 0) {
-                    this.page.zoom3D.setValue(Math.min(1.0, currentVal + step));
-                } else if (scrollY < 0) {
-                    this.page.zoom3D.setValue(Math.max(0.0, currentVal - step));
-                }
-                this.regenerate();
-            }
+        if (handleScroll(mouseX, mouseY, scrollY)) {
             return true;
         }
         return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
@@ -345,33 +280,45 @@ public class Preview3D extends Button {
         int x = this.getX();
         int y = this.getY();
 
-        // Check if either local tile or fallback history data exists to drive structural generation
-        if (this.tile != null || LAST_GLOBAL_TILE != null) {
-            if (this.needsTextureRefresh || this.textureCache == null) {
-                this.rebuildTexture();
-            }
+        if (this.state.previewFailure != null) {
+            PreviewFailure.renderUnavailable(guiGraphics, x, y, this.width, this.height);
+            return;
         }
 
-        if (this.cacheLocation != null) {
-            guiGraphics.blit(this.cacheLocation, x, y, 0.0F, 0.0F, this.width, this.height, this.width, this.height);
+        if (this.state.tile != null && this.needsTextureRefresh) {
+            this.uploadPendingTexture();
+        }
+
+        if (STATIC_CACHE_LOCATION != null) {
+            guiGraphics.blit(STATIC_CACHE_LOCATION, x, y, 0.0F, 0.0F, this.width, this.height, this.width, this.height);
         } else {
             guiGraphics.fill(x, y, x + this.width, y + this.height, 0xFF000000);
         }
 
         renderSpawnMarker(guiGraphics);
-        this.updateLegend(mx, my);
-        this.renderLegend(guiGraphics, mx, my, this.legendLabels, this.legendValues, x, y + this.width + 30, 10, 0xFFFFFF);
+        BiomePreview.Sidecar activeBiomes = this.state.biomes;
+        if (activeBiomes != null && activeBiomes.warning() != null) {
+            guiGraphics.drawCenteredString(
+                    Minecraft.getInstance().font,
+                    activeBiomes.warning(),
+                    x + this.width / 2,
+                    y + 4,
+                    0xFFFF5555
+            );
+        }
+        updateLegend(mx, my);
+        renderLegend(guiGraphics, mx, my, this.state.legendLabels, this.state.legendValues, x, y + this.width + 30, 10, 0xFFFFFF);
     }
 
-    private float getHeightScale(float blockW) {
-        float zoomProgress = (float) (this.page.zoom3D.getLerpedValue() - 1.0D) / 99.0f;
+    private static float getHeightScale(float blockW, double zoomValue) {
+        float zoomProgress = (float) (zoomValue - 1.0D) / 99.0f;
         float biasedProgress = zoomProgress * zoomProgress;
         float minBlockScale = 3.0f;
         float maxBlockScale = 35.0f;
         return blockW * (minBlockScale + (biasedProgress * (maxBlockScale - minBlockScale)));
     }
 
-    private int getSideColor(int cellColor, float shadeFactor, boolean isLeftFace, int ix, int iz, int tileSize) {
+    private static int getSideColor(int cellColor, float shadeFactor, boolean isLeftFace, int ix, int iz, int tileSize) {
         int baseColor = cellColor;
         if ((isLeftFace && iz == tileSize - 1) || (!isLeftFace && ix == tileSize - 1)) {
             baseColor = 0xFF4A3525;
@@ -384,15 +331,15 @@ public class Preview3D extends Button {
 
         if (props.spawnType == SpawnType.USER_SELECTED || props.spawnType == SpawnType.CONTINENT_CENTER) {
             int zoomValue = this.getZoom();
-            Tile activeTile = this.tile != null ? this.tile : LAST_GLOBAL_TILE;
+            Tile activeTile = this.state.tile;
             int tileSize = activeTile != null ? activeTile.getBlockSize().size() : 0;
 
             if (tileSize > 0) {
-                int activeCX = this.tile != null ? this.centerX : LAST_GLOBAL_CENTER_X;
-                int activeCZ = this.tile != null ? this.centerZ : LAST_GLOBAL_CENTER_Z;
+                int activeCX = this.state.centerX;
+                int activeCZ = this.state.centerZ;
 
-                int ix = NoiseUtil.round(((float)(props.spawnX - activeCX) / zoomValue) + (tileSize / 2.0f));
-                int iz = NoiseUtil.round(((float)(props.spawnZ - activeCZ) / zoomValue) + (tileSize / 2.0f));
+                int ix = NoiseUtil.round(((float) (props.spawnX - activeCX) / zoomValue) + (tileSize / 2.0f));
+                int iz = NoiseUtil.round(((float) (props.spawnZ - activeCZ) / zoomValue) + (tileSize / 2.0f));
 
                 if (ix >= 0 && ix < tileSize && iz >= 0 && iz < tileSize) {
                     Cell cell = activeTile.lookup(ix, iz);
@@ -411,13 +358,13 @@ public class Preview3D extends Button {
                     int dz = iz - (tileSize / 2);
 
                     int isoX = centerVisualX + (dx - dz) * halfW;
-                    int isoY = centerVisualY + (dx + dz) * halfH - Math.round(cell.height * getHeightScale((float) blockW));
+                    int isoY = centerVisualY + (dx + dz) * halfH - Math.round(cell.height * getHeightScale((float) blockW, this.page.zoom3D.getLerpedValue()));
 
                     int markerX = isoX + halfW;
                     int markerY = isoY + halfH;
 
                     int size = 6;
-                    int color = 0xFFFF2222;
+                    int color = 0xFFFFFFFF;
                     int shadow = 0xFF000000;
 
                     guiGraphics.fill(markerX - size + 1, markerY + 1, markerX + size + 2, markerY + 2, shadow);
@@ -436,12 +383,15 @@ public class Preview3D extends Button {
 
         if (this.width != width || this.height != height) {
             this.width = width;
-            this.needsTextureRefresh = true;
+            this.height = height;
+            requestRasterization();
         }
     }
 
-    private boolean updateLegend(int mx, int my) {
-        Tile activeTile = this.tile != null ? this.tile : LAST_GLOBAL_TILE;
+    @Override
+    public boolean updateLegend(int mx, int my) {
+        Tile activeTile = this.state.tile;
+        BiomePreview.Sidecar activeBiomes = this.state.biomes;
         if (activeTile != null) {
             int left = this.getX();
             int top = this.getY();
@@ -451,10 +401,10 @@ public class Preview3D extends Button {
 
             int totalWidth = Math.max(1, tileSize * zoomValue);
             int totalHeight = Math.max(1, tileSize * zoomValue);
-            this.legendValues[0] = totalWidth + "x" + totalHeight;
+            this.state.legendValues[0] = totalWidth + "x" + totalHeight;
 
             if (mx < left || mx >= left + this.width || my < top || my >= top + this.height) {
-                this.hoveredCoords = "";
+                this.state.hoveredCoords = "";
                 this.lastHoveredIx = -1;
                 this.lastHoveredIz = -1;
                 return false;
@@ -482,23 +432,31 @@ public class Preview3D extends Button {
                     this.lastHoveredIz = iz;
 
                     Cell cell = activeTile.lookup(ix, iz);
-                    this.legendValues[1] = getTerrainName(cell);
-                    this.legendValues[2] = getBiomeName(cell);
+                    this.state.legendValues[1] = IPreviewHandler.getTerrainName(cell);
+                    String biomeId = activeBiomes == null ? null : activeBiomes.id(ix, iz);
+                    WorldSettings.Properties properties = this.page.preset.getPreset().world().properties;
+                    PreviewDetails.Detail detail = PreviewDetails.forCell(
+                            getRenderMode(), cell,
+                            new Levels(properties.terrainScaler(), properties.worldHeight, properties.worldDepth, properties.seaLevel),
+                            biomeId
+                    );
+                    this.state.legendLabels[2] = detail.label();
+                    this.state.legendValues[2] = detail.value();
 
-                    int activeCX = this.tile != null ? this.centerX : LAST_GLOBAL_CENTER_X;
-                    int activeCZ = this.tile != null ? this.centerZ : LAST_GLOBAL_CENTER_Z;
-                    this.legendValues[3] = getSpawnCoords(activeCX, activeCZ);
+                    int activeCX = this.state.centerX;
+                    int activeCZ = this.state.centerZ;
+                    this.state.legendValues[3] = getSpawnCoords(activeCX, activeCZ);
 
                     int worldOffsetX = (ix - (tileSize / 2)) * zoomValue;
                     int worldOffsetZ = (iz - (tileSize / 2)) * zoomValue;
 
-                    this.hoveredCoords = (activeCX + worldOffsetX) + ":" + (activeCZ + worldOffsetZ);
-                    this.hoveredCoordX = activeCX + worldOffsetX;
-                    this.hoveredCoordZ = activeCZ + worldOffsetZ;
+                    this.state.hoveredCoords = (activeCX + worldOffsetX) + ":" + (activeCZ + worldOffsetZ);
+                    this.state.hoveredCoordX = activeCX + worldOffsetX;
+                    this.state.hoveredCoordZ = activeCZ + worldOffsetZ;
                 }
                 return true;
             } else {
-                this.hoveredCoords = "";
+                this.state.hoveredCoords = "";
                 this.lastHoveredIx = -1;
                 this.lastHoveredIz = -1;
             }
@@ -506,123 +464,13 @@ public class Preview3D extends Button {
         return false;
     }
 
-    private float getLegendScale() {
-        int index = this.page.getScreen().minecraft.options.guiScale().get() - 1;
-        if (index < 0 || index >= LEGEND_SCALES.length) {
-            index = LEGEND_SCALES.length - 1;
-        }
-        return LEGEND_SCALES[index];
-    }
-
-    private void renderLegend(GuiGraphics guiGraphics, int mx, int my, Component[] labels, String[] values, int left, int top, int lineHeight, int color) {
-        float scale = this.getLegendScale();
-        PoseStack pose = guiGraphics.pose();
-
-        pose.pushPose();
-        pose.translate(left + 3.75F * scale, top - lineHeight * (3.2F * scale), 0);
-        pose.scale(scale, scale, 1);
-
-        Minecraft mc = Minecraft.getInstance();
-        Font renderer = mc.font;
-
-        float maxWidth = (this.width - 4) / scale;
-
-        for (int i = 0; i < labels.length && i < values.length; i++) {
-            Component label = labels[i];
-            String value = values[i];
-
-            String labelStr = label.getString();
-            if (labelStr.endsWith(": ")) {
-                labelStr = labelStr.substring(0, labelStr.length() - 2);
-            } else if (labelStr.endsWith(":")) {
-                labelStr = labelStr.substring(0, labelStr.length() - 1);
+    public static void resetToBlack() {
+        if (STATIC_TEXTURE_CACHE != null) {
+            NativeImage pixels = STATIC_TEXTURE_CACHE.getPixels();
+            if (pixels != null) {
+                pixels.fillRect(0, 0, pixels.getWidth(), pixels.getHeight(), 0xFF000000);
+                STATIC_TEXTURE_CACHE.upload();
             }
-
-            String line = value + " \u00a77(" + labelStr + ")";
-
-            while (line.length() > 0 && renderer.width(line) > maxWidth) {
-                line = line.substring(0, line.length() - 1);
-            }
-
-            int x = (int) (maxWidth - renderer.width(line));
-            guiGraphics.drawString(renderer, line, x, i * lineHeight, color);
-        }
-
-        pose.popPose();
-
-        if (!this.hoveredCoords.isEmpty()) {
-            guiGraphics.drawCenteredString(renderer, this.hoveredCoords, mx, my - 10, 0xFFFFFF);
-        }
-    }
-
-    private int getZoom() {
-        return NoiseUtil.round(1.5F * (101 - (float) this.page.zoom3D.getLerpedValue()));
-    }
-
-    private static String getTerrainName(Cell cell) {
-        if (cell.terrain.isRiver()) {
-            return "river";
-        }
-        return cell.terrain.getName().toLowerCase();
-    }
-
-    private String getSpawnCoords() {
-        int activeCX = this.tile != null ? this.centerX : LAST_GLOBAL_CENTER_X;
-        int activeCZ = this.tile != null ? this.centerZ : LAST_GLOBAL_CENTER_Z;
-        return getSpawnCoords(activeCX, activeCZ);
-    }
-
-    private String getSpawnCoords(int cx, int cz) {
-        WorldSettings.Properties props = this.page.preset.getPreset().world().properties;
-        if (props.spawnType == SpawnType.USER_SELECTED) {
-            return "x" + props.spawnX + " z" + props.spawnZ;
-        }
-        if (props.spawnType == SpawnType.CONTINENT_CENTER || props.spawnType == SpawnType.ISLANDS) {
-            return "~x" + cx + " ~z" + cz;
-        }
-        return "x0 z0";
-    }
-
-    private static String getBiomeName(Cell cell) {
-        String terrain = cell.terrain.getName().toLowerCase();
-        if (terrain.contains("ocean")) {
-            if (cell.temperature < 0.3F) {
-                return "cold_" + terrain;
-            }
-            if (cell.temperature > 0.6F) {
-                return "warm_" + terrain;
-            }
-            return terrain;
-        }
-        if (terrain.contains("river")) {
-            return "river";
-        }
-        return cell.biome.name().toLowerCase();
-    }
-
-    private static class PreGenContext {
-        final GeneratorContext context;
-        final int cx;
-        final int cz;
-        final int zoomLevel;
-
-        PreGenContext(GeneratorContext context, int cx, int cz, int zoomLevel) {
-            this.context = context;
-            this.cx = cx;
-            this.cz = cz;
-            this.zoomLevel = zoomLevel;
-        }
-    }
-
-    private static class FrameResult {
-        final Tile tile;
-        final int centerX;
-        final int centerZ;
-
-        FrameResult(Tile tile, int centerX, int centerZ) {
-            this.tile = tile;
-            this.centerX = centerX;
-            this.centerZ = centerZ;
         }
     }
 }
