@@ -57,6 +57,8 @@
 		"MixinOceanMonumentPiece",
 		"MixinOceanMonumentStructure",
 		"MixinJigsawStructure",
+		"MixinServerLevel",
+		"MixinServerStarted",
 		"terrablender.MixinParameterList",
 		"terrablender.MixinClimateSampler",
 		"terrablender.MixinNamespacedSurfaceRuleSource",
