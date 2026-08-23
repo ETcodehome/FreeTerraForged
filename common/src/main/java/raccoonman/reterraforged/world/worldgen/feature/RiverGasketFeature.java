@@ -20,6 +20,8 @@ import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.RiverCarverSettings;
 
+import java.util.Arrays;
+
 public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
 
     // Pre-allocated array of 256 Cells per thread (zero allocation during worldgen)
@@ -109,38 +111,15 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
         BlockState defaultWaterState = Blocks.WATER.defaultBlockState();
         float oceanHeightOffset = levels.water;
 
-        // --- 2D WATER CACHE (Populated only for chunks with active rivers) ---
+        // Reset the lazy water y cache
+        // Fast primitive fill instead of a compulsory 1600 evaluation loop otherwise
         int[] neighborWaterYCache = WATER_Y_CACHE.get();
-
-        for (int dz = -12; dz < 28; dz++) {
-            for (int dx = -12; dx < 28; dx++) {
-                int worldX = minBlockX + dx;
-                int worldZ = minBlockZ + dz;
-
-                generatorContext.lookup.applyCell(
-                        neighborCell.reset(),
-                        worldX,
-                        worldZ,
-                        false,
-                        false
-                );
-
-                float water = (ContinentalHydrology.getComplexWaterHeight(
-                        neighborCell.waterTable,
-                        neighborCell.globalContinentScale,
-                        neighborCell.continentSizeModifier)
-                ) + oceanHeightOffset;
-
-                int waterY = levels.scale(water);
-                int cacheIndex = (dx + 12) + ((dz + 12) * 40);
-                neighborWaterYCache[cacheIndex] = waterY;
-            }
-        }
+        Arrays.fill(neighborWaterYCache, Integer.MIN_VALUE);
 
         Long2ObjectOpenHashMap<BlockState> paintCache = PAINT_CACHE.get();
         paintCache.clear();
 
-        // --- SPARSE MAIN ITERATION: Process ONLY river columns ---
+        // Process only river columns here
         for (int i = 0; i < riverCount; i++) {
             int index = riverIndices[i];
             int x = index & 15;
@@ -149,7 +128,7 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
             int blockX = minBlockX + x;
             int blockZ = minBlockZ + z;
 
-            // Re-use already evaluated cell directly from cache
+            // Reuse any already evaluated cell directly from the cache
             Cell cell = chunkCells[index];
 
             float targetWaterLevel = (ContinentalHydrology.getComplexWaterHeight(
@@ -214,11 +193,16 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
                                 int targetX = blockX + dx;
                                 int targetZ = blockZ + dz;
 
-                                int cacheX = (targetX - minBlockX) + 12;
-                                int cacheZ = (targetZ - minBlockZ) + 12;
-                                int cacheIndex = cacheX + (cacheZ * 40);
-
-                                int neighbourWaterY = neighborWaterYCache[cacheIndex];
+                                int neighbourWaterY = getOrComputeWaterY(
+                                        targetX, targetZ,
+                                        minBlockX, minBlockZ,
+                                        chunkCells,
+                                        levels,
+                                        oceanHeightOffset,
+                                        generatorContext,
+                                        neighborCell,
+                                        neighborWaterYCache
+                                );
 
                                 if (y > neighbourWaterY) {
                                     continue;
@@ -277,6 +261,63 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
             }
         }
         return true;
+    }
+
+    /**
+     * Lazy lookup for neighbor water height.
+     * Directly reuses CHUNK_CELLS for internal coordinates and caches external lookups on demand.
+     */
+    private static int getOrComputeWaterY(
+            int targetX, int targetZ,
+            int minBlockX, int minBlockZ,
+            Cell[] chunkCells,
+            Levels levels,
+            float oceanHeightOffset,
+            GeneratorContext generatorContext,
+            Cell neighborCell,
+            int[] cache
+    ) {
+        int relX = targetX - minBlockX;
+        int relZ = targetZ - minBlockZ;
+
+        // Reuse cached cell directly if the coordinate is within the current chunk bounds
+        if (relX >= 0 && relX < 16 && relZ >= 0 && relZ < 16) {
+            Cell cell = chunkCells[relX + (relZ * 16)];
+            float water = ContinentalHydrology.getComplexWaterHeight(
+                    cell.waterTable,
+                    cell.globalContinentScale,
+                    cell.continentSizeModifier
+            ) + oceanHeightOffset;
+            return levels.scale(water);
+        }
+
+        // Lazy computation & threadlocal caching for out of chunk coordinates
+        int cacheX = relX + 12;
+        int cacheZ = relZ + 12;
+        int cacheIndex = cacheX + (cacheZ * 40);
+
+        int cachedValue = cache[cacheIndex];
+        if (cachedValue != Integer.MIN_VALUE) {
+            return cachedValue;
+        }
+
+        generatorContext.lookup.applyCell(
+                neighborCell.reset(),
+                targetX,
+                targetZ,
+                false,
+                false
+        );
+
+        float water = ContinentalHydrology.getComplexWaterHeight(
+                neighborCell.waterTable,
+                neighborCell.globalContinentScale,
+                neighborCell.continentSizeModifier
+        ) + oceanHeightOffset;
+
+        int computedY = levels.scale(water);
+        cache[cacheIndex] = computedY;
+        return computedY;
     }
 
     private static boolean isTerrainPaint(BlockState state) {
