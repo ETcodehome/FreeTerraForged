@@ -143,13 +143,8 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
             upliftGradient = shiftAndRemap(upliftGradient, (1.0F - cell.continentSizeModifier));
         }
 
-        // use the continent edge values to guarantee we fall to the ocean near the ocean.
-        // sometimes this can look a little rough but havent found a more reliable way yet.
-        float customPeak = shiftAndRemap(cell.continentEdge, levels.water);
-        if (customPeak < 0.05F && customPeak < upliftGradient) {
-            upliftGradient = customPeak;
-        }
         cell.waterTable = upliftGradient;
+        cell.continentEdge = (cell.continentEdge + upliftGradient) / 2.0F;
     }
 
     public float shiftAndRemap(float value, float threshold) {

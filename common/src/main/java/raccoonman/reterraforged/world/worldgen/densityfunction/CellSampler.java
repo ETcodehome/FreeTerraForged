@@ -25,6 +25,7 @@ import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainType;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 import raccoonman.reterraforged.world.worldgen.util.PosUtil;
+import raccoonman.reterraforged.world.worldgen.cell.continent.uplift.UpliftContinentGenerator;
 
 public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) implements MarkerFunction.Mapped {
 	private static final ThreadLocal<Cache2d> CELL = ThreadLocal.withInitial(Cache2d::new);
@@ -138,18 +139,18 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 			}
 		},
 		CONTINENT("continent") {
-			
+
 			//TODO move this somewhere else
 			@Override
 			public float read(Cell cell, Heightmap heightmap) {
 				Levels levels = heightmap.levels();
 				ControlPoints controlPoints = heightmap.controlPoints();
-				
+
 				float deepOcean = controlPoints.deepOcean;
 				float shallowOcean = controlPoints.shallowOcean;
 				float beach = controlPoints.beach;
 				float inland = controlPoints.inland;
-				
+
 				if(cell.terrain == TerrainType.MUSHROOM_FIELDS) {
 					return Continentalness.MUSHROOM_FIELDS.mid();
 				}
@@ -157,9 +158,9 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 				if(cell.terrain.isDeepOcean()) {
 					float alpha = NoiseUtil.clamp(cell.continentEdge, 0.0F, deepOcean);
 					alpha = NoiseUtil.lerp(alpha, 0.0F, deepOcean, 0.0F, 1.0F);
-					return NoiseUtil.lerp(Continentalness.DEEP_OCEAN.min() + 0.05F, Continentalness.DEEP_OCEAN.max(), alpha);					
+					return NoiseUtil.lerp(Continentalness.DEEP_OCEAN.min() + 0.05F, Continentalness.DEEP_OCEAN.max(), alpha);
 				}
-				
+
 				if(cell.terrain.isShallowOcean()) {
 					if(shallowOcean <= deepOcean) {
 						return Continentalness.OCEAN.mid();
@@ -168,7 +169,7 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 					alpha = NoiseUtil.lerp(alpha, deepOcean, shallowOcean, 0.0F, 0.98F);
 					return NoiseUtil.lerp(Continentalness.OCEAN.min(), Continentalness.OCEAN.max(), alpha);
 				}
-				
+
 				if(cell.terrain.getDelegate() == TerrainCategory.BEACH && cell.height + cell.beachNoise < levels.water(5)) {
 					float alpha = NoiseUtil.clamp(cell.continentEdge, shallowOcean, beach);
 					alpha = NoiseUtil.lerp(alpha, shallowOcean, beach, 0.0F, 1.0F);
