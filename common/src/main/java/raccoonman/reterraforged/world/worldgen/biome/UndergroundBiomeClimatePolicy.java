@@ -3,7 +3,6 @@ package raccoonman.reterraforged.world.worldgen.biome;
 import net.minecraft.world.level.biome.Climate;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 
-/** Applies cave/background ownership to the shared climate input seen by biome providers. */
 public final class UndergroundBiomeClimatePolicy {
 	private static final long SURFACE_DEPTH = Climate.quantizeCoord(0.0F);
 

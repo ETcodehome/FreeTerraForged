@@ -48,23 +48,11 @@ public interface IPreviewHandler {
     float[] LEGEND_SCALES = { 1, 0.9F, 0.75F, 0.6F };
     long REFRESH_DEBOUNCE_MILLIS = 75L;
 
-    // ------------------------------------------------------------------
-    // Contract implementers must supply.
-    // ------------------------------------------------------------------
-
     PreviewState state();
 
     PresetEditorPage page();
 
-    /**
-     * Returns the Minecraft widget hosting this preview.
-     *
-     * <p>Shared code must invoke inherited widget methods through this
-     * Minecraft-owned type. Declaring methods such as {@code getWidth()} on
-     * this mod-owned interface leaves their names unchanged when Fabric
-     * remaps the inherited {@link Button} methods, which breaks interface
-     * dispatch in production jars.</p>
-     */
+    /** Routes inherited widget calls through Minecraft's remapped type in production jars. */
     Button widget();
 
     /** Plays the widget's click sound. Implemented per-class since {@code playDownSound} is protected on Button. */

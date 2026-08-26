@@ -10,16 +10,6 @@ import raccoonman.reterraforged.world.worldgen.RTFRandomState;
 import raccoonman.reterraforged.world.worldgen.biome.UndergroundBiomeSurfaceProtection;
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
 
-/**
- * Keeps rescued underground-feature origins behind the same terrain-relative
- * hard shell used by cave-biome selection.
- *
- * <p>The check is deliberately local rather than a global cave-connectivity
- * test. A cave with an entrance is still eligible once its placement position
- * is four complete blocks behind the exposed terrain envelope. Surface heights
- * are cached independently from candidate Y, so each horizontal column in a
- * rescue run pays for its neighborhood only once.</p>
- */
 final class UndergroundFeatureEnclosure {
 	static final int BUFFER_BLOCKS = UndergroundBiomeSurfaceProtection.HARD_SHELL_BLOCKS;
 	private static final int REQUIRED_SURFACE_DIFFERENCE = BUFFER_BLOCKS + 1;

@@ -23,8 +23,6 @@ class UndergroundBiomeSurfaceProtectionTest {
 
 	@Test
 	void exposedNeighborCanProtectADeepLocalColumn() {
-		// The runtime calculation takes the minimum across the cell and its four-block border.
-		// A cliff-side column with only four blocks of cover therefore wins over a tall summit.
 		assertEquals(0.0F, UndergroundBiomeSurfaceProtection.coverageFactor(4.0F));
 	}
 

@@ -18,21 +18,6 @@ import raccoonman.reterraforged.data.worldgen.preset.settings.ClimateSettings;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings;
 
-/**
- * Selects finite cave-biome regions inside an ordinary-biome underground background.
- *
- * <p>There are deliberately three independent decisions:</p>
- *
- * <ol>
- *     <li>a three-dimensional cellular field decides cave ownership versus background;</li>
- *     <li>the stage and registered horizontal climate distances choose the cave identity; and</li>
- *     <li>horizontal and vertical cell sizes determine spatial coherence.</li>
- * </ol>
- *
- * <p>The background is a climate lookup built from registrations which were not recognized as
- * cave registrations. It is not a synthetic biome. Unknown registration conventions remain on
- * that background path instead of being guessed into the cave schedule.</p>
- */
 public final class UndergroundBiomeBanding {
 	public static final int DEFAULT_BIOME_SIZE = 225;
 
@@ -49,7 +34,6 @@ public final class UndergroundBiomeBanding {
 	private static final double CLIMATE_INFLUENCE_SCALE = 2.0D;
 	private static final long OCCUPANCY_CELL_SALT = 0x3CB2F11B1A5D39E7L;
 	private static final long OCCUPANCY_SCORE_SALT = 0x75A28C4D91E637BFL;
-	private static final long IDENTITY_CELL_SALT = 0x61F0CE12D47A958BL;
 	private static final long IDENTITY_SCORE_SALT = 0x2AD4B83598FC1E67L;
 
 	private static final Climate.Parameter VANILLA_UNDERGROUND_DEPTH = Climate.Parameter.span(
@@ -90,11 +74,6 @@ public final class UndergroundBiomeBanding {
 		return apply(preset, entries, entries, seed, classifier);
 	}
 
-	/**
-	 * Builds a layout from one authoritative selector and, optionally, a different cave-candidate
-	 * overlay. TerraBlender uses this form because regional cave slots and the regional ordinary
-	 * selector have different composition rules.
-	 */
 	public static <T> Layout<T> apply(
 		Preset preset,
 		List<Pair<Climate.ParameterPoint, T>> sourceEntries,
@@ -143,7 +122,6 @@ public final class UndergroundBiomeBanding {
 					backgroundEntries.add(entry);
 				}
 			} catch (RuntimeException exception) {
-				// An unclassifiable registration stays on the original/background path.
 				backgroundEntries.add(entry);
 			}
 		}
@@ -230,12 +208,6 @@ public final class UndergroundBiomeBanding {
 		);
 	}
 
-	/**
-	 * Classifies an entry from its vertical registration shape. Horizontal axes, including
-	 * weirdness, deliberately do not decide whether an otherwise conventional cave is eligible.
-	 * A common cave tag can corroborate a nonstandard positive-depth shape, but cannot turn a
-	 * surface registration into a cave.
-	 */
 	public static CandidateRole classify(Climate.ParameterPoint point, boolean caveTagged) {
 		if (!isWellFormed(point)) {
 			return CandidateRole.UNKNOWN;
@@ -358,11 +330,6 @@ public final class UndergroundBiomeBanding {
 		return new RegionSample(nearestKey, unit(nearestKey ^ OCCUPANCY_SCORE_SALT));
 	}
 
-	/**
-	 * Resolves the cave-versus-background decision before a biome provider selects an identity.
-	 * Providers which add or force biomes after the vanilla parameter lookup therefore receive the
-	 * same ownership decision as the built-in selector, without provider-specific integration.
-	 */
 	public static boolean allowsCaveBiome(
 		Preset preset,
 		long seed,
@@ -427,33 +394,6 @@ public final class UndergroundBiomeBanding {
 			0.0F,
 			1.0F
 		);
-	}
-
-	private static long sample2dIdentity(long seed, int blockX, int blockZ, int horizontalSize) {
-		double x = (double) blockX / horizontalSize;
-		double z = (double) blockZ / horizontalSize;
-		int cellX = (int) Math.floor(x);
-		int cellZ = (int) Math.floor(z);
-		double nearestDistance = Double.POSITIVE_INFINITY;
-		long nearestKey = 0L;
-
-		for (int offsetZ = -1; offsetZ <= 1; offsetZ++) {
-			for (int offsetX = -1; offsetX <= 1; offsetX++) {
-				int candidateX = cellX + offsetX;
-				int candidateZ = cellZ + offsetZ;
-				long key = cellHash(seed, candidateX, 0, candidateZ, IDENTITY_CELL_SALT);
-				double siteX = candidateX + 0.5D + (unit(key ^ 0x632BE59BD9B4E019L) - 0.5D) * CELL_JITTER;
-				double siteZ = candidateZ + 0.5D + (unit(key ^ 0xD1B54A32D192ED03L) - 0.5D) * CELL_JITTER;
-				double dx = x - siteX;
-				double dz = z - siteZ;
-				double distance = dx * dx + dz * dz;
-				if (distance < nearestDistance || (distance == nearestDistance && key < nearestKey)) {
-					nearestDistance = distance;
-					nearestKey = key;
-				}
-			}
-		}
-		return nearestKey;
 	}
 
 	private static final class Candidate<T> {
@@ -756,10 +696,10 @@ public final class UndergroundBiomeBanding {
 				return backgroundValue;
 			}
 
-			long identityKey = this.bandingEnabled
-				? region.key()
-				: sample2dIdentity(this.seed, blockX, blockZ, this.horizontalSize);
-			return stage.findValue(target, identityKey, this.climateInfluence);
+			if (!this.bandingEnabled) {
+				return this.original.findValue(target);
+			}
+			return stage.findValue(target, region.key(), this.climateInfluence);
 		}
 
 		private float surfaceFactor(long depth) {

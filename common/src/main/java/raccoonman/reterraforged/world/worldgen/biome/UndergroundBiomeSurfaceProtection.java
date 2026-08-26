@@ -9,18 +9,6 @@ import net.minecraft.world.level.levelgen.NoiseRouterData;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
 
-/**
- * Keeps cave-biome ownership behind a complete biome-quart shell around the terrain surface.
- *
- * <p>A local vertical-depth check protects horizontal ground but cannot protect a cliff face: a
- * point may be far below its own column's summit while being immediately beside exterior air. The
- * minimum surface height across the cell's block footprint plus a one-quart border supplies the
- * missing lateral constraint. Requiring one complete quart above that minimum protects the
- * queried 4x4x4 biome cell on its top, sides, and diagonals.</p>
- *
- * <p>The neighborhood height is independent of Y, so it is cached per sampler and horizontal quart
- * coordinate. This avoids multiplying the terrain lookups by every vertical biome cell.</p>
- */
 public final class UndergroundBiomeSurfaceProtection {
 	public static final int HARD_SHELL_BLOCKS = QuartPos.SIZE;
 	public static final int TRANSITION_BLOCKS = 24;
@@ -37,10 +25,6 @@ public final class UndergroundBiomeSurfaceProtection {
 	private UndergroundBiomeSurfaceProtection() {
 	}
 
-	/**
-	 * Returns the maximum fraction of configured cave-biome coverage allowed at this quart cell.
-	 * Zero is the hard surface shell; one is the fully underground region beyond the transition.
-	 */
 	public static float coverageFactor(
 		Climate.Sampler sampler,
 		Climate.TargetPoint target,
@@ -99,11 +83,6 @@ public final class UndergroundBiomeSurfaceProtection {
 		return minimum;
 	}
 
-	/**
-	 * Samples the stable terrain surface used by underground-biome protection.
-	 * Placement code uses the same authority so decoration cannot disagree with
-	 * biome selection because a tree or an earlier feature changed a heightmap.
-	 */
 	public static int sampleSurfaceY(
 		GeneratorContext context,
 		Cell cell,

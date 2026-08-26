@@ -209,6 +209,55 @@ class UndergroundBiomeBandingTest {
 	}
 
 	@Test
+	void disablingBandingRestoresTheProvidersDepthSelectionAtTheWorldBottom() {
+		UndergroundBiomeBanding.Layout<String> thin = UndergroundBiomeBanding.apply(
+			preset(1.0F, 0.0F, false, 50, 20),
+			vanillaLikeEntries(),
+			-4028775559452121120L
+		);
+		UndergroundBiomeBanding.Layout<String> thick = UndergroundBiomeBanding.apply(
+			preset(1.0F, 1.0F, false, 900, 512),
+			vanillaLikeEntries(),
+			-4028775559452121120L
+		);
+		Climate.TargetPoint bottom = target(8.0F, 0.0F);
+
+		for (int quartZ = -64; quartZ <= 64; quartZ += 4) {
+			for (int quartX = -64; quartX <= 64; quartX += 4) {
+				assertEquals("deep_dark", thin.findValue(bottom, quartX, -233, quartZ));
+				assertEquals("deep_dark", thick.findValue(bottom, quartX, -233, quartZ));
+			}
+		}
+	}
+
+	@Test
+	void enablingBandingStillRedistributesShallowCandidatesAtTheWorldBottom() {
+		UndergroundBiomeBanding.Layout<String> layout = UndergroundBiomeBanding.apply(
+			preset(1.0F, 0.0F, true, 50, 20),
+			vanillaLikeEntries(),
+			-4028775559452121120L
+		);
+		Set<String> selected = new HashSet<>();
+
+		for (int quartZ = -64; quartZ <= 64; quartZ += 4) {
+			for (int quartX = -64; quartX <= 64; quartX += 4) {
+				selected.add(layout.findValue(target(8.0F, 0.0F), quartX, -233, quartZ));
+			}
+		}
+
+		assertTrue(selected.contains("dripstone") || selected.contains("lush"));
+	}
+
+	@Test
+	void verticalSizeStillShapesMixedCoverageWhenBandingIsDisabled() {
+		LineStatistics thin = verticalStatistics(preset(0.35F, 0.0F, false, 225, 16), 8L);
+		LineStatistics thick = verticalStatistics(preset(0.35F, 0.0F, false, 225, 256), 8L);
+
+		assertTrue(thin.transitions() > thick.transitions() * 3);
+		assertEquals(thin.density(), thick.density(), 0.10F);
+	}
+
+	@Test
 	void climateInfluenceRangesFromEqualParticipationToNearestCandidateOnly() {
 		Climate.Parameter preferred = Climate.Parameter.span(0.7F, 1.0F);
 		Climate.Parameter alternative = Climate.Parameter.span(0.4F, 0.6F);
