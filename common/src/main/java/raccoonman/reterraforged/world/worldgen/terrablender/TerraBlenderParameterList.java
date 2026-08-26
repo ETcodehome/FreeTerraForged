@@ -15,6 +15,15 @@ public interface TerraBlenderParameterList<T> {
 
 	T reterraforged$applyUndergroundBanding(Climate.TargetPoint target, int x, int y, int z, T selected);
 
+	T reterraforged$applyUndergroundSurfaceProtection(
+		Climate.TargetPoint target,
+		int x,
+		int y,
+		int z,
+		T selected,
+		float surfaceCoverageFactor
+	);
+
 	CompositionDiagnostics<T> reterraforged$getCompositionDiagnostics();
 
 	SelectionDiagnostics<T> reterraforged$inspectSelection(Climate.TargetPoint target, int x, int y, int z);

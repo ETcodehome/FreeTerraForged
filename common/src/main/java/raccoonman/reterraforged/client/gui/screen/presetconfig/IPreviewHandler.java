@@ -49,23 +49,23 @@ public interface IPreviewHandler {
     long REFRESH_DEBOUNCE_MILLIS = 75L;
 
     // ------------------------------------------------------------------
-    // Contract implementers must supply - either genuinely different logic,
-    // or state accessors satisfied automatically by an inherited Button method.
+    // Contract implementers must supply.
     // ------------------------------------------------------------------
 
     PreviewState state();
 
     PresetEditorPage page();
 
-    int getX();
-
-    int getY();
-
-    int getWidth();
-
-    int getHeight();
-
-    boolean isMouseOver(double mouseX, double mouseY);
+    /**
+     * Returns the Minecraft widget hosting this preview.
+     *
+     * <p>Shared code must invoke inherited widget methods through this
+     * Minecraft-owned type. Declaring methods such as {@code getWidth()} on
+     * this mod-owned interface leaves their names unchanged when Fabric
+     * remaps the inherited {@link Button} methods, which breaks interface
+     * dispatch in production jars.</p>
+     */
+    Button widget();
 
     /** Plays the widget's click sound. Implemented per-class since {@code playDownSound} is protected on Button. */
     void playClickSound();
@@ -438,7 +438,7 @@ public interface IPreviewHandler {
         pose.scale(scale, scale, 1);
 
         Font renderer = Minecraft.getInstance().font;
-        float maxWidth = (getWidth() - 4) / scale;
+        float maxWidth = (widget().getWidth() - 4) / scale;
 
         for (int i = 0; i < labels.length && i < values.length; i++) {
             Component label = labels[i];
@@ -493,7 +493,7 @@ public interface IPreviewHandler {
 
     /** Shared right/middle-click handling. Returns true if the click was handled (caller should not fall through to super). */
     default boolean handleClick(double mouseX, double mouseY, int button) {
-        if (!isMouseOver(mouseX, mouseY)) {
+        if (!widget().isMouseOver(mouseX, mouseY)) {
             return false;
         }
         PreviewState state = state();
@@ -525,7 +525,7 @@ public interface IPreviewHandler {
 
     /** Shared scroll-to-zoom handling. Returns true if the scroll was consumed. */
     default boolean handleScroll(double mouseX, double mouseY, double scrollY) {
-        if (!isMouseOver(mouseX, mouseY)) {
+        if (!widget().isMouseOver(mouseX, mouseY)) {
             return false;
         }
         if (hasZoomControl()) {
