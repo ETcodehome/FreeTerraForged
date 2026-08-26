@@ -110,6 +110,12 @@ public class Preview3D extends Button implements IPreviewHandler {
         return this.width <= 0 || this.height <= 0;
     }
 
+    private static float calculateBlockWidth(int width, int height, int tileSize) {
+        float scaleX = (float) width / (float) tileSize;
+        float scaleY = ((float) height / (float) tileSize) * 2.0f;
+        return Math.max(scaleX, scaleY);
+    }
+
     @Override
     public int[] createRasterData(Tile activeTile, BiomePreview.Sidecar activeBiomes, RenderMode mode, Levels levels, WorldSettings.Properties properties, RasterParams params) {
         int width = params.width;
@@ -119,7 +125,7 @@ public class Preview3D extends Button implements IPreviewHandler {
         java.util.Arrays.fill(pixels, 0xFF000000);
 
         int tileSize = activeTile.getBlockSize().size();
-        float rawBlockW = (float) width / (float) tileSize * 0.85f;
+        float rawBlockW = calculateBlockWidth(width, height, tileSize);
         int halfW = Math.max(1, (int) (rawBlockW / 2.0f));
         int halfH = Math.max(1, halfW / 2);
         int blockW = halfW * 2;
@@ -344,7 +350,7 @@ public class Preview3D extends Button implements IPreviewHandler {
                 if (ix >= 0 && ix < tileSize && iz >= 0 && iz < tileSize) {
                     Cell cell = activeTile.lookup(ix, iz);
 
-                    float rawBlockW = (float) this.width / (float) tileSize * 0.85f;
+                    float rawBlockW = calculateBlockWidth(this.width, this.height, tileSize);
                     int halfW = Math.max(1, (int) (rawBlockW / 2.0f));
                     int halfH = Math.max(1, halfW / 2);
 
@@ -410,7 +416,7 @@ public class Preview3D extends Button implements IPreviewHandler {
                 return false;
             }
 
-            float rawBlockW = (float) this.width / (float) tileSize * 0.85f;
+            float rawBlockW = calculateBlockWidth(this.width, this.height, tileSize);
             int halfW = Math.max(1, (int) (rawBlockW / 2.0f));
             int halfH = Math.max(1, halfW / 2);
 
