@@ -160,7 +160,7 @@
   "reterraforged.gui.slider.undergroundBiomeSize": "Underground Biome Horizontal Size",
   "reterraforged.gui.slider.undergroundBiomeSize.tooltip": "Controls how wide underground biome regions are. This includes both cave biomes and ordinary surface biomes below the surface.",
   "reterraforged.gui.slider.undergroundBiomeVerticalSize": "Underground Biome Vertical Size",
-  "reterraforged.gui.slider.undergroundBiomeVerticalSize.tooltip": "Controls how tall cave-biome and surface-biome areas are underground. With Vertical Cave Biome Banding off, it still controls the height of those areas but does not move cave biomes away from their normal depths. The maximum is the world's full height.",
+  "reterraforged.gui.slider.undergroundBiomeVerticalSize.tooltip": "Controls how tall cave-biome and surface-biome areas are underground. With Vertical Cave Biome Banding off, it still controls the height of those areas but does not move cave biomes away from their normal depths. You can set it as high as 512 blocks, or the world's full height when the world is shorter.",
   "reterraforged.gui.slider.undergroundBiomeCoverage": "Cave Biome Coverage",
   "reterraforged.gui.slider.undergroundBiomeCoverage.tooltip": "Controls how often cave biomes replace ordinary surface biomes underground. At 0%, no cave biomes appear. At 100%, cave biomes fill every underground area where they can generate. This does not change how many physical caves generate.",
   "reterraforged.gui.slider.undergroundBiomeClimateInfluence": "Cave Climate Influence",

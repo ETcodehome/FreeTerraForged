@@ -123,7 +123,7 @@ class ClimateSettingsPage extends PresetEditorPage {
 		});
 
 		ClimateSettings.BiomeShape biomeShape = climate.biomeShape;
-		int maximumUndergroundVerticalSize = ClimateSettings.BiomeShape.maximumUndergroundVerticalSize(
+		int maximumUndergroundVerticalSize = PresetSettingsBounds.maximumUndergroundBiomeVerticalSize(
 			preset.world().properties.worldHeight,
 			preset.world().properties.worldDepth
 		);

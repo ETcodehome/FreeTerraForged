@@ -269,7 +269,7 @@ public class WorldSettingsPage extends PresetEditorPage {
 		ClimateSettings.BiomeShape biomeShape = this.preset.getPreset().climate().biomeShape;
 		biomeShape.undergroundBiomeVerticalSize = Math.min(
 			biomeShape.undergroundBiomeVerticalSize,
-			ClimateSettings.BiomeShape.maximumUndergroundVerticalSize(properties.worldHeight, properties.worldDepth)
+			PresetSettingsBounds.maximumUndergroundBiomeVerticalSize(properties.worldHeight, properties.worldDepth)
 		);
 	}
 
