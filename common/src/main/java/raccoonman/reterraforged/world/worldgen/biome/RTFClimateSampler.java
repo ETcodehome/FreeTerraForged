@@ -4,6 +4,7 @@ import org.jetbrains.annotations.Nullable;
 
 import net.minecraft.core.BlockPos;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
+import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 
 public interface RTFClimateSampler {
 	void setSpawnSearchCenter(BlockPos center);
@@ -16,4 +17,9 @@ public interface RTFClimateSampler {
 	Preset getUndergroundBiomeBandingPreset();
 
 	long getUndergroundBiomeBandingSeed();
+
+	void setUndergroundBiomeSurfaceContext(@Nullable GeneratorContext context);
+
+	@Nullable
+	GeneratorContext getUndergroundBiomeSurfaceContext();
 }

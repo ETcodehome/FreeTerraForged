@@ -87,21 +87,39 @@ public class ClimateSettings {
         }
     }
     
-    public static class BiomeShape {
+	public static class BiomeShape {
 		public static final int MIN_BIOME_SIZE = 50;
 		public static final int MAX_BIOME_SIZE = 2000;
+		public static final int MIN_UNDERGROUND_VERTICAL_SIZE = 16;
+		public static final int MAX_UNDERGROUND_VERTICAL_SIZE = 2048;
+		public static final int DEFAULT_UNDERGROUND_VERTICAL_SIZE = 64;
+		public static final float DEFAULT_UNDERGROUND_BIOME_COVERAGE = 0.25F;
+		public static final float DEFAULT_UNDERGROUND_BIOME_CLIMATE_INFLUENCE = 0.75F;
 		private static final Codec<Integer> BIOME_SIZE_CODEC = Codec.intRange(MIN_BIOME_SIZE, MAX_BIOME_SIZE);
+		private static final Codec<Integer> UNDERGROUND_VERTICAL_SIZE_CODEC = Codec.intRange(
+			MIN_UNDERGROUND_VERTICAL_SIZE,
+			MAX_UNDERGROUND_VERTICAL_SIZE
+		);
+		private static final Codec<Float> UNIT_FLOAT_CODEC = Codec.floatRange(0.0F, 1.0F);
 
     	public static final Codec<BiomeShape> CODEC = RecordCodecBuilder.create(instance -> instance.group(
 			BIOME_SIZE_CODEC.fieldOf("biomeSize").forGetter((o) -> o.biomeSize),
 			BIOME_SIZE_CODEC.optionalFieldOf("undergroundBiomeSize").forGetter((o) -> Optional.of(o.undergroundBiomeSize)),
+			UNDERGROUND_VERTICAL_SIZE_CODEC.optionalFieldOf("undergroundBiomeVerticalSize", DEFAULT_UNDERGROUND_VERTICAL_SIZE).forGetter((o) -> o.undergroundBiomeVerticalSize),
+			UNIT_FLOAT_CODEC.optionalFieldOf("undergroundBiomeCoverage", DEFAULT_UNDERGROUND_BIOME_COVERAGE).forGetter((o) -> o.undergroundBiomeCoverage),
+			UNIT_FLOAT_CODEC.optionalFieldOf("undergroundBiomeClimateInfluence", DEFAULT_UNDERGROUND_BIOME_CLIMATE_INFLUENCE).forGetter((o) -> o.undergroundBiomeClimateInfluence),
+			Codec.BOOL.optionalFieldOf("undergroundBiomeBanding", true).forGetter((o) -> o.undergroundBiomeBanding),
     		Codec.INT.fieldOf("macroNoiseSize").forGetter((o) -> o.macroNoiseSize),
     		Codec.INT.fieldOf("biomeWarpScale").forGetter((o) -> o.biomeWarpScale),
     		Codec.INT.fieldOf("biomeWarpStrength").forGetter((o) -> o.biomeWarpStrength)    		
-		).apply(instance, (biomeSize, undergroundBiomeSize, macroNoiseSize, biomeWarpScale, biomeWarpStrength) ->
+		).apply(instance, (biomeSize, undergroundBiomeSize, undergroundBiomeVerticalSize, undergroundBiomeCoverage, undergroundBiomeClimateInfluence, undergroundBiomeBanding, macroNoiseSize, biomeWarpScale, biomeWarpStrength) ->
 			new BiomeShape(
 				biomeSize,
 				undergroundBiomeSize.orElse(biomeSize),
+				undergroundBiomeVerticalSize,
+				undergroundBiomeCoverage,
+				undergroundBiomeClimateInfluence,
+				undergroundBiomeBanding,
 				macroNoiseSize,
 				biomeWarpScale,
 				biomeWarpStrength
@@ -110,17 +128,62 @@ public class ClimateSettings {
     	
         public int biomeSize;
 		public int undergroundBiomeSize;
+		public int undergroundBiomeVerticalSize;
+		public float undergroundBiomeCoverage;
+		public float undergroundBiomeClimateInfluence;
+		public boolean undergroundBiomeBanding;
         public int macroNoiseSize;
         public int biomeWarpScale;
         public int biomeWarpStrength;
         
         public BiomeShape(int biomeSize, int macroNoiseSize, int biomeWarpScale, int biomeWarpStrength) {
-			this(biomeSize, biomeSize, macroNoiseSize, biomeWarpScale, biomeWarpStrength);
+			this(
+				biomeSize,
+				biomeSize,
+				DEFAULT_UNDERGROUND_VERTICAL_SIZE,
+				DEFAULT_UNDERGROUND_BIOME_COVERAGE,
+				DEFAULT_UNDERGROUND_BIOME_CLIMATE_INFLUENCE,
+				true,
+				macroNoiseSize,
+				biomeWarpScale,
+				biomeWarpStrength
+			);
 		}
 
 		public BiomeShape(int biomeSize, int undergroundBiomeSize, int macroNoiseSize, int biomeWarpScale, int biomeWarpStrength) {
+			this(
+				biomeSize,
+				undergroundBiomeSize,
+				DEFAULT_UNDERGROUND_VERTICAL_SIZE,
+				DEFAULT_UNDERGROUND_BIOME_COVERAGE,
+				DEFAULT_UNDERGROUND_BIOME_CLIMATE_INFLUENCE,
+				true,
+				macroNoiseSize,
+				biomeWarpScale,
+				biomeWarpStrength
+			);
+		}
+
+		public BiomeShape(
+			int biomeSize,
+			int undergroundBiomeSize,
+			int undergroundBiomeVerticalSize,
+			float undergroundBiomeCoverage,
+			float undergroundBiomeClimateInfluence,
+			boolean undergroundBiomeBanding,
+			int macroNoiseSize,
+			int biomeWarpScale,
+			int biomeWarpStrength
+		) {
 			this.biomeSize = validateBiomeSize(biomeSize);
 			this.undergroundBiomeSize = validateBiomeSize(undergroundBiomeSize);
+			this.undergroundBiomeVerticalSize = validateUndergroundVerticalSize(undergroundBiomeVerticalSize);
+			this.undergroundBiomeCoverage = validateUnitFloat("Underground biome coverage", undergroundBiomeCoverage);
+			this.undergroundBiomeClimateInfluence = validateUnitFloat(
+				"Underground biome climate influence",
+				undergroundBiomeClimateInfluence
+			);
+			this.undergroundBiomeBanding = undergroundBiomeBanding;
         	this.macroNoiseSize = macroNoiseSize;
         	this.biomeWarpScale = biomeWarpScale;
         	this.biomeWarpStrength = biomeWarpStrength;
@@ -134,6 +197,25 @@ public class ClimateSettings {
 			return validateBiomeSize(this.undergroundBiomeSize);
 		}
 
+		public int undergroundBiomeVerticalSize() {
+			return validateUndergroundVerticalSize(this.undergroundBiomeVerticalSize);
+		}
+
+		public int undergroundBiomeVerticalSize(int worldHeight, int worldDepth) {
+			return Math.min(
+				this.undergroundBiomeVerticalSize(),
+				maximumUndergroundVerticalSize(worldHeight, worldDepth)
+			);
+		}
+
+		public float undergroundBiomeCoverage() {
+			return validateUnitFloat("Underground biome coverage", this.undergroundBiomeCoverage);
+		}
+
+		public float undergroundBiomeClimateInfluence() {
+			return validateUnitFloat("Underground biome climate influence", this.undergroundBiomeClimateInfluence);
+		}
+
 		private static int validateBiomeSize(int biomeSize) {
 			if (biomeSize < MIN_BIOME_SIZE || biomeSize > MAX_BIOME_SIZE) {
 				throw new IllegalArgumentException(
@@ -142,9 +224,44 @@ public class ClimateSettings {
 			}
 			return biomeSize;
 		}
+
+		private static int validateUndergroundVerticalSize(int size) {
+			if (size < MIN_UNDERGROUND_VERTICAL_SIZE || size > MAX_UNDERGROUND_VERTICAL_SIZE) {
+				throw new IllegalArgumentException(
+					"Underground biome vertical size must be between " + MIN_UNDERGROUND_VERTICAL_SIZE
+						+ " and " + MAX_UNDERGROUND_VERTICAL_SIZE + ": " + size
+				);
+			}
+			return size;
+		}
+
+		public static int maximumUndergroundVerticalSize(int worldHeight, int worldDepth) {
+			long worldSpan = (long) Math.max(0, worldHeight) + Math.max(0, worldDepth);
+			return (int) Math.max(
+				MIN_UNDERGROUND_VERTICAL_SIZE,
+				Math.min(MAX_UNDERGROUND_VERTICAL_SIZE, worldSpan)
+			);
+		}
+
+		private static float validateUnitFloat(String name, float value) {
+			if (!Float.isFinite(value) || value < 0.0F || value > 1.0F) {
+				throw new IllegalArgumentException(name + " must be between 0 and 1: " + value);
+			}
+			return value;
+		}
         
         public BiomeShape copy() {
-			return new BiomeShape(this.biomeSize, this.undergroundBiomeSize, this.macroNoiseSize, this.biomeWarpScale, this.biomeWarpStrength);
+			return new BiomeShape(
+				this.biomeSize,
+				this.undergroundBiomeSize,
+				this.undergroundBiomeVerticalSize,
+				this.undergroundBiomeCoverage,
+				this.undergroundBiomeClimateInfluence,
+				this.undergroundBiomeBanding,
+				this.macroNoiseSize,
+				this.biomeWarpScale,
+				this.biomeWarpStrength
+			);
         }
     }
     

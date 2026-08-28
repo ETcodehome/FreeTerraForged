@@ -11,6 +11,7 @@ import raccoonman.reterraforged.client.data.RTFTranslationKeys;
 import raccoonman.reterraforged.client.gui.screen.page.LinkedPageScreen.Page;
 import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
 import raccoonman.reterraforged.client.gui.widget.Slider;
+import raccoonman.reterraforged.data.worldgen.preset.settings.ClimateSettings;
 import raccoonman.reterraforged.data.worldgen.preset.settings.ContinentType;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.data.worldgen.preset.settings.SpawnType;
@@ -169,6 +170,7 @@ public class WorldSettingsPage extends PresetEditorPage {
 		this.worldHeight = PresetWidgets.createIntSlider(properties.worldHeight, 0, 1024, RTFTranslationKeys.GUI_SLIDER_WORLD_HEIGHT, (slider, value) -> {
 			int nearestMultiple = Math.max(getNearestMultiple(slider, (float) value, 16), 16);
 			properties.worldHeight = nearestMultiple;
+			this.updateUndergroundBiomeVerticalSize(properties);
 			this.regenerate();
 			return slider.getSliderValue(nearestMultiple);
 		});
@@ -176,6 +178,7 @@ public class WorldSettingsPage extends PresetEditorPage {
 			int nearestMultiple = getNearestMultiple(slider, (float) value, 16);
 			properties.worldDepth = nearestMultiple;
 			this.updateOceanDepthRange(properties);
+			this.updateUndergroundBiomeVerticalSize(properties);
 			return slider.getSliderValue(nearestMultiple);
 		});
 		this.oceanDepth = PresetWidgets.createIntSlider(properties.oceanDepth, 10, properties.seaLevel + properties.worldDepth - 10, RTFTranslationKeys.GUI_SLIDER_OCEAN_DEPTH, (slider, value) -> {
@@ -260,6 +263,14 @@ public class WorldSettingsPage extends PresetEditorPage {
 	private void updateOceanDepthRange(WorldSettings.Properties properties) {
 		this.oceanDepth.setRange(10, properties.seaLevel + properties.worldDepth - 10);
 		properties.oceanDepth = (int) this.oceanDepth.scaleValue((float) this.oceanDepth.getValue());
+	}
+
+	private void updateUndergroundBiomeVerticalSize(WorldSettings.Properties properties) {
+		ClimateSettings.BiomeShape biomeShape = this.preset.getPreset().climate().biomeShape;
+		biomeShape.undergroundBiomeVerticalSize = Math.min(
+			biomeShape.undergroundBiomeVerticalSize,
+			PresetSettingsBounds.maximumUndergroundBiomeVerticalSize(properties.worldHeight, properties.worldDepth)
+		);
 	}
 
 	private static int getNearestMultiple(Slider slider, float value, int multiple)  {

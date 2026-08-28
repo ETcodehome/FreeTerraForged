@@ -27,6 +27,7 @@ import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.registries.RTFRegistries;
 import raccoonman.reterraforged.world.worldgen.biome.ClimateParameterListComposition;
 import raccoonman.reterraforged.world.worldgen.biome.UndergroundBiomeBanding;
+import raccoonman.reterraforged.world.worldgen.biome.UndergroundBiomeSurfaceQuery;
 import raccoonman.reterraforged.world.worldgen.biome.PreviewBiomeQueryContext;
 import raccoonman.reterraforged.world.worldgen.biome.UndergroundBiomeTags;
 import raccoonman.reterraforged.world.worldgen.terrablender.TerraBlenderParameterList;
@@ -219,6 +220,41 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 		return banded == null ? selected : banded;
 	}
 
+	@Override
+	public T reterraforged$applyUndergroundSurfaceProtection(
+		Climate.TargetPoint targetPoint,
+		int x,
+		int y,
+		int z,
+		T selected,
+		float surfaceCoverageFactor
+	) {
+		if (surfaceCoverageFactor >= 1.0F
+			|| this.reterraforged$bandingPreset == null
+			|| !this.reterraforged$ensureComposedTrees()) {
+			return selected;
+		}
+
+		int treeIndex;
+		try {
+			treeIndex = this.reterraforged$getUniqueness(targetPoint, x, y, z);
+		} catch (RuntimeException exception) {
+			return selected;
+		}
+		List<UndergroundBiomeBanding.Layout<T>> layouts = this.reterraforged$regionalBanding;
+		if (treeIndex < 0 || treeIndex >= layouts.size()) {
+			return selected;
+		}
+		UndergroundBiomeBanding.Layout<T> layout = layouts.get(treeIndex);
+		if (layout == null || !layout.isCaveCandidate(selected)) {
+			return selected;
+		}
+		if (surfaceCoverageFactor <= 0.0F || !layout.appliesAt(targetPoint)) {
+			return layout.backgroundValue(targetPoint);
+		}
+		return layout.findValue(targetPoint, x, y, z, surfaceCoverageFactor);
+	}
+
 	@Unique
 	private T reterraforged$selectBanded(
 		Climate.TargetPoint targetPoint,
@@ -262,7 +298,18 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 			|| (requireOriginalMatch && !Objects.equals(requiredOriginal, originalValue))) {
 			return null;
 		}
-		T bandedValue = banding.appliesAt(targetPoint) ? banding.findValue(targetPoint, x, z) : originalValue;
+		float surfaceCoverageFactor = UndergroundBiomeSurfaceQuery.coverageFactor(targetPoint, x, y, z);
+		T backgroundValue = banding.backgroundValue(targetPoint);
+		T bandedValue;
+		if (banding.appliesAt(targetPoint)) {
+			bandedValue = banding.findValue(targetPoint, x, y, z, surfaceCoverageFactor);
+		} else if ((surfaceCoverageFactor <= 0.0F
+			|| this.reterraforged$bandingPreset.climate().biomeShape.undergroundBiomeCoverage() <= 0.0F)
+			&& banding.isCaveCandidate(originalValue)) {
+			bandedValue = backgroundValue;
+		} else {
+			bandedValue = originalValue;
+		}
 		if (reterraforged$isDeferredPlaceholder(bandedValue)) {
 			return null;
 		}
@@ -317,7 +364,7 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 		}
 
 		T bandedValue = banding.appliesAt(targetPoint)
-			? banding.findValue(targetPoint, x, z)
+			? banding.findValue(targetPoint, x, y, z)
 			: originalValue;
 		if (reterraforged$isDeferredPlaceholder(bandedValue)) {
 			return new TerraBlenderParameterList.SelectionDiagnostics<>(treeIndex, originalValue, null, "deferred_banded_winner");
@@ -460,6 +507,7 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 
 					UndergroundBiomeBanding.Layout<T> layout = UndergroundBiomeBanding.apply(
 						this.reterraforged$bandingPreset,
+						effectiveEntries,
 						overlay.entries(),
 						this.reterraforged$bandingSeed,
 						(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value))

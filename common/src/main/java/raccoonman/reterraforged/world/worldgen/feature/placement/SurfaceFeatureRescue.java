@@ -46,7 +46,10 @@ public final class SurfaceFeatureRescue {
 				ignored -> SurfacePlacementClassifier.classify(feature, context.getLevel().registryAccess())
 			);
 			if (classification.eligible()) {
-				run = new Run(feature, context, classification.pipeline());
+				Optional<UndergroundFeatureEnclosure.Guard> enclosure = UndergroundFeatureEnclosure.create(context);
+				if (enclosure.isPresent()) {
+					run = new Run(feature, context, classification.pipeline(), enclosure.get());
+				}
 			}
 		}
 		ACTIVE_FEATURES.get().push(new Frame(run));
@@ -106,15 +109,22 @@ public final class SurfaceFeatureRescue {
 		private final PlacedFeature feature;
 		private final PlacementContext context;
 		private final SurfacePipeline pipeline;
+		private final UndergroundFeatureEnclosure.Guard enclosure;
 		private final Map<ColumnBand, long[]> surfaceCache = new HashMap<>();
 		private final Map<HeightBand, BandBudget> bandBudgets = new HashMap<>();
 		private final LongSet reservedPlacementCells = new LongOpenHashSet();
 		private int sampledCount;
 
-		private Run(PlacedFeature feature, PlacementContext context, SurfacePipeline pipeline) {
+		private Run(
+			PlacedFeature feature,
+			PlacementContext context,
+			SurfacePipeline pipeline,
+			UndergroundFeatureEnclosure.Guard enclosure
+		) {
 			this.feature = feature;
 			this.context = context;
 			this.pipeline = pipeline;
+			this.enclosure = enclosure;
 			this.sampledCount = pipeline.countPlacement() == null ? 1 : -1;
 		}
 
@@ -165,7 +175,8 @@ public final class SurfaceFeatureRescue {
 					target.getZ()
 				);
 				if (!this.reservedPlacementCells.contains(placement.asLong())
-					&& this.isStillEligible(target, placement)) {
+					&& this.isStillEligible(target, placement)
+					&& this.enclosure.isProtected(placement)) {
 					eligibleSurfaces.add(packed);
 				}
 			}
