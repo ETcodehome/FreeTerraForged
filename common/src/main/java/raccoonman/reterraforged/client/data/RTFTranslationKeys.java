@@ -61,6 +61,7 @@ public final class RTFTranslationKeys {
 	public static final String GUI_BUTTON_LEGACY_CARVER_DISTRIBUTION = resolve("gui.button.legacyCarverDistribution");
 	public static final String GUI_BUTTON_CLIMATE_SEED_OFFSET = resolve("gui.button.climateSeedOffset");
 	public static final String GUI_BUTTON_BIOME_EDGE_TYPE = resolve("gui.button.biomeEdgeType");
+	public static final String GUI_BUTTON_UNDERGROUND_BIOME_BANDING = resolve("gui.button.undergroundBiomeBanding");
 	public static final String GUI_BUTTON_RENDER_MODE = resolve("gui.button.renderMode");
 	public static final String GUI_BUTTON_TERRAIN_SEED_OFFSET = resolve("gui.button.terrainSeedOffset");
 	public static final String GUI_BUTTON_FANCY_MOUNTAINS = resolve("gui.button.fancyMountains");
@@ -126,6 +127,9 @@ public final class RTFTranslationKeys {
 	public static final String GUI_SLIDER_MOISTURE_BIAS = resolve("gui.slider.moistureBias");
 	public static final String GUI_SLIDER_BIOME_SIZE = resolve("gui.slider.biomeSize");
 	public static final String GUI_SLIDER_UNDERGROUND_BIOME_SIZE = resolve("gui.slider.undergroundBiomeSize");
+	public static final String GUI_SLIDER_UNDERGROUND_BIOME_VERTICAL_SIZE = resolve("gui.slider.undergroundBiomeVerticalSize");
+	public static final String GUI_SLIDER_UNDERGROUND_BIOME_COVERAGE = resolve("gui.slider.undergroundBiomeCoverage");
+	public static final String GUI_SLIDER_UNDERGROUND_BIOME_CLIMATE_INFLUENCE = resolve("gui.slider.undergroundBiomeClimateInfluence");
 	public static final String GUI_SLIDER_MACRO_NOISE_SIZE = resolve("gui.slider.macroNoiseSize");
 	public static final String GUI_SLIDER_BIOME_WARP_SCALE = resolve("gui.slider.biomeWarpScale");
 	public static final String GUI_SLIDER_BIOME_WARP_STRENGTH = resolve("gui.slider.biomeWarpStrength");
@@ -202,6 +206,7 @@ public final class RTFTranslationKeys {
 	public static final String GUI_LABEL_TEMPERATURE = resolve("gui.label.temperature");
 	public static final String GUI_LABEL_MOISTURE = resolve("gui.label.moisture");
 	public static final String GUI_LABEL_BIOME_SHAPE = resolve("gui.label.biomeShape");
+	public static final String GUI_LABEL_UNDERGROUND_BIOMES = resolve("gui.label.undergroundBiomes");
 	public static final String GUI_LABEL_BIOME_EDGE_SHAPE = resolve("gui.label.biomeEdgeShape");
 	public static final String GUI_LABEL_GENERAL = resolve("gui.label.general");
 	public static final String GUI_LABEL_STEPPE = resolve("gui.label.steppe");

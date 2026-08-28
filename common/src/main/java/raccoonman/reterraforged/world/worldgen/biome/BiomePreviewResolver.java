@@ -134,6 +134,7 @@ public final class BiomePreviewResolver {
 			noiseSettings.spawnTarget()
 		);
 		((RTFClimateSampler) (Object) sampler).setUndergroundBiomeBandingPreset(preset, seed);
+		((RTFClimateSampler) (Object) sampler).setUndergroundBiomeSurfaceContext(generatorContext);
 		if (TBCompat.isEnabled() && (Object) sampler instanceof TBClimateSampler terraBlenderSampler) {
 			terraBlenderSampler.setUniqueness(cell(generatorContext, CellSampler.Field.BIOME_REGION));
 		}

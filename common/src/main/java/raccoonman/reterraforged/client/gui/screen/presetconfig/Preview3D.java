@@ -55,6 +55,11 @@ public class Preview3D extends Button implements IPreviewHandler {
     }
 
     @Override
+    public Button widget() {
+        return this;
+    }
+
+    @Override
     public void playClickSound() {
         this.playDownSound(Minecraft.getInstance().getSoundManager());
     }

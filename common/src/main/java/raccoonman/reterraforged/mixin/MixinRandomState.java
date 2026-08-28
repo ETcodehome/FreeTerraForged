@@ -127,6 +127,9 @@ class MixinRandomState {
 						.resultOrPartial(RTFCommon.LOGGER::error)
 						.orElseGet(PerformanceConfig::makeDefault);
 				this.generatorContext = GeneratorContext.makeCached(this.preset, noises, (int) this.seed, config.tileSize(), config.batchCount(), ThreadPools.availableProcessors() > 4);
+				if ((Object) this.sampler instanceof RTFClimateSampler rtfClimateSampler) {
+					rtfClimateSampler.setUndergroundBiomeSurfaceContext(this.generatorContext);
+				}
 			}
 
 			// populate static fields needed for mixins
