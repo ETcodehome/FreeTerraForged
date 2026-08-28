@@ -3,7 +3,6 @@ package raccoonman.reterraforged.client.gui.screen.presetconfig;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
@@ -12,7 +11,7 @@ class PreviewComputationCacheTest {
     @Test
     void sidecarResultsAreComputedOnceForAnExactViewKey() {
         PreviewComputationCache cache = new PreviewComputationCache();
-        BiomePreview.CacheKey revision = new BiomePreview.CacheKey(123L, "preset", "data", "source", List.of("minecraft:plains"));
+        BiomePreview.CacheKey revision = new BiomePreview.CacheKey(123L, 1, 2, "source", 1);
         PreviewComputationCache.SidecarKey key = new PreviewComputationCache.SidecarKey(revision, 10, -20, 4, 256);
         AtomicInteger computations = new AtomicInteger();
         assertNull(cache.sidecar(key, () -> {
