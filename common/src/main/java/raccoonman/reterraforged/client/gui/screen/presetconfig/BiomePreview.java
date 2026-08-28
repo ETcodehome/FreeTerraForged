@@ -2,8 +2,6 @@ package raccoonman.reterraforged.client.gui.screen.presetconfig;
 
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
-import java.util.List;
-import java.util.Map;
 
 import net.minecraft.core.Holder;
 import net.minecraft.core.QuartPos;
@@ -24,6 +22,7 @@ import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
 
 final class BiomePreview {
     private static final ResourceLocation UNREGISTERED = ResourceLocation.fromNamespaceAndPath("reterraforged", "unregistered");
+    private static final ThreadLocal<WorkerBuffer> WORKER_BUFFER = ThreadLocal.withInitial(WorkerBuffer::new);
 
     private final BiomePreviewResolver resolver;
     private final CacheKey cacheKey;
@@ -65,24 +64,14 @@ final class BiomePreview {
         short[] indices = new short[size * size];
         int[] colors = new int[size * size];
 
-        List<String> palette = new ArrayList<>(16);
-        Map<Biome, Entry> entryCache = new IdentityHashMap<>(32);
+        WorkerBuffer buffer = WORKER_BUFFER.get();
+        buffer.reset();
 
         int halfSize = size / 2;
         Climate.Sampler sampler = this.resolver.tileClimateSampler(tile, centerX, centerZ, zoom);
 
-        // Mutable holder to satisfy lambda effectively-final constraint
-        final class LocalQuartCache {
-            int qX = Integer.MIN_VALUE;
-            int qY = Integer.MIN_VALUE;
-            int qZ = Integer.MIN_VALUE;
-            Holder<Biome> biome = null;
-        }
-        final LocalQuartCache quartCache = new LocalQuartCache();
-
         try (BiomePreviewIntegration.Session ignored = this.resolver.openIntegrationSession()) {
             tile.iterate((cell, x, z) -> {
-                // Check cancellation once per row
                 if (x == 0) cancellation.check();
 
                 int blockX = centerX + (x - halfSize) * zoom;
@@ -94,32 +83,42 @@ final class BiomePreview {
                 int qZ = QuartPos.fromBlock(blockZ);
 
                 Holder<Biome> biome;
-                if (qX == quartCache.qX && qY == quartCache.qY && qZ == quartCache.qZ && quartCache.biome != null) {
-                    biome = quartCache.biome;
+                if (qX == buffer.lastQX && qY == buffer.lastQY && qZ == buffer.lastQZ && buffer.lastBiome != null) {
+                    biome = buffer.lastBiome;
                 } else {
                     biome = this.resolver.resolveQuart(qX, qY, qZ, sampler);
-                    quartCache.qX = qX;
-                    quartCache.qY = qY;
-                    quartCache.qZ = qZ;
-                    quartCache.biome = biome;
+                    buffer.lastQX = qX;
+                    buffer.lastQY = qY;
+                    buffer.lastQZ = qZ;
+                    buffer.lastBiome = biome;
                 }
 
                 Biome rawBiome = biome.value();
-                Entry entry = entryCache.get(rawBiome);
+                Entry entry = buffer.entryCache.get(rawBiome);
                 if (entry == null) {
                     ResourceLocation id = biome.unwrapKey().map(ResourceKey::location).orElse(UNREGISTERED);
-                    short paletteIdx = (short) palette.size();
-                    palette.add(id.toString());
-                    entry = new Entry(paletteIdx, BiomePreviewColors.color(biome, id));
-                    entryCache.put(rawBiome, entry);
+                    short paletteIdx = (short) buffer.palette.size();
+                    buffer.palette.add(id.toString());
+                    entry = buffer.obtainEntry(paletteIdx, BiomePreviewColors.color(biome, id));
+                    buffer.entryCache.put(rawBiome, entry);
                 }
 
                 int index = z * size + x;
                 indices[index] = entry.paletteIndex;
                 colors[index] = entry.color;
             });
+
+            return new Sidecar(
+                    this.cacheKey,
+                    size,
+                    buffer.palette.toArray(new String[0]),
+                    indices,
+                    colors,
+                    this.resolver.warning()
+            );
+        } finally {
+            buffer.reset(); // Release Holder<Biome> and registry references to avoid memory leaks
         }
-        return new Sidecar(this.cacheKey, size, palette.toArray(new String[0]), indices, colors, this.resolver.warning());
     }
 
     Sidecar resolveCached(
@@ -143,7 +142,6 @@ final class BiomePreview {
     }
 
     static CacheKey cacheKey(WorldCreationContext settings, Preset preset) {
-        // Fast structural fingerprinting instead of full JSON serialization & registry sorting
         int presetHash = preset.hashCode();
         int biomeCount = (int) settings.worldgenLoadContext().lookupOrThrow(Registries.BIOME).listElements().count();
         String biomeSource = settings.selectedDimensions().overworld().getBiomeSource().getClass().getName();
@@ -163,7 +161,47 @@ final class BiomePreview {
         return Math.max(minY, Math.min(maxY, levels.scale(cell.height)));
     }
 
-    private record Entry(short paletteIndex, int color) {}
+    private static final class Entry {
+        short paletteIndex;
+        int color;
+    }
+
+    private static final class WorkerBuffer {
+        final IdentityHashMap<Biome, Entry> entryCache = new IdentityHashMap<>(32);
+        final ArrayList<String> palette = new ArrayList<>(32);
+        final ArrayList<Entry> entryPool = new ArrayList<>(32);
+
+        int lastQX = Integer.MIN_VALUE;
+        int lastQY = Integer.MIN_VALUE;
+        int lastQZ = Integer.MIN_VALUE;
+        Holder<Biome> lastBiome = null;
+
+        private int entryPoolIndex = 0;
+
+        Entry obtainEntry(short paletteIndex, int color) {
+            Entry entry;
+            if (this.entryPoolIndex < this.entryPool.size()) {
+                entry = this.entryPool.get(this.entryPoolIndex);
+            } else {
+                entry = new Entry();
+                this.entryPool.add(entry);
+            }
+            this.entryPoolIndex++;
+            entry.paletteIndex = paletteIndex;
+            entry.color = color;
+            return entry;
+        }
+
+        void reset() {
+            this.entryCache.clear();
+            this.palette.clear();
+            this.entryPoolIndex = 0;
+            this.lastQX = Integer.MIN_VALUE;
+            this.lastQY = Integer.MIN_VALUE;
+            this.lastQZ = Integer.MIN_VALUE;
+            this.lastBiome = null;
+        }
+    }
 
     record CacheKey(long seed, int presetHash, int dataConfigHash, String biomeSource, int biomeCount) {}
 
