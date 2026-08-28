@@ -7,8 +7,8 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.util.valueproviders.IntProvider;
 import net.minecraft.world.level.levelgen.feature.ConfiguredFeature;
 import net.minecraft.world.level.levelgen.placement.InSquarePlacement;
-import net.minecraft.world.level.levelgen.placement.PlacementContext;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
+import net.minecraft.world.level.levelgen.placement.PlacementContext;
 import net.minecraft.world.level.levelgen.placement.PlacementModifier;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -24,7 +24,7 @@ import java.util.stream.Stream;
 @Mixin(InSquarePlacement.class)
 public class MixinSquarePlacement {
 
-    // Identity fast-path caches: Graph traversal runs ONCE per feature type
+    // Thread-safe identity fast-path caches
     @Unique
     private static final Set<Holder<?>> KNOWN_UNSAFE_FEATURES = Collections.newSetFromMap(new ConcurrentHashMap<>());
     @Unique
@@ -44,7 +44,7 @@ public class MixinSquarePlacement {
         PlacedFeature placedFeature = context.topFeature().get();
         Holder<ConfiguredFeature<?, ?>> featureHolder = placedFeature.feature();
 
-        // 1. FAST PATH: Identity cache lookup (~1ns execution, zero string ops/reflection)
+        // 1. FAST PATH: Thread-safe identity cache lookup
         if (KNOWN_SAFE_FEATURES.contains(featureHolder)) {
             return;
         }
@@ -54,7 +54,7 @@ public class MixinSquarePlacement {
             return;
         }
 
-        // 2. SLOW PATH: Walk object graph of Placement Modifiers AND Feature Configuration (runs ONCE)
+        // 2. SLOW PATH: Inspect top-level placement modifiers and immediate config structure
         if (isUnsafeGeneric(placedFeature)) {
             KNOWN_UNSAFE_FEATURES.add(featureHolder);
             clampPosition(random, pos, cir);
@@ -67,14 +67,14 @@ public class MixinSquarePlacement {
     private static boolean isUnsafeGeneric(PlacedFeature placedFeature) {
         Set<Object> visited = Collections.newSetFromMap(new IdentityHashMap<>());
 
-        // Check Placement Modifiers (random_offset, block_predicate_filter, etc.)
+        // Inspect direct placement modifiers on this PlacedFeature
         for (PlacementModifier mod : placedFeature.placement()) {
             if (inspectObjectGraph(mod, visited, 0)) {
                 return true;
             }
         }
 
-        // Check Configured Feature Configuration (VegetationPatch, CliffDecorators, custom mod configs)
+        // Inspect immediate ConfiguredFeature configuration
         Holder<ConfiguredFeature<?, ?>> holder = placedFeature.feature();
         if (holder.isBound()) {
             ConfiguredFeature<?, ?> cf = holder.value();
@@ -92,21 +92,26 @@ public class MixinSquarePlacement {
             return false;
         }
 
-        // Rule 1: Check Vec3i / BlockPos for non-zero X or Z offsets (e.g., predicate offset [-2, 0, 0])
+        // Prevent traversal into child features when inspecting complex configs (e.g. VegetationPatch)
+        if (depth > 0 && (obj instanceof PlacedFeature || obj instanceof ConfiguredFeature)) {
+            return false;
+        }
+
+        // Rule 1: Check Vec3i / BlockPos for non-zero X or Z offsets (e.g., predicate offsets [-2, 0, -2])
         if (obj instanceof Vec3i vec) {
             if (vec.getX() != 0 || vec.getZ() != 0) {
                 return true;
             }
         }
 
-        // Rule 2: Skip java built-ins, primitive wrappers, and enums
+        // Rule 2: Skip java primitives, wrappers, and enums
         Class<?> clazz = obj.getClass();
         String packageName = clazz.getPackageName();
         if (packageName.startsWith("java.lang") || packageName.startsWith("java.math") || clazz.isEnum()) {
             return false;
         }
 
-        // Rule 3: Unwrap common wrappers, lists, optionals, and arrays
+        // Rule 3: Unwrap common collections, wrappers, and holders
         if (obj instanceof Iterable<?> iterable) {
             for (Object item : iterable) {
                 if (inspectObjectGraph(item, visited, depth + 1)) return true;
@@ -117,7 +122,15 @@ public class MixinSquarePlacement {
             return opt.isPresent() && inspectObjectGraph(opt.get(), visited, depth + 1);
         }
         if (obj instanceof Holder<?> h) {
-            return h.isBound() && inspectObjectGraph(h.value(), visited, depth + 1);
+            if (h.isBound()) {
+                Object val = h.value();
+                // Stop graph traversal if Holder wraps a child feature instance
+                if (val instanceof PlacedFeature || val instanceof ConfiguredFeature) {
+                    return false;
+                }
+                return inspectObjectGraph(val, visited, depth + 1);
+            }
+            return false;
         }
         if (clazz.isArray()) {
             int len = java.lang.reflect.Array.getLength(obj);
@@ -133,9 +146,9 @@ public class MixinSquarePlacement {
                 field.setAccessible(true);
                 Object val = field.get(obj);
                 if (val != null) {
-                    // Check if field name implies horizontal spread/offset and holds a non-zero IntProvider
                     String name = field.getName().toLowerCase(Locale.ROOT);
-                    if ((name.contains("xz") || name.contains("offset") || name.contains("spread") || name.contains("radius"))
+                    // Match fields controlling horizontal position offset/spread (excluding 'radius')
+                    if ((name.contains("xz") || name.contains("offset") || name.contains("spread"))
                             && val instanceof IntProvider ip) {
                         if (ip.getMinValue() != 0 || ip.getMaxValue() != 0) {
                             return true;
