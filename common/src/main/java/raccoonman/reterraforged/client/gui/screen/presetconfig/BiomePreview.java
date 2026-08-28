@@ -3,19 +3,21 @@ package raccoonman.reterraforged.client.gui.screen.presetconfig;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 
+import com.mojang.serialization.JsonOps;
+import net.minecraft.client.gui.screens.worldselection.WorldCreationContext;
 import net.minecraft.core.Holder;
 import net.minecraft.core.QuartPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.WorldDataConfiguration;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.dimension.LevelStem;
-import net.minecraft.client.gui.screens.worldselection.WorldCreationContext;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
-import raccoonman.reterraforged.world.worldgen.biome.BiomePreviewResolver;
 import raccoonman.reterraforged.world.worldgen.biome.BiomePreviewIntegration;
+import raccoonman.reterraforged.world.worldgen.biome.BiomePreviewResolver;
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
@@ -141,14 +143,17 @@ final class BiomePreview {
     }
 
     static CacheKey cacheKey(WorldCreationContext settings, Preset preset) {
-        int presetHash = preset.hashCode();
+        String presetJson = Preset.DIRECT_CODEC.encodeStart(JsonOps.INSTANCE, preset)
+                .result()
+                .map(Object::toString)
+                .orElse("");
         int biomeCount = (int) settings.worldgenLoadContext().lookupOrThrow(Registries.BIOME).listElements().count();
         String biomeSource = settings.selectedDimensions().overworld().getBiomeSource().getClass().getName();
 
         return new CacheKey(
                 settings.options().seed(),
-                presetHash,
-                settings.dataConfiguration().hashCode(),
+                presetJson,
+                settings.dataConfiguration(),
                 biomeSource,
                 biomeCount
         );
@@ -202,7 +207,13 @@ final class BiomePreview {
         }
     }
 
-    record CacheKey(long seed, int presetHash, int dataConfigHash, String biomeSource, int biomeCount) {}
+    record CacheKey(
+            long seed,
+            String presetJson,
+            WorldDataConfiguration dataConfig,
+            String biomeSource,
+            int biomeCount
+    ) {}
 
     static final class Sidecar {
         private final int size;
