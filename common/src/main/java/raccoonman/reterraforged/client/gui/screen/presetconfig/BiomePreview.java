@@ -61,7 +61,8 @@ final class BiomePreview {
             PreviewCancellation cancellation
     ) {
         int size = tile.getBlockSize().size();
-        byte[] indices = new byte[size * size];
+        short[] indices = new short[size * size];
+        int[] colors = new int[size * size];
 
         WorkerBuffer buffer = WORKER_BUFFER.get();
         buffer.reset();
@@ -96,32 +97,27 @@ final class BiomePreview {
                 Entry entry = buffer.entryCache.get(rawBiome);
                 if (entry == null) {
                     ResourceLocation id = biome.unwrapKey().map(ResourceKey::location).orElse(UNREGISTERED);
-                    byte paletteIdx = (byte) buffer.palette.size();
-                    int color = BiomePreviewColors.color(biome, id);
+                    short paletteIdx = (short) buffer.palette.size();
                     buffer.palette.add(id.toString());
-                    buffer.paletteColors.add(color);
-                    entry = buffer.obtainEntry(paletteIdx);
+                    entry = buffer.obtainEntry(paletteIdx, BiomePreviewColors.color(biome, id));
                     buffer.entryCache.put(rawBiome, entry);
                 }
 
-                indices[z * size + x] = entry.paletteIndex;
+                int index = z * size + x;
+                indices[index] = entry.paletteIndex;
+                colors[index] = entry.color;
             });
-
-            int[] paletteColors = new int[buffer.paletteColors.size()];
-            for (int i = 0; i < paletteColors.length; i++) {
-                paletteColors[i] = buffer.paletteColors.get(i);
-            }
 
             return new Sidecar(
                     this.cacheKey,
                     size,
                     buffer.palette.toArray(new String[0]),
-                    paletteColors,
                     indices,
+                    colors,
                     this.resolver.warning()
             );
         } finally {
-            buffer.reset();
+            buffer.reset(); // Release Holder<Biome> and registry references to avoid memory leaks
         }
     }
 
@@ -166,13 +162,13 @@ final class BiomePreview {
     }
 
     private static final class Entry {
-        byte paletteIndex;
+        short paletteIndex;
+        int color;
     }
 
     private static final class WorkerBuffer {
         final IdentityHashMap<Biome, Entry> entryCache = new IdentityHashMap<>(32);
         final ArrayList<String> palette = new ArrayList<>(32);
-        final ArrayList<Integer> paletteColors = new ArrayList<>(32);
         final ArrayList<Entry> entryPool = new ArrayList<>(32);
 
         int lastQX = Integer.MIN_VALUE;
@@ -182,7 +178,7 @@ final class BiomePreview {
 
         private int entryPoolIndex = 0;
 
-        Entry obtainEntry(byte paletteIndex) {
+        Entry obtainEntry(short paletteIndex, int color) {
             Entry entry;
             if (this.entryPoolIndex < this.entryPool.size()) {
                 entry = this.entryPool.get(this.entryPoolIndex);
@@ -192,13 +188,13 @@ final class BiomePreview {
             }
             this.entryPoolIndex++;
             entry.paletteIndex = paletteIndex;
+            entry.color = color;
             return entry;
         }
 
         void reset() {
             this.entryCache.clear();
             this.palette.clear();
-            this.paletteColors.clear();
             this.entryPoolIndex = 0;
             this.lastQX = Integer.MIN_VALUE;
             this.lastQY = Integer.MIN_VALUE;
@@ -213,27 +209,29 @@ final class BiomePreview {
         private final CacheKey cacheKey;
         private final int size;
         private final String[] palette;
-        private final int[] paletteColors;
-        private final byte[] indices;
+        private final short[] indices;
+        private final int[] colors;
         private final String warning;
 
-        private Sidecar(CacheKey cacheKey, int size, String[] palette, int[] paletteColors, byte[] indices, String warning) {
+        private Sidecar(CacheKey cacheKey, int size, String[] palette, short[] indices, int[] colors, String warning) {
             this.cacheKey = cacheKey;
             this.size = size;
             this.palette = palette;
-            this.paletteColors = paletteColors;
             this.indices = indices;
+            this.colors = colors;
             this.warning = warning;
         }
 
         String id(int x, int z) {
-            int idx = Byte.toUnsignedInt(this.indices[this.index(x, z)]);
-            return this.palette[idx];
+            return this.palette[this.indices[this.index(x, z)]];
         }
 
         int color(int x, int z) {
-            int idx = Byte.toUnsignedInt(this.indices[this.index(x, z)]);
-            return this.paletteColors[idx];
+            return this.colors[this.index(x, z)];
+        }
+
+        CacheKey cacheKey() {
+            return this.cacheKey;
         }
 
         String warning() {
