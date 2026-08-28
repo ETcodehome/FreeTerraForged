@@ -39,7 +39,6 @@ import terrablender.util.LevelUtils;
  * Reconstructs the active Overworld surface biome-selection stack for preset previews.
  */
 public final class BiomePreviewResolver {
-	private final Climate.Sampler sampler;
 	private final TerraBlenderParameterList<Holder<Biome>> terraBlenderParameters;
 	private final Climate.ParameterList<Holder<Biome>> baseParameters;
 	private final Holder<Biome> finalFallback;
@@ -49,13 +48,11 @@ public final class BiomePreviewResolver {
 	private final Set<String> activeIntegrations = ConcurrentHashMap.newKeySet();
 
 	private BiomePreviewResolver(
-			Climate.Sampler sampler,
 			TerraBlenderParameterList<Holder<Biome>> terraBlenderParameters,
 			Climate.ParameterList<Holder<Biome>> baseParameters,
 			Holder<Biome> finalFallback,
 			BiomePreviewIntegration.Context integrationContext
 	) {
-		this.sampler = sampler;
 		this.terraBlenderParameters = terraBlenderParameters;
 		this.baseParameters = baseParameters;
 		this.finalFallback = finalFallback;
@@ -85,7 +82,6 @@ public final class BiomePreviewResolver {
 		}
 
 		LevelStem previewStem = new LevelStem(dimensionType, previewGenerator);
-		Climate.Sampler sampler = surfaceClimateSampler(noiseSettings.value(), generatorContext);
 		TerraBlenderParameterList<Holder<Biome>> terraBlenderParameters = terraBlenderParameters(biomeSource);
 		Climate.ParameterList<Holder<Biome>> baseParameters = parameters(biomeSource);
 		Holder<Biome> plains = registries.lookupOrThrow(Registries.BIOME).getOrThrow(Biomes.PLAINS);
@@ -95,35 +91,11 @@ public final class BiomePreviewResolver {
 		);
 
 		return new BiomePreviewResolver(
-				sampler,
 				terraBlenderParameters,
 				baseParameters,
 				plains,
 				integrationContext
 		);
-	}
-
-	private static Climate.Sampler surfaceClimateSampler(
-			NoiseGeneratorSettings noiseSettings,
-			GeneratorContext generatorContext
-	) {
-		Climate.Sampler sampler = new Climate.Sampler(
-				cell(generatorContext, CellSampler.Field.TEMPERATURE),
-				cell(generatorContext, CellSampler.Field.MOISTURE),
-				cell(generatorContext, CellSampler.Field.CONTINENT),
-				cell(generatorContext, CellSampler.Field.EROSION),
-				DensityFunctions.constant(0.0D),
-				cell(generatorContext, CellSampler.Field.WEIRDNESS),
-				noiseSettings.spawnTarget()
-		);
-		if (TBCompat.isEnabled() && (Object) sampler instanceof TBClimateSampler terraBlenderSampler) {
-			terraBlenderSampler.setUniqueness(cell(generatorContext, CellSampler.Field.BIOME_REGION));
-		}
-		return sampler;
-	}
-
-	private static DensityFunction cell(GeneratorContext context, CellSampler.Field field) {
-		return new CellSampler(() -> context.lookup, field);
 	}
 
 	private static void initializeTerraBlender(
@@ -148,10 +120,6 @@ public final class BiomePreviewResolver {
 		);
 	}
 
-	public Holder<Biome> resolveQuart(int quartX, int quartY, int quartZ) {
-		return this.resolveQuart(quartX, quartY, quartZ, this.sampler);
-	}
-
 	public Holder<Biome> resolveQuart(int quartX, int quartY, int quartZ, Climate.Sampler sampler) {
 		if (this.positionalSelectionEnabled.get()) {
 			try {
@@ -171,10 +139,6 @@ public final class BiomePreviewResolver {
 		float originX = centerX - tile.getBlockSize().size() * zoom / 2.0F;
 		float originZ = centerZ - tile.getBlockSize().size() * zoom / 2.0F;
 		return this.tileClimateSamplerAtOrigin(tile, originX, originZ, zoom);
-	}
-
-	public Climate.Sampler tileClimateSamplerAtOrigin(Tile tile, int originX, int originZ, int zoom) {
-		return this.tileClimateSamplerAtOrigin(tile, (float) originX, (float) originZ, zoom);
 	}
 
 	private Climate.Sampler tileClimateSamplerAtOrigin(Tile tile, float originX, float originZ, int zoom) {
@@ -199,36 +163,6 @@ public final class BiomePreviewResolver {
 
 	public BiomePreviewIntegration.Session openIntegrationSession() {
 		return BiomePreviewIntegrations.open(this.integrationContext, error -> {}, this.activeIntegrations::add);
-	}
-
-	public List<String> activeIntegrations() {
-		List<String> list = new ArrayList<>(this.activeIntegrations);
-		list.sort(null);
-		return list;
-	}
-
-	public TerraBlenderParameterList.SelectionDiagnostics<Holder<Biome>> inspectTerraBlenderSelection(
-			int quartX,
-			int quartY,
-			int quartZ
-	) {
-		return this.inspectTerraBlenderSelection(quartX, quartY, quartZ, this.sampler);
-	}
-
-	public TerraBlenderParameterList.SelectionDiagnostics<Holder<Biome>> inspectTerraBlenderSelection(
-			int quartX,
-			int quartY,
-			int quartZ,
-			Climate.Sampler sampler
-	) {
-		if (this.terraBlenderParameters == null) {
-			return new TerraBlenderParameterList.SelectionDiagnostics<>(
-					-1, null, null, "terra_blender_parameter_list_unavailable"
-			);
-		}
-		return this.terraBlenderParameters.reterraforged$inspectSelection(
-				sampler.sample(quartX, quartY, quartZ), quartX, quartY, quartZ
-		);
 	}
 
 	public String warning() {

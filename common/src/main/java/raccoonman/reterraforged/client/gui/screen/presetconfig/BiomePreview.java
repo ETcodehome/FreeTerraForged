@@ -109,7 +109,6 @@ final class BiomePreview {
             });
 
             return new Sidecar(
-                    this.cacheKey,
                     size,
                     buffer.palette.toArray(new String[0]),
                     indices,
@@ -206,15 +205,13 @@ final class BiomePreview {
     record CacheKey(long seed, int presetHash, int dataConfigHash, String biomeSource, int biomeCount) {}
 
     static final class Sidecar {
-        private final CacheKey cacheKey;
         private final int size;
         private final String[] palette;
         private final short[] indices;
         private final int[] colors;
         private final String warning;
 
-        private Sidecar(CacheKey cacheKey, int size, String[] palette, short[] indices, int[] colors, String warning) {
-            this.cacheKey = cacheKey;
+        private Sidecar(int size, String[] palette, short[] indices, int[] colors, String warning) {
             this.size = size;
             this.palette = palette;
             this.indices = indices;
@@ -228,10 +225,6 @@ final class BiomePreview {
 
         int color(int x, int z) {
             return this.colors[this.index(x, z)];
-        }
-
-        CacheKey cacheKey() {
-            return this.cacheKey;
         }
 
         String warning() {

@@ -46,7 +46,7 @@ final class PreviewComputationCache implements AutoCloseable {
             return existing.retain();
         }
 
-        TileEntry entry = new TileEntry(key, tile);
+        TileEntry entry = new TileEntry(tile);
         this.tiles.put(key, entry);
         TileLease lease = entry.retain();
         this.trimTiles();
@@ -171,14 +171,12 @@ final class PreviewComputationCache implements AutoCloseable {
     }
 
     private final class TileEntry {
-        private final TileKey key;
         private final Tile tile;
         private int references;
         private boolean evicted;
         private boolean recycled;
 
-        private TileEntry(TileKey key, Tile tile) {
-            this.key = key;
+        private TileEntry(Tile tile) {
             this.tile = tile;
         }
 
