@@ -13,24 +13,16 @@ import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noises;
 import raccoonman.reterraforged.world.worldgen.util.Seed;
 
-/**
- * Generates archipelago landmasses as a single coherent volcanic landform: a large, smooth
- * summit dome (built entirely from the low-frequency island shape mask, not noise) dissected by
- * erosion channels placed by warping a smooth noise field along the dome's own gradient direction.
- */
 public class ArchipelagoPopulator implements CellPopulator {
-    // Dome shaping defaults
     private static final float DOME_EXPONENT_MIN = 1.3F;
     private static final float DOME_EXPONENT_MAX = 3.6F;
     private static final float DOME_HEIGHT_SCALE = 0.95F;
 
-    // Radial channel carving defaults
     private static final float CHANNEL_DEPTH_MIN = 0.08F;
     private static final float CHANNEL_DEPTH_MAX = 0.32F;
     private static final float PEAK_DRIFT_STRENGTH = 0.35F;
-    private static final float MAX_VALLEY_CARVE_FRACTION = 0.55F; // Channels cannot carve deeper than 55% of dome height
+    private static final float MAX_VALLEY_CARVE_FRACTION = 0.55F;
 
-    // Base summit perturbation coefficient
     private static final float BASE_SUMMIT_PERTURB_STRENGTH = 0.42F;
 
     private IslandSettings settings;
@@ -39,6 +31,7 @@ public class ArchipelagoPopulator implements CellPopulator {
 
     private Noise sizeNoise;
     private Noise densityNoise;
+    private Noise regionNoise;
 
     private Noise peakDrift;
     private Noise channelPattern;
@@ -57,6 +50,7 @@ public class ArchipelagoPopulator implements CellPopulator {
     private float valleySharpness;
     private float channelWarpDist;
     private float gradientStep;
+    private float macroDensityPercentage; // Slider variable: 0.0 (no islands) -> 1.0 (islands everywhere)
 
     public ArchipelagoPopulator(IslandSettings settings, Levels levels, ControlPoints controlPoints, Seed seed) {
         this.settings = settings;
@@ -69,7 +63,8 @@ public class ArchipelagoPopulator implements CellPopulator {
         float mountainHScale = Math.max(0.1F, settings.mountainHorizontalScale);
         float volcanismHScale = Math.max(0.1F, settings.volcanismHorizontalScale);
 
-        // Coastline & Falloff Distortion
+        this.macroDensityPercentage = NoiseUtil.clamp(this.settings.macroDensityPercentage, 0.0F, 1.0F);
+
         Noise sizeN = Noises.simplex(1273 + salt, Math.max(1, Math.round(size * 3.5F / hScale)), 3);
         sizeN = Noises.warpPerlin(sizeN, 1273 + salt, Math.max(1, Math.round(size * 2.0F / hScale)), 2, size * 0.5F / hScale);
         sizeN = Noises.warpPerlin(sizeN, 4830 + salt, Math.max(1, Math.round(size * 0.5F / hScale)), 1, size * 0.3F / hScale);
@@ -82,16 +77,14 @@ public class ArchipelagoPopulator implements CellPopulator {
         densityN = Noises.clamp(densityN, 0.0F, 1.0F);
         this.densityNoise = densityN;
 
-        // Peak drift scaled horizontally by mountainHorizontalScale
+        Noise regionN = Noises.simplex(1492 + salt, 12000, 2);
+        regionN = Noises.warpPerlin(regionN, 1492 + salt, 4000, 2, 2000.0F);
+        regionN = Noises.clamp(regionN, 0.0F, 1.0F);
+        this.regionNoise = regionN;
+
         this.peakDrift = Noises.simplex(3391 + salt, Math.max(1, Math.round((size * 1.2F * mountainHScale) / hScale)), 1);
-
-        // Channel pattern frequency scaled horizontally by volcanismHorizontalScale
         this.channelPattern = Noises.simplex(7213 + salt, Math.max(1, Math.round((size * 0.32F * volcanismHScale) / hScale)), 2);
-
-        // Summit relief wavelength scaled horizontally by mountainHorizontalScale
         this.summitPerturb = Noises.simplex(5107 + salt, Math.max(1, Math.round((size * 0.4F * mountainHScale) / hScale)), 2);
-
-        // Beach variance
         this.beachVariance = Noises.simplex(5541 + salt, Math.max(1, Math.round(size * 0.21F / hScale)), 2);
 
         this.islandErosion = Erosion.LEVEL_4.source();
@@ -116,14 +109,29 @@ public class ArchipelagoPopulator implements CellPopulator {
     private float rawShape(float x, float z) {
         float sizeValue = this.sizeNoise.compute(x, z, 0);
         float densityValue = this.densityNoise.compute(x, z, 0);
-        float densityThreshold = NoiseUtil.clamp(1.0F - this.settings.islandDensity * 0.8F, 0.05F, 0.98F);
+        float regionValue = this.regionNoise.compute(x, z, 0);
 
-        float shapeAlpha = smoothStep(0.5F, 1.0F, sizeValue);
+        // Dynamically shift the threshold cutoff based on macroDensity slider:
+        // macroDensity = 0.0 -> threshold = 1.05F (regionAlpha is forced to 0.0F everywhere)
+        // macroDensity = 0.5 -> threshold = 0.40F (balanced macro ocean gaps and island clusters)
+        // macroDensity = 1.0 -> threshold = -0.25F (regionAlpha is forced to 1.0F everywhere)
+        float regionThreshold = NoiseUtil.lerp(1.05F, -0.25F, this.macroDensityPercentage);
+        float regionAlpha = smoothStep(regionThreshold, regionThreshold + 0.25F, regionValue);
+
+        float densityThreshold = NoiseUtil.clamp(1.0F - this.settings.islandDensity * 0.8F, 0.05F, 0.98F);
         float densityFade = NoiseUtil.clamp((1.0F - densityThreshold) * 0.5F, 0.04F, 0.12F);
         float densityAlpha = smoothStep(densityThreshold, densityThreshold + densityFade, densityValue);
 
+        float totalDensityMask = densityAlpha * regionAlpha;
+        if (totalDensityMask <= 0.001F) {
+            return 0.0F;
+        }
+
+        float shapeAlpha = smoothStep(0.5F, 1.0F, sizeValue);
         float drift = this.peakDrift.compute(x, z, 0) * PEAK_DRIFT_STRENGTH;
-        return NoiseUtil.clamp(shapeAlpha * densityAlpha + drift * shapeAlpha, 0.0F, 1.0F);
+        float driftedShape = NoiseUtil.clamp(shapeAlpha + drift * shapeAlpha, 0.0F, 1.0F);
+
+        return driftedShape * totalDensityMask;
     }
 
     @Override
@@ -165,22 +173,18 @@ public class ArchipelagoPopulator implements CellPopulator {
         float landTransitionEnd = NoiseUtil.clamp(NoiseUtil.lerp(1.0F, dynamicBeachEnd + 0.32F, cliffFactor), dynamicBeachEnd + 0.05F, 1.0F);
         float landAlpha = smoothStep(dynamicBeachEnd, landTransitionEnd, islandAlpha);
 
-        // Elevated inland baseline offset to ensure land stays well above sea level past the beach
         float inlandBase = landAlpha * this.settings.islandHeight * (0.035F + this.settings.islandBaseScale * 0.10F);
 
-        // Blend linear dome profile with exponential power curve to keep lower/mid flanks elevated
         float macroDome = shape;
         float linearDome = macroDome;
         float exponentialDome = (float) Math.pow(macroDome, this.domeExponent);
         float domeShape = NoiseUtil.lerp(linearDome * 0.40F, exponentialDome, macroDome);
         float domeContribution = domeShape * this.settings.islandHeight * this.settings.islandVerticalScale * DOME_HEIGHT_SCALE;
 
-        // Summit perturbation
         float summitInfluence = smoothStep(0.6F, 0.95F, macroDome);
         float summitPerturbValue = this.summitPerturb.compute(x, z, 0) * summitInfluence * this.summitPerturbStrength;
         domeContribution += summitPerturbValue * this.settings.islandHeight * this.settings.islandVerticalScale;
 
-        // Radial erosion channels
         float shapeXOffset = this.rawShape(x + this.gradientStep, z);
         float shapeZOffset = this.rawShape(x, z + this.gradientStep);
         float gx = (shapeXOffset - shape) / this.gradientStep;
@@ -205,7 +209,6 @@ public class ArchipelagoPopulator implements CellPopulator {
             carveDepth = channelMask * carveEnvelope * this.channelDepthScale * this.settings.islandHeight * this.settings.islandVerticalScale;
         }
 
-        // Cap channel carving depth to a maximum fraction of local dome height so valleys never gouge to baseline
         float effectiveCarve = Math.min(carveDepth, domeContribution * MAX_VALLEY_CARVE_FRACTION);
         float reliefHeight = Math.max(0.0F, domeContribution - effectiveCarve);
 

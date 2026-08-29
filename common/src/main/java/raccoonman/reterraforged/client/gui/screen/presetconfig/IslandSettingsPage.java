@@ -28,6 +28,7 @@ public class IslandSettingsPage extends PresetEditorPage {
 	private Slider offshoreDepth;
 	private Slider beachWidth;
 	private Slider beachCoverage;
+	private Slider macroDensityPercentage;
 
 	public IslandSettingsPage(PresetConfigScreen screen, PresetEntry preset) {
 		super(screen, preset);
@@ -51,6 +52,11 @@ public class IslandSettingsPage extends PresetEditorPage {
 		});
 		this.islandDensity = PresetWidgets.createFloatSlider(island.islandDensity, 0.0F, 1.0F, RTFTranslationKeys.GUI_SLIDER_ISLAND_DENSITY, (slider, value) -> {
 			island.islandDensity = (float) slider.scaleValue(value);
+			this.regenerate();
+			return value;
+		});
+		this.macroDensityPercentage = PresetWidgets.createFloatSlider(island.macroDensityPercentage, 0.0F, 1.0F, RTFTranslationKeys.GUI_SLIDER_ISLAND_MACRO_DENSITY, (slider, value) -> {
+			island.macroDensityPercentage = (float) slider.scaleValue(value);
 			this.regenerate();
 			return value;
 		});
@@ -129,6 +135,7 @@ public class IslandSettingsPage extends PresetEditorPage {
 		this.left.addWidget(PresetWidgets.createLabel(RTFTranslationKeys.GUI_LABEL_ISLAND));
 		this.left.addWidget(this.enableArchipelago);
 		this.left.addWidget(this.islandDensity);
+		this.left.addWidget(this.macroDensityPercentage);
 		this.left.addWidget(this.islandSize);
 
 		// island scales

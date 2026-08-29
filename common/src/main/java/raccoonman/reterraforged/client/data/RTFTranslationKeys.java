@@ -225,10 +225,11 @@ public final class RTFTranslationKeys {
 	public static final String GUI_BUTTON_FLOW_PARTICLES = resolve("gui.button.river.flow.particles");
 	public static final String GUI_BUTTON_BOAT_FLOW_DYNAMICS = resolve("gui.button.boat.flow.dynamics");
 	public static final String GUI_BUTTON_NAVIGABLE_WATERFALLS = resolve("gui.button.boat.navigable.waterfalls");
-    public static final String GUI_SLIDER_ISLAND_MOUNTAIN_HORIZONTAL_SCALE = "mt hor scale";
-	public static final String GUI_SLIDER_ISLAND_VOLCANISM_HORIZONTAL_SCALE = "volc hor scale";
+    public static final String GUI_SLIDER_ISLAND_MOUNTAIN_HORIZONTAL_SCALE = resolve("gui.slider.islandMountainHorizontalScale");
+	public static final String GUI_SLIDER_ISLAND_VOLCANISM_HORIZONTAL_SCALE = resolve("gui.slider.islandVolcanismHorizontalScale");
+    public static final String GUI_SLIDER_ISLAND_MACRO_DENSITY = resolve("gui.slider.islandMacroDensityPercentage");
 
-	private static String resolve(String key) {
+    private static String resolve(String key) {
 		return RTFCommon.MOD_ID + "." + key;
 	}
 }
