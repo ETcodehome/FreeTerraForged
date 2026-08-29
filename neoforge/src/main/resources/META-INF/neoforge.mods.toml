@@ -32,3 +32,11 @@ license="MIT"
 	versionRange = "[1.21.1,)"
 	ordering = "NONE"
 	side = "BOTH"
+
+# We enforce 3.0.14 because otherwise biome previews break in a non-obvious manner
+[[dependencies.reterraforged]]
+    modId = "biolith"
+    type = "optional"
+    versionRange = "[3.0.14,)"
+    ordering = "AFTER"
+    side = "BOTH"

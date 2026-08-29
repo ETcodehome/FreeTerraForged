@@ -61,10 +61,7 @@ public final class BiolithPreviewContext {
 	}
 
 	public static void preInitializeBiomeLookup(RegistryAccess registries) {
-		try {
-			BiomeCoordinator.setEarlyBiomeLookup(registries.lookupOrThrow(Registries.BIOME));
-		} catch (RuntimeException | LinkageError ignored) {
-		}
+		BiomeCoordinator.setEarlyBiomeLookup(registries.lookupOrThrow(Registries.BIOME));
 	}
 
 	public static BiomePreviewIntegration.Session open(
