@@ -2,6 +2,7 @@ package raccoonman.reterraforged.world.worldgen.biome;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.ConcurrentHashMap;
@@ -36,13 +37,20 @@ import raccoonman.reterraforged.world.worldgen.terrablender.TerraBlenderParamete
 import terrablender.util.LevelUtils;
 
 /**
- * Reconstructs the active Overworld biome-selection stack for preset previews.
- * Queries deliberately use the positional biome-source path so companion-mod
- * replacements and sub-biomes remain authoritative.
+ * Reconstructs the active Overworld surface biome-selection stack for preset previews.
  */
 public final class BiomePreviewResolver {
-	private final Climate.Sampler sampler;
-	private final SurfaceBiomeFilter<Holder<Biome>> surfaceFilter;
+	private static final Object INIT_LOCK = new Object();
+	private static volatile InitCache initCache = null;
+
+	private record InitCache(
+			RegistryAccess registries,
+			long seed,
+			LevelStem levelStem,
+			NoiseBasedChunkGenerator previewGenerator,
+			BiomeSource biomeSource
+	) {}
+
 	private final TerraBlenderParameterList<Holder<Biome>> terraBlenderParameters;
 	private final Climate.ParameterList<Holder<Biome>> baseParameters;
 	private final Holder<Biome> finalFallback;
@@ -52,169 +60,157 @@ public final class BiomePreviewResolver {
 	private final Set<String> activeIntegrations = ConcurrentHashMap.newKeySet();
 
 	private BiomePreviewResolver(
-		Climate.Sampler sampler,
-		SurfaceBiomeFilter<Holder<Biome>> surfaceFilter,
-		TerraBlenderParameterList<Holder<Biome>> terraBlenderParameters,
-		Climate.ParameterList<Holder<Biome>> baseParameters,
-		Holder<Biome> finalFallback,
-		BiomePreviewIntegration.Context integrationContext
+			TerraBlenderParameterList<Holder<Biome>> terraBlenderParameters,
+			Climate.ParameterList<Holder<Biome>> baseParameters,
+			Holder<Biome> finalFallback,
+			BiomePreviewIntegration.Context integrationContext
 	) {
-		this.sampler = sampler;
-		this.surfaceFilter = surfaceFilter;
 		this.terraBlenderParameters = terraBlenderParameters;
 		this.baseParameters = baseParameters;
 		this.finalFallback = finalFallback;
 		this.integrationContext = integrationContext;
 	}
 
+	public static void clearCache() {
+		synchronized (INIT_LOCK) {
+			initCache = null;
+		}
+	}
+
 	public static BiomePreviewResolver create(
-		RegistryAccess registries,
-		HolderLookup.Provider provider,
-		Holder<DimensionType> dimensionType,
-		ChunkGenerator activeGenerator,
-		Preset preset,
-		GeneratorContext generatorContext,
-		long seed
+			RegistryAccess registries,
+			HolderLookup.Provider provider,
+			Holder<DimensionType> dimensionType,
+			ChunkGenerator activeGenerator,
+			Preset preset,
+			GeneratorContext generatorContext,
+			long seed
 	) {
-		BiomeSource biomeSource = copyBiomeSource(activeGenerator.getBiomeSource());
-		Holder<NoiseGeneratorSettings> noiseSettings = provider.lookupOrThrow(Registries.NOISE_SETTINGS)
-			.getOrThrow(NoiseGeneratorSettings.OVERWORLD);
-		NoiseBasedChunkGenerator previewGenerator = new NoiseBasedChunkGenerator(biomeSource, noiseSettings);
+		LevelStem previewStem;
+		NoiseBasedChunkGenerator previewGenerator;
+		BiomeSource biomeSource;
+		boolean newlyInitialized = false;
 
-		if (BiolithCompat.isEnabled()) {
-			BiolithPreviewContext.preInitializeBiomeLookup(registries);
+		synchronized (INIT_LOCK) {
+			if (initCache == null || initCache.registries() != registries || initCache.seed() != seed) {
+				biomeSource = copyBiomeSource(activeGenerator.getBiomeSource());
+				Holder<NoiseGeneratorSettings> noiseSettings = provider.lookupOrThrow(Registries.NOISE_SETTINGS)
+						.getOrThrow(NoiseGeneratorSettings.OVERWORLD);
+				previewGenerator = new NoiseBasedChunkGenerator(biomeSource, noiseSettings);
+				previewStem = new LevelStem(dimensionType, previewGenerator);
+
+				if (BiolithCompat.isEnabled()) {
+					BiolithPreviewContext.preInitializeBiomeLookup(registries);
+				}
+
+				if (TBCompat.isEnabled()) {
+					initializeTerraBlender(registries, dimensionType, previewGenerator, biomeSource, preset, seed);
+				}
+
+				initCache = new InitCache(registries, seed, previewStem, previewGenerator, biomeSource);
+				newlyInitialized = true;
+			} else {
+				previewStem = initCache.levelStem();
+				previewGenerator = initCache.previewGenerator();
+				biomeSource = initCache.biomeSource();
+
+				if (TBCompat.isEnabled()
+						&& biomeSource instanceof MultiNoiseBiomeSource
+						&& (Object) biomeSource instanceof RTFMultiNoiseBiomeSource source
+						&& (Object) source.reterraforged$getParameters() instanceof TerraBlenderParameterList<?> parameters) {
+					parameters.reterraforged$preparePreview(preset, seed);
+				}
+			}
 		}
 
-		if (TBCompat.isEnabled()) {
-			initializeTerraBlender(registries, dimensionType, previewGenerator, biomeSource, preset, seed);
-		}
-
-		LevelStem previewStem = new LevelStem(dimensionType, previewGenerator);
-
-		Climate.Sampler sampler = surfaceClimateSampler(noiseSettings.value(), preset, generatorContext, seed);
 		TerraBlenderParameterList<Holder<Biome>> terraBlenderParameters = terraBlenderParameters(biomeSource);
-		List<Holder<Biome>> additionalUndergroundCandidates = new ArrayList<>();
-		if (terraBlenderParameters != null) {
-			TerraBlenderParameterList.CompositionDiagnostics<Holder<Biome>> diagnostics =
-				terraBlenderParameters.reterraforged$getCompositionDiagnostics();
-			additionalUndergroundCandidates.addAll(diagnostics.shallowCandidates());
-			additionalUndergroundCandidates.addAll(diagnostics.deepCandidates());
-		}
-		Holder<Biome> plains = registries.lookupOrThrow(Registries.BIOME).getOrThrow(Biomes.PLAINS);
-		SurfaceBiomeFilter<Holder<Biome>> surfaceFilter = surfaceFilter(
-			biomeSource, additionalUndergroundCandidates, plains
-		);
 		Climate.ParameterList<Holder<Biome>> baseParameters = parameters(biomeSource);
+		Holder<Biome> plains = registries.lookupOrThrow(Registries.BIOME).getOrThrow(Biomes.PLAINS);
+
 		BiomePreviewIntegration.Context integrationContext = new BiomePreviewIntegration.Context(
-			seed, registries, provider, biomeSource, previewGenerator, previewStem, preset, generatorContext
+				seed, registries, provider, biomeSource, previewGenerator, previewStem, preset, generatorContext
 		);
-		return new BiomePreviewResolver(
-			sampler,
-			surfaceFilter,
-			terraBlenderParameters,
-			baseParameters,
-			plains,
-			integrationContext
-		);
-	}
 
-	private static Climate.Sampler surfaceClimateSampler(
-		NoiseGeneratorSettings noiseSettings,
-		Preset preset,
-		GeneratorContext generatorContext,
-		long seed
-	) {
-		Climate.Sampler sampler = new Climate.Sampler(
-			cell(generatorContext, CellSampler.Field.TEMPERATURE),
-			cell(generatorContext, CellSampler.Field.MOISTURE),
-			cell(generatorContext, CellSampler.Field.CONTINENT),
-			cell(generatorContext, CellSampler.Field.EROSION),
-			DensityFunctions.constant(0.0D),
-			cell(generatorContext, CellSampler.Field.WEIRDNESS),
-			noiseSettings.spawnTarget()
+		BiomePreviewResolver resolver = new BiomePreviewResolver(
+				terraBlenderParameters,
+				baseParameters,
+				plains,
+				integrationContext
 		);
-		((RTFClimateSampler) (Object) sampler).setUndergroundBiomeBandingPreset(preset, seed);
-		((RTFClimateSampler) (Object) sampler).setUndergroundBiomeSurfaceContext(generatorContext);
-		if (TBCompat.isEnabled() && (Object) sampler instanceof TBClimateSampler terraBlenderSampler) {
-			terraBlenderSampler.setUniqueness(cell(generatorContext, CellSampler.Field.BIOME_REGION));
+
+		if (newlyInitialized) {
+			resolver.prewarm();
 		}
-		return sampler;
-	}
 
-	private static DensityFunction cell(GeneratorContext context, CellSampler.Field field) {
-		return new CellSampler(() -> context.lookup, field);
+		return resolver;
 	}
 
 	private static void initializeTerraBlender(
-		RegistryAccess registries,
-		Holder<DimensionType> dimensionType,
-		NoiseBasedChunkGenerator previewGenerator,
-		BiomeSource biomeSource,
-		Preset preset,
-		long seed
+			RegistryAccess registries,
+			Holder<DimensionType> dimensionType,
+			NoiseBasedChunkGenerator previewGenerator,
+			BiomeSource biomeSource,
+			Preset preset,
+			long seed
 	) {
 		if (biomeSource instanceof MultiNoiseBiomeSource
-			&& (Object) biomeSource instanceof RTFMultiNoiseBiomeSource source
-			&& (Object) source.reterraforged$getParameters() instanceof TerraBlenderParameterList<?> parameters) {
+				&& (Object) biomeSource instanceof RTFMultiNoiseBiomeSource source
+				&& (Object) source.reterraforged$getParameters() instanceof TerraBlenderParameterList<?> parameters) {
 			parameters.reterraforged$preparePreview(preset, seed);
 		}
 		LevelUtils.initializeBiomes(
-			registries,
-			dimensionType,
-			LevelStem.OVERWORLD,
-			previewGenerator,
-			seed
+				registries,
+				dimensionType,
+				LevelStem.OVERWORLD,
+				previewGenerator,
+				seed
 		);
 	}
 
-	public Holder<Biome> resolveQuart(int quartX, int quartY, int quartZ) {
-		return this.resolveQuart(quartX, quartY, quartZ, this.sampler);
+	/**
+	 * Pre-warms integration hooks (TerraBlender/Biolith) on the creator thread.
+	 * Evaluates dummy samples inside an integration session to construct regional biome trees
+	 * synchronously, avoiding multi-threaded lazy composition locks during resolution.
+	 */
+	private void prewarm() {
+		if (!TBCompat.isEnabled() && !BiolithCompat.isEnabled()) {
+			return;
+		}
+		try (BiomePreviewIntegration.Session ignored = this.openIntegrationSession()) {
+			NoiseBasedChunkGenerator generator = (NoiseBasedChunkGenerator) this.integrationContext.generator();
+			List<Climate.ParameterPoint> spawnTarget = generator.generatorSettings().value().spawnTarget();
+
+			Climate.Sampler dummySampler = new Climate.Sampler(
+					DensityFunctions.constant(0.0D),
+					DensityFunctions.constant(0.0D),
+					DensityFunctions.constant(0.0D),
+					DensityFunctions.constant(0.0D),
+					DensityFunctions.constant(0.0D),
+					DensityFunctions.constant(0.0D),
+					spawnTarget
+			);
+
+			// Sample surface and underground points to force both surface and cave tree composition upfront
+			this.resolveQuart(0, 16, 0, dummySampler);
+			this.resolveQuart(0, -16, 0, dummySampler);
+		} catch (Throwable error) {
+			RTFCommon.LOGGER.debug("Pre-warming BiomePreviewResolver tree snapshot encountered an issue: ", error);
+		}
 	}
 
 	public Holder<Biome> resolveQuart(int quartX, int quartY, int quartZ, Climate.Sampler sampler) {
-		Holder<Biome> selected = null;
-		Holder<Biome> composedOriginal = null;
-		boolean composedSelection = false;
 		if (this.positionalSelectionEnabled.get()) {
-			PreviewBiomeQueryContext.begin(quartX, quartY, quartZ);
 			try {
-				selected = this.integrationContext.generator().getBiomeSource()
-					.getNoiseBiome(quartX, quartY, quartZ, sampler);
-				if (selected == null) {
-					throw new IllegalStateException("Biome source returned null during preview selection");
+				Holder<Biome> selected = this.integrationContext.generator().getBiomeSource()
+						.getNoiseBiome(quartX, quartY, quartZ, sampler);
+				if (selected != null) {
+					return selected;
 				}
 			} catch (RuntimeException | LinkageError error) {
 				this.disablePositionalSelection(error);
-				selected = this.resolveFallback(quartX, quartY, quartZ, sampler);
-			} finally {
-				composedSelection = PreviewBiomeQueryContext.matches(quartX, quartY, quartZ, selected);
-				if (composedSelection && PreviewBiomeQueryContext.original() instanceof Holder<?> holder) {
-					@SuppressWarnings("unchecked")
-					Holder<Biome> original = (Holder<Biome>) holder;
-					composedOriginal = original;
-				}
-				PreviewBiomeQueryContext.end();
-			}
-		} else {
-			selected = this.resolveFallback(quartX, quartY, quartZ, sampler);
-		}
-		if (!this.surfaceFilter.isUnderground(selected)) {
-			return selected;
-		}
-		Climate.TargetPoint target = sampler.sample(quartX, quartY, quartZ);
-		if (composedSelection) {
-			if (composedOriginal != null && !this.surfaceFilter.isUnderground(composedOriginal)) {
-				return composedOriginal;
-			}
-		} else if (this.terraBlenderParameters != null) {
-			Holder<Biome> regionalSurface = this.terraBlenderParameters
-				.reterraforged$inspectSelection(target, quartX, quartY, quartZ)
-				.original();
-			if (regionalSurface != null && !this.surfaceFilter.isUnderground(regionalSurface)) {
-				return regionalSurface;
 			}
 		}
-		return this.surfaceFilter.resolve(target, selected);
+		return this.resolveFallback(quartX, quartY, quartZ, sampler);
 	}
 
 	public Climate.Sampler tileClimateSampler(Tile tile, int centerX, int centerZ, int zoom) {
@@ -223,25 +219,21 @@ public final class BiomePreviewResolver {
 		return this.tileClimateSamplerAtOrigin(tile, originX, originZ, zoom);
 	}
 
-	public Climate.Sampler tileClimateSamplerAtOrigin(Tile tile, int originX, int originZ, int zoom) {
-		return this.tileClimateSamplerAtOrigin(tile, (float) originX, (float) originZ, zoom);
-	}
 	private Climate.Sampler tileClimateSamplerAtOrigin(Tile tile, float originX, float originZ, int zoom) {
 		NoiseBasedChunkGenerator previewGenerator = (NoiseBasedChunkGenerator) this.integrationContext.generator();
 		var heightmap = this.integrationContext.generatorContext().lookup.getHeightmap();
 		Climate.Sampler sampler = new Climate.Sampler(
-			new PreviewTileClimateSampler(tile, heightmap, originX, originZ, zoom, CellSampler.Field.TEMPERATURE),
-			new PreviewTileClimateSampler(tile, heightmap, originX, originZ, zoom, CellSampler.Field.MOISTURE),
-			new PreviewTileClimateSampler(tile, heightmap, originX, originZ, zoom, CellSampler.Field.CONTINENT),
-			new PreviewTileClimateSampler(tile, heightmap, originX, originZ, zoom, CellSampler.Field.EROSION),
-			DensityFunctions.constant(0.0D),
-			new PreviewTileClimateSampler(tile, heightmap, originX, originZ, zoom, CellSampler.Field.WEIRDNESS),
-			previewGenerator.generatorSettings().value().spawnTarget()
+				new PreviewTileClimateSampler(tile, heightmap, originX, originZ, zoom, CellSampler.Field.TEMPERATURE),
+				new PreviewTileClimateSampler(tile, heightmap, originX, originZ, zoom, CellSampler.Field.MOISTURE),
+				new PreviewTileClimateSampler(tile, heightmap, originX, originZ, zoom, CellSampler.Field.CONTINENT),
+				new PreviewTileClimateSampler(tile, heightmap, originX, originZ, zoom, CellSampler.Field.EROSION),
+				DensityFunctions.constant(0.0D),
+				new PreviewTileClimateSampler(tile, heightmap, originX, originZ, zoom, CellSampler.Field.WEIRDNESS),
+				previewGenerator.generatorSettings().value().spawnTarget()
 		);
-		((RTFClimateSampler) (Object) sampler).setUndergroundBiomeBandingPreset(this.integrationContext.preset(), this.integrationContext.seed());
 		if (TBCompat.isEnabled() && (Object) sampler instanceof TBClimateSampler terraBlenderSampler) {
 			terraBlenderSampler.setUniqueness(new PreviewTileClimateSampler(
-				tile, heightmap, originX, originZ, zoom, CellSampler.Field.BIOME_REGION
+					tile, heightmap, originX, originZ, zoom, CellSampler.Field.BIOME_REGION
 			));
 		}
 		return sampler;
@@ -249,34 +241,6 @@ public final class BiomePreviewResolver {
 
 	public BiomePreviewIntegration.Session openIntegrationSession() {
 		return BiomePreviewIntegrations.open(this.integrationContext, error -> {}, this.activeIntegrations::add);
-	}
-
-	public List<String> activeIntegrations() {
-		return this.activeIntegrations.stream().sorted().toList();
-	}
-
-	public TerraBlenderParameterList.SelectionDiagnostics<Holder<Biome>> inspectTerraBlenderSelection(
-		int quartX,
-		int quartY,
-		int quartZ
-	) {
-		return this.inspectTerraBlenderSelection(quartX, quartY, quartZ, this.sampler);
-	}
-
-	public TerraBlenderParameterList.SelectionDiagnostics<Holder<Biome>> inspectTerraBlenderSelection(
-		int quartX,
-		int quartY,
-		int quartZ,
-		Climate.Sampler sampler
-	) {
-		if (this.terraBlenderParameters == null) {
-			return new TerraBlenderParameterList.SelectionDiagnostics<>(
-				-1, null, null, "terra_blender_parameter_list_unavailable"
-			);
-		}
-		return this.terraBlenderParameters.reterraforged$inspectSelection(
-			sampler.sample(quartX, quartY, quartZ), quartX, quartY, quartZ
-		);
 	}
 
 	public String warning() {
@@ -287,8 +251,8 @@ public final class BiomePreviewResolver {
 		Climate.TargetPoint target = sampler.sample(quartX, quartY, quartZ);
 		if (this.terraBlenderParameters != null) {
 			Holder<Biome> selected = this.terraBlenderParameters
-				.reterraforged$inspectSelection(target, quartX, quartY, quartZ)
-				.banded();
+					.reterraforged$inspectSelection(target, quartX, quartY, quartZ)
+					.banded();
 			if (selected != null) {
 				return selected;
 			}
@@ -307,44 +271,16 @@ public final class BiomePreviewResolver {
 		String message = "Runtime biome replacements unavailable; showing composed biome registrations";
 		if (this.warning.compareAndSet(null, message)) {
 			RTFCommon.LOGGER.error(
-				"A biome mod failed during positional preview selection; falling back to the composed parameter tree",
-				error
+					"A biome mod failed during positional preview selection; falling back to the composed parameter tree",
+					error
 			);
 		}
-	}
-
-	public boolean isUnderground(Holder<Biome> biome) {
-		return this.surfaceFilter.isUnderground(biome);
-	}
-
-	private static SurfaceBiomeFilter<Holder<Biome>> surfaceFilter(
-		BiomeSource biomeSource,
-		List<Holder<Biome>> additionalUndergroundCandidates,
-		Holder<Biome> finalFallback
-	) {
-		if (biomeSource instanceof MultiNoiseBiomeSource
-			&& (Object) biomeSource instanceof RTFMultiNoiseBiomeSource multiNoise) {
-			return SurfaceBiomeFilter.create(
-				multiNoise.reterraforged$getParameters().values(),
-				(point, biome) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(biome)),
-				UndergroundBiomeTags::isCave,
-				additionalUndergroundCandidates,
-				finalFallback
-			);
-		}
-		return SurfaceBiomeFilter.create(
-			List.of(),
-			(point, biome) -> UndergroundBiomeBanding.CandidateRole.UNKNOWN,
-			UndergroundBiomeTags::isCave,
-			additionalUndergroundCandidates,
-			finalFallback
-		);
 	}
 
 	@SuppressWarnings("unchecked")
 	private static TerraBlenderParameterList<Holder<Biome>> terraBlenderParameters(BiomeSource biomeSource) {
 		if (biomeSource instanceof MultiNoiseBiomeSource
-			&& (Object) ((RTFMultiNoiseBiomeSource) biomeSource).reterraforged$getParameters()
+				&& (Object) ((RTFMultiNoiseBiomeSource) biomeSource).reterraforged$getParameters()
 				instanceof TerraBlenderParameterList<?> parameters) {
 			return (TerraBlenderParameterList<Holder<Biome>>) parameters;
 		}
@@ -353,7 +289,7 @@ public final class BiomePreviewResolver {
 
 	private static Climate.ParameterList<Holder<Biome>> parameters(BiomeSource biomeSource) {
 		if (biomeSource instanceof MultiNoiseBiomeSource
-			&& (Object) biomeSource instanceof RTFMultiNoiseBiomeSource multiNoise) {
+				&& (Object) biomeSource instanceof RTFMultiNoiseBiomeSource multiNoise) {
 			return multiNoise.reterraforged$getParameters();
 		}
 		return null;
@@ -361,9 +297,9 @@ public final class BiomePreviewResolver {
 
 	private static BiomeSource copyBiomeSource(BiomeSource source) {
 		if (source instanceof MultiNoiseBiomeSource
-			&& (Object) source instanceof RTFMultiNoiseBiomeSource multiNoise) {
+				&& (Object) source instanceof RTFMultiNoiseBiomeSource multiNoise) {
 			List<com.mojang.datafixers.util.Pair<Climate.ParameterPoint, Holder<Biome>>> values =
-				List.copyOf(multiNoise.reterraforged$getParameters().values());
+					List.copyOf(multiNoise.reterraforged$getParameters().values());
 			return MultiNoiseBiomeSource.createFromList(new Climate.ParameterList<>(values));
 		}
 		return source;
