@@ -132,21 +132,22 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 	}
 
 	@ModifyArg(
-		method = "initializeForTerraBlender",
-		at = @At(
-			value = "INVOKE",
-			target = "Lnet/minecraft/world/level/biome/Climate$RTree;create(Ljava/util/List;)Lnet/minecraft/world/level/biome/Climate$RTree;"
-		),
-		index = 0,
-		require = 1
+			method = "initializeForTerraBlender",
+			at = @At(
+					value = "INVOKE",
+					target = "Lnet/minecraft/world/level/biome/Climate$RTree;create(Ljava/util/List;)Lnet/minecraft/world/level/biome/Climate$RTree;"
+			),
+			index = 0,
+			require = 1
 	)
 	private List<Pair<Climate.ParameterPoint, T>> reterraforged$captureRegionalEntries(
-		List<Pair<Climate.ParameterPoint, T>> entries
+			List<Pair<Climate.ParameterPoint, T>> entries
 	) {
+		List<Pair<Climate.ParameterPoint, T>> deduplicated = reterraforged$deduplicateEntries(entries);
 		if (this.reterraforged$bandingPreset != null) {
-			this.reterraforged$pendingRegionalEntries.add(List.copyOf(entries));
+			this.reterraforged$pendingRegionalEntries.add(deduplicated);
 		}
-		return entries;
+		return deduplicated;
 	}
 
 	@Inject(
@@ -488,17 +489,21 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 						continue;
 					}
 
-					List<Pair<Climate.ParameterPoint, T>> effectiveEntries = index == 0
-						? Collections.unmodifiableList(new ArrayList<>(currentValues))
-						: ClimateParameterListComposition.append(captured, snapshot.globalAdditions());
+					List<Pair<Climate.ParameterPoint, T>> rawEffectiveEntries = index == 0
+							? currentValues
+							: ClimateParameterListComposition.append(captured, snapshot.globalAdditions());
+
+					// Filter duplicate parameter-to-biome pairs before building search trees
+					List<Pair<Climate.ParameterPoint, T>> effectiveEntries = reterraforged$deduplicateEntries(rawEffectiveEntries);
+
 					ClimateParameterListComposition.CandidateOverlay<T> overlay =
-						ClimateParameterListComposition.overlayUndergroundCandidates(
-							currentValues,
-							index == 0 ? List.of() : captured,
-							snapshot.globalAdditions(),
-							(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value)),
-							MixinParameterList::reterraforged$isDeferredPlaceholder
-						);
+							ClimateParameterListComposition.overlayUndergroundCandidates(
+									currentValues,
+									index == 0 ? List.of() : captured,
+									snapshot.globalAdditions(),
+									(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value)),
+									MixinParameterList::reterraforged$isDeferredPlaceholder
+							);
 					if (!overlay.usable()) {
 						surfaceTrees.add(null);
 						bandingTrees.add(null);
@@ -506,11 +511,11 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 					}
 
 					UndergroundBiomeBanding.Layout<T> layout = UndergroundBiomeBanding.apply(
-						this.reterraforged$bandingPreset,
-						effectiveEntries,
-						overlay.entries(),
-						this.reterraforged$bandingSeed,
-						(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value))
+							this.reterraforged$bandingPreset,
+							effectiveEntries,
+							overlay.entries(),
+							this.reterraforged$bandingSeed,
+							(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value))
 					);
 					surfaceTrees.add(new Climate.ParameterList<>(effectiveEntries));
 					bandingTrees.add(layout);
@@ -596,4 +601,16 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 	public int getUniqueness(int x, int y, int z) {
 		throw new UnsupportedOperationException();
 	}
+
+	@Unique
+	private static <T> List<Pair<Climate.ParameterPoint, T>> reterraforged$deduplicateEntries(
+			List<Pair<Climate.ParameterPoint, T>> entries
+	) {
+		if (entries == null || entries.size() <= 1) {
+			return entries;
+		}
+		Set<Pair<Climate.ParameterPoint, T>> uniqueSet = new LinkedHashSet<>(entries);
+		return uniqueSet.size() == entries.size() ? entries : List.copyOf(uniqueSet);
+	}
+
 }
