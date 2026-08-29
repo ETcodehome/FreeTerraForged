@@ -50,7 +50,7 @@ public class ArchipelagoPopulator implements CellPopulator {
     private float valleySharpness;
     private float channelWarpDist;
     private float gradientStep;
-    private float macroDensityPercentage; // Slider variable: 0.0 (no islands) -> 1.0 (islands everywhere)
+    private float macroDensityPercentage;
 
     public ArchipelagoPopulator(IslandSettings settings, Levels levels, ControlPoints controlPoints, Seed seed) {
         this.settings = settings;
@@ -65,10 +65,11 @@ public class ArchipelagoPopulator implements CellPopulator {
 
         this.macroDensityPercentage = NoiseUtil.clamp(this.settings.macroDensityPercentage, 0.0F, 1.0F);
 
-        Noise sizeN = Noises.simplex(1273 + salt, Math.max(1, Math.round(size * 3.5F / hScale)), 3);
-        sizeN = Noises.warpPerlin(sizeN, 1273 + salt, Math.max(1, Math.round(size * 2.0F / hScale)), 2, size * 0.5F / hScale);
-        sizeN = Noises.warpPerlin(sizeN, 4830 + salt, Math.max(1, Math.round(size * 0.5F / hScale)), 1, size * 0.3F / hScale);
-        sizeN = Noises.warpPerlin(sizeN, 8932 + salt, Math.max(1, Math.round(size * 0.08F / hScale)), 2, size * 0.15F / hScale);
+        // MACRO FOOTPRINT: Scales ONLY with islandSize (hScale no longer shrinks/grows island footprint)
+        Noise sizeN = Noises.simplex(1273 + salt, Math.max(1, Math.round(size * 3.5F)), 3);
+        sizeN = Noises.warpPerlin(sizeN, 1273 + salt, Math.max(1, Math.round(size * 2.0F)), 2, size * 0.5F);
+        sizeN = Noises.warpPerlin(sizeN, 4830 + salt, Math.max(1, Math.round(size * 0.5F)), 1, size * 0.3F);
+        sizeN = Noises.warpPerlin(sizeN, 8932 + salt, Math.max(1, Math.round(size * 0.08F)), 2, size * 0.15F);
         sizeN = Noises.clamp(sizeN, 0.0F, 1.0F);
         this.sizeNoise = sizeN;
 
@@ -82,10 +83,11 @@ public class ArchipelagoPopulator implements CellPopulator {
         regionN = Noises.clamp(regionN, 0.0F, 1.0F);
         this.regionNoise = regionN;
 
-        this.peakDrift = Noises.simplex(3391 + salt, Math.max(1, Math.round((size * 1.2F * mountainHScale) / hScale)), 1);
-        this.channelPattern = Noises.simplex(7213 + salt, Math.max(1, Math.round((size * 0.32F * volcanismHScale) / hScale)), 2);
-        this.summitPerturb = Noises.simplex(5107 + salt, Math.max(1, Math.round((size * 0.4F * mountainHScale) / hScale)), 2);
-        this.beachVariance = Noises.simplex(5541 + salt, Math.max(1, Math.round(size * 0.21F / hScale)), 2);
+        // INTERNAL FEATURES: Scale using islandHorizontalScale (hScale) to modify detail wavelengths independently
+        this.peakDrift = Noises.simplex(3391 + salt, Math.max(1, Math.round(size * 1.2F * mountainHScale * hScale)), 1);
+        this.channelPattern = Noises.simplex(7213 + salt, Math.max(1, Math.round(size * 0.32F * volcanismHScale * hScale)), 2);
+        this.summitPerturb = Noises.simplex(5107 + salt, Math.max(1, Math.round(size * 0.4F * mountainHScale * hScale)), 2);
+        this.beachVariance = Noises.simplex(5541 + salt, Math.max(1, Math.round(size * 0.21F * hScale)), 2);
 
         this.islandErosion = Erosion.LEVEL_4.source();
         this.islandWeirdness = Weirdness.MID_SLICE_NORMAL_DESCENDING.source();
@@ -102,8 +104,8 @@ public class ArchipelagoPopulator implements CellPopulator {
         this.channelDepthScale = NoiseUtil.lerp(CHANNEL_DEPTH_MIN, CHANNEL_DEPTH_MAX, vScale) * vChance;
         this.valleySharpness = NoiseUtil.lerp(1.1F, 2.5F, vScale);
 
-        this.channelWarpDist = Math.max(1.0F, (size * 0.08F * volcanismHScale) / hScale);
-        this.gradientStep = Math.max(0.75F, (size * 0.02F * volcanismHScale) / hScale);
+        this.channelWarpDist = Math.max(1.0F, size * 0.08F * volcanismHScale * hScale);
+        this.gradientStep = Math.max(0.75F, size * 0.02F * volcanismHScale * hScale);
     }
 
     private float rawShape(float x, float z) {
@@ -111,10 +113,6 @@ public class ArchipelagoPopulator implements CellPopulator {
         float densityValue = this.densityNoise.compute(x, z, 0);
         float regionValue = this.regionNoise.compute(x, z, 0);
 
-        // Dynamically shift the threshold cutoff based on macroDensity slider:
-        // macroDensity = 0.0 -> threshold = 1.05F (regionAlpha is forced to 0.0F everywhere)
-        // macroDensity = 0.5 -> threshold = 0.40F (balanced macro ocean gaps and island clusters)
-        // macroDensity = 1.0 -> threshold = -0.25F (regionAlpha is forced to 1.0F everywhere)
         float regionThreshold = NoiseUtil.lerp(1.05F, -0.25F, this.macroDensityPercentage);
         float regionAlpha = smoothStep(regionThreshold, regionThreshold + 0.25F, regionValue);
 

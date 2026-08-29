@@ -134,28 +134,27 @@ public class IslandSettingsPage extends PresetEditorPage {
 		// islands
 		this.left.addWidget(PresetWidgets.createLabel(RTFTranslationKeys.GUI_LABEL_ISLAND));
 		this.left.addWidget(this.enableArchipelago);
+
+		this.left.addWidget(PresetWidgets.createLabel(RTFTranslationKeys.GUI_LABEL_ISLAND_CHANCES));
 		this.left.addWidget(this.islandDensity);
 		this.left.addWidget(this.macroDensityPercentage);
-		this.left.addWidget(this.islandSize);
+		this.left.addWidget(this.volcanoChance); // influence
+		this.left.addWidget(this.mountainChance); // influence
 
 		// island scales
-		this.left.addWidget(PresetWidgets.createLabel("Island Scales"));
+		this.left.addWidget(PresetWidgets.createLabel(RTFTranslationKeys.GUI_LABEL_ISLAND_SCALES));
+		this.left.addWidget(this.islandSize);
 		this.left.addWidget(this.islandHeight);
 		this.left.addWidget(this.islandBaseScale);
 		this.left.addWidget(this.islandHorizontalScale); // lower makes islands bigger
-
-		// feature scales
-		this.left.addWidget(PresetWidgets.createLabel("Feature Tuning"));
 		this.left.addWidget(this.islandVerticalScale); // features
-		this.left.addWidget(this.volcanoChance); // influence
-		this.left.addWidget(this.mountainChance); // influence
 		this.left.addWidget(this.mountainScale); // unused?
 		this.left.addWidget(this.volcanismScale); // unused?
 		this.left.addWidget(this.mountainHorizontalScale);
 		this.left.addWidget(this.volcanismHorizontalScale);
 
 		// Transitions
-		this.left.addWidget(PresetWidgets.createLabel("Transitions"));
+		this.left.addWidget(PresetWidgets.createLabel(RTFTranslationKeys.GUI_LABEL_ISLAND_TRANSITIONS));
 		this.left.addWidget(this.offshoreDepth);
 		this.left.addWidget(this.beachWidth);
 		this.left.addWidget(this.beachCoverage);

@@ -51,10 +51,12 @@ public class IslandSettings {
 	private static IslandSettings fromParts(PartA a, PartB b) {
 		return new IslandSettings(
 				a.enableArchipelago, a.islandDensity, a.islandSize, a.islandHeight, a.islandBaseScale, a.islandVerticalScale, a.islandHorizontalScale,
-				b.mountainChance, b.volcanoChance, a.offshoreDepth, b.beachWidth, b.beachCoverage, b.volcanismScale, b.mountainScale, b.volcanismHorizontalScale, b.mountainHorizontalScale, a.macroDensityPercentage
+				b.mountainChance, b.volcanoChance, a.offshoreDepth, b.beachWidth, b.beachCoverage,
+				b.mountainScale, b.volcanismScale, b.mountainHorizontalScale, b.volcanismHorizontalScale,
+				a.macroDensityPercentage
 		);
 	}
-	
+
 	public boolean enableArchipelago;
 	public float islandDensity;
 	public float islandSize;
@@ -72,8 +74,8 @@ public class IslandSettings {
 	public float beachWidth;
 	public float beachCoverage;
 	public float macroDensityPercentage;
-	
-	public IslandSettings(boolean enableArchipelago, float islandDensity, float islandSize, float islandHeight, float islandBaseScale, float islandVerticalScale, float islandHorizontalScale, float mountainChance, float volcanoChance, float offshoreDepth, float beachWidth, float beachCoverage, float volcanismScale, float mountainScale, float volcanismHorizontalScale, float mountainHorizontalScale, float macroDensityPercentage) {
+
+	public IslandSettings(boolean enableArchipelago, float islandDensity, float islandSize, float islandHeight, float islandBaseScale, float islandVerticalScale, float islandHorizontalScale, float mountainChance, float volcanoChance, float offshoreDepth, float beachWidth, float beachCoverage, float mountainScale, float volcanismScale, float mountainHorizontalScale, float volcanismHorizontalScale, float macroDensityPercentage) {
 		this.enableArchipelago = enableArchipelago;
 		this.islandDensity = islandDensity;
 		this.islandSize = islandSize;
@@ -92,7 +94,7 @@ public class IslandSettings {
 		this.volcanismHorizontalScale = volcanismHorizontalScale;
 		this.macroDensityPercentage = macroDensityPercentage;
 	}
-	
+
 	public IslandSettings copy() {
 		return new IslandSettings(
 				this.enableArchipelago,
@@ -112,9 +114,9 @@ public class IslandSettings {
 				this.mountainHorizontalScale,
 				this.volcanismHorizontalScale,
 				this.macroDensityPercentage
-				);
+		);
 	}
-	
+
 	public static IslandSettings makeDefault() {
 		return new IslandSettings(true,
 				0.655F,
