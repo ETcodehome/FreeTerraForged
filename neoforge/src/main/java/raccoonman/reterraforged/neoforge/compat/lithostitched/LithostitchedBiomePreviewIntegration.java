@@ -65,9 +65,9 @@ public final class LithostitchedBiomePreviewIntegration implements BiomePreviewI
 
 	private void bindFastNoiseConfigs(Context context) {
 		context.registries().lookupOrThrow(LithostitchedRegistries.FAST_NOISE_CONFIG)
-				.listElements()
-				.map(holder -> (FastNoiseConfig) holder.value())
-				.forEach(config -> config.bind(context.seed()));
+			.listElements()
+			.map(holder -> (FastNoiseConfig) holder.value())
+			.forEach(config -> config.bind(context.seed()));
 	}
 
 	private record Initialization(Throwable failure) {
