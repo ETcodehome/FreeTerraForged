@@ -19,6 +19,7 @@ import net.minecraft.world.level.WorldDataConfiguration;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.dimension.LevelStem;
+import raccoonman.reterraforged.compat.biolith.BiolithPreviewContext;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.biome.BiomePreviewIntegration;
@@ -112,44 +113,62 @@ final class BiomePreview {
             int sampledHeight = (size + step - 1) / step;
             int sampledCells = sampledWidth * sampledHeight;
 
+            // Capture the Biolith preview state on this thread (the one that opened the
+            // integration session above) so it can be re-attached on whichever
+            // ForkJoinPool worker thread each chunk below actually executes on.
+            // Without this, BiolithPreviewContext.isActive() reads false on worker
+            // threads (ThreadLocal state doesn't propagate to pooled threads), causing
+            // the preview redirects to silently fall through to Biolith's real,
+            // uninitialized fields and NPE.
+            Object biolithState = BiolithPreviewContext.captureState();
+
             IntStream.range(0, numChunks).parallel().forEach(chunkIdx -> {
                 cancellation.check();
                 ThreadQuartCache cache = THREAD_CACHE.get();
                 cache.clear();
 
-                int startZ = chunkIdx * chunkSize;
-                int endZ = Math.min(size, startZ + chunkSize);
+                try (AutoCloseable biolithAttach = BiolithPreviewContext.attach(biolithState)) {
+                    int startZ = chunkIdx * chunkSize;
+                    int endZ = Math.min(size, startZ + chunkSize);
 
-                for (int z = startZ; z < endZ; z += step) {
-                    int blockZ = centerZ + (z - halfSize) * zoom;
-                    int relZ = border + z;
-                    int maxZ = Math.min(size, z + step);
+                    for (int z = startZ; z < endZ; z += step) {
+                        int blockZ = centerZ + (z - halfSize) * zoom;
+                        int relZ = border + z;
+                        int maxZ = Math.min(size, z + step);
 
-                    for (int x = 0; x < size; x += step) {
-                        int blockX = centerX + (x - halfSize) * zoom;
-                        int relX = border + x;
-                        Cell cell = tile.getCellRaw(relX, relZ);
-                        int surfaceY = surfaceY(cell, levels);
+                        for (int x = 0; x < size; x += step) {
+                            int blockX = centerX + (x - halfSize) * zoom;
+                            int relX = border + x;
+                            Cell cell = tile.getCellRaw(relX, relZ);
+                            int surfaceY = surfaceY(cell, levels);
 
-                        int qX = QuartPos.fromBlock(blockX);
-                        int qY = QuartPos.fromBlock(surfaceY);
-                        int qZ = QuartPos.fromBlock(blockZ);
+                            int qX = QuartPos.fromBlock(blockX);
+                            int qY = QuartPos.fromBlock(surfaceY);
+                            int qZ = QuartPos.fromBlock(blockZ);
 
-                        Holder<Biome> biome = cache.get(qX, qY, qZ);
-                        if (biome == null) {
-                            biome = this.resolver.resolveQuart(qX, qY, qZ, sampler);
-                            cache.put(qX, qY, qZ, biome);
-                        }
+                            Holder<Biome> biome = cache.get(qX, qY, qZ);
+                            if (biome == null) {
+                                biome = this.resolver.resolveQuart(qX, qY, qZ, sampler);
+                                cache.put(qX, qY, qZ, biome);
+                            }
 
-                        // Fill pixel block for the current stride
-                        int maxX = Math.min(size, x + step);
-                        for (int fillZ = z; fillZ < maxZ; fillZ++) {
-                            int rowOffset = fillZ * size;
-                            for (int fillX = x; fillX < maxX; fillX++) {
-                                resolvedBiomes[rowOffset + fillX] = biome;
+                            // Fill pixel block for the current stride
+                            int maxX = Math.min(size, x + step);
+                            for (int fillZ = z; fillZ < maxZ; fillZ++) {
+                                int rowOffset = fillZ * size;
+                                for (int fillX = x; fillX < maxX; fillX++) {
+                                    resolvedBiomes[rowOffset + fillX] = biome;
+                                }
                             }
                         }
                     }
+                } catch (RuntimeException | Error error) {
+                    throw error;
+                } catch (Exception error) {
+                    // AutoCloseable.close() declares checked Exception; BiolithPreviewContext's
+                    // implementation never actually throws one, so this path is unreachable
+                    // in practice but must be handled to satisfy the compiler.
+                    throw new RuntimeException(error);
                 }
             });
             long resolveQuartDuration = System.nanoTime() - resolveQuartStart;
