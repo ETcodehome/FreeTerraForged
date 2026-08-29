@@ -27,6 +27,7 @@ import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.registries.RTFRegistries;
 import raccoonman.reterraforged.world.worldgen.biome.ClimateParameterListComposition;
 import raccoonman.reterraforged.world.worldgen.biome.UndergroundBiomeBanding;
+import raccoonman.reterraforged.world.worldgen.biome.UndergroundBiomeSurfaceQuery;
 import raccoonman.reterraforged.world.worldgen.biome.PreviewBiomeQueryContext;
 import raccoonman.reterraforged.world.worldgen.biome.UndergroundBiomeTags;
 import raccoonman.reterraforged.world.worldgen.terrablender.TerraBlenderParameterList;
@@ -131,21 +132,22 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 	}
 
 	@ModifyArg(
-		method = "initializeForTerraBlender",
-		at = @At(
-			value = "INVOKE",
-			target = "Lnet/minecraft/world/level/biome/Climate$RTree;create(Ljava/util/List;)Lnet/minecraft/world/level/biome/Climate$RTree;"
-		),
-		index = 0,
-		require = 1
+			method = "initializeForTerraBlender",
+			at = @At(
+					value = "INVOKE",
+					target = "Lnet/minecraft/world/level/biome/Climate$RTree;create(Ljava/util/List;)Lnet/minecraft/world/level/biome/Climate$RTree;"
+			),
+			index = 0,
+			require = 1
 	)
 	private List<Pair<Climate.ParameterPoint, T>> reterraforged$captureRegionalEntries(
-		List<Pair<Climate.ParameterPoint, T>> entries
+			List<Pair<Climate.ParameterPoint, T>> entries
 	) {
+		List<Pair<Climate.ParameterPoint, T>> deduplicated = reterraforged$deduplicateEntries(entries);
 		if (this.reterraforged$bandingPreset != null) {
-			this.reterraforged$pendingRegionalEntries.add(List.copyOf(entries));
+			this.reterraforged$pendingRegionalEntries.add(deduplicated);
 		}
-		return entries;
+		return deduplicated;
 	}
 
 	@Inject(
@@ -219,6 +221,41 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 		return banded == null ? selected : banded;
 	}
 
+	@Override
+	public T reterraforged$applyUndergroundSurfaceProtection(
+		Climate.TargetPoint targetPoint,
+		int x,
+		int y,
+		int z,
+		T selected,
+		float surfaceCoverageFactor
+	) {
+		if (surfaceCoverageFactor >= 1.0F
+			|| this.reterraforged$bandingPreset == null
+			|| !this.reterraforged$ensureComposedTrees()) {
+			return selected;
+		}
+
+		int treeIndex;
+		try {
+			treeIndex = this.reterraforged$getUniqueness(targetPoint, x, y, z);
+		} catch (RuntimeException exception) {
+			return selected;
+		}
+		List<UndergroundBiomeBanding.Layout<T>> layouts = this.reterraforged$regionalBanding;
+		if (treeIndex < 0 || treeIndex >= layouts.size()) {
+			return selected;
+		}
+		UndergroundBiomeBanding.Layout<T> layout = layouts.get(treeIndex);
+		if (layout == null || !layout.isCaveCandidate(selected)) {
+			return selected;
+		}
+		if (surfaceCoverageFactor <= 0.0F || !layout.appliesAt(targetPoint)) {
+			return layout.backgroundValue(targetPoint);
+		}
+		return layout.findValue(targetPoint, x, y, z, surfaceCoverageFactor);
+	}
+
 	@Unique
 	private T reterraforged$selectBanded(
 		Climate.TargetPoint targetPoint,
@@ -262,7 +299,18 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 			|| (requireOriginalMatch && !Objects.equals(requiredOriginal, originalValue))) {
 			return null;
 		}
-		T bandedValue = banding.appliesAt(targetPoint) ? banding.findValue(targetPoint, x, z) : originalValue;
+		float surfaceCoverageFactor = UndergroundBiomeSurfaceQuery.coverageFactor(targetPoint, x, y, z);
+		T backgroundValue = banding.backgroundValue(targetPoint);
+		T bandedValue;
+		if (banding.appliesAt(targetPoint)) {
+			bandedValue = banding.findValue(targetPoint, x, y, z, surfaceCoverageFactor);
+		} else if ((surfaceCoverageFactor <= 0.0F
+			|| this.reterraforged$bandingPreset.climate().biomeShape.undergroundBiomeCoverage() <= 0.0F)
+			&& banding.isCaveCandidate(originalValue)) {
+			bandedValue = backgroundValue;
+		} else {
+			bandedValue = originalValue;
+		}
 		if (reterraforged$isDeferredPlaceholder(bandedValue)) {
 			return null;
 		}
@@ -317,7 +365,7 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 		}
 
 		T bandedValue = banding.appliesAt(targetPoint)
-			? banding.findValue(targetPoint, x, z)
+			? banding.findValue(targetPoint, x, y, z)
 			: originalValue;
 		if (reterraforged$isDeferredPlaceholder(bandedValue)) {
 			return new TerraBlenderParameterList.SelectionDiagnostics<>(treeIndex, originalValue, null, "deferred_banded_winner");
@@ -441,17 +489,21 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 						continue;
 					}
 
-					List<Pair<Climate.ParameterPoint, T>> effectiveEntries = index == 0
-						? Collections.unmodifiableList(new ArrayList<>(currentValues))
-						: ClimateParameterListComposition.append(captured, snapshot.globalAdditions());
+					List<Pair<Climate.ParameterPoint, T>> rawEffectiveEntries = index == 0
+							? currentValues
+							: ClimateParameterListComposition.append(captured, snapshot.globalAdditions());
+
+					// Filter duplicate parameter-to-biome pairs before building search trees
+					List<Pair<Climate.ParameterPoint, T>> effectiveEntries = reterraforged$deduplicateEntries(rawEffectiveEntries);
+
 					ClimateParameterListComposition.CandidateOverlay<T> overlay =
-						ClimateParameterListComposition.overlayUndergroundCandidates(
-							currentValues,
-							index == 0 ? List.of() : captured,
-							snapshot.globalAdditions(),
-							(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value)),
-							MixinParameterList::reterraforged$isDeferredPlaceholder
-						);
+							ClimateParameterListComposition.overlayUndergroundCandidates(
+									currentValues,
+									index == 0 ? List.of() : captured,
+									snapshot.globalAdditions(),
+									(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value)),
+									MixinParameterList::reterraforged$isDeferredPlaceholder
+							);
 					if (!overlay.usable()) {
 						surfaceTrees.add(null);
 						bandingTrees.add(null);
@@ -459,10 +511,11 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 					}
 
 					UndergroundBiomeBanding.Layout<T> layout = UndergroundBiomeBanding.apply(
-						this.reterraforged$bandingPreset,
-						overlay.entries(),
-						this.reterraforged$bandingSeed,
-						(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value))
+							this.reterraforged$bandingPreset,
+							effectiveEntries,
+							overlay.entries(),
+							this.reterraforged$bandingSeed,
+							(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value))
 					);
 					surfaceTrees.add(new Climate.ParameterList<>(effectiveEntries));
 					bandingTrees.add(layout);
@@ -548,4 +601,16 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 	public int getUniqueness(int x, int y, int z) {
 		throw new UnsupportedOperationException();
 	}
+
+	@Unique
+	private static <T> List<Pair<Climate.ParameterPoint, T>> reterraforged$deduplicateEntries(
+			List<Pair<Climate.ParameterPoint, T>> entries
+	) {
+		if (entries == null || entries.size() <= 1) {
+			return entries;
+		}
+		Set<Pair<Climate.ParameterPoint, T>> uniqueSet = new LinkedHashSet<>(entries);
+		return uniqueSet.size() == entries.size() ? entries : List.copyOf(uniqueSet);
+	}
+
 }

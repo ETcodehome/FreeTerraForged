@@ -29,6 +29,10 @@ class ClimateSettingsPage extends PresetEditorPage {
 	
 	private Slider biomeSize;
 	private Slider undergroundBiomeSize;
+	private Slider undergroundBiomeVerticalSize;
+	private Slider undergroundBiomeCoverage;
+	private Slider undergroundBiomeClimateInfluence;
+	private CycleButton<Boolean> undergroundBiomeBanding;
 	private Slider macroNoiseSize;
 	private Slider biomeWarpScale;
 	private Slider biomeWarpStrength;
@@ -119,6 +123,14 @@ class ClimateSettingsPage extends PresetEditorPage {
 		});
 
 		ClimateSettings.BiomeShape biomeShape = climate.biomeShape;
+		int maximumUndergroundVerticalSize = PresetSettingsBounds.maximumUndergroundBiomeVerticalSize(
+			preset.world().properties.worldHeight,
+			preset.world().properties.worldDepth
+		);
+		biomeShape.undergroundBiomeVerticalSize = Math.min(
+			biomeShape.undergroundBiomeVerticalSize,
+			maximumUndergroundVerticalSize
+		);
 		this.biomeSize = PresetWidgets.createIntSlider(biomeShape.biomeSize, ClimateSettings.BiomeShape.MIN_BIOME_SIZE, ClimateSettings.BiomeShape.MAX_BIOME_SIZE, RTFTranslationKeys.GUI_SLIDER_BIOME_SIZE, (slider, value) -> {
 			biomeShape.biomeSize = (int) slider.scaleValue(value);
 			this.regenerate();
@@ -127,6 +139,21 @@ class ClimateSettingsPage extends PresetEditorPage {
 		this.undergroundBiomeSize = PresetWidgets.createIntSlider(biomeShape.undergroundBiomeSize, ClimateSettings.BiomeShape.MIN_BIOME_SIZE, ClimateSettings.BiomeShape.MAX_BIOME_SIZE, RTFTranslationKeys.GUI_SLIDER_UNDERGROUND_BIOME_SIZE, (slider, value) -> {
 			biomeShape.undergroundBiomeSize = (int) slider.scaleValue(value);
 			return value;
+		});
+		this.undergroundBiomeVerticalSize = PresetWidgets.createIntSlider(biomeShape.undergroundBiomeVerticalSize, ClimateSettings.BiomeShape.MIN_UNDERGROUND_VERTICAL_SIZE, maximumUndergroundVerticalSize, RTFTranslationKeys.GUI_SLIDER_UNDERGROUND_BIOME_VERTICAL_SIZE, (slider, value) -> {
+			biomeShape.undergroundBiomeVerticalSize = (int) slider.scaleValue(value);
+			return value;
+		});
+		this.undergroundBiomeCoverage = PresetWidgets.createFloatSlider(biomeShape.undergroundBiomeCoverage, 0.0F, 1.0F, RTFTranslationKeys.GUI_SLIDER_UNDERGROUND_BIOME_COVERAGE, (slider, value) -> {
+			biomeShape.undergroundBiomeCoverage = (float) slider.scaleValue(value);
+			return value;
+		});
+		this.undergroundBiomeClimateInfluence = PresetWidgets.createFloatSlider(biomeShape.undergroundBiomeClimateInfluence, 0.0F, 1.0F, RTFTranslationKeys.GUI_SLIDER_UNDERGROUND_BIOME_CLIMATE_INFLUENCE, (slider, value) -> {
+			biomeShape.undergroundBiomeClimateInfluence = (float) slider.scaleValue(value);
+			return value;
+		});
+		this.undergroundBiomeBanding = PresetWidgets.createToggle(biomeShape.undergroundBiomeBanding, RTFTranslationKeys.GUI_BUTTON_UNDERGROUND_BIOME_BANDING, (button, value) -> {
+			biomeShape.undergroundBiomeBanding = value;
 		});
 		this.macroNoiseSize = PresetWidgets.createIntSlider(biomeShape.macroNoiseSize, 1, 20, RTFTranslationKeys.GUI_SLIDER_MACRO_NOISE_SIZE, (slider, value) -> {
 			biomeShape.macroNoiseSize = (int) slider.scaleValue(value);
@@ -193,10 +220,16 @@ class ClimateSettingsPage extends PresetEditorPage {
 		
 		this.left.addWidget(PresetWidgets.createLabel(RTFTranslationKeys.GUI_LABEL_BIOME_SHAPE));
 		this.left.addWidget(this.biomeSize);
-		this.left.addWidget(this.undergroundBiomeSize);
 		this.left.addWidget(this.macroNoiseSize);
 		this.left.addWidget(this.biomeWarpScale);
 		this.left.addWidget(this.biomeWarpStrength);
+
+		this.left.addWidget(PresetWidgets.createLabel(RTFTranslationKeys.GUI_LABEL_UNDERGROUND_BIOMES));
+		this.left.addWidget(this.undergroundBiomeSize);
+		this.left.addWidget(this.undergroundBiomeVerticalSize);
+		this.left.addWidget(this.undergroundBiomeCoverage);
+		this.left.addWidget(this.undergroundBiomeClimateInfluence);
+		this.left.addWidget(this.undergroundBiomeBanding);
 
 		this.left.addWidget(PresetWidgets.createLabel(RTFTranslationKeys.GUI_LABEL_BIOME_EDGE_SHAPE));
 		this.left.addWidget(this.biomeEdgeType);

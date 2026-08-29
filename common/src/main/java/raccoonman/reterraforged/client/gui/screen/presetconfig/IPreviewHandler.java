@@ -48,24 +48,12 @@ public interface IPreviewHandler {
     float[] LEGEND_SCALES = { 1, 0.9F, 0.75F, 0.6F };
     long REFRESH_DEBOUNCE_MILLIS = 75L;
 
-    // ------------------------------------------------------------------
-    // Contract implementers must supply - either genuinely different logic,
-    // or state accessors satisfied automatically by an inherited Button method.
-    // ------------------------------------------------------------------
-
     PreviewState state();
 
     PresetEditorPage page();
 
-    int getX();
-
-    int getY();
-
-    int getWidth();
-
-    int getHeight();
-
-    boolean isMouseOver(double mouseX, double mouseY);
+    /** Routes inherited widget calls through Minecraft's remapped type in production jars. */
+    Button widget();
 
     /** Plays the widget's click sound. Implemented per-class since {@code playDownSound} is protected on Button. */
     void playClickSound();
@@ -438,7 +426,7 @@ public interface IPreviewHandler {
         pose.scale(scale, scale, 1);
 
         Font renderer = Minecraft.getInstance().font;
-        float maxWidth = (getWidth() - 4) / scale;
+        float maxWidth = (widget().getWidth() - 4) / scale;
 
         for (int i = 0; i < labels.length && i < values.length; i++) {
             Component label = labels[i];
@@ -493,7 +481,7 @@ public interface IPreviewHandler {
 
     /** Shared right/middle-click handling. Returns true if the click was handled (caller should not fall through to super). */
     default boolean handleClick(double mouseX, double mouseY, int button) {
-        if (!isMouseOver(mouseX, mouseY)) {
+        if (!widget().isMouseOver(mouseX, mouseY)) {
             return false;
         }
         PreviewState state = state();
@@ -525,7 +513,7 @@ public interface IPreviewHandler {
 
     /** Shared scroll-to-zoom handling. Returns true if the scroll was consumed. */
     default boolean handleScroll(double mouseX, double mouseY, double scrollY) {
-        if (!isMouseOver(mouseX, mouseY)) {
+        if (!widget().isMouseOver(mouseX, mouseY)) {
             return false;
         }
         if (hasZoomControl()) {

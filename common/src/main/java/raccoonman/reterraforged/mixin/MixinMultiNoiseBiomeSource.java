@@ -20,6 +20,7 @@ import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.world.worldgen.biome.RTFClimateSampler;
 import raccoonman.reterraforged.world.worldgen.biome.RTFMultiNoiseBiomeSource;
 import raccoonman.reterraforged.world.worldgen.biome.UndergroundBiomeBanding;
+import raccoonman.reterraforged.world.worldgen.biome.UndergroundBiomeSurfaceProtection;
 import raccoonman.reterraforged.world.worldgen.biome.PreviewBiomeQueryContext;
 import raccoonman.reterraforged.world.worldgen.terrablender.TerraBlenderParameterList;
 
@@ -72,8 +73,19 @@ public abstract class MixinMultiNoiseBiomeSource implements RTFMultiNoiseBiomeSo
         if ((Object) parameters instanceof TerraBlenderParameterList<?> terraBlenderParameters
                 && terraBlenderParameters.reterraforged$isTerraBlenderInitialized()) {
             @SuppressWarnings("unchecked")
-            Holder<Biome> composed = ((TerraBlenderParameterList<Holder<Biome>>) terraBlenderParameters)
-                    .reterraforged$applyUndergroundBanding(target, x, y, z, selected);
+            TerraBlenderParameterList<Holder<Biome>> terraBlender =
+                    (TerraBlenderParameterList<Holder<Biome>>) terraBlenderParameters;
+            Holder<Biome> composed = terraBlender.reterraforged$applyUndergroundBanding(
+                    target, x, y, z, selected
+            );
+            composed = terraBlender.reterraforged$applyUndergroundSurfaceProtection(
+                    target,
+                    x,
+                    y,
+                    z,
+                    composed,
+                    UndergroundBiomeSurfaceProtection.coverageFactor(sampler, target, x, y, z)
+            );
             cir.setReturnValue(composed);
             return;
         }
@@ -82,7 +94,8 @@ public abstract class MixinMultiNoiseBiomeSource implements RTFMultiNoiseBiomeSo
             return;
         }
         Preset preset = rtfSampler.getUndergroundBiomeBandingPreset();
-        if (preset == null || !Objects.equals(selected, parameters.findValue(target))) {
+        boolean ownsSelection = Objects.equals(selected, parameters.findValue(target));
+        if (preset == null || !ownsSelection) {
             return;
         }
 
@@ -101,8 +114,15 @@ public abstract class MixinMultiNoiseBiomeSource implements RTFMultiNoiseBiomeSo
                 }
             }
         }
+        Holder<Biome> composed = selected;
+        float surfaceCoverageFactor = UndergroundBiomeSurfaceProtection.coverageFactor(
+                sampler, target, x, y, z
+        );
         if (banding.appliesAt(target)) {
-            cir.setReturnValue(banding.findValue(target, x, z));
+            composed = banding.findValue(target, x, y, z, surfaceCoverageFactor);
+        } else if (surfaceCoverageFactor <= 0.0F && banding.isCaveCandidate(selected)) {
+            composed = banding.backgroundValue(target);
         }
+        cir.setReturnValue(composed);
     }
 }

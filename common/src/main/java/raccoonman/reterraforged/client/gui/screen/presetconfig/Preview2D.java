@@ -66,6 +66,11 @@ public class Preview2D extends Button implements IPreviewHandler {
     }
 
     @Override
+    public Button widget() {
+        return this;
+    }
+
+    @Override
     public void playClickSound() {
         this.playDownSound(Minecraft.getInstance().getSoundManager());
     }
@@ -146,16 +151,15 @@ public class Preview2D extends Button implements IPreviewHandler {
     }
 
     private void uploadPixelData(int[] pixelData) {
-        if (STATIC_TEXTURE == null) {
-            getOrCreateTexture();
-        }
+        if (STATIC_TEXTURE == null || pixelData == null) return;
         NativeImage pixels = STATIC_TEXTURE.getPixels();
-        if (pixels == null || pixelData == null) return;
+        if (pixels == null) return;
 
         int tileWidth = (int) Math.sqrt(pixelData.length);
         for (int bz = 0; bz < tileWidth; bz++) {
+            int rowOffset = bz * tileWidth;
             for (int bx = 0; bx < tileWidth; bx++) {
-                pixels.setPixelRGBA(bx, bz, pixelData[bz * tileWidth + bx]);
+                pixels.setPixelRGBA(bx, bz, pixelData[rowOffset + bx]);
             }
         }
         STATIC_TEXTURE.upload();

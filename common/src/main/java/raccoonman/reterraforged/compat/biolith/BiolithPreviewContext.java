@@ -40,11 +40,28 @@ public final class BiolithPreviewContext {
 	private BiolithPreviewContext() {
 	}
 
-	public static void preInitializeBiomeLookup(RegistryAccess registries) {
-		try {
-			BiomeCoordinator.setEarlyBiomeLookup(registries.lookupOrThrow(Registries.BIOME));
-		} catch (RuntimeException | LinkageError ignored) {
+	public static Object captureState() {
+		return ACTIVE.get();
+	}
+
+	public static AutoCloseable attach(Object captured) {
+		if (!(captured instanceof State state)) {
+			return () -> {
+			};
 		}
+		State previous = ACTIVE.get();
+		ACTIVE.set(state);
+		return () -> {
+			if (previous == null) {
+				ACTIVE.remove();
+			} else {
+				ACTIVE.set(previous);
+			}
+		};
+	}
+
+	public static void preInitializeBiomeLookup(RegistryAccess registries) {
+		BiomeCoordinator.setEarlyBiomeLookup(registries.lookupOrThrow(Registries.BIOME));
 	}
 
 	public static BiomePreviewIntegration.Session open(

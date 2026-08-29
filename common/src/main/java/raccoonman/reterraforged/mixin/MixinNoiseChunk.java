@@ -185,6 +185,7 @@ class MixinNoiseChunk {
 			&& randomState.preset() != null
 			&& (Object) callback.getReturnValue() instanceof RTFClimateSampler sampler) {
 			sampler.setUndergroundBiomeBandingPreset(randomState.preset(), randomState.seed());
+			sampler.setUndergroundBiomeSurfaceContext(randomState.generatorContext());
 		}
 	}
 
