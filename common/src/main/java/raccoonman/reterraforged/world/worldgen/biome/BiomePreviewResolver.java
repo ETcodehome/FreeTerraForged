@@ -2,6 +2,7 @@ package raccoonman.reterraforged.world.worldgen.biome;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.ConcurrentHashMap;
@@ -39,6 +40,17 @@ import terrablender.util.LevelUtils;
  * Reconstructs the active Overworld surface biome-selection stack for preset previews.
  */
 public final class BiomePreviewResolver {
+	private static final Object INIT_LOCK = new Object();
+	private static volatile InitCache initCache = null;
+
+	private record InitCache(
+			RegistryAccess registries,
+			long seed,
+			LevelStem levelStem,
+			NoiseBasedChunkGenerator previewGenerator,
+			BiomeSource biomeSource
+	) {}
+
 	private final TerraBlenderParameterList<Holder<Biome>> terraBlenderParameters;
 	private final Climate.ParameterList<Holder<Biome>> baseParameters;
 	private final Holder<Biome> finalFallback;
@@ -59,6 +71,12 @@ public final class BiomePreviewResolver {
 		this.integrationContext = integrationContext;
 	}
 
+	public static void clearCache() {
+		synchronized (INIT_LOCK) {
+			initCache = null;
+		}
+	}
+
 	public static BiomePreviewResolver create(
 			RegistryAccess registries,
 			HolderLookup.Provider provider,
@@ -68,20 +86,43 @@ public final class BiomePreviewResolver {
 			GeneratorContext generatorContext,
 			long seed
 	) {
-		BiomeSource biomeSource = copyBiomeSource(activeGenerator.getBiomeSource());
-		Holder<NoiseGeneratorSettings> noiseSettings = provider.lookupOrThrow(Registries.NOISE_SETTINGS)
-				.getOrThrow(NoiseGeneratorSettings.OVERWORLD);
-		NoiseBasedChunkGenerator previewGenerator = new NoiseBasedChunkGenerator(biomeSource, noiseSettings);
+		LevelStem previewStem;
+		NoiseBasedChunkGenerator previewGenerator;
+		BiomeSource biomeSource;
+		boolean newlyInitialized = false;
 
-		if (BiolithCompat.isEnabled()) {
-			BiolithPreviewContext.preInitializeBiomeLookup(registries);
+		synchronized (INIT_LOCK) {
+			if (initCache == null || initCache.registries() != registries || initCache.seed() != seed) {
+				biomeSource = copyBiomeSource(activeGenerator.getBiomeSource());
+				Holder<NoiseGeneratorSettings> noiseSettings = provider.lookupOrThrow(Registries.NOISE_SETTINGS)
+						.getOrThrow(NoiseGeneratorSettings.OVERWORLD);
+				previewGenerator = new NoiseBasedChunkGenerator(biomeSource, noiseSettings);
+				previewStem = new LevelStem(dimensionType, previewGenerator);
+
+				if (BiolithCompat.isEnabled()) {
+					BiolithPreviewContext.preInitializeBiomeLookup(registries);
+				}
+
+				if (TBCompat.isEnabled()) {
+					initializeTerraBlender(registries, dimensionType, previewGenerator, biomeSource, preset, seed);
+				}
+
+				initCache = new InitCache(registries, seed, previewStem, previewGenerator, biomeSource);
+				newlyInitialized = true;
+			} else {
+				previewStem = initCache.levelStem();
+				previewGenerator = initCache.previewGenerator();
+				biomeSource = initCache.biomeSource();
+
+				if (TBCompat.isEnabled()
+						&& biomeSource instanceof MultiNoiseBiomeSource
+						&& (Object) biomeSource instanceof RTFMultiNoiseBiomeSource source
+						&& (Object) source.reterraforged$getParameters() instanceof TerraBlenderParameterList<?> parameters) {
+					parameters.reterraforged$preparePreview(preset, seed);
+				}
+			}
 		}
 
-		if (TBCompat.isEnabled()) {
-			initializeTerraBlender(registries, dimensionType, previewGenerator, biomeSource, preset, seed);
-		}
-
-		LevelStem previewStem = new LevelStem(dimensionType, previewGenerator);
 		TerraBlenderParameterList<Holder<Biome>> terraBlenderParameters = terraBlenderParameters(biomeSource);
 		Climate.ParameterList<Holder<Biome>> baseParameters = parameters(biomeSource);
 		Holder<Biome> plains = registries.lookupOrThrow(Registries.BIOME).getOrThrow(Biomes.PLAINS);
@@ -90,12 +131,18 @@ public final class BiomePreviewResolver {
 				seed, registries, provider, biomeSource, previewGenerator, previewStem, preset, generatorContext
 		);
 
-		return new BiomePreviewResolver(
+		BiomePreviewResolver resolver = new BiomePreviewResolver(
 				terraBlenderParameters,
 				baseParameters,
 				plains,
 				integrationContext
 		);
+
+		if (newlyInitialized) {
+			resolver.prewarm();
+		}
+
+		return resolver;
 	}
 
 	private static void initializeTerraBlender(
@@ -118,6 +165,37 @@ public final class BiomePreviewResolver {
 				previewGenerator,
 				seed
 		);
+	}
+
+	/**
+	 * Pre-warms integration hooks (TerraBlender/Biolith) on the creator thread.
+	 * Evaluates dummy samples inside an integration session to construct regional biome trees
+	 * synchronously, avoiding multi-threaded lazy composition locks during resolution.
+	 */
+	private void prewarm() {
+		if (!TBCompat.isEnabled() && !BiolithCompat.isEnabled()) {
+			return;
+		}
+		try (BiomePreviewIntegration.Session ignored = this.openIntegrationSession()) {
+			NoiseBasedChunkGenerator generator = (NoiseBasedChunkGenerator) this.integrationContext.generator();
+			List<Climate.ParameterPoint> spawnTarget = generator.generatorSettings().value().spawnTarget();
+
+			Climate.Sampler dummySampler = new Climate.Sampler(
+					DensityFunctions.constant(0.0D),
+					DensityFunctions.constant(0.0D),
+					DensityFunctions.constant(0.0D),
+					DensityFunctions.constant(0.0D),
+					DensityFunctions.constant(0.0D),
+					DensityFunctions.constant(0.0D),
+					spawnTarget
+			);
+
+			// Sample surface and underground points to force both surface and cave tree composition upfront
+			this.resolveQuart(0, 16, 0, dummySampler);
+			this.resolveQuart(0, -16, 0, dummySampler);
+		} catch (Throwable error) {
+			RTFCommon.LOGGER.debug("Pre-warming BiomePreviewResolver tree snapshot encountered an issue: ", error);
+		}
 	}
 
 	public Holder<Biome> resolveQuart(int quartX, int quartY, int quartZ, Climate.Sampler sampler) {
