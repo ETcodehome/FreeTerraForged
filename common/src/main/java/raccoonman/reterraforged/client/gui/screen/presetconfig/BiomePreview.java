@@ -5,8 +5,6 @@ import java.util.IdentityHashMap;
 import java.util.concurrent.ForkJoinPool;
 import java.util.stream.IntStream;
 
-import org.slf4j.Logger;
-import com.mojang.logging.LogUtils;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.client.gui.screens.worldselection.WorldCreationContext;
@@ -29,7 +27,6 @@ import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
 
 final class BiomePreview {
-    private static final Logger LOGGER = LogUtils.getLogger();
     private static final ResourceLocation UNREGISTERED = ResourceLocation.fromNamespaceAndPath("reterraforged", "unregistered");
     private static final ThreadLocal<WorkerBuffer> WORKER_BUFFER = ThreadLocal.withInitial(WorkerBuffer::new);
     private static final ThreadLocal<ThreadQuartCache> THREAD_CACHE = ThreadLocal.withInitial(ThreadQuartCache::new);
@@ -48,11 +45,9 @@ final class BiomePreview {
             Preset preset,
             GeneratorContext generatorContext
     ) {
-        long startTime = System.nanoTime();
         long seed = settings.options().seed();
         LevelStem activeOverworld = settings.selectedDimensions().get(LevelStem.OVERWORLD).orElseThrow();
 
-        long resolverStart = System.nanoTime();
         BiomePreviewResolver resolver = BiomePreviewResolver.create(
                 settings.worldgenLoadContext(),
                 provider,
@@ -62,14 +57,8 @@ final class BiomePreview {
                 generatorContext,
                 seed
         );
-        long resolverDuration = System.nanoTime() - resolverStart;
 
-        long cacheKeyStart = System.nanoTime();
         CacheKey key = cacheKey(settings, preset);
-        long cacheKeyDuration = System.nanoTime() - cacheKeyStart;
-
-        LOGGER.info("[BiomePreview Profiler] create() total: {} ms | Resolver setup: {} ms | CacheKey gen: {} ms",
-                toMs(System.nanoTime() - startTime), toMs(resolverDuration), toMs(cacheKeyDuration));
 
         return new BiomePreview(resolver, key);
     }
@@ -82,7 +71,6 @@ final class BiomePreview {
             Levels levels,
             PreviewCancellation cancellation
     ) {
-        long resolveStart = System.nanoTime();
         int size = tile.getBlockSize().size();
         int totalPixels = size * size;
         int border = tile.getBlockSize().border();
@@ -95,31 +83,15 @@ final class BiomePreview {
         int halfSize = size / 2;
         int step = getSamplingStep(zoom);
 
-        long samplerStart = System.nanoTime();
         Climate.Sampler sampler = this.resolver.tileClimateSampler(tile, centerX, centerZ, zoom);
-        long samplerDuration = System.nanoTime() - samplerStart;
-
-        long loopStart = System.nanoTime();
 
         try (BiomePreviewIntegration.Session ignored = this.resolver.openIntegrationSession()) {
-            long resolveQuartStart = System.nanoTime();
-
             // Chunk rows into blocks of 16 to minimize thread scheduling overhead
             int chunkSize = 16;
             int numChunks = (size + chunkSize - 1) / chunkSize;
 
-            // Compute total evaluated sample points for profiler output
-            int sampledWidth = (size + step - 1) / step;
-            int sampledHeight = (size + step - 1) / step;
-            int sampledCells = sampledWidth * sampledHeight;
-
-            // Capture the Biolith preview state on this thread (the one that opened the
-            // integration session above) so it can be re-attached on whichever
-            // ForkJoinPool worker thread each chunk below actually executes on.
-            // Without this, BiolithPreviewContext.isActive() reads false on worker
-            // threads (ThreadLocal state doesn't propagate to pooled threads), causing
-            // the preview redirects to silently fall through to Biolith's real,
-            // uninitialized fields and NPE.
+            // Capture the Biolith preview state on this thread so it can be re-attached
+            // on whichever ForkJoinPool worker thread each chunk below executes on.
             Object biolithState = BiolithPreviewContext.captureState();
 
             IntStream.range(0, numChunks).parallel().forEach(chunkIdx -> {
@@ -165,16 +137,11 @@ final class BiomePreview {
                 } catch (RuntimeException | Error error) {
                     throw error;
                 } catch (Exception error) {
-                    // AutoCloseable.close() declares checked Exception; BiolithPreviewContext's
-                    // implementation never actually throws one, so this path is unreachable
-                    // in practice but must be handled to satisfy the compiler.
                     throw new RuntimeException(error);
                 }
             });
-            long resolveQuartDuration = System.nanoTime() - resolveQuartStart;
 
             // Sequential Palette & Color Assembly
-            long colorStart = System.nanoTime();
             WorkerBuffer buffer = WORKER_BUFFER.get();
             buffer.reset();
 
@@ -194,23 +161,14 @@ final class BiomePreview {
                 indices[i] = entry.paletteIndex;
                 colors[i] = entry.color;
             }
-            long colorDuration = System.nanoTime() - colorStart;
 
-            Sidecar sidecar = new Sidecar(
+            return new Sidecar(
                     size,
                     buffer.palette.toArray(new String[0]),
                     indices,
                     colors,
                     this.resolver.warning()
             );
-
-            long loopTime = System.nanoTime() - loopStart;
-            long totalResolveTime = System.nanoTime() - resolveStart;
-
-            LOGGER.info("[BiomePreview Profiler] resolve() total: {} ms | Loop total: {} ms (Sampler: {} ms, Parallel Quart Resolve: {} ms across {} cells, Palette/Colors: {} ms)",
-                    toMs(totalResolveTime), toMs(loopTime), toMs(samplerDuration), toMs(resolveQuartDuration), sampledCells, toMs(colorDuration));
-
-            return sidecar;
         } finally {
             WORKER_BUFFER.get().reset();
         }
@@ -225,7 +183,6 @@ final class BiomePreview {
             Levels levels,
             PreviewCancellation cancellation
     ) {
-        long start = System.nanoTime();
         int size = tile.getBlockSize().size();
         PreviewComputationCache.SidecarKey key = new PreviewComputationCache.SidecarKey(
                 this.cacheKey,
@@ -234,29 +191,17 @@ final class BiomePreview {
                 zoom,
                 size
         );
-        Sidecar result = cache.sidecar(key, () -> this.resolve(tile, centerX, centerZ, zoom, levels, cancellation)).join();
-        LOGGER.info("[BiomePreview Profiler] resolveCached() total wait: {} ms", toMs(System.nanoTime() - start));
-        return result;
+        return cache.sidecar(key, () -> this.resolve(tile, centerX, centerZ, zoom, levels, cancellation)).join();
     }
 
     static CacheKey cacheKey(WorldCreationContext settings, Preset preset) {
-        long start = System.nanoTime();
-
-        long jsonStart = System.nanoTime();
         String presetJson = Preset.DIRECT_CODEC.encodeStart(JsonOps.INSTANCE, preset)
                 .result()
                 .map(Object::toString)
                 .orElse("");
-        long jsonDuration = System.nanoTime() - jsonStart;
 
-        long registryStart = System.nanoTime();
         int biomeCount = (int) settings.worldgenLoadContext().lookupOrThrow(Registries.BIOME).listElements().count();
-        long registryDuration = System.nanoTime() - registryStart;
-
         String biomeSource = settings.selectedDimensions().overworld().getBiomeSource().getClass().getName();
-
-        LOGGER.info("[BiomePreview Profiler] cacheKey() total: {} ms | JSON Codec: {} ms | Registry Count: {} ms",
-                toMs(System.nanoTime() - start), toMs(jsonDuration), toMs(registryDuration));
 
         return new CacheKey(
                 settings.options().seed(),
@@ -275,10 +220,6 @@ final class BiomePreview {
             return 2; // 2 blocks/px: 2x2 pixels share 1 Quart
         }
         return 1;     // >= 4 blocks/px: 1+ Quarts per pixel
-    }
-
-    private static String toMs(long nanos) {
-        return String.format("%.2f", nanos / 1_000_000.0);
     }
 
     private static int surfaceY(Cell cell, Levels levels) {
