@@ -80,7 +80,7 @@ public class IslandSettingsPage extends PresetEditorPage {
 			this.regenerate();
 			return value;
 		});
-		this.islandHorizontalScale = PresetWidgets.createFloatSlider(island.islandHorizontalScale, 0.1F, 3.0F, RTFTranslationKeys.GUI_SLIDER_ISLAND_HORIZONTAL_SCALE, (slider, value) -> {
+		this.islandHorizontalScale = PresetWidgets.createFloatSlider(island.islandHorizontalScale, 0.1F, 10.0F, RTFTranslationKeys.GUI_SLIDER_ISLAND_HORIZONTAL_SCALE, (slider, value) -> {
 			island.islandHorizontalScale = (float) slider.scaleValue(value);
 			this.regenerate();
 			return value;
