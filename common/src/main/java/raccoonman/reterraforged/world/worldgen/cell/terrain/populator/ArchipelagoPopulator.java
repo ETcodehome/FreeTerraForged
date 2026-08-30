@@ -49,6 +49,10 @@ public class ArchipelagoPopulator implements CellPopulator {
     private Noise coastalModulationNoise;  // Secondary noise to vary intensity/characteristics spatially
     private Noise shelfDetailNoise;        // Fine detail for subsea shelf variation
 
+    // Below-waterline surface detail
+    private Noise oceanFloorRidge;      // Fine ridged noise — additive texture on the seabed/shelf surface
+    private Noise oceanFloorVariance;   // Broad low-frequency mask — varies detail amplitude by region
+
     private Noise islandErosion;
     private Noise islandWeirdness;
     private Noise beachErosion;
@@ -111,6 +115,10 @@ public class ArchipelagoPopulator implements CellPopulator {
         this.coastalModulationNoise = Noises.simplex(4109 + salt, Math.max(1, Math.round(size * 1.5F)), 2);
         this.shelfDetailNoise = Noises.simplex(6317 + salt, Math.max(1, Math.round(size * 0.12F * hScale)), 3);
 
+        // Below-waterline surface detail
+        this.oceanFloorRidge = Noises.perlinRidge(2718 + salt, Math.max(1, Math.round(size * 0.10F * hScale)), 3, 2.0F, 0.85F);
+        this.oceanFloorVariance = Noises.simplex(3141 + salt, Math.max(1, Math.round(size * 2.2F)), 2);
+
         this.islandErosion = Erosion.LEVEL_4.source();
         this.islandWeirdness = Weirdness.MID_SLICE_NORMAL_DESCENDING.source();
         this.beachErosion = Erosion.LEVEL_4.source();
@@ -130,14 +138,6 @@ public class ArchipelagoPopulator implements CellPopulator {
         this.gradientStep = Math.max(0.75F, size * 0.02F * volcanismHScale * hScale);
     }
 
-    /**
-     * Macro-scale gating mask (density * region), independent of the island's own footprint
-     * shape (sizeNoise/peakDrift). This is the mask driven by macroDensityPercentage that
-     * decides whether a macro region is "active" for island generation at all. Exposed
-     * separately from rawShape so callers can use it to blend effects — like the underwater
-     * floor carve in apply() — smoothly across the region's leading edge, rather than having
-     * them snap on/off the instant totalDensityMask crosses the near-zero epsilon.
-     */
     private float macroDensityMask(float x, float z) {
         float densityValue = this.densityNoise.compute(x, z, 0);
         float regionValue = this.regionNoise.compute(x, z, 0);
@@ -146,7 +146,8 @@ public class ArchipelagoPopulator implements CellPopulator {
         float regionAlpha = smoothStep(regionThreshold, regionThreshold + 0.25F, regionValue);
 
         float densityThreshold = NoiseUtil.clamp(1.0F - this.settings.islandDensity * 0.8F, 0.05F, 0.98F);
-        float densityFade = NoiseUtil.clamp((1.0F - densityThreshold) * 0.5F, 0.04F, 0.12F);
+        // Expanded density fade range to make macro-region transitions wider and smoother
+        float densityFade = NoiseUtil.clamp((1.0F - densityThreshold) * 0.5F, 0.12F, 0.30F);
         float densityAlpha = smoothStep(densityThreshold, densityThreshold + densityFade, densityValue);
 
         return densityAlpha * regionAlpha;
@@ -171,6 +172,7 @@ public class ArchipelagoPopulator implements CellPopulator {
     @Override
     public void apply(Cell cell, float x, float z) {
         float originalContinentEdge = cell.continentEdge;
+        float originalHeight = cell.height;
 
         float shape = this.rawShape(x, z);
 
@@ -203,10 +205,12 @@ public class ArchipelagoPopulator implements CellPopulator {
         float detailNoiseVal = this.shelfDetailNoise.compute(x * 0.02F, z * 0.02F, 0);
         float coastalNoise = (angularNoiseVal * 0.65F + detailNoiseVal * 0.35F) * (0.2F + 0.8F * modFactor);
 
-        // Perturb island alpha in the underwater & coastal zone for broken contours
-        float perturbedAlpha = NoiseUtil.clamp(islandAlpha + coastalNoise * 0.18F * (1.0F - islandAlpha * 0.8F), 0.0F, 1.0F);
+        // Perturb island alpha in underwater & coastal zone; scale noise perturbation down near islandAlpha = 0
+        // to prevent abrupt step-jumps right at the early-return boundary.
+        float noiseFade = smoothStep(0.0F, 0.12F, islandAlpha);
+        float perturbedAlpha = NoiseUtil.clamp(islandAlpha + coastalNoise * 0.18F * (1.0F - islandAlpha * 0.8F) * noiseFade, 0.0F, 1.0F);
 
-        // Subsea Falloff Width: Expanded ~3x, scaled by islandSize, oceanDepth, and spatial modulation
+        // Subsea Falloff Width
         float baseBeachWidth = NoiseUtil.clamp(Math.max(0.05F, this.settings.beachWidth), 0.05F, 0.45F);
         float beachCoverage = NoiseUtil.clamp(this.settings.beachCoverage, 0.0F, 1.0F);
         float widthMultiplier = 3.0F * this.islandSizeScale * this.oceanDepthScale * (0.7F + 0.6F * modFactor);
@@ -221,19 +225,17 @@ public class ArchipelagoPopulator implements CellPopulator {
         float bVariance = rawVariance * 0.15F * (1.0F - cliffFactor) - 0.05F * (1.0F - cliffFactor);
         float dynamicBeachEnd = NoiseUtil.clamp(baseBeachEnd + bVariance, coastEnd + 0.01F, 0.90F);
 
-        // Macro region mask at this cell — used below to fade the forced deep-floor carve
-        // back to the pre-existing terrain at the region's leading edge, instead of letting
-        // it hard-clamp the instant islandAlpha ekes above the near-zero threshold.
+        // Macro region mask at this cell
         float regionMask = this.macroDensityMask(x, z);
 
-        // Deep Ocean floor floor height scaled by oceanDepth parameter
+        // Deep Ocean floor height scaled by oceanDepth parameter
         float trueOceanFloor = this.levels.water(-this.oceanDepth);
-        float clampedOceanFloor = Math.min(cell.height, trueOceanFloor);
-        // Overlay the clamp on top of the existing terrain rather than overriding it outright:
-        // at regionMask ~0 (edge of the macro density region) this resolves to cell.height
-        // unchanged, and only reaches the full hard clamp once regionMask ~1 deep inside an
-        // active region. This is what stops the underwater "chasm" artifact at region edges.
-        float oceanFloorHeight = NoiseUtil.lerp(cell.height, clampedOceanFloor, regionMask);
+        float clampedOceanFloor = Math.min(originalHeight, trueOceanFloor);
+
+        // Fade the ocean floor carve smoothly as perturbedAlpha approaches zero.
+        // This ensures oceanFloorHeight seamlessly matches originalHeight at the outer edge with no cliff artifact.
+        float floorCarveAlpha = regionMask * smoothStep(0.0F, shelfEnd, perturbedAlpha);
+        float oceanFloorHeight = NoiseUtil.lerp(originalHeight, clampedOceanFloor, floorCarveAlpha);
 
         // Shallow shelf depth target
         int shelfDepth = Math.max(2, Math.round(3.0F + this.settings.offshoreDepth * 8.0F));
@@ -243,6 +245,24 @@ public class ArchipelagoPopulator implements CellPopulator {
         float shelfAlpha = smoothStep(0.0F, shelfEnd, perturbedAlpha);
         float smoothFalloff = (float) Math.pow(shelfAlpha, 1.2F);
         float shelfHeight = NoiseUtil.lerp(oceanFloorHeight, shelfTarget, smoothFalloff);
+
+        // Below-waterline surface detail
+        float regionVarianceValue = 0.5F + 0.5F * this.oceanFloorVariance.compute(x, z, 0);
+        float ridgeValue = NoiseUtil.clamp(this.oceanFloorRidge.compute(x, z, 0), 0.0F, 1.0F);
+
+        float onsetWidth = shelfEnd * 0.3F;
+        float onsetFade = smoothStep(0.0F, onsetWidth, perturbedAlpha);
+
+        float shoreFadeWidth = shelfEnd * 0.20F;
+        float shoreFadeStart = Math.max(0.0F, shelfEnd - shoreFadeWidth);
+        float shoreFade = 1.0F - smoothStep(shoreFadeStart, shelfEnd, perturbedAlpha);
+
+        float detailFade = onsetFade * shoreFade;
+
+        float detailAmplitudeBlocks = NoiseUtil.lerp(1.5F, 6.0F, regionVarianceValue) * (0.4F + 0.6F * this.oceanDepthScale);
+        float oceanFloorDetailBlocks = ridgeValue * detailAmplitudeBlocks * detailFade;
+
+        shelfHeight += oceanFloorDetailBlocks / this.levels.terrainScaleFactor;
 
         float coastAlpha = smoothStep(shelfEnd, coastEnd, perturbedAlpha);
         float beachHeight = NoiseUtil.lerp(shelfHeight, this.levels.ground, coastAlpha);
@@ -289,7 +309,9 @@ public class ArchipelagoPopulator implements CellPopulator {
         cell.continentEdge = Math.max(originalContinentEdge, continentEdge(perturbedAlpha, shelfEnd, dynamicBeachEnd));
 
         if (perturbedAlpha < shelfEnd) {
-            cell.terrain = TerrainType.SHALLOW_OCEAN;
+            if (perturbedAlpha >= 0.01F) {
+                cell.terrain = TerrainType.SHALLOW_OCEAN;
+            }
         } else if (perturbedAlpha < dynamicBeachEnd) {
             cell.terrain = TerrainType.ISLAND_BEACH;
         } else if (macroDome > 0.5F && landAlpha > 0.5F && this.settings.mountainChance > 0.05F) {
