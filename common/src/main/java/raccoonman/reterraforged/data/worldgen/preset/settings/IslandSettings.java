@@ -119,22 +119,22 @@ public class IslandSettings {
 
 	public static IslandSettings makeDefault() {
 		return new IslandSettings(true,
-				0.655F,
-				185.0F,
-				1.0F,
-				1.0F,
-				2.0F,
-				0.250F,
-				0.6F,
-				0.5F,
+				0.4F,
+				150.0F,
 				0.1F,
-				0.125F,
-				0.125F,
+				0.1F,
+				1.5F,
+				5.0F,
 				0.5F,
 				0.5F,
-				1.0F,
-				1.0F,
-				0.5F
+				0.275F,
+				0.225F,
+				0.6F,
+				0.4F,
+				0.85F,
+				0.7F,
+				0.7F,
+				1.0F
 		);
 	}
 }
