@@ -306,7 +306,7 @@ public class ArchipelagoPopulator implements CellPopulator {
         float targetHeight = this.levels.ground + inlandBase + reliefHeight;
 
         cell.height = NoiseUtil.lerp(beachHeight, targetHeight, landAlpha);
-        cell.continentEdge = Math.max(originalContinentEdge, continentEdge(perturbedAlpha, shelfEnd, dynamicBeachEnd));
+        cell.continentEdge = Math.max(originalContinentEdge, continentEdge(perturbedAlpha, shelfEnd, dynamicBeachEnd, regionMask));
 
         if (perturbedAlpha < shelfEnd) {
             if (perturbedAlpha >= 0.01F) {
@@ -331,17 +331,19 @@ public class ArchipelagoPopulator implements CellPopulator {
         }
     }
 
-    private float continentEdge(float islandAlpha, float shelfEnd, float beachEnd) {
+    private float continentEdge(float islandAlpha, float shelfEnd, float beachEnd, float regionMask) {
+        float edge;
         if (islandAlpha < shelfEnd) {
             float alpha = smoothStep(0.0F, shelfEnd, islandAlpha);
-            return NoiseUtil.lerp(this.controlPoints.deepOcean, this.controlPoints.shallowOcean, alpha);
-        }
-        if (islandAlpha < beachEnd) {
+            edge = NoiseUtil.lerp(0.0F, this.controlPoints.shallowOcean, alpha);
+        } else if (islandAlpha < beachEnd) {
             float alpha = smoothStep(shelfEnd, beachEnd, islandAlpha);
-            return NoiseUtil.lerp(this.controlPoints.shallowOcean, this.controlPoints.coast, alpha);
+            edge = NoiseUtil.lerp(this.controlPoints.shallowOcean, this.controlPoints.coast, alpha);
+        } else {
+            float alpha = smoothStep(beachEnd, 1.0F, islandAlpha);
+            edge = NoiseUtil.lerp(this.controlPoints.coast, 1.0F, alpha);
         }
-        float alpha = smoothStep(beachEnd, 1.0F, islandAlpha);
-        return NoiseUtil.lerp(this.controlPoints.coast, this.controlPoints.inland, alpha);
+        return edge * regionMask;
     }
 
     private static float smoothStep(float min, float max, float value) {
