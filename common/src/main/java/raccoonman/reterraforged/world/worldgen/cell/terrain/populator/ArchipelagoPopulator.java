@@ -18,11 +18,7 @@ public class ArchipelagoPopulator implements CellPopulator {
     private static final float DOME_EXPONENT_MAX = 3.6F;
     private static final float DOME_HEIGHT_SCALE = 0.95F;
 
-    private static final float CHANNEL_DEPTH_MIN = 0.08F;
-    private static final float CHANNEL_DEPTH_MAX = 0.32F;
     private static final float PEAK_DRIFT_STRENGTH = 0.35F;
-    private static final float MAX_VALLEY_CARVE_FRACTION = 0.55F;
-
     private static final float BASE_SUMMIT_PERTURB_STRENGTH = 0.42F;
 
     private IslandSettings settings;
@@ -39,8 +35,11 @@ public class ArchipelagoPopulator implements CellPopulator {
     private Noise regionNoise;
 
     private Noise peakDrift;
-    private Noise channelPattern;
     private Noise summitPerturb;
+
+    // Inland Volcanism noise generators (Spire subnoise & spire masking)
+    private Noise volcanicSpireNoise;
+    private Noise volcanicMaskNoise;
 
     private Noise beachVariance;
 
@@ -60,9 +59,6 @@ public class ArchipelagoPopulator implements CellPopulator {
 
     private float domeExponent;
     private float summitPerturbStrength;
-    private float channelDepthScale;
-    private float valleySharpness;
-    private float channelWarpDist;
     private float gradientStep;
     private float macroDensityPercentage;
 
@@ -106,9 +102,12 @@ public class ArchipelagoPopulator implements CellPopulator {
 
         // INTERNAL & COASTAL FEATURES: Scale using islandHorizontalScale
         this.peakDrift = Noises.simplex(3391 + salt, Math.max(1, Math.round(size * 1.2F * mountainHScale * hScale)), 1);
-        this.channelPattern = Noises.simplex(7213 + salt, Math.max(1, Math.round(size * 0.32F * volcanismHScale * hScale)), 2);
         this.summitPerturb = Noises.simplex(5107 + salt, Math.max(1, Math.round(size * 0.4F * mountainHScale * hScale)), 2);
         this.beachVariance = Noises.simplex(5541 + salt, Math.max(1, Math.round(size * 0.21F * hScale)), 2);
+
+        // VOLCANISM NOISE: High-frequency volcanic spires and spire distribution mask
+        this.volcanicSpireNoise = Noises.perlinRidge(7213 + salt, Math.max(1, Math.round(size * 0.07F * volcanismHScale * hScale)), 3, 2.2F, 0.85F);
+        this.volcanicMaskNoise = Noises.simplex(3391 + salt, Math.max(1, Math.round(size * 0.35F * volcanismHScale * hScale)), 2);
 
         // Angular and modulation noises for broken coastal/subsea falloff
         this.angularCoastalNoise = Noises.simplex(8821 + salt, Math.max(1, Math.round(size * 0.25F * hScale)), 2);
@@ -129,12 +128,6 @@ public class ArchipelagoPopulator implements CellPopulator {
         this.domeExponent = NoiseUtil.lerp(DOME_EXPONENT_MIN, DOME_EXPONENT_MAX, mScale);
         this.summitPerturbStrength = BASE_SUMMIT_PERTURB_STRENGTH * (0.4F + mScale * 0.8F) * mChance;
 
-        float vScale = NoiseUtil.clamp(this.settings.volcanismScale, 0.0F, 1.0F);
-        float vChance = NoiseUtil.clamp(this.settings.volcanoChance, 0.0F, 1.0F);
-        this.channelDepthScale = NoiseUtil.lerp(CHANNEL_DEPTH_MIN, CHANNEL_DEPTH_MAX, vScale) * vChance;
-        this.valleySharpness = NoiseUtil.lerp(1.1F, 2.5F, vScale);
-
-        this.channelWarpDist = Math.max(1.0F, size * 0.08F * volcanismHScale * hScale);
         this.gradientStep = Math.max(0.75F, size * 0.02F * volcanismHScale * hScale);
     }
 
@@ -282,26 +275,20 @@ public class ArchipelagoPopulator implements CellPopulator {
         float summitPerturbValue = this.summitPerturb.compute(x, z, 0) * summitInfluence * this.summitPerturbStrength;
         domeContribution += summitPerturbValue * this.settings.islandHeight * this.settings.islandVerticalScale;
 
-        float carveDepth = 0.0F;
-        if (gradMagSq > 1.0e-8F) {
-            float invMag = 1.0F / (float) Math.sqrt(gradMagSq);
-            float dirX = gx * invMag;
-            float dirZ = gz * invMag;
+        // Volcanism System: Sharp volcanic spire subnoise across interior terrain
+        float vScale = NoiseUtil.clamp(this.settings.volcanismScale, 0.0F, 1.0F);
+        float vChance = NoiseUtil.clamp(this.settings.volcanoChance, 0.0F, 1.0F);
 
-            float warpedX = x + dirX * this.channelWarpDist;
-            float warpedZ = z + dirZ * this.channelWarpDist;
-            float channelValue = this.channelPattern.compute(warpedX, warpedZ, 0);
+        float spireRaw = this.volcanicSpireNoise.compute(x, z, 0);
+        float spireSharpened = (float) Math.pow(spireRaw, 2.8F); // Sharpen into needle/spire peaks
 
-            float channelMask = NoiseUtil.clamp(1.0F - Math.abs(channelValue) * 1.6F, 0.0F, 1.0F);
-            channelMask = (float) Math.pow(channelMask, this.valleySharpness);
+        float spireMaskNoise = 0.5F + 0.5F * this.volcanicMaskNoise.compute(x, z, 0);
+        float spirePresence = smoothStep(1.0F - vChance, 1.0F, spireMaskNoise);
+        float spireLocationMask = smoothStep(0.25F, 0.80F, macroDome) * landAlpha;
 
-            float carveEnvelope = smoothStep(0.28F, 0.45F, macroDome) * (1.0F - smoothStep(0.58F, 0.85F, macroDome));
+        float volcanicSpireRelief = spireSharpened * spirePresence * spireLocationMask * vScale * this.settings.islandHeight * this.settings.islandVerticalScale * 0.50F;
 
-            carveDepth = channelMask * carveEnvelope * this.channelDepthScale * this.settings.islandHeight * this.settings.islandVerticalScale;
-        }
-
-        float effectiveCarve = Math.min(carveDepth, domeContribution * MAX_VALLEY_CARVE_FRACTION);
-        float reliefHeight = Math.max(0.0F, domeContribution - effectiveCarve);
+        float reliefHeight = Math.max(0.0F, domeContribution) + volcanicSpireRelief;
 
         float targetHeight = this.levels.ground + inlandBase + reliefHeight;
 
@@ -314,7 +301,7 @@ public class ArchipelagoPopulator implements CellPopulator {
             }
         } else if (perturbedAlpha < dynamicBeachEnd) {
             cell.terrain = TerrainType.ISLAND_BEACH;
-        } else if (macroDome > 0.5F && landAlpha > 0.5F && this.settings.mountainChance > 0.05F) {
+        } else if (macroDome > 0.5F && landAlpha > 0.5F && (this.settings.mountainChance > 0.05F || vScale > 0.2F)) {
             cell.terrain = TerrainType.ISLAND_MOUNTAINS;
         } else {
             cell.terrain = TerrainType.ISLAND;
