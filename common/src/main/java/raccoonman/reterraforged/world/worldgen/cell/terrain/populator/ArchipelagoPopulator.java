@@ -128,7 +128,7 @@ public class ArchipelagoPopulator implements CellPopulator {
         this.domeExponent = NoiseUtil.lerp(DOME_EXPONENT_MIN, DOME_EXPONENT_MAX, mScale);
         this.summitPerturbStrength = BASE_SUMMIT_PERTURB_STRENGTH * (0.4F + mScale * 0.8F) * mChance;
 
-        this.gradientStep = Math.max(0.75F, size * 0.02F * volcanismHScale * hScale);
+        this.gradientStep = 5.0F;
     }
 
     private float macroDensityMask(float x, float z) {
@@ -293,7 +293,7 @@ public class ArchipelagoPopulator implements CellPopulator {
         float targetHeight = this.levels.ground + inlandBase + reliefHeight;
 
         cell.height = NoiseUtil.lerp(beachHeight, targetHeight, landAlpha);
-        cell.continentEdge = Math.max(originalContinentEdge, continentEdge(perturbedAlpha, shelfEnd, dynamicBeachEnd, regionMask));
+        cell.continentEdge = Math.max(originalContinentEdge, continentEdge(perturbedAlpha, shelfEnd, regionMask));
 
         if (perturbedAlpha < shelfEnd) {
             if (perturbedAlpha >= 0.01F) {
@@ -318,19 +318,16 @@ public class ArchipelagoPopulator implements CellPopulator {
         }
     }
 
-    private float continentEdge(float islandAlpha, float shelfEnd, float beachEnd, float regionMask) {
-        float edge;
+    private float continentEdge(float islandAlpha, float shelfEnd, float originalContinentEdge) {
         if (islandAlpha < shelfEnd) {
             float alpha = smoothStep(0.0F, shelfEnd, islandAlpha);
-            edge = NoiseUtil.lerp(0.0F, this.controlPoints.shallowOcean, alpha);
-        } else if (islandAlpha < beachEnd) {
-            float alpha = smoothStep(shelfEnd, beachEnd, islandAlpha);
-            edge = NoiseUtil.lerp(this.controlPoints.shallowOcean, this.controlPoints.coast, alpha);
-        } else {
-            float alpha = smoothStep(beachEnd, 1.0F, islandAlpha);
-            edge = NoiseUtil.lerp(this.controlPoints.coast, 1.0F, alpha);
+            // Lerps from ambient deep ocean (0.0 / originalContinentEdge) up to islandCoast at the waterline
+            return NoiseUtil.lerp(originalContinentEdge, this.controlPoints.islandCoast, alpha);
         }
-        return edge * regionMask;
+
+        float alpha = smoothStep(shelfEnd, 1.0F, islandAlpha);
+        // Lerps from islandCoast at the shore up to 1.0 deep inland
+        return NoiseUtil.lerp(this.controlPoints.islandCoast, 1.0F, alpha);
     }
 
     private static float smoothStep(float min, float max, float value) {
