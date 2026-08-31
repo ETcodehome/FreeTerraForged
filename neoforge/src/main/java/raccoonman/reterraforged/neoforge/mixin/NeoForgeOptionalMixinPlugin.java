@@ -7,7 +7,7 @@ import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 
-import raccoonman.reterraforged.neoforge.compat.NeoForgeBiomePreviewIntegrations;
+import raccoonman.reterraforged.platform.ModLoaderUtil;
 
 public final class NeoForgeOptionalMixinPlugin implements IMixinConfigPlugin {
 	@Override
@@ -22,11 +22,16 @@ public final class NeoForgeOptionalMixinPlugin implements IMixinConfigPlugin {
 	@Override
 	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
 		if (mixinClassName.contains("Biolith")) {
-			try {
-				return NeoForgeBiomePreviewIntegrations.isBiolithLoaded();
-			} catch (LinkageError | RuntimeException error) {
-				return false;
-			}
+			// NOTE: previously used NeoForgeBiomePreviewIntegrations.isBiolithLoaded()
+			// (net.neoforged.fml.ModList#isLoaded), which throws until mods have been
+			// constructed. shouldApplyMixin runs whenever the JVM loads the target
+			// class - here, Biolith's own TerraBlenderCompatNeoForge, on Biolith's
+			// schedule rather than ours - and that can happen before ModList is
+			// populated, silently disabling this mixin for the rest of the session.
+			// ModLoaderUtil (backed by LoadingModList, populated during early mod
+			// discovery) is safe to query this early, and is what every other
+			// Biolith-gated mixin in the common module already uses.
+			return ModLoaderUtil.isLoaded("biolith");
 		}
 		return true;
 	}
