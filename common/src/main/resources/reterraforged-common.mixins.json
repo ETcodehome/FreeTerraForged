@@ -17,6 +17,7 @@
 		"MixinClimateSampler",
 		"MixinWorldCarver",
 		"MixinChunkAccess",
+		"MixinLevel",
 		"MixinLevelChunk",
 		"MixinImposterProtoChunk",
 		"MixinNoiseBasedChunkGenerator",

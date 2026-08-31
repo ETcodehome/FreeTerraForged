@@ -1,6 +1,7 @@
 package raccoonman.reterraforged.mixin;
 
 import java.util.concurrent.Executor;
+import java.util.Objects;
 import java.util.function.Supplier;
 
 import org.spongepowered.asm.mixin.Mixin;
@@ -24,6 +25,8 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.storage.DimensionDataStorage;
 import net.minecraft.world.level.storage.LevelStorageSource;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
+import raccoonman.reterraforged.world.worldgen.FlowSettingsSnapshot;
+import raccoonman.reterraforged.world.worldgen.IFlowSettingsHolder;
 import raccoonman.reterraforged.world.worldgen.runtime.TagEpoch;
 import raccoonman.reterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenEpoch;
@@ -69,6 +72,12 @@ public class MixinChunkMap {
 				);
 			}
 			terraForged.initializeEpoch(epoch, rtfRandomState);
+			((IFlowSettingsHolder) serverLevel).reterraforged$setFlowSettings(
+				FlowSettingsSnapshot.from(Objects.requireNonNull(
+					rtfRandomState.preset(),
+					"FTF worldgen initialized without its selected preset"
+				).flow())
+			);
 		} catch (Exception error) {
 			throw new IllegalStateException("Failed to initialize FTF worldgen epoch", error);
 		}

@@ -16,6 +16,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import raccoonman.reterraforged.world.worldgen.ChunkFlowField;
 import raccoonman.reterraforged.world.worldgen.IFlowFieldHolder;
+import raccoonman.reterraforged.world.worldgen.IFlowSettingsHolder;
 
 @Mixin(Block.class)
 public class MixinBlock {
@@ -32,8 +33,8 @@ public class MixinBlock {
         ChunkAccess chunk = level.getChunk(pos);
         if (!(chunk instanceof IFlowFieldHolder holder)) return;
 
-        ChunkFlowField flowField = holder.reterraforged$getFlowField();
-        if (!flowField.enableFlowParticles()) return;
+		ChunkFlowField flowField = holder.reterraforged$getFlowField();
+		if (!((IFlowSettingsHolder) level).reterraforged$getFlowSettings().flowParticles()) return;
         int localX = pos.getX() & 15;
         int localZ = pos.getZ() & 15;
 

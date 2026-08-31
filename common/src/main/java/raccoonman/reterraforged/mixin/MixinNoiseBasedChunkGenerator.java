@@ -67,10 +67,6 @@ abstract class MixinNoiseBasedChunkGenerator extends ChunkGenerator {
 
 		// Cast the chunk to your interface to access the flow field container
 		ChunkFlowField flowField = (chunk instanceof IFlowFieldHolder holder) ? holder.reterraforged$getFlowField() : null;
-		if (flowField != null && rtfRandomState.preset() != null) {
-			flowField.configure(rtfRandomState.preset().flow());
-		}
-
 		for(int x = 0; x < 16; x++) {
 			for(int z = 0; z < 16; z++) {
 				Cell cell = tileChunk.getCell(x, z);

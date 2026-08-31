@@ -12,6 +12,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import raccoonman.reterraforged.world.worldgen.ChunkFlowField;
 import raccoonman.reterraforged.world.worldgen.IFlowFieldHolder;
+import raccoonman.reterraforged.world.worldgen.FlowSettingsSnapshot;
+import raccoonman.reterraforged.world.worldgen.IFlowSettingsHolder;
 
 @Mixin(Boat.class)
 public abstract class MixinFloatyBoaty {
@@ -34,7 +36,8 @@ public abstract class MixinFloatyBoaty {
     private void applyRiverPhysics(CallbackInfo ci) {
 
         Boat boat = (Boat) (Object) this;
-        Level level = boat.level();
+		Level level = boat.level();
+		FlowSettingsSnapshot flowSettings = ((IFlowSettingsHolder) level).reterraforged$getFlowSettings();
 
         // Apply physics whenever in liquid, independent of vanilla river biome boundaries
         if (this.status != Boat.Status.IN_AIR && this.status != Boat.Status.ON_LAND) {
@@ -43,7 +46,7 @@ public abstract class MixinFloatyBoaty {
 
             if (chunk instanceof IFlowFieldHolder holder) {
                 ChunkFlowField flowField = holder.reterraforged$getFlowField();
-                if (!flowField.enableBoatFlowDynamics()) {
+				if (!flowSettings.boatFlowDynamics()) {
                     return;
                 }
 
@@ -58,7 +61,7 @@ public abstract class MixinFloatyBoaty {
                     double motionZ = currentMotion.z;
 
                     // 1. Buoyancy / Waterfall Logic
-                    boolean allowGoingUpWaterfalls = flowField.enableNavigableWaterfalls();
+					boolean allowGoingUpWaterfalls = flowSettings.navigableWaterfalls();
                     if (allowGoingUpWaterfalls && (this.status == Boat.Status.UNDER_WATER || this.status == Boat.Status.UNDER_FLOWING_WATER)) {
                         motionY = (boat.getControllingPassenger() != null) ? 0.3 : 0.2;
                     }
