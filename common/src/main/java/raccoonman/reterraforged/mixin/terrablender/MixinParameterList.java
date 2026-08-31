@@ -109,14 +109,8 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 		this.reterraforged$compositionFallbackReason = null;
 		if (this.reterraforged$bandingPreset == null && regionType == RegionType.OVERWORLD) {
 			registryAccess.lookup(RTFRegistries.PRESET)
-					.flatMap(registry -> registry.get(Preset.KEY))
-					.ifPresent(holder -> this.reterraforged$bandingPreset = holder.value());
-
-			// Fallback to the preview preset stored in the thread-local/preview context
-			// if the registry hasn't registered the live unsaved preset yet.
-			if (this.reterraforged$bandingPreset == null) {
-				this.reterraforged$bandingPreset = this.reterraforged$previewPreset;
-			}
+				.flatMap(registry -> registry.get(Preset.KEY))
+				.ifPresent(holder -> this.reterraforged$bandingPreset = holder.value());
 		}
 //
 //    	registryAccess.lookup(RTFRegistries.PRESET).flatMap((registry) -> {
