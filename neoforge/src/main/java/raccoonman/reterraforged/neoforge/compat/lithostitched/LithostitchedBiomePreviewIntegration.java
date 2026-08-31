@@ -11,7 +11,6 @@ import dev.worldgen.lithostitched.api.worldgen.densityfunction.fastnoise.FastNoi
 import dev.worldgen.lithostitched.impl.worldgen.biomeinjector.internal.BiomeInjectorManager;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.RegistrationInfo;
-import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.dimension.LevelStem;
@@ -61,46 +60,14 @@ public final class LithostitchedBiomePreviewIntegration implements BiomePreviewI
 	private void applyInjectors(Context context) {
 		MappedRegistry<LevelStem> dimensions = new MappedRegistry<>(Registries.LEVEL_STEM, Lifecycle.stable());
 		dimensions.register(LevelStem.OVERWORLD, context.levelStem(), RegistrationInfo.BUILT_IN);
-
-		RegistryAccess baseRegistries = context.registries();
-		var biomeRegistry = baseRegistries.registryOrThrow(Registries.BIOME);
-
-		RegistryAccess safeRegistries = new RegistryAccess.Frozen() {
-			@Override
-			@SuppressWarnings("unchecked")
-			public <E> java.util.Optional<net.minecraft.core.Registry<E>> registry(net.minecraft.resources.ResourceKey<? extends net.minecraft.core.Registry<? extends E>> key) {
-				if (key.equals(Registries.BIOME)) {
-					return java.util.Optional.of((net.minecraft.core.Registry<E>) biomeRegistry);
-				}
-				return baseRegistries.registry(key);
-			}
-
-			@Override
-			@SuppressWarnings("unchecked")
-			public <E> java.util.Optional<net.minecraft.core.HolderLookup.RegistryLookup<E>> lookup(net.minecraft.resources.ResourceKey<? extends net.minecraft.core.Registry<? extends E>> key) {
-				return baseRegistries.lookup(key);
-			}
-
-			@Override
-			@SuppressWarnings("unchecked")
-			public <E> net.minecraft.core.HolderLookup.RegistryLookup<E> lookupOrThrow(net.minecraft.resources.ResourceKey<? extends net.minecraft.core.Registry<? extends E>> key) {
-				return baseRegistries.lookupOrThrow(key);
-			}
-
-			@Override
-			public java.util.stream.Stream<RegistryEntry<?>> registries() {
-				return baseRegistries.registries();
-			}
-		};
-
-		BiomeInjectorManager.applyBiomeInjectors(safeRegistries, dimensions, context.seed());
+		BiomeInjectorManager.applyBiomeInjectors(context.registries(), dimensions, context.seed());
 	}
 
 	private void bindFastNoiseConfigs(Context context) {
 		context.registries().lookupOrThrow(LithostitchedRegistries.FAST_NOISE_CONFIG)
-				.listElements()
-				.map(holder -> (FastNoiseConfig) holder.value())
-				.forEach(config -> config.bind(context.seed()));
+			.listElements()
+			.map(holder -> (FastNoiseConfig) holder.value())
+			.forEach(config -> config.bind(context.seed()));
 	}
 
 	private record Initialization(Throwable failure) {
