@@ -27,7 +27,6 @@ import net.minecraft.world.level.levelgen.NoiseSettings;
 import net.minecraft.world.level.levelgen.RandomState;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings;
-import raccoonman.reterraforged.world.worldgen.ActiveChunk;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.MaxHeightUtil;
 import raccoonman.reterraforged.world.worldgen.RTFChunk;
@@ -37,6 +36,8 @@ import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.densityfunction.CellSampler;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.TileCache;
+import raccoonman.reterraforged.world.worldgen.runtime.WorldgenPlan;
+import raccoonman.reterraforged.world.worldgen.runtime.WorldgenPlans;
 
 @Mixin(NoiseChunk.class)
 class MixinNoiseChunk {
@@ -77,12 +78,28 @@ class MixinNoiseChunk {
 		if((Object) randomState instanceof RTFRandomState rtfRandomState && cellCountXZ > 1 && (generatorContext = rtfRandomState.generatorContext()) != null) {
 			this.chunk = generatorContext.cache.provideAtChunk(this.chunkX, this.chunkZ).getChunkReader(this.chunkX, this.chunkZ);
 
-			RTFChunk rtfChunk = (RTFChunk) ActiveChunk.get();
-			int maxHeight = Math.min(noiseSettings.height(), MaxHeightUtil.getMaxHeight(this.chunkX, this.chunkZ, rtfChunk.getMaxHeight().orElseGet(noiseSettings::height), generatorSettings, noiseSettings, beardifierOrMarker));
+			int maxHeight = Math.min(noiseSettings.height(), MaxHeightUtil.getMaxHeight(
+				this.chunkX,
+				this.chunkZ,
+				getTileMaxHeight(this.chunk),
+				generatorSettings,
+				noiseSettings,
+				beardifierOrMarker
+			));
 			this.cellCountY = Math.min(this.cellCountY, maxHeight / this.cellHeight);
 		}
 		this.cache2d = new CellSampler.Cache2d();
 		return randomState.router();
+	}
+
+	private static int getTileMaxHeight(Tile.Chunk chunk) {
+		float maxHeight = Float.MIN_VALUE;
+		for (int x = 0; x < 16; x++) {
+			for (int z = 0; z < 16; z++) {
+				maxHeight = Math.max(maxHeight, chunk.getCell(x, z).height * 256.0F);
+			}
+		}
+		return Mth.ceil(maxHeight);
 	}
 
 	@ModifyVariable(
@@ -176,16 +193,22 @@ class MixinNoiseChunk {
 		at = @At("RETURN"),
 		method = "cachedClimateSampler"
 	)
-	private void reterraforged$configureUndergroundBiomeBanding(
+	private void reterraforged$bindWorldgenPlan(
 		NoiseRouter noiseRouter,
 		List<Climate.ParameterPoint> spawnTarget,
 		CallbackInfoReturnable<Climate.Sampler> callback
 	) {
 		if ((Object) this.randomState instanceof RTFRandomState randomState
 			&& randomState.preset() != null
-			&& (Object) callback.getReturnValue() instanceof RTFClimateSampler sampler) {
-			sampler.setUndergroundBiomeBandingPreset(randomState.preset(), randomState.seed());
-			sampler.setUndergroundBiomeSurfaceContext(randomState.generatorContext());
+			&& randomState.generatorContext() != null
+			&& randomState.plan() != null
+			&& (Object) callback.getReturnValue() instanceof RTFClimateSampler) {
+			WorldgenPlan plan = randomState.plan();
+			plan.samplerDecoration().decorate(
+				plan,
+				new WorldgenPlans.SamplerInputs(randomState.preset(), randomState.generatorContext()),
+				callback.getReturnValue()
+			);
 		}
 	}
 

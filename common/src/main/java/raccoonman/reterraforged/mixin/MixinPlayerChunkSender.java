@@ -26,7 +26,7 @@ public class MixinPlayerChunkSender {
 
             if (flowField != null && flowField.hasRivers()) {
                 listener.send(new ClientboundCustomPayloadPacket(
-                        new FlowFieldSyncPayload(chunk.getPos(), flowField.getRawGrid())
+                        new FlowFieldSyncPayload(chunk.getPos(), flowField.getRawGrid(), flowField.getSettings())
                 ));
             }
         }

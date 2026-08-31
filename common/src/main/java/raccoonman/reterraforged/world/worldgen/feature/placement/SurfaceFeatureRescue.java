@@ -5,24 +5,21 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.levelgen.placement.BiomeFilter;
-import net.minecraft.world.level.levelgen.placement.BlockPredicateFilter;
 import net.minecraft.world.level.levelgen.placement.CountPlacement;
 import net.minecraft.world.level.levelgen.placement.EnvironmentScanPlacement;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.minecraft.world.level.levelgen.placement.PlacementContext;
 import net.minecraft.world.level.levelgen.placement.PlacementModifier;
-import raccoonman.reterraforged.mixin.BlockPredicateFilterAccessor;
 import raccoonman.reterraforged.world.worldgen.feature.placement.DynamicHeightRangePlacement.HeightBand;
 import raccoonman.reterraforged.world.worldgen.feature.placement.SurfacePlacementClassifier.Classification;
 import raccoonman.reterraforged.world.worldgen.feature.placement.SurfacePlacementClassifier.SurfacePipeline;
+import raccoonman.reterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
 
 /**
  * Gives a conventional surface placement its original chance first, then
@@ -32,7 +29,6 @@ import raccoonman.reterraforged.world.worldgen.feature.placement.SurfacePlacemen
  */
 public final class SurfaceFeatureRescue {
 	private static final int UNSCALED_RESCUE_THRESHOLD = 8;
-	private static final ConcurrentHashMap<PlacedFeature, Classification> CLASSIFICATIONS = new ConcurrentHashMap<>();
 	private static final ThreadLocal<Deque<Frame>> ACTIVE_FEATURES = ThreadLocal.withInitial(ArrayDeque::new);
 
 	private SurfaceFeatureRescue() {
@@ -40,11 +36,10 @@ public final class SurfaceFeatureRescue {
 
 	public static void begin(PlacedFeature feature, PlacementContext context) {
 		Run run = null;
-		if (DynamicHeightRangePlacement.isRtfOverworld(context)) {
-			Classification classification = CLASSIFICATIONS.computeIfAbsent(
-				feature,
-				ignored -> SurfacePlacementClassifier.classify(feature, context.getLevel().registryAccess())
-			);
+		if (context.generator() instanceof TerraForgedChunkGenerator generator) {
+			Classification classification = generator.plan()
+				.map(plan -> plan.placedFeatures().surfaceClassification(feature))
+				.orElseGet(Classification::rejected);
 			if (classification.eligible()) {
 				Optional<UndergroundFeatureEnclosure.Guard> enclosure = UndergroundFeatureEnclosure.create(context);
 				if (enclosure.isPresent()) {
@@ -106,6 +101,7 @@ public final class SurfaceFeatureRescue {
 	}
 
 	private static final class Run {
+		/** Stable occurrence identity consumed by retained placement telemetry. */
 		private final PlacedFeature feature;
 		private final PlacementContext context;
 		private final SurfacePipeline pipeline;
@@ -222,16 +218,11 @@ public final class SurfaceFeatureRescue {
 				return false;
 			}
 			for (PlacementModifier modifier : this.pipeline.downstreamFilters()) {
-				if (modifier instanceof BiomeFilter) {
-					if (!this.context.generator()
-						.getBiomeGenerationSettings(this.context.getLevel().getBiome(placement))
-						.hasFeature(this.feature)) {
-						return false;
-					}
-				} else if (modifier instanceof BlockPredicateFilter filter
-					&& !((BlockPredicateFilterAccessor)(Object)filter)
-						.reterraforged$getPredicate()
-						.test(this.context.getLevel(), placement)) {
+				if (modifier.getPositions(
+					this.context,
+					net.minecraft.util.RandomSource.create(0L),
+					placement
+				).findAny().isEmpty()) {
 					return false;
 				}
 			}

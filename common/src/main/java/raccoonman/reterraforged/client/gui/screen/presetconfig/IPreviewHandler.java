@@ -171,31 +171,12 @@ public interface IPreviewHandler {
         BiomePreview.CacheKey requestedKey;
         RenderMode mode;
         boolean biomePipeline;
-        PreparedContext reusable;
-        HolderLookup.Provider provider;
-        HolderGetter<Noise> noises;
-        Preset presetObj;
         try {
             settings = page.getScreen().getSettings();
             requestedPreset = page.preset.getPreset();
             requestedKey = BiomePreview.cacheKey(settings, requestedPreset);
             mode = getRenderMode();
             biomePipeline = mode == RenderMode.BIOME;
-            reusable = state.preparedContext;
-            provider = null;
-            noises = null;
-            presetObj = requestedPreset;
-            if (reusable == null
-                    || !Objects.equals(reusable.cacheKey, requestedKey)
-                    || reusable.biomePipeline != biomePipeline) {
-                RegistryAccess.Frozen registries = settings.worldgenLoadContext();
-                provider = biomePipeline
-                        ? requestedPreset.buildFullPatch(registries)
-                        : requestedPreset.buildPatch(registries);
-                HolderGetter<Preset> presets = provider.lookupOrThrow(RTFRegistries.PRESET);
-                noises = provider.lookupOrThrow(RTFRegistries.NOISE);
-                presetObj = presets.getOrThrow(Preset.KEY).value();
-            }
         } catch (RuntimeException | LinkageError error) {
             state.isRunning = false;
             state.previewFailure = PreviewFailure.log("Failed to prepare " + getFailureLabel() + " preview provider", error);
@@ -204,14 +185,9 @@ public interface IPreviewHandler {
             }
             return;
         }
-        HolderLookup.Provider preparedProvider = provider;
-        HolderGetter<Noise> preparedNoises = noises;
-        Preset preparedPreset = presetObj;
         if (!Objects.equals(state.cacheKey, requestedKey)) {
             state.cacheKey = requestedKey;
         }
-        WorldSettings.Properties properties = presetObj.world().properties;
-        Levels levels = new Levels(properties.terrainScaler(), properties.worldHeight, properties.worldDepth, properties.seaLevel);
 
         int seed = (int) settings.options().seed();
         int zoomLevel = getZoom();
@@ -222,94 +198,122 @@ public interface IPreviewHandler {
 
         // Stage 1: prepare context, run config loading and structure lookups off the main thread
         CompletableFuture<PreGenContext> setupStage = CompletableFuture.supplyAsync(() -> {
-            PreparedContext prepared = reusable;
-            if (prepared == null
-                    || !Objects.equals(prepared.cacheKey, requestedKey)
-                    || prepared.biomePipeline != biomePipeline) {
-                PerformanceConfig config = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
-                        .resultOrPartial(RTFCommon.LOGGER::error)
-                        .orElseGet(PerformanceConfig::makeDefault);
-                GeneratorContext generatorContext = GeneratorContext.makeUncached(
-                        preparedPreset, preparedNoises, seed, FACTOR, 0, config.batchCount()
-                );
-                prepared = new PreparedContext(requestedKey, generatorContext, preparedProvider, preparedPreset, biomePipeline);
-                state.preparedContext = prepared;
-            }
-            BiomePreview biomePreview = null;
-            PreviewFailure biomeFailure = null;
-            if (biomePipeline) {
-                try {
-                    prepared.ensureBiomePreview(settings);
-                    biomePreview = prepared.biomePreview();
-                } catch (RuntimeException | LinkageError error) {
-                    biomeFailure = PreviewFailure.log("Failed to prepare " + getFailureLabel() + " biome preview", error);
+            PreparedContext.Lease lease = null;
+            try {
+                lease = page.getScreen().previewRequests().acquire(requestedKey, biomePipeline, () -> {
+                    RegistryAccess.Frozen registries = settings.worldgenLoadContext();
+                    HolderLookup.Provider provider = biomePipeline
+                            ? requestedPreset.buildPreviewLookups(registries)
+                            : requestedPreset.buildPatch(registries);
+                    HolderGetter<Preset> presets = provider.lookupOrThrow(RTFRegistries.PRESET);
+                    HolderGetter<Noise> noises = provider.lookupOrThrow(RTFRegistries.NOISE);
+                    Preset preparedPreset = presets.getOrThrow(Preset.KEY).value();
+                    PerformanceConfig config = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
+                            .resultOrPartial(RTFCommon.LOGGER::error)
+                            .orElseGet(PerformanceConfig::makeDefault);
+                    GeneratorContext generatorContext = GeneratorContext.makeUncached(
+                            preparedPreset, noises, seed, FACTOR, 0, config.batchCount()
+                    );
+                    return new PreparedContext(requestedKey, generatorContext, provider, preparedPreset, biomePipeline);
+                });
+                PreparedContext prepared = lease.owner();
+                BiomePreview biomePreview = null;
+                PreviewFailure biomeFailure = null;
+                if (biomePipeline) {
+                    try {
+                        prepared.ensureBiomePreview(settings);
+                        biomePreview = prepared.biomePreview();
+                    } catch (RuntimeException | LinkageError error) {
+                        biomeFailure = PreviewFailure.log("Failed to prepare " + getFailureLabel() + " biome preview", error);
+                    }
                 }
-            }
-            GeneratorContext generatorContext = prepared.context;
-            if (properties.spawnType == SpawnType.CONTINENT_CENTER) {
-                long baseContinentCenter = generatorContext.lookup.getHeightmap().continent().getNearestCenter(0, 0);
-                properties.spawnX = PosUtil.unpackLeft(baseContinentCenter);
-                properties.spawnZ = PosUtil.unpackRight(baseContinentCenter);
-            }
-
-            int cx;
-            int cz;
-            if (preparedPreset.world().properties.spawnType == SpawnType.CONTINENT_CENTER) {
-                long nearestContinentCenter = generatorContext.lookup.getHeightmap().continent().getNearestCenter(
-                        localNavigated ? localOffsetX : 0,
-                        localNavigated ? localOffsetZ : 0
+                GeneratorContext generatorContext = prepared.context;
+                Preset preparedPreset = prepared.preset;
+                WorldSettings.Properties properties = preparedPreset.world().properties;
+                Levels levels = new Levels(
+                        properties.terrainScaler(), properties.worldHeight, properties.worldDepth, properties.seaLevel
                 );
-                cx = PosUtil.unpackLeft(nearestContinentCenter);
-                cz = PosUtil.unpackRight(nearestContinentCenter);
-            } else {
-                cx = localNavigated ? localOffsetX : (preparedPreset.world().properties.spawnType == SpawnType.USER_SELECTED ? preparedPreset.world().properties.spawnX : 0);
-                cz = localNavigated ? localOffsetZ : (preparedPreset.world().properties.spawnType == SpawnType.USER_SELECTED ? preparedPreset.world().properties.spawnZ : 0);
-            }
+                if (properties.spawnType == SpawnType.CONTINENT_CENTER) {
+                    long baseContinentCenter = generatorContext.lookup.getHeightmap().continent().getNearestCenter(0, 0);
+                    properties.spawnX = PosUtil.unpackLeft(baseContinentCenter);
+                    properties.spawnZ = PosUtil.unpackRight(baseContinentCenter);
+                }
 
-            PreviewComputationCache.TileKey tileKey = new PreviewComputationCache.TileKey(
-                    requestedKey, cx, cz, zoomLevel, SIZE, biomePipeline
-            );
-            return new PreGenContext(generatorContext, biomePreview, cx, cz, zoomLevel, tileKey, biomeFailure);
+                int cx;
+                int cz;
+                if (preparedPreset.world().properties.spawnType == SpawnType.CONTINENT_CENTER) {
+                    long nearestContinentCenter = generatorContext.lookup.getHeightmap().continent().getNearestCenter(
+                            localNavigated ? localOffsetX : 0,
+                            localNavigated ? localOffsetZ : 0
+                    );
+                    cx = PosUtil.unpackLeft(nearestContinentCenter);
+                    cz = PosUtil.unpackRight(nearestContinentCenter);
+                } else {
+                    cx = localNavigated ? localOffsetX : (preparedPreset.world().properties.spawnType == SpawnType.USER_SELECTED ? preparedPreset.world().properties.spawnX : 0);
+                    cz = localNavigated ? localOffsetZ : (preparedPreset.world().properties.spawnType == SpawnType.USER_SELECTED ? preparedPreset.world().properties.spawnZ : 0);
+                }
+
+                PreviewComputationCache.TileKey tileKey = new PreviewComputationCache.TileKey(
+                        requestedKey, cx, cz, zoomLevel, SIZE, biomePipeline
+                );
+                return new PreGenContext(
+                        generatorContext, biomePreview, cx, cz, zoomLevel, tileKey,
+                        properties, levels, biomeFailure, lease
+                );
+            } catch (RuntimeException | Error failure) {
+                if (lease != null) {
+                    lease.close();
+                }
+                throw failure;
+            }
         }, net.minecraft.Util.backgroundExecutor());
 
         // Stage 2: fetch/generate the tile and rasterize it, entirely on the worker pool
         state.pendingGeneration = setupStage.thenCompose(preGen -> {
-            cancellation.check();
-            PreviewComputationCache.TileLease cached = page.previewCache().acquire(preGen.tileKey);
-            CompletableFuture<PreviewComputationCache.TileLease> tileFuture;
-            if (cached != null) {
-                tileFuture = CompletableFuture.completedFuture(cached);
-            } else {
-                tileFuture = preGen.context.generator.generateZoomed(
-                        preGen.cx, preGen.cz, preGen.zoomLevel, biomePipeline, cancellation::isCancelled
-                ).thenApply(newTile -> {
-                    PreviewComputationCache.TileLease stored = page.previewCache().store(preGen.tileKey, newTile);
-                    if (stored == null) {
-                        throw new java.util.concurrent.CancellationException("Preview cache closed");
-                    }
-                    return stored;
-                });
-            }
-            return tileFuture.thenApply(lease -> {
+            try {
                 cancellation.check();
-                Tile generatedTile = lease.tile();
-                try {
-                    BiomePreview.Sidecar biomes = null;
-                    PreviewFailure failure = preGen.biomeFailure;
-                    if (failure == null && biomePipeline) {
-                        biomes = preGen.biomePreview.resolveCached(
-                                page.previewCache(), generatedTile, preGen.cx, preGen.cz, preGen.zoomLevel, levels, cancellation
-                        );
-                    }
-                    int[] rasterData = failure == null
-                            ? createRasterData(generatedTile, biomes, mode, levels, properties, params)
-                            : null;
-                    return new FrameResult(lease, biomes, preGen.cx, preGen.cz, rasterData, params.width, params.height, failure);
-                } catch (Throwable throwable) {
-                    lease.close();
-                    throw throwable;
+                PreviewComputationCache.TileLease cached = page.previewCache().acquire(preGen.tileKey);
+                CompletableFuture<PreviewComputationCache.TileLease> tileFuture;
+                if (cached != null) {
+                    tileFuture = CompletableFuture.completedFuture(cached);
+                } else {
+                    tileFuture = preGen.context.generator.generateZoomed(
+                            preGen.cx, preGen.cz, preGen.zoomLevel, biomePipeline, cancellation::isCancelled
+                    ).thenApply(newTile -> {
+                        PreviewComputationCache.TileLease stored = page.previewCache().store(preGen.tileKey, newTile);
+                        if (stored == null) {
+                            throw new java.util.concurrent.CancellationException("Preview cache closed");
+                        }
+                        return stored;
+                    });
                 }
-            });
+                return tileFuture.thenApply(lease -> {
+                    cancellation.check();
+                    Tile generatedTile = lease.tile();
+                    try {
+                        BiomePreview.Sidecar biomes = null;
+                        PreviewFailure failure = preGen.biomeFailure;
+                        if (failure == null && biomePipeline) {
+                            biomes = preGen.biomePreview.resolveCached(
+                                    page.previewCache(), generatedTile, preGen.cx, preGen.cz, preGen.zoomLevel,
+                                    preGen.levels, cancellation
+                            );
+                        }
+                        int[] rasterData = failure == null
+                                ? createRasterData(
+                                        generatedTile, biomes, mode, preGen.levels, preGen.properties, params
+                                )
+                                : null;
+                        return new FrameResult(lease, biomes, preGen.cx, preGen.cz, rasterData, params.width, params.height, failure);
+                    } catch (Throwable throwable) {
+                        lease.close();
+                        throw throwable;
+                    }
+                }).whenComplete((result, failure) -> preGen.close());
+            } catch (RuntimeException | Error failure) {
+                preGen.close();
+                throw failure;
+            }
         });
 
         // Stage 3: return to the main render thread and adopt the result
@@ -406,7 +410,6 @@ public interface IPreviewHandler {
         state.tile = null;
         state.previewFailure = null;
         state.generatedWithBiomePipeline = false;
-        state.preparedContext = null;
     }
 
     default float getLegendScale() {
@@ -577,33 +580,57 @@ public interface IPreviewHandler {
         }
     }
 
-    final class PreGenContext {
+    final class PreGenContext implements AutoCloseable {
         final GeneratorContext context;
         final BiomePreview biomePreview;
         final int cx;
         final int cz;
         final int zoomLevel;
         final PreviewComputationCache.TileKey tileKey;
+        final WorldSettings.Properties properties;
+        final Levels levels;
         final PreviewFailure biomeFailure;
+        final PreparedContext.Lease lease;
 
-        PreGenContext(GeneratorContext context, BiomePreview biomePreview, int cx, int cz, int zoomLevel, PreviewComputationCache.TileKey tileKey, PreviewFailure biomeFailure) {
+        PreGenContext(
+                GeneratorContext context,
+                BiomePreview biomePreview,
+                int cx,
+                int cz,
+                int zoomLevel,
+                PreviewComputationCache.TileKey tileKey,
+                WorldSettings.Properties properties,
+                Levels levels,
+                PreviewFailure biomeFailure,
+                PreparedContext.Lease lease
+        ) {
             this.context = context;
             this.biomePreview = biomePreview;
             this.cx = cx;
             this.cz = cz;
             this.zoomLevel = zoomLevel;
             this.tileKey = tileKey;
+            this.properties = properties;
+            this.levels = levels;
             this.biomeFailure = biomeFailure;
+            this.lease = lease;
+        }
+
+        @Override
+        public void close() {
+            this.lease.close();
         }
     }
 
-    final class PreparedContext {
+    final class PreparedContext implements AutoCloseable {
         final BiomePreview.CacheKey cacheKey;
         final GeneratorContext context;
         final HolderLookup.Provider provider;
         final Preset preset;
         final boolean biomePipeline;
         private BiomePreview biomePreview;
+        private int leases;
+        private boolean closeRequested;
 
         PreparedContext(BiomePreview.CacheKey cacheKey, GeneratorContext context, HolderLookup.Provider provider, Preset preset, boolean biomePipeline) {
             this.cacheKey = cacheKey;
@@ -613,14 +640,90 @@ public interface IPreviewHandler {
             this.biomePipeline = biomePipeline;
         }
 
+        boolean matches(BiomePreview.CacheKey key, boolean pipeline) {
+            return Objects.equals(this.cacheKey, key) && this.biomePipeline == pipeline;
+        }
+
+        synchronized Lease acquire() {
+            if (this.closeRequested) {
+                throw new java.util.concurrent.CancellationException("Preview request owner is closing");
+            }
+            this.leases++;
+            return new Lease(this);
+        }
+
         synchronized void ensureBiomePreview(WorldCreationContext settings) {
             if (this.biomePreview == null) {
-                this.biomePreview = BiomePreview.create(settings, this.provider, this.preset, this.context);
+                this.biomePreview = BiomePreview.create(
+                    settings, this.provider, this.preset, this.context, this.cacheKey
+                );
             }
         }
 
-        BiomePreview biomePreview() {
+        synchronized BiomePreview biomePreview() {
             return this.biomePreview;
+        }
+
+        @Override
+        public void close() {
+            BiomePreview closing;
+            synchronized (this) {
+                if (this.closeRequested) {
+                    return;
+                }
+                this.closeRequested = true;
+                closing = this.leases == 0 ? this.detachBiomePreview() : null;
+            }
+            closeBiomePreview(closing);
+        }
+
+        private void release() {
+            BiomePreview closing;
+            synchronized (this) {
+                if (this.leases <= 0) {
+                    throw new IllegalStateException("Preview request lease was released more than once");
+                }
+                this.leases--;
+                closing = this.closeRequested && this.leases == 0 ? this.detachBiomePreview() : null;
+            }
+            closeBiomePreview(closing);
+        }
+
+        private BiomePreview detachBiomePreview() {
+            BiomePreview preview = this.biomePreview;
+            this.biomePreview = null;
+            return preview;
+        }
+
+        private static void closeBiomePreview(BiomePreview preview) {
+            if (preview != null) {
+                try {
+                    preview.close();
+                } catch (Exception failure) {
+                    RTFCommon.LOGGER.error("Failed closing request-owned biome preview plan", failure);
+                }
+            }
+        }
+
+        static final class Lease implements AutoCloseable {
+            private final PreparedContext owner;
+            private final java.util.concurrent.atomic.AtomicBoolean closed =
+                    new java.util.concurrent.atomic.AtomicBoolean();
+
+            private Lease(PreparedContext owner) {
+                this.owner = owner;
+            }
+
+            PreparedContext owner() {
+                return this.owner;
+            }
+
+            @Override
+            public void close() {
+                if (this.closed.compareAndSet(false, true)) {
+                    this.owner.release();
+                }
+            }
         }
     }
 

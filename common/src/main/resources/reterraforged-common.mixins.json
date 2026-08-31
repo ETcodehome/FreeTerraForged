@@ -1,23 +1,14 @@
 {
 
   	"required": true,
-  	"plugin": "raccoonman.reterraforged.mixin.plugin.MixinPlugin",
   	"package": "raccoonman.reterraforged.mixin",
   	"minVersion": "0.8",
   	"compatibilityLevel": "JAVA_21",
   	"mixins": [
-		"biolith.BiolithDimensionBiomePlacementAccessor",
-		"biolith.BiolithReplacementRequestAccessor",
-		"biolith.BiolithReplacementRequestSetAccessor",
-		"biolith.BiolithSubBiomeRequestAccessor",
-		"biolith.BiolithSubBiomeRequestSetAccessor",
-		"biolith.MixinBiolithDimensionBiomePlacement",
-		"biolith.MixinBiolithOverworldBiomePlacement",
 		"MixinNoiseChunk",
 		"MixinRandomState",
 		"MixinChunkMap",
 		"MixinUtil",
-		"MixinBiomeGenerationSettings",
 		"MixinSurfaceSystem",
 		"MixinStructure",
 		"MixinMinecraftServer",
@@ -34,15 +25,9 @@
 		"MixinBlock",
 		"MixinPlayerChunkSender",
 		"MixinC2MECompilerShield",
-		"MixinMultiNoiseBiomeSource",
 		"MixinWorldGenRegionCache",
 		"MixinNoiseFill",
 		"MixinChunkGeneratorTiming",
-		"HeightRangePlacementAccessor",
-		"UniformHeightAccessor",
-		"EnvironmentScanPlacementAccessor",
-		"RandomOffsetPlacementAccessor",
-		"BlockPredicateFilterAccessor",
 		"MixinHeightRangePlacement",
 		"MixinCountPlacement",
 		"MixinRepeatingPlacement",
@@ -57,18 +42,13 @@
 		"MixinOceanMonumentPiece",
 		"MixinOceanMonumentStructure",
 		"MixinJigsawStructure",
-		"MixinServerLevel",
-		"MixinServerStarted",
-		"MixinSquarePlacement",
-		"terrablender.MixinParameterList",
-		"terrablender.MixinClimateSampler",
-		"terrablender.MixinNamespacedSurfaceRuleSource",
-		"terrablender.SurfaceRulesContextAccessor",
-		"terrablender.MixinTargetPoint",
-		"terrablender.MixinNoiseChunk"
+		"MixinServerLevel"
+		,"compat.MixinBiolithDimensionBiomePlacement"
+		,"compat.MixinLithostitchedBiomeInjectorManager"
 		],
-		"client": [
+	"client": [
 			"MixinCreateWorldScreenWorldTab",
+			"MixinWorldCreationUiState",
 			"MixinGuaranteeData",
 			"ScreenInvoker"
 		],

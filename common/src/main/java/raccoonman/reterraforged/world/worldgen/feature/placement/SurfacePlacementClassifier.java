@@ -6,12 +6,12 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
+import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.RegistryOps;
-import net.minecraft.util.valueproviders.IntProvider;
 import net.minecraft.world.level.levelgen.blockpredicates.BlockPredicate;
 import net.minecraft.world.level.levelgen.blockpredicates.BlockPredicateType;
 import net.minecraft.world.level.levelgen.placement.BiomeFilter;
@@ -24,19 +24,17 @@ import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.minecraft.world.level.levelgen.placement.PlacementModifier;
 import net.minecraft.world.level.levelgen.placement.RandomOffsetPlacement;
 import net.minecraft.world.level.levelgen.placement.RarityFilter;
-import raccoonman.reterraforged.mixin.EnvironmentScanPlacementAccessor;
-import raccoonman.reterraforged.mixin.RandomOffsetPlacementAccessor;
 
 /**
  * Recognizes only the conventional placement-modifier pipeline whose declared
  * semantics make same-column surface rescue safe. Unknown shapes fail closed.
  */
-final class SurfacePlacementClassifier {
+public final class SurfacePlacementClassifier {
 
 	private SurfacePlacementClassifier() {
 	}
 
-	static Classification classify(PlacedFeature feature, HolderLookup.Provider registries) {
+	public static Classification classify(PlacedFeature feature, HolderLookup.Provider registries) {
 		List<PlacementModifier> modifiers = feature.placement();
 		int scanIndex = uniqueIndex(modifiers, EnvironmentScanPlacement.class);
 		if (scanIndex < 2 || scanIndex + 1 >= modifiers.size()) {
@@ -70,26 +68,31 @@ final class SurfacePlacementClassifier {
 		}
 
 		EnvironmentScanPlacement scan = (EnvironmentScanPlacement)modifiers.get(scanIndex);
-		EnvironmentScanPlacementAccessor scanAccessor = (EnvironmentScanPlacementAccessor)(Object)scan;
-		Direction direction = scanAccessor.reterraforged$getDirectionOfSearch();
-		if (direction.getAxis() != Direction.Axis.Y) {
+		JsonObject scanJson = encode(EnvironmentScanPlacement.CODEC.codec(), scan, registries);
+		if (scanJson == null) {
 			return Classification.rejected();
 		}
-
-		RandomOffsetPlacementAccessor offsetAccessor = (RandomOffsetPlacementAccessor)(Object)offset;
-		IntProvider xz = offsetAccessor.reterraforged$getXzSpread();
-		IntProvider y = offsetAccessor.reterraforged$getYSpread();
+		String directionName = string(scanJson, "direction_of_search");
+		Direction direction = directionName == null ? null : Direction.byName(directionName);
+		if (direction == null || direction.getAxis() != Direction.Axis.Y) {
+			return Classification.rejected();
+		}
+		JsonObject offsetJson = encode(RandomOffsetPlacement.CODEC.codec(), offset, registries);
 		int expectedY = -direction.getStepY();
-		if (!isConstant(xz, 0) || !isConstant(y, expectedY)) {
+		if (offsetJson == null
+			|| !isConstant(offsetJson.get("xz_spread"), 0)
+			|| !isConstant(offsetJson.get("y_spread"), expectedY)) {
 			return Classification.rejected();
 		}
 
-		BlockPredicate allowed = scanAccessor.reterraforged$getAllowedSearchCondition();
-		BlockPredicate target = scanAccessor.reterraforged$getTargetCondition();
-		JsonElement allowedJson = encode(allowed, registries);
-		JsonElement targetJson = encode(target, registries);
+		JsonElement allowedJson = scanJson.get("allowed_search_condition");
+		JsonElement targetJson = scanJson.get("target_condition");
+		BlockPredicate allowed = decodePredicate(allowedJson, registries);
+		BlockPredicate target = decodePredicate(targetJson, registries);
 		if (allowedJson == null
 			|| targetJson == null
+			|| allowed == null
+			|| target == null
 			|| !isOnlyAir(allowed, allowedJson)
 			|| !isSurfaceTarget(target, targetJson, direction)) {
 			return Classification.rejected();
@@ -118,15 +121,33 @@ final class SurfacePlacementClassifier {
 		return result;
 	}
 
-	private static boolean isConstant(IntProvider provider, int value) {
-		return provider.getMinValue() == value && provider.getMaxValue() == value;
+	private static boolean isConstant(JsonElement provider, int value) {
+		return provider != null && provider.isJsonPrimitive()
+			&& provider.getAsJsonPrimitive().isNumber()
+			&& provider.getAsInt() == value;
 	}
 
-	private static JsonElement encode(BlockPredicate predicate, HolderLookup.Provider registries) {
-		return BlockPredicate.CODEC
-			.encodeStart(RegistryOps.create(JsonOps.INSTANCE, registries), predicate)
+	private static <T> JsonObject encode(Codec<T> codec, T value, HolderLookup.Provider registries) {
+		JsonElement encoded = codec
+			.encodeStart(RegistryOps.create(JsonOps.INSTANCE, registries), value)
 			.result()
 			.orElse(null);
+		return encoded != null && encoded.isJsonObject() ? encoded.getAsJsonObject() : null;
+	}
+
+	private static BlockPredicate decodePredicate(JsonElement encoded, HolderLookup.Provider registries) {
+		if (encoded == null) {
+			return null;
+		}
+		return BlockPredicate.CODEC
+			.parse(RegistryOps.create(JsonOps.INSTANCE, registries), encoded)
+			.result()
+			.orElse(null);
+	}
+
+	private static String string(JsonObject object, String member) {
+		JsonElement value = object.get(member);
+		return value != null && value.isJsonPrimitive() ? value.getAsString() : null;
 	}
 
 	private static boolean isOnlyAir(BlockPredicate predicate, JsonElement json) {
@@ -185,7 +206,7 @@ final class SurfacePlacementClassifier {
 		return value instanceof JsonPrimitive primitive && primitive.isNumber() && primitive.getAsInt() == 0;
 	}
 
-	record SurfacePipeline(
+	public record SurfacePipeline(
 		EnvironmentScanPlacement scan,
 		BlockPredicate target,
 		BlockPredicate allowed,
@@ -195,17 +216,17 @@ final class SurfacePlacementClassifier {
 	) {
 	}
 
-	record Classification(SurfacePipeline pipeline) {
+	public record Classification(SurfacePipeline pipeline) {
 
-		static Classification eligible(SurfacePipeline pipeline) {
+		public static Classification eligible(SurfacePipeline pipeline) {
 			return new Classification(pipeline);
 		}
 
-		static Classification rejected() {
+		public static Classification rejected() {
 			return new Classification(null);
 		}
 
-		boolean eligible() {
+		public boolean eligible() {
 			return this.pipeline != null;
 		}
 	}

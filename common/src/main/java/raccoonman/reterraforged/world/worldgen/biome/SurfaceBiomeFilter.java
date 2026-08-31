@@ -7,6 +7,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
 
@@ -18,7 +19,7 @@ import net.minecraft.world.level.biome.Climate;
  * Removes dynamically registered underground candidates from preview-only biome selection.
  * Classification is driven by climate registration shape and tags supplied by the caller.
  */
-final class SurfaceBiomeFilter<T> {
+public final class SurfaceBiomeFilter<T> {
 	private final Climate.ParameterList<T> surfaceParameters;
 	private final Set<T> undergroundOnly;
 	private final Predicate<T> undergroundTag;
@@ -36,7 +37,7 @@ final class SurfaceBiomeFilter<T> {
 		this.finalFallback = finalFallback;
 	}
 
-	static <T> SurfaceBiomeFilter<T> create(
+	public static <T> SurfaceBiomeFilter<T> create(
 		List<Pair<Climate.ParameterPoint, T>> entries,
 		BiFunction<Climate.ParameterPoint, T, UndergroundBiomeBanding.CandidateRole> classifier,
 		Predicate<T> undergroundTag,
@@ -75,11 +76,19 @@ final class SurfaceBiomeFilter<T> {
 		return new SurfaceBiomeFilter<>(surfaceParameters, undergroundOnly, undergroundTag, finalFallback);
 	}
 
-	boolean isUnderground(T value) {
+	public boolean hasSurfaceCandidate() {
+		return this.surfaceParameters != null;
+	}
+
+	public Optional<Climate.ParameterList<T>> surfaceParameters() {
+		return Optional.ofNullable(this.surfaceParameters);
+	}
+
+	public boolean isUnderground(T value) {
 		return value != null && (this.undergroundTag.test(value) || this.undergroundOnly.contains(value));
 	}
 
-	T resolve(Climate.TargetPoint target, T selected) {
+	public T resolve(Climate.TargetPoint target, T selected) {
 		if (!this.isUnderground(selected)) {
 			return selected;
 		}

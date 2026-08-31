@@ -5,6 +5,7 @@ import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.WorldLookup;
 
 import java.util.Arrays;
+import java.lang.ref.WeakReference;
 
 /**
  * A strictly zero-allocation, thread-local cache for ReTerraForged cell math.
@@ -14,7 +15,7 @@ public final class PointCellCache {
     private static final int CACHE_SIZE = 4096; // Must be a power of two
     private static final int MASK = CACHE_SIZE - 1;
 
-    private WorldLookup boundLookup;
+    private WeakReference<WorldLookup> boundLookup = new WeakReference<>(null);
     private final long[] keys = new long[CACHE_SIZE];
     private final Cell[] cells = new Cell[CACHE_SIZE];
 
@@ -31,7 +32,7 @@ public final class PointCellCache {
 
     private void fillInternal(WorldLookup lookup, int blockX, int blockZ, Cell target) {
         // Validates environment to prevent state-leaking across restarts
-        if (this.boundLookup != lookup) {
+        if (this.boundLookup.get() != lookup) {
             this.rebind(lookup);
         }
 
@@ -53,6 +54,6 @@ public final class PointCellCache {
 
     private void rebind(WorldLookup lookup) {
         Arrays.fill(this.keys, Long.MIN_VALUE);
-        this.boundLookup = lookup;
+        this.boundLookup = new WeakReference<>(lookup);
     }
 }

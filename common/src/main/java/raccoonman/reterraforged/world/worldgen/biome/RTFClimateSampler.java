@@ -5,6 +5,9 @@ import org.jetbrains.annotations.Nullable;
 import net.minecraft.core.BlockPos;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
+import raccoonman.reterraforged.world.worldgen.runtime.WorldgenPlan;
+import raccoonman.reterraforged.world.worldgen.runtime.BiomeCellCache;
+import raccoonman.reterraforged.world.worldgen.runtime.WorldgenRuntimeBinding;
 
 public interface RTFClimateSampler {
 	void setSpawnSearchCenter(BlockPos center);
@@ -22,4 +25,15 @@ public interface RTFClimateSampler {
 
 	@Nullable
 	GeneratorContext getUndergroundBiomeSurfaceContext();
+
+	float minimumSurfaceY(GeneratorContext context, int quartX, int quartZ);
+
+	void setWorldgenPlan(@Nullable WorldgenPlan plan);
+
+	void setWorldgenBinding(@Nullable WorldgenRuntimeBinding binding);
+
+	@Nullable
+	WorldgenPlan getWorldgenPlan();
+
+	BiomeCellCache<WorldgenPlan> getBiomeCellCache();
 }

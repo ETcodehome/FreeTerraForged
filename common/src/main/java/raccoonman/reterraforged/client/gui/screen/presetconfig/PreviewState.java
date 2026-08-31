@@ -31,7 +31,6 @@ final class PreviewState {
     String hoveredCoords = "";
 
     CompletableFuture<IPreviewHandler.FrameResult> pendingGeneration;
-    volatile IPreviewHandler.PreparedContext preparedContext;
     volatile PreviewCancellation generationCancellation;
     volatile PreviewFailure previewFailure;
 

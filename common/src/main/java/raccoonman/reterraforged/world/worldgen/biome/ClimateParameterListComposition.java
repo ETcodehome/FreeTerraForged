@@ -61,8 +61,8 @@ public final class ClimateParameterListComposition {
 	/**
 	 * Builds one immutable view of all successfully captured regional registrations.
 	 *
-	 * <p>The first TerraBlender tree follows the public {@code values} list because global biome
-	 * additions can replace that list after TerraBlender initializes. Other regional trees receive
+	 * <p>The first regional tree follows the public {@code values} list because global biome
+	 * additions can replace that list after initialization. Other regional trees receive
 	 * those late additions explicitly. Exact duplicate point/value pairs are collapsed in the global
 	 * index while distinct parameter points and all source-region provenance are retained.</p>
 	 */
@@ -137,7 +137,7 @@ public final class ClimateParameterListComposition {
 	/**
 	 * Resolves the underground candidate slots for one positional region.
 	 *
-	 * <p>TerraBlender regions are alternative tables. A regional cave registration at the same
+	 * <p>Regional contributions are alternative tables. A cave registration at the same
 	 * parameter point as a default registration therefore replaces that default slot; it is not a
 	 * second globally competing cave. Registrations at distinct points remain additive. Late global
 	 * additions are then restored in every region.</p>

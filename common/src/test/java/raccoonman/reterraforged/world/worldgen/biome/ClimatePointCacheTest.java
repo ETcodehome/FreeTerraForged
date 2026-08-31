@@ -11,33 +11,37 @@ import net.minecraft.world.level.biome.Climate;
 
 class ClimatePointCacheTest {
 	@Test
-	void cacheIsScopedBySamplerIdentityAndCoordinates() {
-		Object sampler = new Object();
+	void cacheIsScopedByInstanceAndCoordinates() {
+		ClimatePointCache cache = new ClimatePointCache();
+		ClimatePointCache other = new ClimatePointCache();
 		Climate.TargetPoint target = target(1L);
+		Object owner = new Object();
 
-		ClimatePointCache.store(sampler, 11, -7, 23, target);
+		cache.store(owner, 11, -7, 23, target);
 
-		assertSame(target, ClimatePointCache.find(sampler, 11, -7, 23));
-		assertNull(ClimatePointCache.find(new Object(), 11, -7, 23));
-		assertNull(ClimatePointCache.find(sampler, 12, -7, 23));
+		assertSame(target, cache.find(owner, 11, -7, 23));
+		assertNull(other.find(owner, 11, -7, 23));
+		assertNull(cache.find(owner, 12, -7, 23));
+		assertNull(cache.find(new Object(), 11, -7, 23));
 	}
 
 	@Test
-	void cacheDoesNotLeakAcrossThreads() throws InterruptedException {
-		Object sampler = new Object();
+	void cacheIsSafeToShareWithSamplerAcrossThreads() throws InterruptedException {
+		ClimatePointCache cache = new ClimatePointCache();
 		Climate.TargetPoint target = target(2L);
+		Object owner = new Object();
 		AtomicReference<Climate.TargetPoint> otherThreadResult = new AtomicReference<>();
 
-		ClimatePointCache.store(sampler, 3, 5, 7, target);
+		cache.store(owner, 3, 5, 7, target);
 		Thread thread = new Thread(
-			() -> otherThreadResult.set(ClimatePointCache.find(sampler, 3, 5, 7)),
+			() -> otherThreadResult.set(cache.find(owner, 3, 5, 7)),
 			"climate-point-cache-test"
 		);
 		thread.start();
 		thread.join();
 
-		assertNull(otherThreadResult.get());
-		assertSame(target, ClimatePointCache.find(sampler, 3, 5, 7));
+		assertSame(target, otherThreadResult.get());
+		assertSame(target, cache.find(owner, 3, 5, 7));
 	}
 
 	private static Climate.TargetPoint target(long value) {

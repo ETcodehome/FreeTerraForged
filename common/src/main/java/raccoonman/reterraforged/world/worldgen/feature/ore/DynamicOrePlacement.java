@@ -15,7 +15,7 @@ import net.minecraft.world.level.levelgen.placement.HeightRangePlacement;
 import net.minecraft.world.level.levelgen.placement.PlacementModifier;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.minecraft.world.level.levelgen.placement.PlacementContext;
-import raccoonman.reterraforged.server.RTFMinecraftServer;
+import raccoonman.reterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
 import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan.FanoutStage;
 import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan.VerticalFrame;
 import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan.VerticalTransform;
@@ -123,10 +123,12 @@ public final class DynamicOrePlacement {
 			.registryAccess()
 			.registryOrThrow(Registries.PLACED_FEATURE)
 			.getKey(topFeature.orElseThrow());
-		if (featureId == null || !(context.getLevel().getServer() instanceof RTFMinecraftServer owner)) {
+		if (featureId == null || !(context.generator() instanceof TerraForgedChunkGenerator generator)) {
 			return Optional.empty();
 		}
-		DynamicOrePlan plan = owner.getDynamicOrePlan();
+		DynamicOrePlan plan = generator.plan()
+			.map(worldgenPlan -> worldgenPlan.placedFeatures().ores())
+			.orElseGet(DynamicOrePlan::empty);
 		VerticalFrame currentFrame = new VerticalFrame(
 			context.getMinGenY(),
 			context.getMinGenY() + context.getGenDepth() - 1,

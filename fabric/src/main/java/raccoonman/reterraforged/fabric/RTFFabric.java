@@ -5,26 +5,29 @@ import net.fabricmc.fabric.api.datagen.v1.DataGeneratorEntrypoint;
 import net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator;
 import net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator.Pack;
 import net.fabricmc.fabric.api.datagen.v1.FabricDataOutput;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.minecraft.data.metadata.PackMetadataGenerator;
 import net.minecraft.network.chat.Component;
 import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.client.data.RTFLanguageProvider;
 import raccoonman.reterraforged.client.data.RTFTranslationKeys;
 import raccoonman.reterraforged.fabric.network.RTFFabricNetworking;
-import raccoonman.reterraforged.fabric.compat.FabricBiomePreviewIntegrations;
-import raccoonman.reterraforged.platform.RegistryUtil;
-import raccoonman.reterraforged.registries.RTFRegistries;
-import raccoonman.reterraforged.world.worldgen.biome.modifier.BiomeModifier;
+import raccoonman.reterraforged.server.RTFMinecraftServer;
+import raccoonman.reterraforged.world.worldgen.runtime.WorldgenLifecycle;
 
 public class RTFFabric implements ModInitializer, DataGeneratorEntrypoint {
 
 	@Override
 	public void onInitialize() {
 		RTFCommon.bootstrap();
-		FabricBiomePreviewIntegrations.bootstrap();
 		RTFFabricNetworking.init();
-
-		RegistryUtil.createDataRegistry(RTFRegistries.BIOME_MODIFIER, BiomeModifier.DIRECT_CODEC, false);
+		ServerLifecycleEvents.END_DATA_PACK_RELOAD.register((server, resources, success) -> {
+			if (!success) {
+				return;
+			}
+			((RTFMinecraftServer) server).getFeatureTemplateManager().onReload(resources);
+			WorldgenLifecycle.tagsReloaded(server);
+		});
 	}
 
 	@Override

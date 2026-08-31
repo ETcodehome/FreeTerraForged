@@ -9,7 +9,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import net.minecraft.core.Holder;
 import net.minecraft.util.Mth;
@@ -18,15 +17,14 @@ import net.minecraft.world.level.StructureManager;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.BiomeGenerationSettings;
 import net.minecraft.world.level.biome.BiomeSource;
+import net.minecraft.world.level.biome.BiomeResolver;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
-import net.minecraft.world.level.levelgen.NoiseChunk;
 import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 import net.minecraft.world.level.levelgen.NoiseSettings;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.blending.Blender;
-import raccoonman.reterraforged.world.worldgen.ActiveChunk;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.MaxHeightUtil;
 import raccoonman.reterraforged.world.worldgen.RTFChunk;
@@ -35,6 +33,7 @@ import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
 import raccoonman.reterraforged.world.worldgen.IFlowFieldHolder;
 import raccoonman.reterraforged.world.worldgen.ChunkFlowField;
+import raccoonman.reterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
 
 @Mixin(NoiseBasedChunkGenerator.class)
 abstract class MixinNoiseBasedChunkGenerator extends ChunkGenerator {
@@ -68,6 +67,9 @@ abstract class MixinNoiseBasedChunkGenerator extends ChunkGenerator {
 
 		// Cast the chunk to your interface to access the flow field container
 		ChunkFlowField flowField = (chunk instanceof IFlowFieldHolder holder) ? holder.reterraforged$getFlowField() : null;
+		if (flowField != null && rtfRandomState.preset() != null) {
+			flowField.configure(rtfRandomState.preset().flow());
+		}
 
 		for(int x = 0; x < 16; x++) {
 			for(int z = 0; z < 16; z++) {
@@ -89,7 +91,24 @@ abstract class MixinNoiseBasedChunkGenerator extends ChunkGenerator {
 	}
 
 	@Redirect(
-			method = { "fillFromNoise", "populateNoise" },
+		method = "doCreateBiomes",
+		at = @At(
+			value = "INVOKE",
+			target = "Lnet/minecraft/world/level/levelgen/blending/Blender;getBiomeResolver(Lnet/minecraft/world/level/biome/BiomeResolver;)Lnet/minecraft/world/level/biome/BiomeResolver;"
+		)
+	)
+	private BiomeResolver reterraforged$useGeneratorRootBiomeResolver(
+		Blender blender,
+		BiomeResolver source
+	) {
+		if ((Object) this instanceof TerraForgedChunkGenerator generator) {
+			return blender.getBiomeResolver(generator::resolveBiome);
+		}
+		return blender.getBiomeResolver(source);
+	}
+
+	@Redirect(
+			method = "fillFromNoise",
 			at = @At(
 					value = "INVOKE",
 					target = "Lnet/minecraft/world/level/levelgen/NoiseSettings;height()I"
@@ -107,18 +126,4 @@ abstract class MixinNoiseBasedChunkGenerator extends ChunkGenerator {
 		maxHeight = MaxHeightUtil.getMaxHeight(chunk.getPos(), maxHeight, this.settings.value(), settings, structureManager);
 		return maxHeight;
     }
-	
-	@Inject(
-		method = "createNoiseChunk",	
-		at = @At("HEAD")
-	)
-    private void createNoiseChunk(ChunkAccess chunkAccess, StructureManager structureManager, Blender blender, RandomState randomState, CallbackInfoReturnable<NoiseChunk> callback) {
-
-		RTFRandomState rtfRandomState = (RTFRandomState) (Object) randomState;
-		if (rtfRandomState.generatorContext() == null) {
-			return;
-		}
-
-		ActiveChunk.set(chunkAccess);
-	}
 }

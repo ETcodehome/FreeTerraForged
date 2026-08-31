@@ -20,10 +20,12 @@ loom {
 configurations {
     common
     shadowCommon
+    productionServerInstaller
+    productionServerRuntime
     compileClasspath.extendsFrom common
-    runtimeClasspath.extendsFrom common
-    developmentNeoForge.extendsFrom common
 }
+
+loom.mods.main.configuration(configurations.common)
 
 repositories {
     maven { url "https://maven.neoforged.net/releases/" }
@@ -31,11 +33,62 @@ repositories {
 
 dependencies {
     neoForge "net.neoforged:neoforge:$rootProject.neoforge_version"
-    common(project(path: ":common", configuration: "namedElements")) { transitive false }
+    common(project(path: ":common", configuration: "transformProductionNeoForge")) { transitive false }
     shadowCommon(project(path: ":common", configuration: "transformProductionNeoForge")) { transitive false }
     modApi "dev.architectury:architectury-neoforge:${rootProject.architectury_version}"
     modCompileOnly "maven.modrinth:biolith:3.0.14-neoforge"
-    modCompileOnly "maven.modrinth:lithostitched:1.7.13-neoforge-21.1"
+    modCompileOnly "maven.modrinth:lithostitched:1.8.0+beta4-neoforge-21.1"
+    productionServerInstaller "net.neoforged:neoforge:$rootProject.neoforge_version:installer"
+    productionServerRuntime("dev.architectury:architectury-neoforge:${rootProject.architectury_version}") { transitive false }
+}
+
+def productionServerDir = file("run")
+def productionServerArguments = file("run/libraries/net/neoforged/neoforge/${rootProject.neoforge_version}/unix_args.txt")
+def productionJava = javaToolchains.launcherFor {
+    languageVersion = JavaLanguageVersion.of(21)
+}
+
+tasks.register("installProductionServer", Exec) {
+    group = "neoforge"
+    description = "Installs the production NeoForge server runtime"
+    inputs.files(configurations.productionServerInstaller)
+    outputs.file(productionServerArguments)
+    workingDir productionServerDir
+    onlyIf { !productionServerArguments.isFile() }
+    doFirst {
+        productionServerDir.mkdirs()
+        commandLine productionJava.get().executablePath.asFile,
+            "-jar",
+            configurations.productionServerInstaller.singleFile,
+            "--install-server",
+            productionServerDir
+    }
+}
+
+tasks.register("prodServer", Exec) {
+    group = "neoforge"
+    description = "Runs the remapped production artifact with an installed NeoForge server"
+    dependsOn "installProductionServer", "remapJar"
+    inputs.files(configurations.productionServerRuntime)
+    workingDir productionServerDir
+    doFirst {
+        def modsDir = file("run/mods")
+        modsDir.mkdirs()
+        copy {
+            from tasks.remapJar.archiveFile
+            into modsDir
+            rename { "reterraforged-production.jar" }
+        }
+        copy {
+            from configurations.productionServerRuntime
+            into modsDir
+            rename { "architectury-production.jar" }
+        }
+        commandLine productionJava.get().executablePath.asFile,
+            "-Xmx4G",
+            "@libraries/net/neoforged/neoforge/${rootProject.neoforge_version}/unix_args.txt",
+            "nogui"
+    }
 }
 
 repositories {

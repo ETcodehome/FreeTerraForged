@@ -21,19 +21,21 @@ import net.minecraft.world.level.levelgen.synth.NormalNoise;
 import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.concurrent.ThreadPools;
 import raccoonman.reterraforged.config.PerformanceConfig;
-import raccoonman.reterraforged.data.worldgen.preset.settings.FlowSettings;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.registries.RTFRegistries;
 import raccoonman.reterraforged.tags.RTFDensityFunctionTags;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
-import raccoonman.reterraforged.world.worldgen.RTFWorldGenContext;
 import raccoonman.reterraforged.world.worldgen.densityfunction.CellSampler;
 import raccoonman.reterraforged.world.worldgen.densityfunction.MarkerFunction;
 import raccoonman.reterraforged.world.worldgen.densityfunction.NoiseFunction;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noises;
 import raccoonman.reterraforged.world.worldgen.biome.RTFClimateSampler;
+import raccoonman.reterraforged.world.worldgen.runtime.WorldgenEpoch;
+import raccoonman.reterraforged.world.worldgen.runtime.WorldgenPlan;
+import raccoonman.reterraforged.world.worldgen.runtime.WorldgenPlans;
+import raccoonman.reterraforged.world.worldgen.runtime.WorldgenRuntimeBinding;
 
 @Mixin(RandomState.class)
 @Implements(@Interface(iface = RTFRandomState.class, prefix = "reterraforged$RTFRandomState$"))
@@ -44,8 +46,10 @@ class MixinRandomState {
 	private boolean hasContext;
 	@Shadow	@Final private Climate.Sampler sampler;
 	@Unique private boolean reterraforged$isRTFDimension = false; // Tracks if the BASE router belongs to RTF
-	@Nullable private GeneratorContext generatorContext;
-	@Nullable private Preset preset;
+	@Nullable private volatile GeneratorContext generatorContext;
+	@Nullable private volatile Preset preset;
+	@Nullable private volatile WorldgenEpoch worldgenEpoch;
+	@Nullable private volatile WorldgenRuntimeBinding worldgenBinding;
 
 	@Redirect(
 			at = @At(
@@ -58,7 +62,6 @@ class MixinRandomState {
 	private NoiseRouter RandomState(NoiseRouter router, DensityFunction.Visitor visitor, NoiseGeneratorSettings noiseGeneratorSettings, HolderGetter<NormalNoise.NoiseParameters> params, final long seed) {
 		this.seed = seed;
 
-		final boolean isVanillaOverworld = RTFWorldGenContext.IS_VANILLA_OVERWORLD.get();
 		this.densityFunctionWrapper = new DensityFunction.Visitor() {
 
 			@Override
@@ -69,17 +72,8 @@ class MixinRandomState {
 				}
 
 				if(function instanceof CellSampler.Marker marker) {
-
-					if (!isVanillaOverworld) {
-						return DensityFunctions.zero();
-					}
-
 					MixinRandomState.this.hasContext = true;
 					return new CellSampler(Suppliers.memoize(() -> MixinRandomState.this.generatorContext.lookup), marker.field());
-				}
-
-				if (function instanceof MarkerFunction && !isVanillaOverworld) {
-					return DensityFunctions.zero();
 				}
 
 				return visitor.apply(function);
@@ -93,25 +87,31 @@ class MixinRandomState {
 
 		// Map the base router first. If the current dimension naturally utilizes RTF, hasContext flips to true here.
 		NoiseRouter mappedRouter = router.mapAll(this.densityFunctionWrapper);
-		if (this.hasContext && isVanillaOverworld) {
+		if (this.hasContext) {
 			this.reterraforged$isRTFDimension = true;
 		}
 		return mappedRouter;
 	}
 
-	public void reterraforged$RTFRandomState$initialize(RegistryAccess registries) {
+	public synchronized void reterraforged$RTFRandomState$initialize(WorldgenEpoch epoch) {
+		if (this.worldgenEpoch != null) {
+			if (this.worldgenEpoch.id().equals(epoch.id())) {
+				return;
+			}
+			throw new IllegalStateException("RandomState is already owned by worldgen epoch " + this.worldgenEpoch.id());
+		}
+		RegistryAccess registries = epoch.registries();
 		RegistryLookup<Preset> presets = registries.lookupOrThrow(RTFRegistries.PRESET);
 
-		// Always assign the global preset. UI previews and legacy features in other dimensions
-		// rely on this being non-null to read settings without throwing an NPE.
 		presets.get(Preset.KEY).ifPresent((presetHolder) -> {
 			this.preset = presetHolder.value();
 		});
 
-		// Only compile global density tags and build a heavy Overworld GeneratorContext
-		// if the base router mapping verified that this instance is actually an RTF worldgen dimension.
 		if (this.reterraforged$isRTFDimension) {
-			if (this.preset != null && (Object) this.sampler instanceof RTFClimateSampler rtfClimateSampler) {
+			if (this.preset == null) {
+				throw new IllegalStateException("RTF density graph is active but the selected preset is unavailable");
+			}
+			if ((Object) this.sampler instanceof RTFClimateSampler rtfClimateSampler) {
 				rtfClimateSampler.setUndergroundBiomeBandingPreset(this.preset, this.seed);
 			}
 
@@ -122,19 +122,79 @@ class MixinRandomState {
 				set.forEach((function) -> function.value().mapAll(this.densityFunctionWrapper));
 			});
 
-			if (this.preset != null) {
-				PerformanceConfig config = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
-						.resultOrPartial(RTFCommon.LOGGER::error)
-						.orElseGet(PerformanceConfig::makeDefault);
-				this.generatorContext = GeneratorContext.makeCached(this.preset, noises, (int) this.seed, config.tileSize(), config.batchCount(), ThreadPools.availableProcessors() > 4);
-				if ((Object) this.sampler instanceof RTFClimateSampler rtfClimateSampler) {
-					rtfClimateSampler.setUndergroundBiomeSurfaceContext(this.generatorContext);
-				}
+			PerformanceConfig config = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
+					.resultOrPartial(RTFCommon.LOGGER::error)
+					.orElseGet(PerformanceConfig::makeDefault);
+			this.generatorContext = GeneratorContext.makeCached(this.preset, noises, (int) this.seed, config.tileSize(), config.batchCount(), ThreadPools.availableProcessors() > 4);
+			if ((Object) this.sampler instanceof RTFClimateSampler rtfClimateSampler) {
+				rtfClimateSampler.setUndergroundBiomeSurfaceContext(this.generatorContext);
 			}
-
-			// populate static fields needed for mixins
-			FlowSettings.CurrentPresetState.set(preset.flow());
 		}
+		this.worldgenEpoch = epoch;
+	}
+
+	public synchronized void reterraforged$RTFRandomState$bindPlan(WorldgenRuntimeBinding binding) {
+		WorldgenPlan plan = binding.plan();
+		if (this.worldgenEpoch == null || !this.worldgenEpoch.id().equals(plan.owner().id())) {
+			throw new IllegalStateException("Cannot bind a plan owned by a different worldgen epoch");
+		}
+		if (this.worldgenBinding != null && this.worldgenBinding != binding) {
+			throw new IllegalStateException("RandomState already has a compiled worldgen plan");
+		}
+		this.reterraforged$decorateSampler(plan);
+		((RTFClimateSampler) (Object) this.sampler).setWorldgenBinding(binding);
+		this.worldgenBinding = binding;
+	}
+
+	public synchronized void reterraforged$RTFRandomState$preparePlanRebind(WorldgenEpoch epoch, WorldgenPlan plan) {
+		WorldgenRuntimeBinding binding = this.worldgenBinding;
+		if (binding == null || !binding.epoch().id().equals(epoch.id())) {
+			throw new IllegalStateException("Cannot refresh a different worldgen epoch");
+		}
+		if (!plan.owner().id().equals(epoch.id())) {
+			throw new IllegalStateException("Refreshed plan is owned by a different worldgen epoch");
+		}
+		WorldgenEpoch current = binding.epoch();
+		boolean tagsAdvanced = epoch.tagEpoch().sequence() > current.tagEpoch().sequence();
+		boolean contributionsAdvanced = epoch.contributionSequence() > current.contributionSequence();
+		if (!tagsAdvanced && !contributionsAdvanced) {
+			throw new IllegalStateException("A plan rebind must advance a worldgen input epoch");
+		}
+		if (epoch.tagEpoch().sequence() < current.tagEpoch().sequence()
+			|| epoch.contributionSequence() < current.contributionSequence()) {
+			throw new IllegalStateException("Worldgen input epochs must advance monotonically");
+		}
+		this.reterraforged$decorateSampler(plan);
+	}
+
+	@Unique
+	private void reterraforged$decorateSampler(WorldgenPlan plan) {
+		Preset currentPreset = this.preset;
+		GeneratorContext currentContext = this.generatorContext;
+		if (currentPreset == null || currentContext == null) {
+			throw new IllegalStateException("FTF sampler state is unavailable for the active worldgen owner");
+		}
+		plan.samplerDecoration().decorate(
+			plan,
+			new WorldgenPlans.SamplerInputs(currentPreset, currentContext),
+			this.sampler
+		);
+	}
+
+	@Nullable
+	public WorldgenEpoch reterraforged$RTFRandomState$epoch() {
+		WorldgenRuntimeBinding binding = this.worldgenBinding;
+		return binding == null ? this.worldgenEpoch : binding.epoch();
+	}
+
+	@Nullable
+	public WorldgenPlan reterraforged$RTFRandomState$plan() {
+		WorldgenRuntimeBinding binding = this.worldgenBinding;
+		return binding == null ? null : binding.plan();
+	}
+
+	public boolean reterraforged$RTFRandomState$isTerraForged() {
+		return this.reterraforged$isRTFDimension;
 	}
 
 	@Nullable

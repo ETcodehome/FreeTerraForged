@@ -126,6 +126,8 @@ public class ClimateModule {
 			}
 		}
 		cell.biomeRegionId = this.cellValue(this.seed , cellX, cellZ);
+		cell.biomeRegionX = cellX;
+		cell.biomeRegionZ = cellZ;
 		cell.regionMoisture = this.moisture.compute(centerX, centerZ, 0);
 		cell.regionTemperature = this.temperature.compute(centerX, centerZ, 0);
 		cell.macroBiomeId = this.macroBiomeNoise.compute(centerX, centerZ, 0);

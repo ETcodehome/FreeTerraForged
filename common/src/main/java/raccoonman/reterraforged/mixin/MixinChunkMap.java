@@ -10,7 +10,6 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import com.mojang.datafixers.DataFixer;
-import net.minecraft.world.level.Level;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.progress.ChunkProgressListener;
@@ -20,10 +19,15 @@ import net.minecraft.world.level.chunk.LightChunkGetter;
 import net.minecraft.world.level.entity.ChunkStatusUpdateListener;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
+import net.minecraft.world.level.dimension.LevelStem;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.storage.DimensionDataStorage;
 import net.minecraft.world.level.storage.LevelStorageSource;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
-import raccoonman.reterraforged.world.worldgen.RTFWorldGenContext;
+import raccoonman.reterraforged.world.worldgen.runtime.TagEpoch;
+import raccoonman.reterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
+import raccoonman.reterraforged.world.worldgen.runtime.WorldgenEpoch;
+import raccoonman.reterraforged.world.worldgen.runtime.WorldgenFingerprints;
 
 @Mixin(ChunkMap.class)
 public class MixinChunkMap {
@@ -31,21 +35,42 @@ public class MixinChunkMap {
     private RandomState randomState;
 
 	@Inject(
-			at = @At("HEAD"),
-			method = "<init>"
-			)
-	private static void beforeChunkMapInit(ServerLevel serverLevel, LevelStorageSource.LevelStorageAccess storageAccess, DataFixer dataFixer, StructureTemplateManager templateLoader, Executor executor, BlockableEventLoop<Runnable> eventLoop, LightChunkGetter lightChunkGetter, ChunkGenerator chunkGenerator, ChunkProgressListener chunkProgressListener, ChunkStatusUpdateListener chunkStatusListener, Supplier<DimensionDataStorage> dimensionStorage, int viewDistance, boolean syncChunkWrites, CallbackInfo callback) {
-		RTFWorldGenContext.IS_VANILLA_OVERWORLD.set(serverLevel.dimension() == Level.OVERWORLD);
-	}
-
-	@Inject(
 		at = @At("TAIL"),
 		method = "<init>"
 	)
 	public void ChunkMap(ServerLevel serverLevel, LevelStorageSource.LevelStorageAccess storageAccess, DataFixer dataFixer, StructureTemplateManager templateLoader, Executor executor, BlockableEventLoop<Runnable> eventLoop, LightChunkGetter lightChunkGetter, ChunkGenerator chunkGenerator, ChunkProgressListener chunkProgressListener, ChunkStatusUpdateListener chunkStatusListener, Supplier<DimensionDataStorage> dimensionStorage, int viewDistance, boolean syncChunkWrites, CallbackInfo callback) {
-		if((Object) this.randomState instanceof RTFRandomState rtfRandomState) {
-			rtfRandomState.initialize(serverLevel.registryAccess());
+		if (!((Object) this.randomState instanceof RTFRandomState rtfRandomState)
+			|| !rtfRandomState.isTerraForged()) {
+			return;
 		}
-		RTFWorldGenContext.IS_VANILLA_OVERWORLD.remove();
+		LevelStem selectedStem = new LevelStem(serverLevel.dimensionTypeRegistration(), chunkGenerator);
+		String generatorType = chunkGenerator.getTypeNameForDataFixer()
+			.map(key -> key.location().toString())
+			.orElse("unregistered");
+		String settingsIdentity = generatorType;
+		if (chunkGenerator instanceof net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator noiseGenerator) {
+			settingsIdentity += "|" + noiseGenerator.generatorSettings().unwrapKey()
+				.map(key -> key.location().toString())
+				.orElse("inline_noise_settings");
+		}
+		WorldgenEpoch epoch = WorldgenEpoch.create(
+			Registries.levelToLevelStem(serverLevel.dimension()),
+			serverLevel.getSeed(),
+			serverLevel.registryAccess(),
+			selectedStem,
+			settingsIdentity,
+			"unavailable:resource_layers_not_exposed_at_level_construction",
+			new TagEpoch(0L, WorldgenFingerprints.tags(serverLevel.registryAccess()))
+		);
+		try {
+			if (!(chunkGenerator instanceof TerraForgedChunkGenerator terraForged)) {
+				throw new IllegalStateException(
+					"FTF terrain requires the registered TerraForged generator root"
+				);
+			}
+			terraForged.initializeEpoch(epoch, rtfRandomState);
+		} catch (Exception error) {
+			throw new IllegalStateException("Failed to initialize FTF worldgen epoch", error);
+		}
 	}
 }

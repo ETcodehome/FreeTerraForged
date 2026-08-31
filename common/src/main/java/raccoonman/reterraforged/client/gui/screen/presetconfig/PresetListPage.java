@@ -41,7 +41,6 @@ import raccoonman.reterraforged.client.gui.screen.page.LinkedPageScreen.Page;
 import raccoonman.reterraforged.client.gui.widget.Label;
 import raccoonman.reterraforged.client.gui.widget.WidgetList;
 import raccoonman.reterraforged.client.gui.widget.WidgetList.Entry;
-import raccoonman.reterraforged.data.worldgen.preset.settings.FlowSettings;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Presets;
 import raccoonman.reterraforged.platform.ConfigUtil;
@@ -280,9 +279,6 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
-
-			// specifically populate the static fields of flow dynamics that are used when resolving mixin state checks
-			FlowSettings.CurrentPresetState.set(presetEntry.preset.flow());
 		}
 	}
 

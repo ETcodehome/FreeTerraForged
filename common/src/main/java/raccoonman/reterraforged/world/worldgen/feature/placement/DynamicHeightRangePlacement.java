@@ -5,21 +5,20 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.mojang.serialization.JsonOps;
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.levelgen.VerticalAnchor;
-import net.minecraft.world.level.levelgen.heightproviders.HeightProvider;
-import net.minecraft.world.level.levelgen.heightproviders.UniformHeight;
 import net.minecraft.world.level.levelgen.placement.HeightRangePlacement;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.minecraft.world.level.levelgen.placement.PlacementContext;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
-import raccoonman.reterraforged.mixin.HeightRangePlacementAccessor;
-import raccoonman.reterraforged.mixin.UniformHeightAccessor;
 import raccoonman.reterraforged.registries.RTFRegistries;
 
 /**
@@ -87,18 +86,37 @@ public final class DynamicHeightRangePlacement {
 	}
 
 	public static boolean isCanonicalRange(HeightRangePlacement placement) {
-		HeightProvider provider = ((HeightRangePlacementAccessor)(Object)placement).reterraforged$getHeightProvider();
-		if (!(provider instanceof UniformHeight uniform)) {
+		JsonElement encoded = HeightRangePlacement.CODEC.codec()
+			.encodeStart(JsonOps.INSTANCE, placement)
+			.result()
+			.orElse(null);
+		if (encoded == null || !encoded.isJsonObject()) {
 			return false;
 		}
+		JsonElement heightElement = encoded.getAsJsonObject().get("height");
+		if (heightElement == null || !heightElement.isJsonObject()) {
+			return false;
+		}
+		JsonObject height = heightElement.getAsJsonObject();
+		return "minecraft:uniform".equals(string(height, "type"))
+			&& anchorEquals(height.get("min_inclusive"), "above_bottom", 0)
+			&& anchorEquals(height.get("max_inclusive"), "absolute", REFERENCE_MAX_Y);
+	}
 
-		UniformHeightAccessor accessor = (UniformHeightAccessor)(Object)uniform;
-		VerticalAnchor min = accessor.reterraforged$getMinInclusive();
-		VerticalAnchor max = accessor.reterraforged$getMaxInclusive();
-		return min instanceof VerticalAnchor.AboveBottom aboveBottom
-			&& aboveBottom.offset() == 0
-			&& max instanceof VerticalAnchor.Absolute absolute
-			&& absolute.y() == REFERENCE_MAX_Y;
+	private static String string(JsonObject object, String member) {
+		JsonElement value = object.get(member);
+		return value != null && value.isJsonPrimitive() ? value.getAsString() : null;
+	}
+
+	private static boolean anchorEquals(JsonElement value, String member, int expected) {
+		if (value == null || !value.isJsonObject()) {
+			return false;
+		}
+		JsonObject anchor = value.getAsJsonObject();
+		return anchor.size() == 1
+			&& anchor.has(member)
+			&& anchor.get(member).isJsonPrimitive()
+			&& anchor.get(member).getAsInt() == expected;
 	}
 
 	static List<HeightBand> createBands(int minY, int maxY) {
