@@ -125,4 +125,25 @@ public abstract class MixinMultiNoiseBiomeSource implements RTFMultiNoiseBiomeSo
         }
         cir.setReturnValue(composed);
     }
+
+    @Inject(method = "possibleBiomes", at = @At("HEAD"), cancellable = true)
+    private void rtf$bypassInlinePossibleBiomesCrash(CallbackInfoReturnable<java.util.Set<Holder<Biome>>> cir) {
+        // Only intercept inline parameter lists (Either.left) used by preset previews.
+        // Runtime worldgen sources (Either.right) are left untouched.
+        if (this.parameters != null && this.parameters.left().isPresent()) {
+            try {
+                Climate.ParameterList<Holder<Biome>> parameterList = this.reterraforged$getParameters();
+                if (parameterList != null) {
+                    java.util.Set<Holder<Biome>> dynamicBiomes = parameterList.values().stream()
+                            .map(com.mojang.datafixers.util.Pair::getSecond)
+                            .map(holder -> (Holder<Biome>) holder)
+                            .collect(java.util.stream.Collectors.toUnmodifiableSet());
+
+                    cir.setReturnValue(dynamicBiomes);
+                }
+            } catch (Exception ignored) {
+                // Fallback to default execution if uninitialized
+            }
+        }
+    }
 }
