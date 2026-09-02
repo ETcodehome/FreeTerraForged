@@ -126,7 +126,12 @@ public abstract class MixinMultiNoiseBiomeSource implements RTFMultiNoiseBiomeSo
         cir.setReturnValue(composed);
     }
 
-    @Inject(method = "possibleBiomes", at = @At("HEAD"), cancellable = true)
+    @Inject(
+            method = "possibleBiomes",
+            at = @At("HEAD"),
+            cancellable = true,
+            require = 0
+    )
     private void rtf$bypassInlinePossibleBiomesCrash(CallbackInfoReturnable<java.util.Set<Holder<Biome>>> cir) {
         // Only intercept inline parameter lists (Either.left) used by preset previews.
         // Runtime worldgen sources (Either.right) are left untouched.
