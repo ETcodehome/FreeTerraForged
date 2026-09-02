@@ -126,27 +126,24 @@ public abstract class MixinMultiNoiseBiomeSource implements RTFMultiNoiseBiomeSo
         cir.setReturnValue(composed);
     }
 
-    /**
-     * Intercepts possibleBiomes execution. If Biolith's proxy system causes a ClassCastException
-     * against Mojang's strict internal checks, this captures the logic and routes the biome lookup
-     * dynamically through FreeTerraForged's parameter unwrapper instead.
-     */
     @Inject(method = "possibleBiomes", at = @At("HEAD"), cancellable = true)
-    private void rtf$bypassBiolithCastingCrash(CallbackInfoReturnable<java.util.Set<Holder<Biome>>> cir) {
-        try {
-            // Leverage FreeTerraForged's parameter un-wrapper to pull the underlying list safely
-            Climate.ParameterList<Holder<Biome>> parameterList = this.reterraforged$getParameters();
-            if (parameterList != null) {
-                java.util.Set<Holder<Biome>> dynamicBiomes = parameterList.values().stream()
-                        .map(com.mojang.datafixers.util.Pair::getSecond)
-                        .map(holder -> (Holder<Biome>) holder)
-                        .collect(java.util.stream.Collectors.toUnmodifiableSet());
+    private void rtf$bypassInlinePossibleBiomesCrash(CallbackInfoReturnable<java.util.Set<Holder<Biome>>> cir) {
+        // Only intercept inline parameter lists (Either.left) used by preset previews.
+        // Runtime worldgen sources (Either.right) are left untouched.
+        if (this.parameters != null && this.parameters.left().isPresent()) {
+            try {
+                Climate.ParameterList<Holder<Biome>> parameterList = this.reterraforged$getParameters();
+                if (parameterList != null) {
+                    java.util.Set<Holder<Biome>> dynamicBiomes = parameterList.values().stream()
+                            .map(com.mojang.datafixers.util.Pair::getSecond)
+                            .map(holder -> (Holder<Biome>) holder)
+                            .collect(java.util.stream.Collectors.toUnmodifiableSet());
 
-                // Return the collected set, skipping Mojang's crash-prone native method block completely
-                cir.setReturnValue(dynamicBiomes);
+                    cir.setReturnValue(dynamicBiomes);
+                }
+            } catch (Exception ignored) {
+                // Fallback to default execution if uninitialized
             }
-        } catch (Exception e) {
-            // No-op fallback; let standard vanilla execution run if elements are uninitialized
         }
     }
 }
