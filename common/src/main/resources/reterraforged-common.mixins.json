@@ -59,7 +59,7 @@
 		"MixinJigsawStructure",
 		"MixinServerLevel",
 		"MixinServerStarted",
-		"MixinSquarePlacement",
+		"MixinRandomOffsetPlacement",
 		"terrablender.MixinParameterList",
 		"terrablender.MixinClimateSampler",
 		"terrablender.MixinNamespacedSurfaceRuleSource",
