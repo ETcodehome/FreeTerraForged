@@ -11,15 +11,24 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
+import java.util.function.BooleanSupplier;
 
 import net.minecraft.resources.ResourceLocation;
 
 /** Deterministic capability negotiation and independently failed facet compilation. */
 public final class WorldgenPlanCompiler {
 	private final List<WorldgenCapabilityProvider> providers;
+	private final WorldgenProviderCatalog catalog;
 
 	public WorldgenPlanCompiler(List<? extends WorldgenCapabilityProvider> providers) {
 		this.providers = orderProviders(providers);
+		this.catalog = null;
+	}
+
+	public WorldgenPlanCompiler(WorldgenProviderCatalog catalog) {
+		this.providers = List.of();
+		this.catalog = Objects.requireNonNull(catalog, "catalog");
 	}
 
 	public List<WorldgenCapabilityProvider> providers() {
@@ -31,9 +40,73 @@ public final class WorldgenPlanCompiler {
 	}
 
 	public WorldgenPlan compile(WorldgenPlan base, WorldgenCompilationPurpose purpose) {
+		return this.compile(base, purpose, () -> false);
+	}
+
+	public WorldgenPlan compile(
+		WorldgenPlan base,
+		WorldgenCompilationPurpose purpose,
+		BooleanSupplier cancelled
+	) {
 		Objects.requireNonNull(base, "base");
 		Objects.requireNonNull(purpose, "purpose");
-		WorldgenCompilationContext context = new WorldgenCompilationContext(base.owner(), purpose);
+		Objects.requireNonNull(cancelled, "cancelled");
+		return this.catalog == null
+			? this.compileAcquired(base, purpose, cancelled)
+			: this.catalog.inAcquisitionSession(
+				cancelled, () -> this.compileAcquired(base, purpose, cancelled)
+			);
+	}
+
+	private WorldgenPlan compileAcquired(
+		WorldgenPlan base,
+		WorldgenCompilationPurpose purpose,
+		BooleanSupplier cancelled
+	) {
+		checkCancelled(cancelled);
+		WorldgenProviderCatalog.Resolution resolution = this.catalog == null
+			? new WorldgenProviderCatalog.Resolution(
+				this.providers.stream().map(provider -> new WorldgenProviderCatalog.ProviderBinding(
+					directMetadata(provider), provider
+				)).toList(),
+				List.of(),
+				List.of()
+			)
+			: this.catalog.resolveCompile(base.owner().type(), purpose.facets());
+		List<WorldgenProviderCatalog.FailedProvider> providerFailures = new ArrayList<>(resolution.failures());
+		List<WorldgenProviderCatalog.ProviderBinding> activeBindings = new ArrayList<>();
+		for (WorldgenProviderCatalog.ProviderBinding binding : resolution.providers()) {
+			Optional<CapabilityFailure> revisionFailure = base.owner().contributionRevision()
+				.failure(binding.metadata().id());
+			Optional<CapabilityFailure> preServerFailure = this.catalog == null
+				|| base.owner().selectedStem() == null
+				|| base.owner().selectedStem().generator() == null
+				? Optional.empty()
+				: WorldgenPreServerFinalizer.failure(
+					base.owner().selectedStem().generator(), binding.metadata().id()
+				);
+			if (revisionFailure.isPresent()) {
+				providerFailures.add(new WorldgenProviderCatalog.FailedProvider(
+					binding.metadata(), revisionFailure.orElseThrow()
+				));
+			} else if (preServerFailure.isPresent()) {
+				providerFailures.add(new WorldgenProviderCatalog.FailedProvider(
+					binding.metadata(), preServerFailure.orElseThrow()
+				));
+			} else {
+				activeBindings.add(binding);
+			}
+		}
+		List<WorldgenCapabilityProvider> activeProviders = this.catalog == null
+			? orderProviders(activeBindings.stream()
+				.map(WorldgenProviderCatalog.ProviderBinding::provider).toList())
+			: activeBindings.stream().map(WorldgenProviderCatalog.ProviderBinding::provider).toList();
+		Map<ResourceLocation, WorldgenProviderMetadata> metadataById = new HashMap<>();
+		activeBindings.forEach(binding -> metadataById.put(binding.metadata().id(), binding.metadata()));
+		checkCancelled(cancelled);
+		WorldgenCompilationContext context = new WorldgenCompilationContext(
+			base.owner(), purpose, cancelled
+		);
 		EnumMap<WorldgenFacet, WorldgenPlans.DomainPlan> plans = new EnumMap<>(WorldgenFacet.class);
 		for (WorldgenFacet facet : WorldgenFacet.values()) {
 			plans.put(facet, base.facet(facet));
@@ -43,12 +116,24 @@ public final class WorldgenPlanCompiler {
 			new EnumMap<>(WorldgenFacet.class);
 		WorldgenExecution execution = base.execution();
 		Set<WorldgenFacet> failedFacets = new HashSet<>();
+		for (WorldgenProviderCatalog.FailedProvider failed : providerFailures) {
+			for (WorldgenFacet facet : failed.metadata().facets().stream().sorted().toList()) {
+				if (!purpose.includes(facet)) {
+					continue;
+				}
+				plans.put(facet, unavailable(plans.get(facet), failed.metadata().id(), failed.failure()));
+				execution = execution.withQueryMode(facet, WorldgenQueryMode.OWNER_SERIAL);
+				failedFacets.add(facet);
+			}
+		}
 
-		for (WorldgenCapabilityProvider provider : this.providers) {
+		for (WorldgenCapabilityProvider provider : activeProviders) {
+			context.checkCancelled();
 			if (!provider.ownerTypes().contains(base.owner().type())) {
 				continue;
 			}
 			for (WorldgenFacet facet : provider.facets().stream().sorted().toList()) {
+				context.checkCancelled();
 				if (!purpose.includes(facet)) {
 					continue;
 				}
@@ -59,14 +144,18 @@ public final class WorldgenPlanCompiler {
 					WorldgenApplicability applicability = Objects.requireNonNull(
 						provider.applicability(facet, context), "provider applicability"
 					);
+					context.checkCancelled();
 					if (applicability == WorldgenApplicability.NOT_APPLICABLE) {
 						continue;
 					}
 					Optional<? extends WorldgenPlans.DomainPlan> result = Objects.requireNonNull(
 						provider.compile(facet, context), "provider compile result"
 					);
+					context.checkCancelled();
 					if (result.isEmpty()) {
-						continue;
+						throw new IllegalStateException(
+							"Applicable provider " + provider.id() + " supplied no plan for " + facet
+						);
 					}
 					WorldgenPlans.DomainPlan plan = Objects.requireNonNull(result.get(), "provider plan");
 					if (plan.facet() != facet) {
@@ -74,7 +163,17 @@ public final class WorldgenPlanCompiler {
 							"Provider " + provider.id() + " returned " + plan.facet() + " while compiling " + facet
 						);
 					}
-					if (facet == WorldgenFacet.BIOME_COMPOSITION) {
+					WorldgenContributionKind contributionKind = Objects.requireNonNull(
+						provider.contributionKind(facet), "provider contribution kind"
+					);
+					if (!WorldgenFacetAlgebra.supports(facet, contributionKind)) {
+						throw new IllegalArgumentException(
+							"Provider " + provider.id() + " declares " + contributionKind + " for " + facet
+								+ " but the supported algebra is " + WorldgenFacetAlgebra.supportedKinds(facet)
+						);
+					}
+					if (contributionKind == WorldgenContributionKind.ORDERED_TRANSFORM
+						&& facet == WorldgenFacet.BIOME_COMPOSITION) {
 						WorldgenPlans.BiomeComposition previous =
 							(WorldgenPlans.BiomeComposition) plans.get(facet);
 						WorldgenPlans.BiomeComposition contribution =
@@ -86,16 +185,18 @@ public final class WorldgenPlanCompiler {
 							failedFacets.add(facet);
 							continue;
 						}
-						if (contribution.entries().isEmpty() && contribution.stages().isEmpty()) {
+						if (!contribution.entries().isEmpty()) {
 							throw new IllegalArgumentException(
-								"Biome-composition provider " + provider.id()
-									+ " supplied neither a candidate root nor candidate stages"
+								"Candidate transform provider " + provider.id() + " supplied a unique candidate root"
+							);
+						}
+						if (contribution.stages().isEmpty()) {
+							throw new IllegalArgumentException(
+								"Candidate transform provider " + provider.id() + " supplied no candidate stages"
 							);
 						}
 						plans.put(facet, composeCandidateStages(previous, contribution));
-						WorldgenQueryMode queryMode = Objects.requireNonNull(
-							provider.queryMode(facet, context), "provider query mode"
-						);
+						WorldgenQueryMode queryMode = queryMode(provider, metadataById.get(provider.id()), facet, context);
 						execution = execution.withQueryMode(
 							facet,
 							previous.stages().isEmpty()
@@ -106,7 +207,8 @@ public final class WorldgenPlanCompiler {
 							.add(contribution.descriptor());
 						continue;
 					}
-					if (facet == WorldgenFacet.SELECTION_DECORATION) {
+					if (contributionKind == WorldgenContributionKind.ORDERED_TRANSFORM
+						&& facet == WorldgenFacet.SELECTION_DECORATION) {
 						WorldgenPlans.SelectionDecoration previous =
 							(WorldgenPlans.SelectionDecoration) plans.get(facet);
 						WorldgenPlans.SelectionDecoration contribution =
@@ -124,9 +226,7 @@ public final class WorldgenPlanCompiler {
 							failedFacets.add(facet);
 							continue;
 						}
-						WorldgenQueryMode queryMode = Objects.requireNonNull(
-							provider.queryMode(facet, context), "provider query mode"
-						);
+						WorldgenQueryMode queryMode = queryMode(provider, metadataById.get(provider.id()), facet, context);
 						plans.put(facet, composeSelectionDecorators(previous, contribution));
 						if (!contribution.stages().isEmpty()) {
 							execution = execution.withQueryMode(
@@ -136,6 +236,71 @@ public final class WorldgenPlanCompiler {
 									: queryMode
 							);
 						}
+						contributionDescriptors.computeIfAbsent(facet, ignored -> new ArrayList<>())
+							.add(contribution.descriptor());
+						continue;
+					}
+					if (contributionKind == WorldgenContributionKind.ORDERED_TRANSFORM
+						&& facet == WorldgenFacet.SAMPLER_DECORATION) {
+						WorldgenPlans.SamplerDecoration previous =
+							(WorldgenPlans.SamplerDecoration) plans.get(facet);
+						WorldgenPlans.SamplerDecoration contribution =
+							(WorldgenPlans.SamplerDecoration) plan;
+						if (contribution.stages().isEmpty()
+							&& contribution.descriptor().state() != CapabilityState.UNAVAILABLE) {
+							throw new IllegalArgumentException(
+								"Sampler-decoration provider " + provider.id() + " supplied no executable stages"
+							);
+						}
+						if (contribution.descriptor().state() == CapabilityState.UNAVAILABLE) {
+							plans.put(facet, contribution);
+							execution = execution.withQueryMode(facet, WorldgenQueryMode.OWNER_SERIAL);
+							contributionDescriptors.remove(facet);
+							failedFacets.add(facet);
+							continue;
+						}
+						WorldgenQueryMode queryMode = queryMode(provider, metadataById.get(provider.id()), facet, context);
+						plans.put(facet, composeSamplerDecorators(previous, contribution));
+						if (!contribution.stages().isEmpty()) {
+							execution = execution.withQueryMode(
+								facet,
+								previous.stages().isEmpty()
+									? queryMode
+									: restrict(execution.queryMode(facet), queryMode)
+							);
+						}
+						contributionDescriptors.computeIfAbsent(facet, ignored -> new ArrayList<>())
+							.add(contribution.descriptor());
+						continue;
+					}
+					if (contributionKind == WorldgenContributionKind.ORDERED_TRANSFORM
+						&& facet == WorldgenFacet.SURFACE) {
+						WorldgenPlans.Surface previous = (WorldgenPlans.Surface) plans.get(facet);
+						WorldgenPlans.Surface contribution = (WorldgenPlans.Surface) plan;
+						if (contribution.descriptor().state() == CapabilityState.UNAVAILABLE) {
+							plans.put(facet, contribution);
+							execution = execution.withQueryMode(facet, WorldgenQueryMode.OWNER_SERIAL);
+							contributionDescriptors.remove(facet);
+							failedFacets.add(facet);
+							continue;
+						}
+						if (contribution.root().isPresent() || contribution.transforms().isEmpty()) {
+							throw new IllegalArgumentException(
+								"Surface transform provider " + provider.id() + " must supply stages and no root"
+							);
+						}
+						PlanDescriptor descriptor = pipelineDescriptor(
+							WorldgenFacet.SURFACE, "surface_rule_pipeline",
+							"Surface-rule transformations execute once during plan compilation"
+						);
+						plans.put(facet, previous.append(contribution, descriptor));
+						WorldgenQueryMode queryMode = queryMode(provider, metadataById.get(provider.id()), facet, context);
+						execution = execution.withQueryMode(
+							facet,
+							previous.transforms().isEmpty()
+								? queryMode
+								: restrict(execution.queryMode(facet), queryMode)
+						);
 						contributionDescriptors.computeIfAbsent(facet, ignored -> new ArrayList<>())
 							.add(contribution.descriptor());
 						continue;
@@ -152,13 +317,24 @@ public final class WorldgenPlanCompiler {
 						failedFacets.add(facet);
 						continue;
 					}
-						WorldgenQueryMode queryMode = Objects.requireNonNull(
-						provider.queryMode(facet, context), "provider query mode"
-					);
-					plans.put(facet, plan);
+					WorldgenQueryMode queryMode = queryMode(provider, metadataById.get(provider.id()), facet, context);
+					if (facet == WorldgenFacet.SURFACE) {
+						WorldgenPlans.Surface current = (WorldgenPlans.Surface) plans.get(facet);
+						WorldgenPlans.Surface root = (WorldgenPlans.Surface) plan;
+						if (root.root().isEmpty() || !root.transforms().isEmpty()) {
+							throw new IllegalArgumentException(
+								"Surface root provider " + provider.id() + " must supply one root and no transforms"
+							);
+						}
+						plans.put(facet, current.withRoot(root));
+					} else {
+						plans.put(facet, plan);
+					}
 					execution = execution.withQueryMode(facet, queryMode);
 					contributionDescriptors.computeIfAbsent(facet, ignored -> new ArrayList<>())
 						.add(plan.descriptor());
+				} catch (CancellationException failure) {
+					throw failure;
 				} catch (RuntimeException | LinkageError failure) {
 					contributionDescriptors.remove(facet);
 					failedFacets.add(facet);
@@ -176,8 +352,29 @@ public final class WorldgenPlanCompiler {
 				}
 			}
 		}
+		WorldgenPlans.Surface pendingSurface = (WorldgenPlans.Surface) plans.get(WorldgenFacet.SURFACE);
+		if (!failedFacets.contains(WorldgenFacet.SURFACE) && !pendingSurface.transforms().isEmpty()) {
+			try {
+				context.checkCancelled();
+				plans.put(WorldgenFacet.SURFACE, pendingSurface.materialize(pipelineDescriptor(
+					WorldgenFacet.SURFACE, "materialized_surface_rule_pipeline",
+					"All surface-rule transformations were applied transactionally during plan compilation"
+				)));
+				context.checkCancelled();
+			} catch (CancellationException failure) {
+				throw failure;
+			} catch (RuntimeException | LinkageError failure) {
+				plans.put(WorldgenFacet.SURFACE, unavailable(
+					pendingSurface, pendingSurface.descriptor().id(),
+					CapabilityFailure.of("surface_transform_failed", failure)
+				));
+				execution = execution.withQueryMode(WorldgenFacet.SURFACE, WorldgenQueryMode.OWNER_SERIAL);
+				failedFacets.add(WorldgenFacet.SURFACE);
+			}
+		}
 		List<CapabilityNodeReport> reports = new ArrayList<>();
 		for (WorldgenFacet facet : WorldgenFacet.values()) {
+			context.checkCancelled();
 			WorldgenPlans.DomainPlan plan = plans.get(facet);
 			if (plan == base.facet(facet)) {
 				reports.addAll(base.report().facet(facet));
@@ -207,7 +404,26 @@ public final class WorldgenPlanCompiler {
 			require(plans, WorldgenFacet.PLACED_FEATURES, WorldgenPlans.PlacedFeatures.class),
 			require(plans, WorldgenFacet.STRUCTURES, WorldgenPlans.Structures.class),
 			execution,
-			new WorldgenCapabilityReport(reports, execution)
+			new WorldgenCapabilityReport(reports, execution, resolution.diagnostics())
+		);
+	}
+
+	private static void checkCancelled(BooleanSupplier cancelled) {
+		if (cancelled.getAsBoolean() || Thread.currentThread().isInterrupted()) {
+			throw new CancellationException("Worldgen plan acquisition was superseded");
+		}
+	}
+
+	private static WorldgenProviderMetadata directMetadata(WorldgenCapabilityProvider provider) {
+		EnumMap<WorldgenFacet, WorldgenContributionKind> contributions = new EnumMap<>(WorldgenFacet.class);
+		EnumMap<WorldgenFacet, WorldgenQueryMode> queryModes = new EnumMap<>(WorldgenFacet.class);
+		provider.facets().forEach(facet -> contributions.put(facet, provider.contributionKind(facet)));
+		provider.facets().forEach(facet -> queryModes.put(facet, provider.declaredQueryMode(facet)));
+		return new WorldgenProviderMetadata(
+			provider.id(), WorldgenProviderMetadata.CURRENT_PROTOCOL, provider.version(),
+			provider.getClass().getName(), contributions, queryModes, provider.ownerTypes(), provider.ordering(),
+			List.of(), provider.providesPreviewFactory(), provider.requiresPreServerFinalization(),
+			provider.providesContributionRevision()
 		);
 	}
 
@@ -232,6 +448,29 @@ public final class WorldgenPlanCompiler {
 		return previous.append(contribution, descriptor);
 	}
 
+	private static WorldgenPlans.SamplerDecoration composeSamplerDecorators(
+		WorldgenPlans.SamplerDecoration previous,
+		WorldgenPlans.SamplerDecoration contribution
+	) {
+		if (previous.descriptor().state() == CapabilityState.UNAVAILABLE || previous.stages().isEmpty()) {
+			return new WorldgenPlans.SamplerDecoration(
+				contribution.descriptor(), previous.queryPolicy(), contribution.stages()
+			);
+		}
+		if (contribution.stages().isEmpty()) {
+			return previous;
+		}
+		PlanDescriptor descriptor = new PlanDescriptor(
+			ResourceLocation.fromNamespaceAndPath("reterraforged", "sampler_mechanism_pipeline"),
+			WorldgenFacet.SAMPLER_DECORATION,
+			CapabilityState.PROVIDER_CONTRACT,
+			"ordered_sampler_pipeline",
+			"Sampler decorators from independent mechanism contracts execute in declared stage order",
+			Optional.empty()
+		);
+		return previous.append(contribution, descriptor);
+	}
+
 	private static WorldgenPlans.BiomeComposition composeCandidateStages(
 		WorldgenPlans.BiomeComposition previous,
 		WorldgenPlans.BiomeComposition contribution
@@ -249,7 +488,9 @@ public final class WorldgenPlanCompiler {
 			entries = contribution.entries();
 		}
 		if (entries.isEmpty()) {
-			return new WorldgenPlans.BiomeComposition(previous.descriptor(), entries, stages);
+			return new WorldgenPlans.BiomeComposition(
+				previous.descriptor(), entries, stages, previous.candidateRoot()
+			);
 		}
 		PlanDescriptor descriptor = new PlanDescriptor(
 			ResourceLocation.fromNamespaceAndPath("reterraforged", "candidate_mechanism_pipeline"),
@@ -259,13 +500,45 @@ public final class WorldgenPlanCompiler {
 			"Candidate additions and removals execute in declared mechanism order before selection",
 			Optional.empty()
 		);
-		return new WorldgenPlans.BiomeComposition(descriptor, entries, stages);
+		return new WorldgenPlans.BiomeComposition(
+			descriptor, entries, stages, previous.candidateRoot()
+		);
 	}
 
 	private static WorldgenQueryMode restrict(WorldgenQueryMode first, WorldgenQueryMode second) {
 		return first.supportsIsolatedParallelRead() && second.supportsIsolatedParallelRead()
 			? WorldgenQueryMode.ISOLATED_PARALLEL_READ
 			: WorldgenQueryMode.OWNER_SERIAL;
+	}
+
+	private static PlanDescriptor pipelineDescriptor(
+		WorldgenFacet facet,
+		String mechanism,
+		String detail
+	) {
+		return new PlanDescriptor(
+			ResourceLocation.fromNamespaceAndPath("reterraforged", mechanism),
+			facet, CapabilityState.PROVIDER_CONTRACT, mechanism, detail, Optional.empty()
+		);
+	}
+
+	private static WorldgenQueryMode queryMode(
+		WorldgenCapabilityProvider provider,
+		WorldgenProviderMetadata metadata,
+		WorldgenFacet facet,
+		WorldgenCompilationContext context
+	) {
+		WorldgenQueryMode actual = Objects.requireNonNull(
+			provider.queryMode(facet, context), "provider query mode"
+		);
+		WorldgenQueryMode declared = Objects.requireNonNull(metadata, "provider metadata").queryMode(facet);
+		if (actual.supportsIsolatedParallelRead() && !declared.supportsIsolatedParallelRead()) {
+			throw new IllegalArgumentException(
+				"Provider " + provider.id() + " returned query mode " + actual
+					+ " beyond its metadata declaration " + declared + " for " + facet
+			);
+		}
+		return actual;
 	}
 
 	private static List<WorldgenCapabilityProvider> orderProviders(
@@ -357,7 +630,9 @@ public final class WorldgenPlanCompiler {
 				descriptor, List.of()
 			);
 			case WorldgenPlans.SpatialOwnership ignored -> new WorldgenPlans.SpatialOwnership(descriptor, Optional.empty());
-			case WorldgenPlans.SamplerDecoration ignored -> new WorldgenPlans.SamplerDecoration(descriptor, Optional.empty());
+			case WorldgenPlans.SamplerDecoration sampler -> new WorldgenPlans.SamplerDecoration(
+				descriptor, sampler.queryPolicy(), Optional.empty()
+			);
 			case WorldgenPlans.DensitySettings ignored -> new WorldgenPlans.DensitySettings(descriptor, Optional.empty());
 			case WorldgenPlans.Surface ignored -> new WorldgenPlans.Surface(descriptor, Optional.empty());
 			case WorldgenPlans.Carvers ignored -> new WorldgenPlans.Carvers(descriptor, List.of());
@@ -365,7 +640,9 @@ public final class WorldgenPlanCompiler {
 				descriptor, List.of(), List.of(), Map.of(),
 				raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan.empty()
 			);
-			case WorldgenPlans.Structures ignored -> new WorldgenPlans.Structures(descriptor, List.of(), List.of(), List.of(), List.of());
+			case WorldgenPlans.Structures ignored -> new WorldgenPlans.Structures(
+				descriptor, List.of(), List.of(), List.of(), List.of(), List.of()
+			);
 		};
 	}
 

@@ -30,4 +30,16 @@ class FlowSettingsSyncStateTest {
 		assertFalse(state.update(ALTERNATE, changed));
 		assertTrue(state.update(Level.OVERWORLD, changed));
 	}
+
+	@Test
+	void omitsRedundantDisabledTrafficButStillClearsEnabledClients() {
+		FlowSettingsSyncState state = new FlowSettingsSyncState();
+		FlowSettingsSnapshot enabled = new FlowSettingsSnapshot(true, false, false);
+
+		assertFalse(state.update(Level.OVERWORLD, FlowSettingsSnapshot.DISABLED));
+		assertFalse(state.update(ALTERNATE, FlowSettingsSnapshot.DISABLED));
+		assertTrue(state.update(ALTERNATE, enabled));
+		assertTrue(state.update(Level.OVERWORLD, FlowSettingsSnapshot.DISABLED));
+		assertFalse(state.update(ALTERNATE, FlowSettingsSnapshot.DISABLED));
+	}
 }

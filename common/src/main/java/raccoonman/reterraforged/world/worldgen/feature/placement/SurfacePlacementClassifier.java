@@ -1,6 +1,7 @@
 package raccoonman.reterraforged.world.worldgen.feature.placement;
 
 import java.util.List;
+import java.util.Optional;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -11,6 +12,7 @@ import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.world.level.levelgen.blockpredicates.BlockPredicate;
 import net.minecraft.world.level.levelgen.blockpredicates.BlockPredicateType;
@@ -34,28 +36,46 @@ public final class SurfacePlacementClassifier {
 	private SurfacePlacementClassifier() {
 	}
 
-	public static Classification classify(PlacedFeature feature, HolderLookup.Provider registries) {
+	public static Classification classify(
+		PlacedFeature feature,
+		Optional<ResourceLocation> featureId,
+		HolderLookup.Provider registries
+	) {
+		try {
+			return classifyChecked(feature, featureId, registries);
+		} catch (RuntimeException | LinkageError failure) {
+			return Classification.failed("SURFACE_CONTRACT_INSPECTION_FAILED", failure);
+		}
+	}
+
+	private static Classification classifyChecked(
+		PlacedFeature feature,
+		Optional<ResourceLocation> featureId,
+		HolderLookup.Provider registries
+	) {
 		List<PlacementModifier> modifiers = feature.placement();
 		int scanIndex = uniqueIndex(modifiers, EnvironmentScanPlacement.class);
 		if (scanIndex < 2 || scanIndex + 1 >= modifiers.size()) {
-			return Classification.rejected();
+			return Classification.rejected(scanIndex == -2
+				? "MULTIPLE_ENVIRONMENT_SCANS"
+				: "MISSING_CANONICAL_SURFACE_SCAN_SEQUENCE");
 		}
 		if (!(modifiers.get(scanIndex - 1) instanceof HeightRangePlacement height)
 			|| !DynamicHeightRangePlacement.isCanonicalRange(height)
 			|| !(modifiers.get(scanIndex - 2) instanceof InSquarePlacement)
 			|| !(modifiers.get(scanIndex + 1) instanceof RandomOffsetPlacement offset)) {
-			return Classification.rejected();
+			return Classification.rejected("NON_CANONICAL_SURFACE_SCAN_SEQUENCE");
 		}
 
 		CountPlacement countPlacement = null;
 		for (int i = 0; i < scanIndex - 2; i++) {
 			PlacementModifier modifier = modifiers.get(i);
 			if (!(modifier instanceof CountPlacement) && !(modifier instanceof RarityFilter)) {
-				return Classification.rejected();
+				return Classification.rejected("UNSUPPORTED_UPSTREAM_SURFACE_MODIFIER");
 			}
 			if (modifier instanceof CountPlacement count) {
 				if (countPlacement != null) {
-					return Classification.rejected();
+					return Classification.rejected("MULTIPLE_SURFACE_COUNT_STAGES");
 				}
 				countPlacement = count;
 			}
@@ -63,26 +83,26 @@ public final class SurfacePlacementClassifier {
 		for (int i = scanIndex + 2; i < modifiers.size(); i++) {
 			PlacementModifier modifier = modifiers.get(i);
 			if (!(modifier instanceof BiomeFilter) && !(modifier instanceof BlockPredicateFilter)) {
-				return Classification.rejected();
+				return Classification.rejected("UNSUPPORTED_DOWNSTREAM_SURFACE_MODIFIER");
 			}
 		}
 
 		EnvironmentScanPlacement scan = (EnvironmentScanPlacement)modifiers.get(scanIndex);
 		JsonObject scanJson = encode(EnvironmentScanPlacement.CODEC.codec(), scan, registries);
 		if (scanJson == null) {
-			return Classification.rejected();
+			return Classification.rejected("ENVIRONMENT_SCAN_CODEC_UNAVAILABLE");
 		}
 		String directionName = string(scanJson, "direction_of_search");
 		Direction direction = directionName == null ? null : Direction.byName(directionName);
-		if (direction == null || direction.getAxis() != Direction.Axis.Y) {
-			return Classification.rejected();
+		if (direction != Direction.DOWN) {
+			return Classification.rejected("NON_DOWNWARD_SURFACE_SCAN");
 		}
 		JsonObject offsetJson = encode(RandomOffsetPlacement.CODEC.codec(), offset, registries);
 		int expectedY = -direction.getStepY();
 		if (offsetJson == null
 			|| !isConstant(offsetJson.get("xz_spread"), 0)
 			|| !isConstant(offsetJson.get("y_spread"), expectedY)) {
-			return Classification.rejected();
+			return Classification.rejected("NON_CANONICAL_SURFACE_OFFSET");
 		}
 
 		JsonElement allowedJson = scanJson.get("allowed_search_condition");
@@ -95,10 +115,12 @@ public final class SurfacePlacementClassifier {
 			|| target == null
 			|| !isOnlyAir(allowed, allowedJson)
 			|| !isSurfaceTarget(target, targetJson, direction)) {
-			return Classification.rejected();
+			return Classification.rejected("UNPROVEN_SURFACE_SCAN_PREDICATES");
 		}
 
 		return Classification.eligible(new SurfacePipeline(
+			featureId,
+			height,
 			scan,
 			target,
 			allowed,
@@ -169,9 +191,7 @@ public final class SurfacePlacementClassifier {
 			}
 			return false;
 		}
-		return predicate.type() == BlockPredicateType.MATCHING_BLOCK_TAG
-			&& object.has("tag")
-			&& "minecraft:air".equals(object.get("tag").getAsString());
+		return false;
 	}
 
 	private static boolean isSurfaceTarget(BlockPredicate predicate, JsonElement json, Direction searchDirection) {
@@ -207,6 +227,8 @@ public final class SurfacePlacementClassifier {
 	}
 
 	public record SurfacePipeline(
+		Optional<ResourceLocation> featureId,
+		HeightRangePlacement heightRange,
 		EnvironmentScanPlacement scan,
 		BlockPredicate target,
 		BlockPredicate allowed,
@@ -214,20 +236,44 @@ public final class SurfacePlacementClassifier {
 		List<PlacementModifier> downstreamFilters,
 		CountPlacement countPlacement
 	) {
+		public SurfacePipeline {
+			featureId = java.util.Objects.requireNonNull(featureId, "featureId");
+		}
 	}
 
-	public record Classification(SurfacePipeline pipeline) {
+	public record Classification(SurfacePipeline pipeline, String reasonCode, String failure) {
+		public Classification {
+			reasonCode = java.util.Objects.requireNonNull(reasonCode, "reasonCode");
+		}
 
 		public static Classification eligible(SurfacePipeline pipeline) {
-			return new Classification(pipeline);
+			return new Classification(
+				java.util.Objects.requireNonNull(pipeline, "pipeline"),
+				"SUPPORTED_SURFACE_RESCUE_CONTRACT",
+				null
+			);
 		}
 
 		public static Classification rejected() {
-			return new Classification(null);
+			return rejected("NOT_CLASSIFIED");
+		}
+
+		public static Classification rejected(String reasonCode) {
+			return new Classification(null, reasonCode, null);
+		}
+
+		public static Classification failed(String reasonCode, Throwable failure) {
+			String detail = failure.getClass().getName() + ": "
+				+ java.util.Optional.ofNullable(failure.getMessage()).orElse("<no message>");
+			return new Classification(null, reasonCode, detail);
 		}
 
 		public boolean eligible() {
 			return this.pipeline != null;
+		}
+
+		public boolean failed() {
+			return this.failure != null;
 		}
 	}
 }

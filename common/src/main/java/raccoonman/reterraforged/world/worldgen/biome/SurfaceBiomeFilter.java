@@ -15,24 +15,27 @@ import com.mojang.datafixers.util.Pair;
 
 import net.minecraft.world.level.biome.Climate;
 
-/**
- * Removes dynamically registered underground candidates from preview-only biome selection.
- * Classification is driven by climate registration shape and tags supplied by the caller.
- */
 public final class SurfaceBiomeFilter<T> {
-	private final Climate.ParameterList<T> surfaceParameters;
+	private final List<Pair<Climate.ParameterPoint, T>> surfaceEntries;
+	private final Climate.ParameterList<T> retainedSurfaceParameters;
 	private final Set<T> undergroundOnly;
+	private final Set<T> knownCandidates;
 	private final Predicate<T> undergroundTag;
 	private final T finalFallback;
+	private volatile Climate.ParameterList<T> materializedSurfaceParameters;
 
 	private SurfaceBiomeFilter(
-		Climate.ParameterList<T> surfaceParameters,
+		List<Pair<Climate.ParameterPoint, T>> surfaceEntries,
+		Climate.ParameterList<T> retainedSurfaceParameters,
 		Set<T> undergroundOnly,
+		Set<T> knownCandidates,
 		Predicate<T> undergroundTag,
 		T finalFallback
 	) {
-		this.surfaceParameters = surfaceParameters;
+		this.surfaceEntries = List.copyOf(surfaceEntries);
+		this.retainedSurfaceParameters = retainedSurfaceParameters;
 		this.undergroundOnly = undergroundOnly;
+		this.knownCandidates = knownCandidates;
 		this.undergroundTag = undergroundTag;
 		this.finalFallback = finalFallback;
 	}
@@ -44,9 +47,27 @@ public final class SurfaceBiomeFilter<T> {
 		Collection<T> additionalUndergroundCandidates,
 		T finalFallback
 	) {
+		return create(
+			new Climate.ParameterList<>(entries), classifier, undergroundTag,
+			additionalUndergroundCandidates, finalFallback
+		);
+	}
+
+	public static <T> SurfaceBiomeFilter<T> create(
+		Climate.ParameterList<T> source,
+		BiFunction<Climate.ParameterPoint, T, UndergroundBiomeBanding.CandidateRole> classifier,
+		Predicate<T> undergroundTag,
+		Collection<T> additionalUndergroundCandidates,
+		T finalFallback
+	) {
+		List<Pair<Climate.ParameterPoint, T>> entries = source.values();
 		Map<T, Roles> roles = new HashMap<>();
-		for (Pair<Climate.ParameterPoint, T> entry : entries) {
+		UndergroundBiomeBanding.CandidateRole[] classified =
+			new UndergroundBiomeBanding.CandidateRole[entries.size()];
+		for (int index = 0; index < entries.size(); index++) {
+			Pair<Climate.ParameterPoint, T> entry = entries.get(index);
 			UndergroundBiomeBanding.CandidateRole role = classifier.apply(entry.getFirst(), entry.getSecond());
+			classified[index] = role;
 			roles.computeIfAbsent(entry.getSecond(), ignored -> new Roles()).accept(role);
 		}
 		for (T candidate : additionalUndergroundCandidates) {
@@ -62,38 +83,61 @@ public final class SurfaceBiomeFilter<T> {
 		}
 
 		List<Pair<Climate.ParameterPoint, T>> surfaceEntries = new ArrayList<>();
-		for (Pair<Climate.ParameterPoint, T> entry : entries) {
-			UndergroundBiomeBanding.CandidateRole role = classifier.apply(entry.getFirst(), entry.getSecond());
+		for (int index = 0; index < entries.size(); index++) {
+			Pair<Climate.ParameterPoint, T> entry = entries.get(index);
+			UndergroundBiomeBanding.CandidateRole role = classified[index];
 			if (!undergroundOnly.contains(entry.getSecond())
 				&& role != UndergroundBiomeBanding.CandidateRole.SHALLOW_CAVE
 				&& role != UndergroundBiomeBanding.CandidateRole.DEEP_CAVE) {
 				surfaceEntries.add(entry);
 			}
 		}
-		Climate.ParameterList<T> surfaceParameters = surfaceEntries.isEmpty()
-			? null
-			: new Climate.ParameterList<>(surfaceEntries);
-		return new SurfaceBiomeFilter<>(surfaceParameters, undergroundOnly, undergroundTag, finalFallback);
+		Climate.ParameterList<T> retained = !surfaceEntries.isEmpty()
+			&& surfaceEntries.size() == entries.size()
+			? source
+			: null;
+		return new SurfaceBiomeFilter<>(
+			surfaceEntries, retained, Set.copyOf(undergroundOnly), Set.copyOf(roles.keySet()),
+			undergroundTag, finalFallback
+		);
 	}
 
 	public boolean hasSurfaceCandidate() {
-		return this.surfaceParameters != null;
+		return !this.surfaceEntries.isEmpty();
 	}
 
 	public Optional<Climate.ParameterList<T>> surfaceParameters() {
-		return Optional.ofNullable(this.surfaceParameters);
+		if (this.surfaceEntries.isEmpty()) {
+			return Optional.empty();
+		}
+		if (this.retainedSurfaceParameters != null) {
+			return Optional.of(this.retainedSurfaceParameters);
+		}
+		Climate.ParameterList<T> parameters = this.materializedSurfaceParameters;
+		if (parameters == null) {
+			synchronized (this) {
+				parameters = this.materializedSurfaceParameters;
+				if (parameters == null) {
+					parameters = new Climate.ParameterList<>(this.surfaceEntries);
+					this.materializedSurfaceParameters = parameters;
+				}
+			}
+		}
+		return Optional.of(parameters);
 	}
 
 	public boolean isUnderground(T value) {
-		return value != null && (this.undergroundTag.test(value) || this.undergroundOnly.contains(value));
+		return value != null && (this.undergroundOnly.contains(value)
+			|| (!this.knownCandidates.contains(value) && this.undergroundTag.test(value)));
 	}
 
 	public T resolve(Climate.TargetPoint target, T selected) {
 		if (!this.isUnderground(selected)) {
 			return selected;
 		}
-		if (this.surfaceParameters != null) {
-			T fallback = this.surfaceParameters.findValue(target);
+		Optional<Climate.ParameterList<T>> parameters = this.surfaceParameters();
+		if (parameters.isPresent()) {
+			T fallback = parameters.orElseThrow().findValue(target);
 			if (!this.isUnderground(fallback)) {
 				return fallback;
 			}
@@ -114,4 +158,5 @@ public final class SurfaceBiomeFilter<T> {
 			}
 		}
 	}
+
 }

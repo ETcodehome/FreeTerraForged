@@ -4,96 +4,108 @@ import org.spongepowered.asm.mixin.Implements;
 import org.spongepowered.asm.mixin.Interface;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.biome.Climate;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
-import raccoonman.reterraforged.world.worldgen.biome.ClimatePointCache;
+import raccoonman.reterraforged.world.worldgen.biome.ClimateQueryPolicy;
+import raccoonman.reterraforged.world.worldgen.biome.ClimateQuerySemantics;
 import raccoonman.reterraforged.world.worldgen.biome.RTFClimateSampler;
 import raccoonman.reterraforged.world.worldgen.biome.UndergroundBiomeClimatePolicy;
-import raccoonman.reterraforged.world.worldgen.biome.UndergroundBiomeSurfaceProtection;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenPlan;
 import raccoonman.reterraforged.world.worldgen.runtime.BiomeCellCache;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenRuntimeBinding;
+import raccoonman.reterraforged.world.worldgen.runtime.WorldgenQueryCaches;
 
 @Mixin(Climate.Sampler.class)
 @Implements(@Interface(iface = RTFClimateSampler.class, prefix = "reterraforged$RTFClimateSampler$"))
 class MixinClimateSampler {
-	private volatile BlockPos spawnSearchCenter = BlockPos.ZERO;
-	private volatile Preset undergroundBiomeBandingPreset;
-	private volatile long undergroundBiomeBandingSeed;
-	private volatile GeneratorContext undergroundBiomeSurfaceContext;
+	@Unique
+	private static final RTFClimateSampler.SpawnSearch reterraforged$defaultSpawnSearch = new RTFClimateSampler.SpawnSearch(
+		raccoonman.reterraforged.data.worldgen.preset.settings.SpawnType.WORLD_ORIGIN,
+		BlockPos.ZERO
+	);
+	private volatile RTFClimateSampler.SpawnSearch spawnSearch = reterraforged$defaultSpawnSearch;
+	@Unique private volatile ClimateQuerySemantics reterraforged$querySemantics =
+		ClimateQuerySemantics.passthrough();
 	private volatile WorldgenPlan worldgenPlan;
 	private volatile WorldgenRuntimeBinding worldgenBinding;
-	@Unique private final ClimatePointCache reterraforged$climatePointCache = new ClimatePointCache();
-	@Unique private volatile Object reterraforged$climateCacheOwner = new Object();
-	@Unique private final UndergroundBiomeSurfaceProtection.Cache reterraforged$surfaceCache =
-		new UndergroundBiomeSurfaceProtection.Cache();
-	@Unique private final BiomeCellCache<WorldgenPlan> reterraforged$biomeCellCache = new BiomeCellCache<>();
+	@Unique private volatile WorldgenQueryCaches reterraforged$queryCaches;
 
-	@Inject(method = "sample", at = @At("HEAD"), cancellable = true)
-	private void reterraforged$reuseClimatePoint(int x, int y, int z, CallbackInfoReturnable<Climate.TargetPoint> callback) {
-		Object owner = this.reterraforged$climateCacheOwner;
-		Climate.TargetPoint target = this.reterraforged$climatePointCache.find(owner, x, y, z);
-		if (target != null) {
-			callback.setReturnValue(target);
+	@WrapMethod(method = "sample")
+	private Climate.TargetPoint reterraforged$sampleOnce(
+		int x,
+		int y,
+		int z,
+		Operation<Climate.TargetPoint> original
+	) {
+		ClimateQuerySemantics semantics = this.reterraforged$querySemantics;
+		ClimateQueryPolicy policy = semantics.policy();
+		if (!policy.cachesClimatePoints() && !policy.appliesUndergroundBanding()) {
+			return original.call(x, y, z);
 		}
-	}
+		WorldgenQueryCaches caches = policy.cachesClimatePoints()
+			? this.reterraforged$queryCaches()
+			: null;
+		Object queryOwner = semantics.cacheOwner();
+		if (caches != null) {
+			Climate.TargetPoint cached = caches.climatePoints().find(queryOwner, x, y, z);
+			if (cached != null) {
+				return cached;
+			}
+		}
 
-	@Inject(method = "sample", at = @At("RETURN"), cancellable = true)
-	private void reterraforged$cacheClimatePoint(int x, int y, int z, CallbackInfoReturnable<Climate.TargetPoint> callback) {
-		Object owner = this.reterraforged$climateCacheOwner;
 		Climate.TargetPoint target = UndergroundBiomeClimatePolicy.apply(
 			(Climate.Sampler) (Object) this,
-			callback.getReturnValue(),
+			original.call(x, y, z),
 			x,
 			y,
-			z
+			z,
+			policy,
+			semantics.preset(),
+			semantics.seed(),
+			semantics.surfaceContext()
 		);
-		callback.setReturnValue(target);
-		if (owner == this.reterraforged$climateCacheOwner) {
-			this.reterraforged$climatePointCache.store(owner, x, y, z, target);
+		if (caches != null
+			&& semantics == this.reterraforged$querySemantics
+			&& caches == this.reterraforged$queryCaches
+			&& queryOwner == semantics.cacheOwner()) {
+			caches.climatePoints().store(queryOwner, x, y, z, target);
 		}
+		return target;
 	}
 	
-	public void reterraforged$RTFClimateSampler$setSpawnSearchCenter(BlockPos spawnSearchCenter) {
-		this.spawnSearchCenter = spawnSearchCenter;
-	}
-	
-	public BlockPos reterraforged$RTFClimateSampler$getSpawnSearchCenter() {
-		return this.spawnSearchCenter;
+	public void reterraforged$RTFClimateSampler$setSpawnSearch(RTFClimateSampler.SpawnSearch spawnSearch) {
+		this.spawnSearch = java.util.Objects.requireNonNull(spawnSearch, "spawnSearch");
 	}
 
-	public void reterraforged$RTFClimateSampler$setUndergroundBiomeBandingPreset(Preset preset, long seed) {
-		if (this.undergroundBiomeBandingPreset != preset || this.undergroundBiomeBandingSeed != seed) {
-			this.reterraforged$climateCacheOwner = new Object();
+	public RTFClimateSampler.SpawnSearch reterraforged$RTFClimateSampler$getSpawnSearch() {
+		return this.spawnSearch;
+	}
+
+	public synchronized void reterraforged$RTFClimateSampler$setClimateQuerySemantics(
+		ClimateQueryPolicy policy,
+		Preset preset,
+		long seed,
+		GeneratorContext context
+	) {
+		java.util.Objects.requireNonNull(policy, "climate query policy");
+		ClimateQuerySemantics current = this.reterraforged$querySemantics;
+		if (current.policy() != policy || current.preset() != preset || current.seed() != seed
+			|| current.surfaceContext() != context) {
+			this.reterraforged$querySemantics = new ClimateQuerySemantics(
+				policy, preset, seed, context, new Object()
+			);
+			this.reterraforged$discardLocalQueryCacheStorage();
 		}
-		this.undergroundBiomeBandingPreset = preset;
-		this.undergroundBiomeBandingSeed = seed;
 	}
 
-	public Preset reterraforged$RTFClimateSampler$getUndergroundBiomeBandingPreset() {
-		return this.undergroundBiomeBandingPreset;
-	}
-
-	public long reterraforged$RTFClimateSampler$getUndergroundBiomeBandingSeed() {
-		return this.undergroundBiomeBandingSeed;
-	}
-
-	public void reterraforged$RTFClimateSampler$setUndergroundBiomeSurfaceContext(GeneratorContext context) {
-		if (this.undergroundBiomeSurfaceContext != context) {
-			this.reterraforged$climateCacheOwner = new Object();
-			this.reterraforged$surfaceCache.clear();
-		}
-		this.undergroundBiomeSurfaceContext = context;
-	}
-
-	public GeneratorContext reterraforged$RTFClimateSampler$getUndergroundBiomeSurfaceContext() {
-		return this.undergroundBiomeSurfaceContext;
+	public ClimateQuerySemantics reterraforged$RTFClimateSampler$climateQuerySemantics() {
+		return this.reterraforged$querySemantics;
 	}
 
 	public float reterraforged$RTFClimateSampler$minimumSurfaceY(
@@ -101,13 +113,12 @@ class MixinClimateSampler {
 		int quartX,
 		int quartZ
 	) {
-		return this.reterraforged$surfaceCache.minimumSurfaceY(context, quartX, quartZ);
+		return this.reterraforged$queryCaches().surfaceProtection().minimumSurfaceY(context, quartX, quartZ);
 	}
 
 	public void reterraforged$RTFClimateSampler$setWorldgenPlan(WorldgenPlan plan) {
 		if (this.worldgenPlan != plan || this.worldgenBinding != null) {
-			this.reterraforged$climateCacheOwner = new Object();
-			this.reterraforged$biomeCellCache.clear();
+			this.reterraforged$queryCaches = null;
 		}
 		this.worldgenBinding = null;
 		this.worldgenPlan = plan;
@@ -115,8 +126,7 @@ class MixinClimateSampler {
 
 	public void reterraforged$RTFClimateSampler$setWorldgenBinding(WorldgenRuntimeBinding binding) {
 		if (this.worldgenBinding != binding || this.worldgenPlan != null) {
-			this.reterraforged$climateCacheOwner = new Object();
-			this.reterraforged$biomeCellCache.clear();
+			this.reterraforged$queryCaches = binding == null ? null : binding.queryCaches();
 		}
 		this.worldgenPlan = null;
 		this.worldgenBinding = binding;
@@ -128,6 +138,29 @@ class MixinClimateSampler {
 	}
 
 	public BiomeCellCache<WorldgenPlan> reterraforged$RTFClimateSampler$getBiomeCellCache() {
-		return this.reterraforged$biomeCellCache;
+		return this.reterraforged$queryCaches().biomeCells();
+	}
+
+	@Unique
+	private WorldgenQueryCaches reterraforged$queryCaches() {
+		WorldgenQueryCaches caches = this.reterraforged$queryCaches;
+		if (caches == null) {
+			synchronized (this) {
+				caches = this.reterraforged$queryCaches;
+				if (caches == null) {
+					WorldgenRuntimeBinding binding = this.worldgenBinding;
+					caches = binding == null ? new WorldgenQueryCaches() : binding.queryCaches();
+					this.reterraforged$queryCaches = caches;
+				}
+			}
+		}
+		return caches;
+	}
+
+	@Unique
+	private void reterraforged$discardLocalQueryCacheStorage() {
+		if (this.worldgenBinding == null) {
+			this.reterraforged$queryCaches = null;
+		}
 	}
 }

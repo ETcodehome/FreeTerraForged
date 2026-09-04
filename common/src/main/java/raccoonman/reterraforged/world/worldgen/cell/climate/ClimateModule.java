@@ -85,49 +85,47 @@ public class ClimateModule {
 		this.macroBiomeNoise = macroBiomeNoise;
 	}
 
+	ClimateModule(
+		int seed,
+		float biomeFreq,
+		float warpStrength,
+		Noise warpX,
+		Noise warpZ,
+		Noise moisture,
+		Noise temperature,
+		Noise macroBiomeNoise,
+		Continent continent,
+		ControlPoints controlPoints,
+		Levels levels
+	) {
+		this.seed = seed;
+		this.biomeFreq = biomeFreq;
+		this.warpStrength = warpStrength;
+		this.warpX = warpX;
+		this.warpZ = warpZ;
+		this.moisture = moisture;
+		this.temperature = temperature;
+		this.macroBiomeNoise = macroBiomeNoise;
+		this.continent = continent;
+		this.controlPoints = controlPoints;
+		this.levels = levels;
+	}
+
 	public void apply(Cell cell, float x, float z, float originalX, float originalZ) {
 		this.apply(cell, x, z, originalX, originalZ, true);
 	}
 
 	public void apply(Cell cell, float x, float z, float originalX, float originalZ, boolean mask) {
-		float ox = this.warpX.compute(x, z, 0) * this.warpStrength;
-		float oz = this.warpZ.compute(x, z, 0) * this.warpStrength;
-		x += ox;
-		z += oz;
-		x *= this.biomeFreq;
-		z *= this.biomeFreq;
-		int xr = NoiseUtil.floor(x);
-		int zr = NoiseUtil.floor(z);
-		int cellX = xr;
-		int cellZ = zr;
-		float centerX = x;
-		float centerZ = z;
-		float edgeDistance = 999999.0F;
-		float edgeDistance2 = 999999.0F;
-		DistanceFunction dist = DistanceFunction.EUCLIDEAN;
-		for (int dz = -1; dz <= 1; ++dz) {
-			for (int dx = -1; dx <= 1; ++dx) {
-				int cx = xr + dx;
-				int cz = zr + dz;
-				Vec2f vec = NoiseUtil.cell(this.seed, cx, cz);
-				float cxf = cx + vec.x();
-				float czf = cz + vec.y();
-				float distance = dist.apply(cxf - x, czf - z);
-				if (distance < edgeDistance) {
-					edgeDistance2 = edgeDistance;
-					edgeDistance = distance;
-					centerX = cxf;
-					centerZ = czf;
-					cellX = cx;
-					cellZ = cz;
-				} else if (distance < edgeDistance2) {
-					edgeDistance2 = distance;
-				}
-			}
-		}
-		cell.biomeRegionId = this.cellValue(this.seed , cellX, cellZ);
-		cell.biomeRegionX = cellX;
-		cell.biomeRegionZ = cellZ;
+		float warpedX = x + this.warpX.compute(x, z, 0) * this.warpStrength;
+		float warpedZ = z + this.warpZ.compute(x, z, 0) * this.warpStrength;
+		x = warpedX * this.biomeFreq;
+		z = warpedZ * this.biomeFreq;
+		this.resolveRegion(cell, x, z, mask);
+		float centerX = cell.biomeRegionCenterX;
+		float centerZ = cell.biomeRegionCenterZ;
+		int cellX = (int) cell.biomeRegionX;
+		int cellZ = (int) cell.biomeRegionZ;
+		cell.biomeRegionId = this.cellValue(this.seed, cellX, cellZ);
 		cell.regionMoisture = this.moisture.compute(centerX, centerZ, 0);
 		cell.regionTemperature = this.temperature.compute(centerX, centerZ, 0);
 		cell.macroBiomeId = this.macroBiomeNoise.compute(centerX, centerZ, 0);
@@ -135,7 +133,6 @@ public class ClimateModule {
 		int posZ = NoiseUtil.floor(centerZ / this.biomeFreq);
 		float continentEdge = this.continent.getLandValue(posX, posZ);
 		if (mask) {
-			cell.biomeRegionEdge = this.edgeValue(edgeDistance, edgeDistance2);
 			this.modifyTerrain(cell, continentEdge);
 		}
 		cell.regionMoisture = this.modifyMoisture(cell.regionMoisture, continentEdge);
@@ -171,6 +168,53 @@ public class ClimateModule {
 			islTemp = this.modifyTemp(cell.height, islTemp, originalX, originalZ);
 			cell.temperature = islTemp * 2.0F - 1.0F;
 			cell.moisture = islMoist * 2.0F - 1.0F;
+		}
+	}
+
+	public void applyRegion(Cell cell, float x, float z, boolean mask) {
+		float warpedX = x + this.warpX.compute(x, z, 0) * this.warpStrength;
+		float warpedZ = z + this.warpZ.compute(x, z, 0) * this.warpStrength;
+		this.resolveRegion(
+			cell, warpedX * this.biomeFreq, warpedZ * this.biomeFreq, mask
+		);
+	}
+
+	private void resolveRegion(Cell cell, float x, float z, boolean mask) {
+		int xr = NoiseUtil.floor(x);
+		int zr = NoiseUtil.floor(z);
+		int cellX = xr;
+		int cellZ = zr;
+		float centerX = x;
+		float centerZ = z;
+		float edgeDistance = 999999.0F;
+		float edgeDistance2 = 999999.0F;
+		DistanceFunction dist = DistanceFunction.EUCLIDEAN;
+		for (int dz = -1; dz <= 1; ++dz) {
+			for (int dx = -1; dx <= 1; ++dx) {
+				int cx = xr + dx;
+				int cz = zr + dz;
+				Vec2f vec = NoiseUtil.cell(this.seed, cx, cz);
+				float cxf = cx + vec.x();
+				float czf = cz + vec.y();
+				float distance = dist.apply(cxf - x, czf - z);
+				if (distance < edgeDistance) {
+					edgeDistance2 = edgeDistance;
+					edgeDistance = distance;
+					centerX = cxf;
+					centerZ = czf;
+					cellX = cx;
+					cellZ = cz;
+				} else if (distance < edgeDistance2) {
+					edgeDistance2 = distance;
+				}
+			}
+		}
+		cell.biomeRegionCenterX = centerX;
+		cell.biomeRegionCenterZ = centerZ;
+		cell.biomeRegionX = cellX;
+		cell.biomeRegionZ = cellZ;
+		if (mask) {
+			cell.biomeRegionEdge = this.edgeValue(edgeDistance, edgeDistance2);
 		}
 	}
 

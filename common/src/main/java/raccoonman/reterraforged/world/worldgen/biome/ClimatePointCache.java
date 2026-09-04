@@ -2,6 +2,7 @@ package raccoonman.reterraforged.world.worldgen.biome;
 
 import net.minecraft.world.level.biome.Climate;
 import raccoonman.reterraforged.world.worldgen.runtime.OwnerThreadCache;
+import java.lang.ref.WeakReference;
 
 /**
  * Sampler-owned memoization for climate samples. Keeping this cache at the sampler boundary lets
@@ -16,22 +17,26 @@ public final class ClimatePointCache {
     /**
      * @return the cached climate point for this sampler, or null on a cache miss.
      */
-    public Climate.TargetPoint find(final Object owner, final int x, final int y, final int z) {
+    public Climate.TargetPoint find(final Object sampler, final int x, final int y, final int z) {
         final long key = key(x, y, z);
-        final Entry entry = this.values.find(key);
-        return entry != null && entry.owner == owner ? entry.value : null;
+		Entry entry = this.values.find(key);
+		return entry != null && entry.get() == sampler ? entry.target : null;
     }
 
     /**
      * Stores a fully evaluated climate point in the active sampler slot.
      */
-    public void store(final Object owner, final int x, final int y, final int z, final Climate.TargetPoint target) {
+    public void store(final Object sampler, final int x, final int y, final int z, final Climate.TargetPoint target) {
         if (target == null) {
             return;
         }
         final long key = key(x, y, z);
-        this.values.store(key, new Entry(owner, target));
+		this.values.store(key, new Entry(sampler, target));
     }
+
+	public void clear() {
+		this.values.clear();
+	}
 
     /**
      * Packs 3D quart coordinates safely into a single 64-bit primitive key.
@@ -43,6 +48,13 @@ public final class ClimatePointCache {
 
     public ClimatePointCache() {}
 
-    private record Entry(Object owner, Climate.TargetPoint value) {
-    }
+	private static final class Entry extends WeakReference<Object> {
+		private final Climate.TargetPoint target;
+
+		private Entry(Object sampler, Climate.TargetPoint target) {
+			super(sampler);
+			this.target = target;
+		}
+	}
+
 }

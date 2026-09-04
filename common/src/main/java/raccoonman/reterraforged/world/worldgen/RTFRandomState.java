@@ -9,7 +9,7 @@ import raccoonman.reterraforged.world.worldgen.runtime.WorldgenEpoch;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenPlan;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenRuntimeBinding;
 
-public interface RTFRandomState {
+public interface RTFRandomState extends AutoCloseable {
 	void initialize(WorldgenEpoch epoch);
 
 	void bindPlan(WorldgenRuntimeBinding binding);
@@ -21,6 +21,9 @@ public interface RTFRandomState {
 
 	@Nullable
 	WorldgenPlan plan();
+
+	@Nullable
+	WorldgenRuntimeBinding binding();
 
 	boolean isTerraForged();
 
@@ -35,4 +38,7 @@ public interface RTFRandomState {
 	DensityFunction wrap(DensityFunction function);
 
 	Noise seed(Noise noise);
+
+	@Override
+	void close();
 }

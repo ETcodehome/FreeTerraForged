@@ -51,4 +51,8 @@ public record WorldgenPlan(
 			case STRUCTURES -> this.structures;
 		};
 	}
+
+	public WorldgenPlanDiagnostics.Snapshot diagnostics() {
+		return WorldgenPlanDiagnostics.snapshot(this);
+	}
 }

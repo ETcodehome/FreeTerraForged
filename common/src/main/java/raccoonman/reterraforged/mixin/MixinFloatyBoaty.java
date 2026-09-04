@@ -45,10 +45,13 @@ public abstract class MixinFloatyBoaty {
             ChunkAccess chunk = level.getChunk(pos);
 
             if (chunk instanceof IFlowFieldHolder holder) {
-                ChunkFlowField flowField = holder.reterraforged$getFlowField();
 				if (!flowSettings.boatFlowDynamics()) {
                     return;
                 }
+				ChunkFlowField flowField = holder.reterraforged$getFlowField();
+				if (flowField == null) {
+					return;
+				}
 
                 int localX = pos.getX() & 15;
                 int localZ = pos.getZ() & 15;

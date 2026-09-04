@@ -20,11 +20,16 @@ class CellRendezvousTest {
 
 	@Test
 	void semanticChoiceOrderDoesNotChangeResults() {
+		CellRendezvous.Selector<String> selector = new CellRendezvous.Selector<>(17L, CHOICES);
 		List<CellRendezvous.Choice<String>> reversed = CHOICES.reversed();
 		for (int cell = 0; cell < 10_000; cell++) {
 			assertEquals(
 				CellRendezvous.select(17L, cell, -cell, CHOICES),
 				CellRendezvous.select(17L, cell, -cell, reversed)
+			);
+			assertEquals(
+				CellRendezvous.select(17L, cell, -cell, CHOICES),
+				selector.select(cell, -cell)
 			);
 		}
 	}

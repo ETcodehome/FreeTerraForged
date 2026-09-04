@@ -17,8 +17,9 @@ public final class FlowSettingsSyncState {
 		if (dimension.equals(this.dimension) && encoded == this.settings) {
 			return false;
 		}
+		byte previous = this.settings;
 		this.dimension = dimension;
 		this.settings = encoded;
-		return true;
+		return encoded != 0 || previous > 0;
 	}
 }

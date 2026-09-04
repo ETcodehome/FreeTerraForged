@@ -10,16 +10,14 @@ import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.placement.HeightRangePlacement;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.minecraft.world.level.levelgen.placement.PlacementContext;
-import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
-import raccoonman.reterraforged.registries.RTFRegistries;
+import raccoonman.reterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
+import raccoonman.reterraforged.world.worldgen.runtime.WorldgenPlan;
 
 /**
  * Extends vanilla's canonical bottom-to-max-terrain placement semantics into
@@ -40,22 +38,29 @@ public final class DynamicHeightRangePlacement {
 	private DynamicHeightRangePlacement() {
 	}
 
-	/**
-	 * Returns replacement positions only when the current modifier is the exact
-	 * canonical {@code uniform(bottom, absolute(256))} range in an extended RTF
-	 * Overworld. Returning empty leaves vanilla and custom placement behavior
-	 * untouched.
-	 */
 	public static Optional<Stream<BlockPos>> getPositions(
 		HeightRangePlacement placement,
 		PlacementContext context,
 		RandomSource random,
 		BlockPos origin
 	) {
-		if (!isCanonicalRange(placement) || !isRtfOverworld(context)) {
+		if (!(context.generator() instanceof TerraForgedChunkGenerator generator)) {
 			return Optional.empty();
 		}
-		Optional<ResourceLocation> featureId = getTopLevelFeatureId(placement, context);
+		WorldgenPlan plan = generator.plan().orElse(null);
+		if (plan == null) {
+			return Optional.empty();
+		}
+		Optional<PlacedFeature> topFeature = getTopLevelFeature(placement, context);
+		if (topFeature.isEmpty()) {
+			return Optional.empty();
+		}
+		SurfacePlacementClassifier.Classification classification =
+			plan.placedFeatures().surfaceClassification(topFeature.orElseThrow());
+		if (!classification.eligible() || classification.pipeline().heightRange() != placement) {
+			return Optional.empty();
+		}
+		Optional<ResourceLocation> featureId = classification.pipeline().featureId();
 		if (featureId.isEmpty()) {
 			return Optional.empty();
 		}
@@ -177,29 +182,9 @@ public final class DynamicHeightRangePlacement {
 		);
 	}
 
-	static boolean isRtfOverworld(PlacementContext context) {
-		if (!Level.OVERWORLD.equals(context.getLevel().getLevel().dimension())) {
-			return false;
-		}
-		return context.getLevel()
-			.registryAccess()
-			.lookup(RTFRegistries.PRESET)
-			.flatMap(registry -> registry.get(Preset.KEY))
-			.isPresent();
-	}
-
-	private static Optional<ResourceLocation> getTopLevelFeatureId(HeightRangePlacement placement, PlacementContext context) {
-		Optional<PlacedFeature> feature = context.topFeature()
+	private static Optional<PlacedFeature> getTopLevelFeature(HeightRangePlacement placement, PlacementContext context) {
+		return context.topFeature()
 			.filter(topFeature -> topFeature.placement().stream().anyMatch(modifier -> modifier == placement));
-		if (feature.isEmpty()) {
-			return Optional.empty();
-		}
-		return Optional.ofNullable(
-			context.getLevel()
-				.registryAccess()
-				.registryOrThrow(Registries.PLACED_FEATURE)
-				.getKey(feature.get())
-		);
 	}
 
 	private static long extensionSeed(PlacementContext context, ResourceLocation featureId, BlockPos origin, int baseY) {

@@ -17,6 +17,7 @@ import net.minecraft.world.level.levelgen.structure.StructurePiece;
 import net.minecraft.world.level.levelgen.structure.pieces.PiecesContainer;
 import net.minecraft.world.level.levelgen.structure.pieces.StructurePiecesBuilder;
 import net.minecraft.world.level.levelgen.structure.structures.OceanMonumentStructure;
+import raccoonman.reterraforged.world.worldgen.RTFRandomState;
 import raccoonman.reterraforged.world.worldgen.structure.OceanMonumentBuildingFix;
 
 @Mixin(OceanMonumentStructure.class)
@@ -30,6 +31,9 @@ public class MixinOceanMonumentStructure {
 		Structure.GenerationContext context,
 		CallbackInfo ci
 	) {
+		if(!((Object) context.randomState() instanceof RTFRandomState randomState) || !randomState.isTerraForged()) {
+			return;
+		}
 		List<StructurePiece> pieces = ((StructurePiecesBuilderAccessor) builder).rtf$getPieces();
 		if (pieces.isEmpty()) {
 			return;

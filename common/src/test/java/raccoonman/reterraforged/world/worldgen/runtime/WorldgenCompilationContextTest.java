@@ -6,7 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.UUID;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.Test;
 
@@ -65,6 +67,24 @@ class WorldgenCompilationContextTest {
 		);
 	}
 
+	@Test
+	void supersededAcquisitionCannotPublishANewSnapshot() {
+		AtomicBoolean cancelled = new AtomicBoolean();
+		AtomicInteger calls = new AtomicInteger();
+		WorldgenCompilationContext context = new WorldgenCompilationContext(
+			owner(1), WorldgenCompilationPurpose.BIOME_PREVIEW, cancelled::get
+		);
+		cancelled.set(true);
+
+		assertThrows(CancellationException.class, () ->
+			context.snapshot(PROVIDER, Object.class, () -> {
+				calls.incrementAndGet();
+				return new Object();
+			})
+		);
+		assertEquals(0, calls.get());
+	}
+
 	private static WorldgenOwner owner(int suffix) {
 		return new WorldgenOwner() {
 			private final UUID id = new UUID(0L, suffix);
@@ -76,9 +96,12 @@ class WorldgenCompilationContextTest {
 			@Override public ResourceKey<LevelStem> dimension() { return LevelStem.OVERWORLD; }
 			@Override public LevelStem selectedStem() { return null; }
 			@Override public String settingsIdentity() { return "settings"; }
+			@Override public long resourceRevision() { return 0L; }
 			@Override public String resourceLayerFingerprint() { return "resources"; }
 			@Override public TagEpoch tagEpoch() { return new TagEpoch(0L, "tags"); }
-			@Override public long contributionSequence() { return 0L; }
+			@Override public WorldgenContributionRevision.Snapshot contributionRevision() {
+				return WorldgenContributionRevision.Snapshot.empty(LevelStem.OVERWORLD.location());
+			}
 			@Override public net.minecraft.core.HolderLookup.Provider lookups() { return RegistryAccess.EMPTY; }
 		};
 	}

@@ -11,7 +11,7 @@ class PreviewRequestOwnershipTest {
 	@Test
 	void closeDefersUntilTheActiveUseReleasesAndRejectsNewUses() {
 		IPreviewHandler.PreparedContext owner = new IPreviewHandler.PreparedContext(
-			null, null, null, null, true
+			null, null, null, null
 		);
 		IPreviewHandler.PreparedContext.Lease lease = owner.acquire();
 

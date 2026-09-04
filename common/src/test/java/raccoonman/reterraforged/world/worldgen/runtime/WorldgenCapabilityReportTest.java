@@ -28,7 +28,8 @@ class WorldgenCapabilityReportTest {
 		String first = report.toJson().toString();
 		String second = report.toJson().toString();
 		assertEquals(first, second);
-		assertEquals(2, report.toJson().get("schema_version").getAsInt());
+		assertEquals(3, report.toJson().get("schema_version").getAsInt());
+		assertTrue(report.toJson().getAsJsonArray("provider_diagnostics").isEmpty());
 		assertEquals(
 			"owner_serial",
 			report.toJson().getAsJsonObject("query_modes").get("provider_selection").getAsString()

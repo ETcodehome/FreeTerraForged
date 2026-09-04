@@ -37,6 +37,7 @@ import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.client.data.RTFTranslationKeys;
 import raccoonman.reterraforged.client.gui.Toasts;
 import raccoonman.reterraforged.client.gui.screen.page.BisectedPage;
+import raccoonman.reterraforged.client.gui.screen.page.LinkedPageScreen.SaveResult;
 import raccoonman.reterraforged.client.gui.screen.page.LinkedPageScreen.Page;
 import raccoonman.reterraforged.client.gui.widget.Label;
 import raccoonman.reterraforged.client.gui.widget.WidgetList;
@@ -269,17 +270,16 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 	}
 
 	@Override
-	public void onSave() {
-		super.onSave();
-
+	public SaveResult onSave() {
 		Entry<AbstractWidget> selected = this.left.getSelected();
 		if(selected != null && selected.getWidget() instanceof PresetEntry presetEntry) {
 			try {
-				this.screen.applyPreset(presetEntry);
+				return this.screen.applyPreset(presetEntry);
 			} catch (IOException e) {
-				e.printStackTrace();
+				return this.screen.reportPresetApplyFailure(e);
 			}
 		}
+		return SaveResult.STAY_OPEN;
 	}
 
 	private void selectPreset(@Nullable PresetEntry entry) {

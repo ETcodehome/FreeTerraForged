@@ -20,23 +20,22 @@ loom {
 configurations {
     common
     shadowCommon
+    architecturyTransformerClasspath
     compileClasspath.extendsFrom common
     runtimeClasspath.extendsFrom common
     developmentFabric.extendsFrom common
+    architecturyTransformerClasspath.extendsFrom compileClasspath
 }
 
 dependencies {
     modImplementation "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}"
     modApi("net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}") { exclude group: 'net.fabricmc', module: 'fabric-loader' }
-    modApi "dev.architectury:architectury-fabric:${rootProject.architectury_version}"
     modCompileOnly "maven.modrinth:biolith:3.0.14-fabric"
-    // The Fabric artifact declares a v1 class-tweaker through the legacy access-widener key,
-    // which this Loom version cannot parse. The shared implementation is identical and the
-    // NeoForge artifact is already Mojang-mapped, so use it only as the compile-time API.
-    compileOnly "maven.modrinth:lithostitched:1.7.13-neoforge-21.1"
+    architecturyTransformerClasspath "com.github.glitchfiend:TerraBlender-neoforge:${rootProject.minecraft_version}-${rootProject.terrablender_version}"
+    architecturyTransformerClasspath "maven.modrinth:biolith:3.0.14-neoforge"
+    architecturyTransformerClasspath "maven.modrinth:lithostitched:1.8.0+beta4-neoforge-21.1"
     common(project(path: ":common", configuration: "namedElements")) { transitive false }
     shadowCommon(project(path: ":common", configuration: "transformProductionFabric")) { transitive false }
-    compileOnly "dev.architectury:architectury-injectables:1.0.13"
 }
 
 tasks.register("prodServer", net.fabricmc.loom.task.prod.ServerProductionRunTask) {

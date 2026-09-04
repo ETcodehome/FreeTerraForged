@@ -29,31 +29,42 @@ import raccoonman.reterraforged.world.worldgen.runtime.TerraForgedChunkGenerator
  */
 public final class SurfaceFeatureRescue {
 	private static final int UNSCALED_RESCUE_THRESHOLD = 8;
-	private static final ThreadLocal<Deque<Frame>> ACTIVE_FEATURES = ThreadLocal.withInitial(ArrayDeque::new);
+	private static final Frame INACTIVE = new Frame(null);
+	private static final ThreadLocal<Deque<Frame>> ACTIVE_FEATURES = new ThreadLocal<>();
 
 	private SurfaceFeatureRescue() {
 	}
 
-	public static void begin(PlacedFeature feature, PlacementContext context) {
+	public static boolean begin(PlacedFeature feature, PlacementContext context) {
+		if (!(context.generator() instanceof TerraForgedChunkGenerator generator)) {
+			return false;
+		}
 		Run run = null;
-		if (context.generator() instanceof TerraForgedChunkGenerator generator) {
-			Classification classification = generator.plan()
-				.map(plan -> plan.placedFeatures().surfaceClassification(feature))
-				.orElseGet(Classification::rejected);
-			if (classification.eligible()) {
-				Optional<UndergroundFeatureEnclosure.Guard> enclosure = UndergroundFeatureEnclosure.create(context);
-				if (enclosure.isPresent()) {
-					run = new Run(feature, context, classification.pipeline(), enclosure.get());
-				}
+		Classification classification = generator.plan()
+			.map(plan -> plan.placedFeatures().surfaceClassification(feature))
+			.orElseGet(Classification::rejected);
+		if (classification.eligible()) {
+			Optional<UndergroundFeatureEnclosure.Guard> enclosure = UndergroundFeatureEnclosure.create(context);
+			if (enclosure.isPresent()) {
+				run = new Run(feature, context, classification.pipeline(), enclosure.get());
 			}
 		}
-		ACTIVE_FEATURES.get().push(new Frame(run));
+		Deque<Frame> stack = ACTIVE_FEATURES.get();
+		if (stack == null) {
+			stack = new ArrayDeque<>();
+			ACTIVE_FEATURES.set(stack);
+		}
+		stack.push(run == null ? INACTIVE : new Frame(run));
+		return true;
 	}
 
-	public static void finish() {
-		Deque<Frame> stack = ACTIVE_FEATURES.get();
-		if (stack.isEmpty()) {
+	public static void finish(boolean entered) {
+		if (!entered) {
 			return;
+		}
+		Deque<Frame> stack = ACTIVE_FEATURES.get();
+		if (stack == null || stack.isEmpty()) {
+			throw new IllegalStateException("Surface-feature rescue scope underflow");
 		}
 		stack.pop();
 		if (stack.isEmpty()) {
@@ -85,7 +96,7 @@ public final class SurfaceFeatureRescue {
 
 	private static Run activeRun() {
 		Deque<Frame> stack = ACTIVE_FEATURES.get();
-		return stack.isEmpty() ? null : stack.peek().run();
+		return stack == null || stack.isEmpty() ? null : stack.peek().run();
 	}
 
 	private static int scaledAttempts(int count) {

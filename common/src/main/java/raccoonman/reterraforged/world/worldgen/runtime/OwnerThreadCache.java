@@ -1,5 +1,6 @@
 package raccoonman.reterraforged.world.worldgen.runtime;
 
+import java.util.concurrent.atomic.AtomicLongArray;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 
 import it.unimi.dsi.fastutil.HashCommon;
@@ -14,7 +15,7 @@ import it.unimi.dsi.fastutil.HashCommon;
  * owner lifetime.</p>
  */
 public final class OwnerThreadCache<V> {
-	static final int STRIPE_COUNT = 32;
+	static final int STRIPE_COUNT = 8;
 	private static final int STRIPE_MASK = STRIPE_COUNT - 1;
 
 	private final int capacity;
@@ -85,28 +86,59 @@ public final class OwnerThreadCache<V> {
 	}
 
 	private static final class Table<V> {
-		private final AtomicReferenceArray<Entry<V>> values;
+		private final AtomicLongArray sequences;
+		private final long[] keys;
+		private final AtomicReferenceArray<V> values;
 
 		private Table(int capacity) {
+			this.sequences = new AtomicLongArray(capacity);
+			this.keys = new long[capacity];
 			this.values = new AtomicReferenceArray<>(capacity);
 		}
 
 		private V find(long key, int mask) {
-			Entry<V> entry = this.values.get((int) HashCommon.mix(key) & mask);
-			return entry != null && entry.key == key ? entry.value : null;
+			int index = (int) HashCommon.mix(key) & mask;
+			for (int attempt = 0; attempt < 3; attempt++) {
+				long before = this.sequences.get(index);
+				if ((before & 1L) != 0L) {
+					Thread.onSpinWait();
+					continue;
+				}
+				long storedKey = this.keys[index];
+				V value = this.values.get(index);
+				long after = this.sequences.get(index);
+				if (before == after) {
+					return value != null && storedKey == key ? value : null;
+				}
+			}
+			return null;
 		}
 
 		private void store(long key, V value, int mask) {
-			this.values.set((int) HashCommon.mix(key) & mask, new Entry<>(key, value));
+			int index = (int) HashCommon.mix(key) & mask;
+			long sequence = this.lock(index);
+			this.keys[index] = key;
+			this.values.set(index, value);
+			this.sequences.set(index, sequence + 2L);
 		}
 
 		private void clear(int capacity) {
 			for (int index = 0; index < capacity; index++) {
+				long sequence = this.lock(index);
 				this.values.set(index, null);
+				this.sequences.set(index, sequence + 2L);
 			}
 		}
-	}
 
-	private record Entry<V>(long key, V value) {
+		private long lock(int index) {
+			while (true) {
+				long sequence = this.sequences.get(index);
+				if ((sequence & 1L) == 0L
+					&& this.sequences.compareAndSet(index, sequence, sequence + 1L)) {
+					return sequence;
+				}
+				Thread.onSpinWait();
+			}
+		}
 	}
 }

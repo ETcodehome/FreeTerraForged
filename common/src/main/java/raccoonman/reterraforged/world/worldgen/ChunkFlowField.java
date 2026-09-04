@@ -82,6 +82,10 @@ public class ChunkFlowField {
     public boolean hasRivers() { return this.hasRivers; }
     public byte[] getRawGrid() { return this.flowGrid; }
 
+    public static boolean hasData(CompoundTag tag) {
+        return tag.contains(FLOW_FIELD_KEY);
+    }
+
     public void writeToNbt(CompoundTag tag) {
         if (hasRivers) {
             tag.putByteArray(FLOW_FIELD_KEY, flowGrid);

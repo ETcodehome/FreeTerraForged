@@ -14,6 +14,7 @@ import raccoonman.reterraforged.client.data.RTFTranslationKeys;
 import raccoonman.reterraforged.fabric.network.RTFFabricNetworking;
 import raccoonman.reterraforged.server.RTFMinecraftServer;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenLifecycle;
+import raccoonman.reterraforged.world.worldgen.runtime.WorldgenResourceRevision;
 
 public class RTFFabric implements ModInitializer, DataGeneratorEntrypoint {
 
@@ -26,7 +27,9 @@ public class RTFFabric implements ModInitializer, DataGeneratorEntrypoint {
 				return;
 			}
 			((RTFMinecraftServer) server).getFeatureTemplateManager().onReload(resources);
-			WorldgenLifecycle.tagsReloaded(server);
+			WorldgenLifecycle.tagsReloaded(
+				server, ((WorldgenResourceRevision) server).advanceWorldgenResourceRevision()
+			);
 		});
 	}
 

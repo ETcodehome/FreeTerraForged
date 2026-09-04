@@ -13,6 +13,7 @@ import net.minecraft.core.HolderSet;
 import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.tags.TagKey;
+import net.minecraft.server.MinecraftServer;
 
 /** Public registry/tag identities used for diagnostics and invalidation, never guessed provenance. */
 public final class WorldgenFingerprints {
@@ -24,6 +25,16 @@ public final class WorldgenFingerprints {
 		registries.registries()
 			.sorted(Comparator.comparing(entry -> entry.key().location().toString()))
 			.forEach(entry -> appendRegistryTags(digest, entry.value()));
+		return HexFormat.of().formatHex(digest.digest());
+	}
+
+	public static String resourceLayers(MinecraftServer server, long revision) {
+		if (revision < 0L) {
+			throw new IllegalArgumentException("Resource revision must be non-negative");
+		}
+		MessageDigest digest = sha256();
+		append(digest, Long.toString(revision));
+		server.getPackRepository().getSelectedIds().forEach(id -> append(digest, id));
 		return HexFormat.of().formatHex(digest.digest());
 	}
 

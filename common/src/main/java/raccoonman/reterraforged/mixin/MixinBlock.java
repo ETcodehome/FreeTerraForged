@@ -26,6 +26,7 @@ public class MixinBlock {
 
         // Guard Clauses & Throttling
         if (!level.isClientSide()) return;
+		if (!((IFlowSettingsHolder) level).reterraforged$getFlowSettings().flowParticles()) return;
         if (random.nextFloat() > 0.30f) return; // abandon 70%
         if (!(state.getBlock() instanceof LiquidBlock)) return;
         if (!state.getFluidState().is(FluidTags.WATER)) return;
@@ -34,7 +35,7 @@ public class MixinBlock {
         if (!(chunk instanceof IFlowFieldHolder holder)) return;
 
 		ChunkFlowField flowField = holder.reterraforged$getFlowField();
-		if (!((IFlowSettingsHolder) level).reterraforged$getFlowSettings().flowParticles()) return;
+		if (flowField == null) return;
         int localX = pos.getX() & 15;
         int localZ = pos.getZ() & 15;
 

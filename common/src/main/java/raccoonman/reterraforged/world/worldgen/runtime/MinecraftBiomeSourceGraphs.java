@@ -31,12 +31,21 @@ public final class MinecraftBiomeSourceGraphs {
 			: generator.getBiomeSource();
 	}
 
-	public static List<Pair<Climate.ParameterPoint, Holder<Biome>>> multiNoiseEntries(
+	public static BiomeCandidateRoot multiNoiseRoot(
 		BiomeSource source,
 		HolderLookup.Provider lookups
 	) {
 		if (!(source instanceof MultiNoiseBiomeSource multiNoise)) {
 			throw new IllegalArgumentException("Selected biome source is not a multi-noise source");
+		}
+		var parameterLists = lookups.lookupOrThrow(Registries.MULTI_NOISE_BIOME_SOURCE_PARAMETER_LIST);
+		var retainedPreset = parameterLists.listElements()
+			.filter(holder -> multiNoise.stable(holder.key()))
+			.findFirst();
+		if (retainedPreset.isPresent()) {
+			return BiomeCandidateRoot.fromCandidates(
+				retainedPreset.orElseThrow().value().parameters()
+			);
 		}
 		var ops = RegistryOps.create(JsonOps.INSTANCE, lookups);
 		JsonElement encoded = MultiNoiseBiomeSource.CODEC.codec()
@@ -46,7 +55,7 @@ public final class MinecraftBiomeSourceGraphs {
 			));
 		var direct = MultiNoiseBiomeSource.DIRECT_CODEC.codec().parse(ops, encoded).result();
 		if (direct.isPresent()) {
-			return List.copyOf(direct.orElseThrow().values());
+			return BiomeCandidateRoot.fromCandidates(direct.orElseThrow());
 		}
 		if (!encoded.isJsonObject()) {
 			throw new IllegalStateException("Selected multi-noise codec graph is not an object: " + encoded);
@@ -64,13 +73,21 @@ public final class MinecraftBiomeSourceGraphs {
 			Registries.MULTI_NOISE_BIOME_SOURCE_PARAMETER_LIST,
 			presetId
 		);
-		return List.copyOf(lookups.lookupOrThrow(Registries.MULTI_NOISE_BIOME_SOURCE_PARAMETER_LIST)
+		return BiomeCandidateRoot.fromCandidates(
+			parameterLists
 			.get(presetKey)
 			.orElseThrow(() -> new IllegalStateException(
 				"Selected multi-noise preset is absent from the final lookup graph: " + presetId
 			))
 			.value()
 			.parameters()
-			.values());
+		);
+	}
+
+	public static List<Pair<Climate.ParameterPoint, Holder<Biome>>> multiNoiseEntries(
+		BiomeSource source,
+		HolderLookup.Provider lookups
+	) {
+		return multiNoiseRoot(source, lookups).entries();
 	}
 }

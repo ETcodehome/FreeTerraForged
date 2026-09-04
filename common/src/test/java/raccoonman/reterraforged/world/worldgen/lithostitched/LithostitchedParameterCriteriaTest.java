@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import net.minecraft.SharedConstants;
+import net.minecraft.core.Holder;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.util.KeyDispatchDataCodec;
@@ -107,6 +108,46 @@ class LithostitchedParameterCriteriaTest {
 		assertEquals(
 			List.of("test:middle", "test:alpha", "test:zeta"),
 			injectors.stream().map(value -> value.id().toString()).toList()
+		);
+	}
+
+	@Test
+	void injectorSemanticsAreSelectedByPublicCodecIdentity() {
+		assertEquals(Kind.ADD_POINTS, kind("add_points"));
+		assertEquals(Kind.FORCE, kind("force_placement"));
+		assertEquals(Kind.DISPATCH, kind("dispatch_alternate_layout"));
+		assertEquals(Kind.REPLACE_PARTIALLY, kind("replace_partially"));
+		assertEquals(Kind.REPLACE_FULLY, kind("replace_fully"));
+		assertEquals(
+			Kind.UNKNOWN,
+			LithostitchedInjectionBridge.kindForCodec(
+				ResourceLocation.fromNamespaceAndPath("unseen", "custom_injector")
+			)
+		);
+	}
+
+	@Test
+	void densityTypeInspectionTraversesHolderBackedGraphsWithoutCallingTheHolderCodec() {
+		DensityFunction holder = new DensityFunctions.HolderHolder(
+			Holder.direct(DensityFunctions.endIslands(0L))
+		);
+
+		DensityFunction mapped = holder.mapAll(function -> {
+			LithostitchedInjectionBridge.densityFunctionType(function);
+			return function;
+		});
+
+		assertTrue(mapped instanceof DensityFunctions.HolderHolder);
+		assertTrue(LithostitchedInjectionBridge.densityFunctionType(holder).isEmpty());
+		assertEquals(
+			ResourceLocation.withDefaultNamespace("end_islands"),
+			LithostitchedInjectionBridge.densityFunctionType(DensityFunctions.endIslands(0L)).orElseThrow()
+		);
+	}
+
+	private static Kind kind(String path) {
+		return LithostitchedInjectionBridge.kindForCodec(
+			ResourceLocation.fromNamespaceAndPath("lithostitched", path)
 		);
 	}
 

@@ -5,10 +5,13 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
 
+import dev.worldgen.lithostitched.api.event.AddBiomeInjectorsEvent;
+import dev.worldgen.lithostitched.api.event.AddRegionsEvent;
 import dev.worldgen.lithostitched.api.worldgen.biomeinjector.BiomeInjector;
 import dev.worldgen.lithostitched.api.worldgen.util.DensityFunctionWrapper;
 import dev.worldgen.lithostitched.impl.worldgen.biomeinjector.internal.InjectorBiomeSource;
 import dev.worldgen.lithostitched.impl.worldgen.biomeinjector.region.Region;
+import dev.worldgen.lithostitched.impl.event.LithostitchedEvent;
 import dev.worldgen.lithostitched.mixin.common.ChunkGeneratorAccessor;
 import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
@@ -28,6 +31,52 @@ import raccoonman.reterraforged.world.worldgen.runtime.TerraForgedChunkGenerator
 @Pseudo
 @Mixin(targets = "dev.worldgen.lithostitched.impl.worldgen.biomeinjector.internal.BiomeInjectorManager", remap = false)
 public abstract class MixinLithostitchedBiomeInjectorManager {
+	@Redirect(
+		method = "applyBiomeInjectors",
+		at = @At(
+			value = "INVOKE",
+			target = "Ldev/worldgen/lithostitched/impl/event/LithostitchedEvent;invoker()Ljava/lang/Object;",
+			ordinal = 0,
+			remap = false
+		),
+		remap = false,
+		require = 1
+	)
+	@SuppressWarnings("unchecked")
+	private static Object rtf$resolveBiomeInjectorEvent(
+		LithostitchedEvent<?> event,
+		RegistryAccess registries,
+		Registry<LevelStem> dimensions,
+		long seed
+	) {
+		return LithostitchedInjectionBridge.biomeInjectorEvent(
+			(LithostitchedEvent<AddBiomeInjectorsEvent>) event, registries, dimensions
+		);
+	}
+
+	@Redirect(
+		method = "applyBiomeInjectors",
+		at = @At(
+			value = "INVOKE",
+			target = "Ldev/worldgen/lithostitched/impl/event/LithostitchedEvent;invoker()Ljava/lang/Object;",
+			ordinal = 1,
+			remap = false
+		),
+		remap = false,
+		require = 1
+	)
+	@SuppressWarnings("unchecked")
+	private static Object rtf$resolveRegionEvent(
+		LithostitchedEvent<?> event,
+		RegistryAccess registries,
+		Registry<LevelStem> dimensions,
+		long seed
+	) {
+		return LithostitchedInjectionBridge.regionEvent(
+			(LithostitchedEvent<AddRegionsEvent>) event, registries, dimensions
+		);
+	}
+
 	@Redirect(
 		method = "applyBiomeInjectors",
 		at = @At(

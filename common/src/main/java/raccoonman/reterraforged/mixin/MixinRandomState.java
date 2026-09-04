@@ -32,10 +32,12 @@ import raccoonman.reterraforged.world.worldgen.densityfunction.NoiseFunction;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noises;
 import raccoonman.reterraforged.world.worldgen.biome.RTFClimateSampler;
+import raccoonman.reterraforged.world.worldgen.biome.ClimateQueryPolicy;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenEpoch;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenPlan;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenPlans;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenRuntimeBinding;
+import raccoonman.reterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
 
 @Mixin(RandomState.class)
 @Implements(@Interface(iface = RTFRandomState.class, prefix = "reterraforged$RTFRandomState$"))
@@ -102,35 +104,52 @@ class MixinRandomState {
 		}
 		RegistryAccess registries = epoch.registries();
 		RegistryLookup<Preset> presets = registries.lookupOrThrow(RTFRegistries.PRESET);
-
-		presets.get(Preset.KEY).ifPresent((presetHolder) -> {
-			this.preset = presetHolder.value();
-		});
-
-		if (this.reterraforged$isRTFDimension) {
-			if (this.preset == null) {
-				throw new IllegalStateException("RTF density graph is active but the selected preset is unavailable");
-			}
-			if ((Object) this.sampler instanceof RTFClimateSampler rtfClimateSampler) {
-				rtfClimateSampler.setUndergroundBiomeBandingPreset(this.preset, this.seed);
-			}
-
-			RegistryLookup<Noise> noises = registries.lookupOrThrow(RTFRegistries.NOISE);
-			RegistryLookup<DensityFunction> functions = registries.lookupOrThrow(Registries.DENSITY_FUNCTION);
-
-			functions.get(RTFDensityFunctionTags.ADDITIONAL_NOISE_ROUTER_FUNCTIONS).ifPresent((set) -> {
-				set.forEach((function) -> function.value().mapAll(this.densityFunctionWrapper));
-			});
-
-			PerformanceConfig config = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
-					.resultOrPartial(RTFCommon.LOGGER::error)
-					.orElseGet(PerformanceConfig::makeDefault);
-			this.generatorContext = GeneratorContext.makeCached(this.preset, noises, (int) this.seed, config.tileSize(), config.batchCount(), ThreadPools.availableProcessors() > 4);
-			if ((Object) this.sampler instanceof RTFClimateSampler rtfClimateSampler) {
-				rtfClimateSampler.setUndergroundBiomeSurfaceContext(this.generatorContext);
-			}
+		if (epoch.selectedStem().generator() instanceof TerraForgedChunkGenerator) {
+			this.reterraforged$isRTFDimension = true;
 		}
-		this.worldgenEpoch = epoch;
+		Preset initializedPreset = presets.get(Preset.KEY)
+			.map((presetHolder) -> presetHolder.value())
+			.orElse(null);
+		GeneratorContext initializedContext = null;
+		try {
+			if (this.reterraforged$isRTFDimension) {
+				if (initializedPreset == null) {
+				throw new IllegalStateException("RTF density graph is active but the selected preset is unavailable");
+				}
+				RegistryLookup<Noise> noises = registries.lookupOrThrow(RTFRegistries.NOISE);
+				RegistryLookup<DensityFunction> functions = registries.lookupOrThrow(Registries.DENSITY_FUNCTION);
+
+				functions.get(RTFDensityFunctionTags.ADDITIONAL_NOISE_ROUTER_FUNCTIONS).ifPresent((set) -> {
+					set.forEach((function) -> function.value().mapAll(this.densityFunctionWrapper));
+				});
+
+				PerformanceConfig config = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
+						.resultOrPartial(RTFCommon.LOGGER::error)
+						.orElseGet(PerformanceConfig::makeDefault);
+				initializedContext = GeneratorContext.makeCached(
+						initializedPreset, noises, (int) this.seed,
+						config.tileSize(), config.batchCount(), ThreadPools.availableProcessors() > 4
+				);
+			}
+			this.preset = initializedPreset;
+			this.generatorContext = initializedContext;
+			this.worldgenEpoch = epoch;
+		} catch (RuntimeException | Error failure) {
+			Throwable samplerFailure = this.reterraforged$resetSamplerState(null);
+			if (samplerFailure != null) {
+				failure.addSuppressed(samplerFailure);
+			}
+			if (initializedContext != null) {
+				try {
+					initializedContext.close();
+				} catch (RuntimeException | Error cleanupFailure) {
+					failure.addSuppressed(cleanupFailure);
+				}
+			}
+			this.preset = null;
+			this.generatorContext = null;
+			throw failure;
+		}
 	}
 
 	public synchronized void reterraforged$RTFRandomState$bindPlan(WorldgenRuntimeBinding binding) {
@@ -155,16 +174,19 @@ class MixinRandomState {
 			throw new IllegalStateException("Refreshed plan is owned by a different worldgen epoch");
 		}
 		WorldgenEpoch current = binding.epoch();
-		boolean tagsAdvanced = epoch.tagEpoch().sequence() > current.tagEpoch().sequence();
-		boolean contributionsAdvanced = epoch.contributionSequence() > current.contributionSequence();
-		if (!tagsAdvanced && !contributionsAdvanced) {
+		if (!epoch.inputRevisionStrictlyAdvances(current)) {
 			throw new IllegalStateException("A plan rebind must advance a worldgen input epoch");
 		}
-		if (epoch.tagEpoch().sequence() < current.tagEpoch().sequence()
-			|| epoch.contributionSequence() < current.contributionSequence()) {
+		if (epoch.inputRevisionRegressesFrom(current)) {
 			throw new IllegalStateException("Worldgen input epochs must advance monotonically");
 		}
-		this.reterraforged$decorateSampler(plan);
+		WorldgenPlans.SamplerDecoration currentSampler = binding.plan().samplerDecoration();
+		WorldgenPlans.SamplerDecoration replacementSampler = plan.samplerDecoration();
+		if (currentSampler.queryPolicy() != replacementSampler.queryPolicy()) {
+			throw new IllegalStateException(
+				"A sampler query-policy change requires a new worldgen owner; it cannot be published by reload"
+			);
+		}
 	}
 
 	@Unique
@@ -174,7 +196,7 @@ class MixinRandomState {
 		if (currentPreset == null || currentContext == null) {
 			throw new IllegalStateException("FTF sampler state is unavailable for the active worldgen owner");
 		}
-		plan.samplerDecoration().decorate(
+		plan.samplerDecoration().initialize(
 			plan,
 			new WorldgenPlans.SamplerInputs(currentPreset, currentContext),
 			this.sampler
@@ -191,6 +213,11 @@ class MixinRandomState {
 	public WorldgenPlan reterraforged$RTFRandomState$plan() {
 		WorldgenRuntimeBinding binding = this.worldgenBinding;
 		return binding == null ? null : binding.plan();
+	}
+
+	@Nullable
+	public WorldgenRuntimeBinding reterraforged$RTFRandomState$binding() {
+		return this.worldgenBinding;
 	}
 
 	public boolean reterraforged$RTFRandomState$isTerraForged() {
@@ -212,6 +239,65 @@ class MixinRandomState {
 	}
 
 	public long reterraforged$RTFRandomState$seed() { return this.seed;	}
+
+	public synchronized void reterraforged$RTFRandomState$close() {
+		GeneratorContext closing = this.generatorContext;
+		this.generatorContext = null;
+		this.worldgenBinding = null;
+		this.worldgenEpoch = null;
+		this.preset = null;
+		Throwable failure = this.reterraforged$resetSamplerState(null);
+		if (closing != null) {
+			try {
+				closing.close();
+			} catch (RuntimeException | Error closeFailure) {
+				failure = reterraforged$mergeFailure(failure, closeFailure);
+			}
+		}
+		if (failure instanceof RuntimeException runtime) {
+			throw runtime;
+		}
+		if (failure instanceof Error error) {
+			throw error;
+		}
+	}
+
+	@Unique
+	private Throwable reterraforged$resetSamplerState(@Nullable Throwable failure) {
+		if ((Object) this.sampler instanceof RTFClimateSampler sampler) {
+			failure = this.reterraforged$runCleanup(failure, () -> sampler.setWorldgenBinding(null));
+			failure = this.reterraforged$runCleanup(failure, () -> sampler.setClimateQuerySemantics(
+				ClimateQueryPolicy.PASSTHROUGH, null, this.seed, null
+			));
+		}
+		return failure;
+	}
+
+	@Unique
+	private Throwable reterraforged$runCleanup(@Nullable Throwable failure, Runnable operation) {
+		try {
+			operation.run();
+		} catch (RuntimeException | Error cleanupFailure) {
+			return reterraforged$mergeFailure(failure, cleanupFailure);
+		}
+		return failure;
+	}
+
+	@Unique
+	private static Throwable reterraforged$mergeFailure(
+		@Nullable Throwable current,
+		Throwable next
+	) {
+		if (current == null) {
+			return next;
+		}
+		if (next instanceof Error && !(current instanceof Error)) {
+			next.addSuppressed(current);
+			return next;
+		}
+		current.addSuppressed(next);
+		return current;
+	}
 
 	@Nullable
 	public DensityFunction reterraforged$RTFRandomState$wrap(DensityFunction function) {

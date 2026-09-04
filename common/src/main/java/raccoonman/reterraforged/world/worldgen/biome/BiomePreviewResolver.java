@@ -39,13 +39,14 @@ import raccoonman.reterraforged.world.worldgen.runtime.PreviewRequest;
 import raccoonman.reterraforged.world.worldgen.runtime.RequestOwnedBiomeSource;
 import raccoonman.reterraforged.world.worldgen.runtime.TagEpoch;
 import raccoonman.reterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
-import raccoonman.reterraforged.world.worldgen.runtime.WorldgenCapabilityDiscovery;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenCompilationPurpose;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenBiomeSelection;
+import raccoonman.reterraforged.world.worldgen.runtime.WorldgenContributionRevision;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenFingerprints;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenFacet;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenPlan;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenPlans;
+import raccoonman.reterraforged.world.worldgen.runtime.WorldgenProviderCatalog;
 
 /** Request-owned consumer of the same immutable worldgen plan used by server generation. */
 public final class BiomePreviewResolver implements AutoCloseable {
@@ -54,6 +55,7 @@ public final class BiomePreviewResolver implements AutoCloseable {
 	private final NoiseBasedChunkGenerator generator;
 	private final Climate.Sampler sampler;
 	private final WorldgenPlan plan;
+	private final WorldgenBiomeSelection.Executable biomeSelection;
 	private final RequestOwnedBiomeSource sourceLifecycle;
 
 	private BiomePreviewResolver(
@@ -62,6 +64,7 @@ public final class BiomePreviewResolver implements AutoCloseable {
 		NoiseBasedChunkGenerator generator,
 		Climate.Sampler sampler,
 		WorldgenPlan plan,
+		WorldgenBiomeSelection.Executable biomeSelection,
 		RequestOwnedBiomeSource sourceLifecycle
 	) {
 		this.generatorContext = generatorContext;
@@ -69,11 +72,12 @@ public final class BiomePreviewResolver implements AutoCloseable {
 		this.generator = generator;
 		this.sampler = sampler;
 		this.plan = plan;
+		this.biomeSelection = biomeSelection;
 		this.sourceLifecycle = sourceLifecycle;
 	}
 
 	public static BiomePreviewResolver create(
-		RegistryAccess registries,
+		RegistryAccess.Frozen registries,
 		HolderLookup.Provider provider,
 		ResourceKey<LevelStem> dimension,
 		Holder<DimensionType> dimensionType,
@@ -83,8 +87,59 @@ public final class BiomePreviewResolver implements AutoCloseable {
 		long seed,
 		String settingsIdentity,
 		String resourceLayerFingerprint,
-		String tagFingerprint
+		String tagFingerprint,
+		WorldgenContributionRevision.Snapshot contributionRevision,
+		WorldgenProviderCatalog providers
 	) {
+		return create(
+			registries, provider, dimension, dimensionType, activeGenerator, preset,
+			generatorContext, seed, settingsIdentity, resourceLayerFingerprint,
+			tagFingerprint, contributionRevision, providers, () -> false
+		);
+	}
+
+	public static BiomePreviewResolver create(
+		RegistryAccess.Frozen registries,
+		HolderLookup.Provider provider,
+		ResourceKey<LevelStem> dimension,
+		Holder<DimensionType> dimensionType,
+		ChunkGenerator activeGenerator,
+		Preset preset,
+		GeneratorContext generatorContext,
+		long seed,
+		String settingsIdentity,
+		String resourceLayerFingerprint,
+		String tagFingerprint,
+		WorldgenContributionRevision.Snapshot contributionRevision,
+		WorldgenProviderCatalog providers,
+		BooleanSupplier cancelled
+	) {
+		Objects.requireNonNull(providers, "providers");
+		Objects.requireNonNull(cancelled, "cancelled");
+		return providers.inAcquisitionSession(cancelled, () -> createAcquired(
+			registries, provider, dimension, dimensionType, activeGenerator, preset,
+			generatorContext, seed, settingsIdentity, resourceLayerFingerprint,
+			tagFingerprint, contributionRevision, providers, cancelled
+		));
+	}
+
+	private static BiomePreviewResolver createAcquired(
+		RegistryAccess.Frozen registries,
+		HolderLookup.Provider provider,
+		ResourceKey<LevelStem> dimension,
+		Holder<DimensionType> dimensionType,
+		ChunkGenerator activeGenerator,
+		Preset preset,
+		GeneratorContext generatorContext,
+		long seed,
+		String settingsIdentity,
+		String resourceLayerFingerprint,
+		String tagFingerprint,
+		WorldgenContributionRevision.Snapshot contributionRevision,
+		WorldgenProviderCatalog providers,
+		BooleanSupplier cancelled
+	) {
+		checkCancellation(cancelled);
 		if (!(activeGenerator instanceof NoiseBasedChunkGenerator activeNoise)) {
 			throw new IllegalStateException(
 				"The selected custom generator is an opaque root and exposes no request-owned preview factory: "
@@ -93,38 +148,63 @@ public final class BiomePreviewResolver implements AutoCloseable {
 		}
 
 		Holder<NoiseGeneratorSettings> noiseSettings = activeNoise.generatorSettings();
-		var providers = WorldgenCapabilityDiscovery.discover(BiomePreviewResolver.class.getClassLoader());
+		requireCurrentContributions(
+			dimension, contributionRevision, providers, "before custom-source acquisition"
+		);
 		PreviewSourceNegotiator.Result sourceResult = PreviewSourceNegotiator.resolve(
 			new PreviewSourceContext(
 				seed,
-				registries.freeze(),
+				registries,
 				provider,
 				MinecraftBiomeSourceGraphs.acquisitionSource(activeGenerator),
 				noiseSettings,
 				settingsIdentity,
 				resourceLayerFingerprint,
-				new TagEpoch(0L, tagFingerprint)
+				new TagEpoch(0L, tagFingerprint),
+				cancelled
 			),
 			providers
 		);
-		BiomeSource biomeSource = sourceResult.owned().source();
-		TerraForgedChunkGenerator previewGenerator = new TerraForgedChunkGenerator(biomeSource, noiseSettings);
-		LevelStem previewStem = new LevelStem(dimensionType, previewGenerator);
-		PreviewRequest request = PreviewRequest.create(
-			dimension,
-			seed,
-			registries,
-			provider,
-			previewStem,
-			settingsIdentity,
-			resourceLayerFingerprint,
-			new TagEpoch(0L, tagFingerprint)
-		);
 		try {
-			WorldgenPlan plan = MinecraftWorldgenPlanCompiler.compile(
-				request, providers, WorldgenCompilationPurpose.BIOME_PREVIEW
+			checkCancellation(cancelled);
+			requireCurrentContributions(
+				dimension, contributionRevision, providers, "after custom-source acquisition"
 			);
-			WorldgenBiomeSelection.requireExecutablePlan(plan);
+		} catch (RuntimeException | Error failure) {
+			try {
+				sourceResult.owned().close();
+			} catch (Throwable cleanup) {
+				failure.addSuppressed(cleanup);
+			}
+			throw failure;
+		}
+		try {
+			BiomeSource biomeSource = sourceResult.owned().source();
+			TerraForgedChunkGenerator previewGenerator = new TerraForgedChunkGenerator(
+				biomeSource, noiseSettings, sourceResult.owned().planInput(),
+				sourceResult.owned().candidateRoot()
+			);
+			LevelStem previewStem = new LevelStem(dimensionType, previewGenerator);
+			PreviewRequest request = PreviewRequest.create(
+				dimension,
+				seed,
+				registries,
+				provider,
+				previewStem,
+				settingsIdentity,
+				resourceLayerFingerprint,
+				new TagEpoch(0L, tagFingerprint),
+				contributionRevision
+			);
+			WorldgenPlan plan = MinecraftWorldgenPlanCompiler.compile(
+				request, providers, WorldgenCompilationPurpose.BIOME_PREVIEW, cancelled
+			);
+			checkCancellation(cancelled);
+			WorldgenBiomeSelection.Executable biomeSelection = WorldgenBiomeSelection.prepare(plan);
+			checkCancellation(cancelled);
+			requireCurrentContributions(
+				dimension, contributionRevision, providers, "during plan compilation"
+			);
 			Climate.Sampler sampler = decorateSampler(
 				new Climate.Sampler(
 					cell(generatorContext, CellSampler.Field.TEMPERATURE),
@@ -140,12 +220,13 @@ public final class BiomePreviewResolver implements AutoCloseable {
 				plan
 			);
 			return new BiomePreviewResolver(
-				generatorContext, preset, previewGenerator, sampler, plan, sourceResult.owned()
+				generatorContext, preset, previewGenerator, sampler, plan,
+				biomeSelection, sourceResult.owned()
 			);
 		} catch (Throwable failure) {
 			try {
 				sourceResult.owned().close();
-			} catch (Exception cleanup) {
+			} catch (Throwable cleanup) {
 				failure.addSuppressed(cleanup);
 			}
 			if (failure instanceof RuntimeException runtimeFailure) {
@@ -155,6 +236,23 @@ public final class BiomePreviewResolver implements AutoCloseable {
 				throw error;
 			}
 			throw new IllegalStateException("Failed preparing request-owned biome preview state", failure);
+		}
+	}
+
+	private static void requireCurrentContributions(
+		ResourceKey<LevelStem> dimension,
+		WorldgenContributionRevision.Snapshot expected,
+		WorldgenProviderCatalog providers,
+		String boundary
+	) {
+		WorldgenContributionRevision.Snapshot current = WorldgenContributionRevision.snapshot(
+			dimension, providers
+		);
+		if (!current.equals(expected)) {
+			throw new IllegalStateException(
+				"Worldgen contributions changed " + boundary + "; expected " + expected
+					+ " but acquired " + current
+			);
 		}
 	}
 
@@ -168,13 +266,13 @@ public final class BiomePreviewResolver implements AutoCloseable {
 		GeneratorContext generatorContext,
 		WorldgenPlan plan
 	) {
-		Climate.Sampler decorated = plan.samplerDecoration().decorate(
+		plan.samplerDecoration().initialize(
 			plan,
 			new WorldgenPlans.SamplerInputs(preset, generatorContext),
 			sampler
 		);
-		((RTFClimateSampler) (Object) decorated).setWorldgenPlan(plan);
-		return decorated;
+		((RTFClimateSampler) (Object) sampler).setWorldgenPlan(plan);
+		return sampler;
 	}
 
 	public Holder<Biome> resolveQuart(int quartX, int quartY, int quartZ) {
@@ -193,9 +291,9 @@ public final class BiomePreviewResolver implements AutoCloseable {
 		Cell preparedCell
 	) {
 		Holder<Biome> selected = preparedCell == null
-			? WorldgenBiomeSelection.resolve(this.plan, quartX, quartY, quartZ, sampler)
-			: WorldgenBiomeSelection.resolveInCell(
-				this.plan, quartX, quartY, quartZ, sampler,
+			? this.biomeSelection.resolve(quartX, quartY, quartZ, sampler)
+			: this.biomeSelection.resolveInCell(
+				quartX, quartY, quartZ, sampler,
 				preparedCell.biomeRegionX, preparedCell.biomeRegionZ
 			)
 		;
@@ -235,7 +333,6 @@ public final class BiomePreviewResolver implements AutoCloseable {
 	 * operation consumed by preview widgets: coordinate mapping, sampler ownership, query execution,
 	 * cancellation, and concurrency policy do not leak to the client.
 	 */
-	@SuppressWarnings("unchecked")
 	public ResolvedTile resolveSurfaceTile(
 		Tile tile,
 		int centerX,
@@ -255,7 +352,6 @@ public final class BiomePreviewResolver implements AutoCloseable {
 		int halfSize = size / 2;
 		int[] quartXs = new int[size];
 		int[] quartZs = new int[size];
-		int[] quartYs = new int[Math.multiplyExact(size, size)];
 		for (int x = 0; x < size; x++) {
 			quartXs[x] = QuartPos.fromBlock(Math.addExact(
 				centerX, Math.multiplyExact(x - halfSize, zoom)
@@ -266,44 +362,38 @@ public final class BiomePreviewResolver implements AutoCloseable {
 			quartZs[z] = QuartPos.fromBlock(Math.addExact(
 				centerZ, Math.multiplyExact(z - halfSize, zoom)
 			));
-			int rowOffset = z * size;
-			for (int x = 0; x < size; x++) {
-				Cell cell = tile.getCellRaw(border + x, border + z);
-				quartYs[rowOffset + x] = QuartPos.fromBlock(surfaceY(cell, levels));
-			}
 		}
 
-		Object[] resolved = PreviewQueryExecutor.resolve(
+		@SuppressWarnings("unchecked")
+		Holder<Biome>[] biomes = new Holder[Math.multiplyExact(size, size)];
+		PreviewQueryExecutor.resolve(
+			biomes,
 			size,
 			size,
 			this.supportsParallelTileQueries(),
 			ThreadPools.previewParallelism(),
 			() -> {
 				TileBiomeRequest request = this.tileRequest(tile, centerX, centerZ, zoom);
-				PreviewQuartCache quartCache = new PreviewQuartCache();
+				PreviewQuartCache quartCache = zoom < QuartPos.SIZE ? new PreviewQuartCache() : null;
 				return (x, z) -> {
-					int index = z * size + x;
 					int quartX = quartXs[x];
-					int quartY = quartYs[index];
 					int quartZ = quartZs[z];
+					Cell cell = tile.getCellRaw(border + x, border + z);
+					int quartY = QuartPos.fromBlock(surfaceY(cell, levels));
+					if (quartCache == null) {
+						return request.resolveQuartInCell(quartX, quartY, quartZ, cell);
+					}
 					Holder<Biome> biome = quartCache.get(quartX, quartY, quartZ);
 					if (biome == null) {
-						biome = request.resolveQuart(quartX, quartY, quartZ);
+						biome = request.resolveQuartInCell(quartX, quartY, quartZ, cell);
 						quartCache.put(quartX, quartY, quartZ, biome);
 					}
 					return biome;
 				};
 			},
 			cancelled,
-			ThreadPools.PREVIEW
+			ThreadPools.WORLD_GEN
 		);
-		@SuppressWarnings("unchecked")
-		Holder<Biome>[] biomes = new Holder[resolved.length];
-		for (int index = 0; index < resolved.length; index++) {
-			biomes[index] = (Holder<Biome>) Objects.requireNonNull(
-				resolved[index], "resolved biome"
-			);
-		}
 		return new ResolvedTile(size, biomes);
 	}
 
@@ -343,6 +433,10 @@ public final class BiomePreviewResolver implements AutoCloseable {
 			Cell cell = this.tileLookup.lookupBlock(
 				QuartPos.toBlock(quartX), QuartPos.toBlock(quartZ)
 			);
+			return this.resolveQuartInCell(quartX, quartY, quartZ, cell);
+		}
+
+		private Holder<Biome> resolveQuartInCell(int quartX, int quartY, int quartZ, Cell cell) {
 			return BiomePreviewResolver.this.resolveQuartInCell(
 				quartX, quartY, quartZ, this.sampler, cell
 			);
@@ -375,14 +469,15 @@ public final class BiomePreviewResolver implements AutoCloseable {
 	 * sampler/request per worker. Unknown provider and source implementations remain serial.
 	 */
 	public boolean supportsParallelTileQueries() {
-		return this.plan.execution().supportsIsolatedParallelRead(this.tileQueryFacets());
+		return this.biomeSelection.supportsIsolatedParallelRead();
 	}
 
 	public Set<WorldgenFacet> tileQueryFacets() {
 		return Set.of(
 			WorldgenFacet.PROVIDER_SELECTION,
 			WorldgenFacet.SELECTION_DECORATION,
-			WorldgenFacet.SPATIAL_OWNERSHIP
+			WorldgenFacet.SPATIAL_OWNERSHIP,
+			WorldgenFacet.SAMPLER_DECORATION
 		);
 	}
 
@@ -449,9 +544,27 @@ public final class BiomePreviewResolver implements AutoCloseable {
 		long biomeCellX,
 		long biomeCellZ
 	) {
-		Climate.TargetPoint target = sampler.sample(quartX, quartY, quartZ);
-		return this.plan.providerSelection().resolve(biomeCellX, biomeCellZ, target)
-			.orElseThrow(() -> new IllegalStateException("Preview plan has no provider selection contract"));
+		return this.plan.execution().execute(
+			Set.of(
+				WorldgenFacet.PROVIDER_SELECTION,
+				WorldgenFacet.SPATIAL_OWNERSHIP,
+				WorldgenFacet.SAMPLER_DECORATION
+			),
+			() -> {
+				Climate.TargetPoint target = this.plan.samplerDecoration().sample(
+					sampler, quartX, quartY, quartZ
+				);
+				WorldgenPlans.SpatialResult spatial = this.plan.spatialOwnership().resolver()
+					.orElseThrow(() -> new IllegalStateException(
+						"Preview plan has no spatial ownership contract"
+					))
+					.resolve(biomeCellX, biomeCellZ);
+				return this.plan.providerSelection().resolve(spatial.domain(), target)
+					.orElseThrow(() -> new IllegalStateException(
+						"Preview spatial plan selected unknown provider domain " + spatial.domain()
+					));
+			}
+		);
 	}
 
 	public boolean isUnderground(Holder<Biome> biome) {

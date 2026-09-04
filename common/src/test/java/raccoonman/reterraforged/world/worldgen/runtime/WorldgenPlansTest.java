@@ -17,8 +17,8 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Climate;
-import net.minecraft.world.level.levelgen.feature.ConfiguredFeature;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
+import raccoonman.reterraforged.world.worldgen.biome.ClimateQueryPolicy;
 
 class WorldgenPlansTest {
 	private static final Holder<Biome> VALUE = Holder.direct((Biome) null);
@@ -61,6 +61,28 @@ class WorldgenPlansTest {
 	}
 
 	@Test
+	void directCustomRootIsImmutableExclusiveAndChecksItsOutputClosure() {
+		Holder<Biome> declared = biome("declared");
+		Holder<Biome> undeclared = biome("undeclared");
+		BiomeSourcePlanInput input = new BiomeSourcePlanInput(
+			id("direct"), Set.of(declared), WorldgenQueryMode.ISOLATED_PARALLEL_READ,
+			(x, y, z, sampler) -> x == 0 ? declared : undeclared
+		);
+		WorldgenPlans.ProviderSelection direct = new WorldgenPlans.ProviderSelection(
+			descriptor(), 0L, List.of(), Optional.empty(), Optional.empty(), Optional.empty(),
+			Optional.of(input)
+		);
+
+		assertEquals(declared, input.resolve(0, 0, 0, null));
+		assertThrows(IllegalStateException.class, () -> input.resolve(1, 0, 0, null));
+		assertEquals(input, direct.directInput().orElseThrow());
+		assertThrows(IllegalArgumentException.class, () -> new WorldgenPlans.ProviderSelection(
+			descriptor(), 0L, List.of(domain("candidate", 0)), Optional.empty(), Optional.empty(),
+			Optional.empty(), Optional.of(input)
+		));
+	}
+
+	@Test
 	void authoritativeSpatialDomainSelectsItsTableWithoutASecondAssignment() {
 		WorldgenPlans.ProviderDomain first = domain("first", 0);
 		WorldgenPlans.ProviderDomain second = domain("second", 1);
@@ -75,16 +97,89 @@ class WorldgenPlansTest {
 	}
 
 	@Test
+	void providerIndexAndPreparedSelectorPreserveAuthoritativeDomains() {
+		WorldgenPlans.ProviderDomain first = domain("first", 0);
+		WorldgenPlans.ProviderDomain second = new WorldgenPlans.ProviderDomain(
+			id("second"), 3.0D, TABLE, 1
+		);
+		WorldgenPlans.ProviderSelection plan = new WorldgenPlans.ProviderSelection(
+			descriptor(), 991L, List.of(first, second), Optional.of(first.id()), Optional.of(TABLE), Optional.empty()
+		);
+
+		for (int x = -20; x <= 20; x++) {
+			for (int z = -20; z <= 20; z++) {
+				assertEquals(
+					WeightedRendezvous.select(plan.salt(), x, z, plan.providers()).id(),
+					plan.selectDomain(x, z)
+				);
+			}
+		}
+		assertThrows(
+			IllegalArgumentException.class,
+			() -> plan.resolveRequired(id("missing"), Climate.target(0, 0, 0, 0, 0, 0))
+		);
+	}
+
+	@Test
+	void samplerQueryPolicyIsExplicitImmutablePlanData() {
+		PlanDescriptor descriptor = new PlanDescriptor(
+			id("sampler"), WorldgenFacet.SAMPLER_DECORATION, CapabilityState.NORMALIZED,
+			"test", "test", Optional.empty()
+		);
+		WorldgenPlans.SamplerDecoration preview = new WorldgenPlans.SamplerDecoration(
+			descriptor, ClimateQueryPolicy.SURFACE_PREVIEW, Optional.empty()
+		);
+
+		assertEquals(ClimateQueryPolicy.SURFACE_PREVIEW, preview.queryPolicy());
+		assertEquals(
+			ClimateQueryPolicy.WORLDGEN,
+			new WorldgenPlans.SamplerDecoration(descriptor, Optional.empty()).queryPolicy()
+		);
+	}
+
+	@Test
+	void providerResultCarriesImmutableBestAndDistinctNextBestCandidates() {
+		Holder<Biome> best = biome("best");
+		Holder<Biome> duplicateBest = best;
+		Holder<Biome> next = biome("next");
+		Climate.ParameterPoint bestPoint = Climate.parameters(0, 0, 0, 0, 0, 0, 0);
+		Climate.ParameterPoint duplicatePoint = Climate.parameters(0.4F, 0, 0, 0, 0, 0, 0);
+		Climate.ParameterPoint nextPoint = Climate.parameters(0.2F, 0, 0, 0, 0, 0, 0);
+		WorldgenPlans.ProviderDomain domain = new WorldgenPlans.ProviderDomain(
+			id("fittest"), 1.0D,
+			new Climate.ParameterList<>(List.of(
+				Pair.of(bestPoint, best),
+				Pair.of(duplicatePoint, duplicateBest),
+				Pair.of(nextPoint, next)
+			)),
+			0
+		);
+		WorldgenPlans.ProviderSelection plan = new WorldgenPlans.ProviderSelection(
+			descriptor(), 1L, List.of(domain), Optional.of(domain.id()), Optional.empty(), Optional.empty()
+		);
+
+		WorldgenPlans.ProviderResult result = plan.resolve(
+			domain.id(), Climate.target(0, 0, 0, 0, 0, 0)
+		).orElseThrow();
+		WorldgenPlans.CandidateFit fit = result.candidateFit();
+
+		assertEquals(best, result.baseBiome());
+		assertEquals(bestPoint, fit.ultimate().point());
+		assertEquals(next, fit.penultimate().orElseThrow().biome());
+		assertEquals(4_000_000L, fit.penultimate().orElseThrow().distance());
+	}
+
+	@Test
 	void selectionPipelinePreservesBaseCandidateAndThreadsCurrentBiome() {
 		List<WorldgenPlans.ProviderResult> observed = new java.util.ArrayList<>();
 		WorldgenPlans.SelectionDecoration plan = new WorldgenPlans.SelectionDecoration(
 			selectionDescriptor(),
 			List.of(
-				new WorldgenPlans.SelectionDecoratorStage(id("first"), (result, spatial, target, x, y, z, sampler) -> {
+				new WorldgenPlans.SelectionDecoratorStage(id("first"), 10, (result, spatial, target, x, y, z, sampler, surfaceContext) -> {
 					observed.add(result);
 					return MIDDLE;
 				}),
-				new WorldgenPlans.SelectionDecoratorStage(id("second"), (result, spatial, target, x, y, z, sampler) -> {
+				new WorldgenPlans.SelectionDecoratorStage(id("second"), 20, (result, spatial, target, x, y, z, sampler, surfaceContext) -> {
 					observed.add(result);
 					return FINAL;
 				})
@@ -94,7 +189,7 @@ class WorldgenPlansTest {
 		Holder<Biome> selected = plan.apply(
 			new WorldgenPlans.ProviderResult(id("domain"), BASE, false),
 			new WorldgenPlans.SpatialResult(id("domain"), 0, 0),
-			Climate.target(0, 0, 0, 0, 0, 0), 0, 0, 0, null
+			Climate.target(0, 0, 0, 0, 0, 0), 0, 0, 0, null, null
 		);
 
 		assertEquals(FINAL, selected);
@@ -104,12 +199,12 @@ class WorldgenPlansTest {
 
 	@Test
 	void duplicateSelectionStageIdsAreRejected() {
-		WorldgenPlans.BiomeSelectionDecorator identity = (result, spatial, target, x, y, z, sampler) -> result.biome();
+		WorldgenPlans.BiomeSelectionDecorator identity = (result, spatial, target, x, y, z, sampler, surfaceContext) -> result.biome();
 		assertThrows(IllegalArgumentException.class, () -> new WorldgenPlans.SelectionDecoration(
 			selectionDescriptor(),
 			List.of(
-				new WorldgenPlans.SelectionDecoratorStage(id("duplicate"), identity),
-				new WorldgenPlans.SelectionDecoratorStage(id("duplicate"), identity)
+				new WorldgenPlans.SelectionDecoratorStage(id("duplicate"), 10, identity),
+				new WorldgenPlans.SelectionDecoratorStage(id("duplicate"), 20, identity)
 			)
 		));
 	}
@@ -132,7 +227,6 @@ class WorldgenPlansTest {
 			Registries.BIOME, ResourceLocation.fromNamespaceAndPath("unseen", "biome")
 		);
 		Holder<PlacedFeature> placed = Holder.direct((PlacedFeature) null);
-		Holder<ConfiguredFeature<?, ?>> configured = Holder.direct((ConfiguredFeature<?, ?>) null);
 		WorldgenPlans.PlacedFeatures plan = new WorldgenPlans.PlacedFeatures(
 			new PlanDescriptor(
 				ResourceLocation.fromNamespaceAndPath("test", "features"),
@@ -144,10 +238,10 @@ class WorldgenPlansTest {
 			),
 			List.of(
 				new WorldgenPlans.PlacedFeaturePipeline(
-					biome, 4, 0, placed, configured, List.of(), List.of()
+					biome, 4, 0, placed
 				),
 				new WorldgenPlans.PlacedFeaturePipeline(
-					biome, 4, 1, placed, configured, List.of(), List.of()
+					biome, 4, 1, placed
 				)
 			),
 			List.of(),
@@ -158,8 +252,6 @@ class WorldgenPlansTest {
 		assertEquals(2, plan.pipelines().size());
 		assertEquals(List.of(0, 1), plan.pipelines().stream()
 			.map(WorldgenPlans.PlacedFeaturePipeline::index).toList());
-		assertEquals(List.of(configured, configured), plan.pipelines().stream()
-			.map(WorldgenPlans.PlacedFeaturePipeline::configuredFeature).toList());
 		assertEquals(List.of(placed, placed), plan.forBiome(biome, 4));
 	}
 
@@ -181,10 +273,7 @@ class WorldgenPlansTest {
 				biome,
 				4,
 				1,
-				Holder.direct((PlacedFeature) null),
-				Holder.direct((ConfiguredFeature<?, ?>) null),
-				List.of(),
-				List.of()
+				Holder.direct((PlacedFeature) null)
 			)),
 			List.of(),
 			java.util.Map.of(),

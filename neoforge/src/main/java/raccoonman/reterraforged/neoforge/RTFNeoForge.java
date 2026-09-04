@@ -19,6 +19,7 @@ import raccoonman.reterraforged.client.data.RTFTranslationKeys;
 import raccoonman.reterraforged.platform.neoforge.RegistryUtilImpl;
 import raccoonman.reterraforged.server.RTFMinecraftServer;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenLifecycle;
+import raccoonman.reterraforged.world.worldgen.runtime.WorldgenResourceRevision;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 @Mod(RTFCommon.MOD_ID)
@@ -46,7 +47,9 @@ public class RTFNeoForge {
 			return;
 		}
 		((RTFMinecraftServer) server).getFeatureTemplateManager().onReload(server.getResourceManager());
-		WorldgenLifecycle.tagsReloaded(server);
+		WorldgenLifecycle.tagsReloaded(
+			server, ((WorldgenResourceRevision) server).advanceWorldgenResourceRevision()
+		);
 	}
 
 	private static void gatherData(GatherDataEvent event) {

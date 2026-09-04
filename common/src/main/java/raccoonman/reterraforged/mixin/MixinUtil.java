@@ -18,7 +18,7 @@ public class MixinUtil {
 	@Inject(method = "shutdownExecutors()V", at = @At("TAIL"))
 	private static void shutdownExecutors(CallbackInfo callback) {
 		shutdownExecutor(ThreadPools.WORLD_GEN);
-		shutdownExecutor(ThreadPools.PREVIEW);
+		shutdownExecutor(ThreadPools.TILE_ADMISSION);
 		shutdownExecutor(Cache.SCHEDULER);
 	}
 

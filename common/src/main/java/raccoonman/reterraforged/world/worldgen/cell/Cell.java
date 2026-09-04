@@ -41,6 +41,8 @@ public class Cell {
     public float terrainRegionCenterZ;
     public float biomeRegionId;
     public float biomeRegionEdge;
+    public float biomeRegionCenterX;
+    public float biomeRegionCenterZ;
     public long biomeRegionX;
     public long biomeRegionZ;
     public float macroBiomeId;
@@ -90,6 +92,8 @@ public class Cell {
         this.terrainRegionCenterZ = other.terrainRegionCenterZ;
         this.biomeRegionId = other.biomeRegionId;
         this.biomeRegionEdge = other.biomeRegionEdge;
+        this.biomeRegionCenterX = other.biomeRegionCenterX;
+        this.biomeRegionCenterZ = other.biomeRegionCenterZ;
         this.biomeRegionX = other.biomeRegionX;
         this.biomeRegionZ = other.biomeRegionZ;
         this.macroBiomeId = other.macroBiomeId;

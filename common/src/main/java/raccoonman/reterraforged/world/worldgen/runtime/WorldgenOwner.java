@@ -30,9 +30,11 @@ public interface WorldgenOwner {
 
 	String settingsIdentity();
 
+	long resourceRevision();
+
 	String resourceLayerFingerprint();
 
 	TagEpoch tagEpoch();
 
-	long contributionSequence();
+	WorldgenContributionRevision.Snapshot contributionRevision();
 }

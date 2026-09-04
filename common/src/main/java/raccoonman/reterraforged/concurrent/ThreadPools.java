@@ -6,11 +6,13 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class ThreadPools {
-	public static final ExecutorService WORLD_GEN = Executors.newFixedThreadPool(availableProcessors());
-	public static final ExecutorService PREVIEW = Executors.newFixedThreadPool(
-		previewParallelism(), namedDaemonFactory("RTF Preview")
+	public static final ExecutorService WORLD_GEN = Executors.newFixedThreadPool(
+		availableProcessors(), namedDaemonFactory("RTF Worldgen")
 	);
-	
+	public static final ExecutorService TILE_ADMISSION = Executors.newThreadPerTaskExecutor(
+		Thread.ofVirtual().name("RTF Tile Admission-", 0L).factory()
+	);
+
 	public static int availableProcessors() {
 		return Math.max(2, Runtime.getRuntime().availableProcessors());
 	}

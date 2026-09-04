@@ -2,9 +2,11 @@
 
   	"required": true,
   	"package": "raccoonman.reterraforged.mixin",
+	"plugin": "raccoonman.reterraforged.mixin.CompatibilityMixinPlugin",
   	"minVersion": "0.8",
   	"compatibilityLevel": "JAVA_21",
-  	"mixins": [
+  "mixins": [
+    "BiomeSourceAccessor",
 		"MixinNoiseChunk",
 		"MixinRandomState",
 		"MixinChunkMap",
@@ -19,16 +21,14 @@
 		"MixinChunkAccess",
 		"MixinLevel",
 		"MixinLevelChunk",
-		"MixinImposterProtoChunk",
 		"MixinNoiseBasedChunkGenerator",
+		"MixinPlanBackedBiomeDecoration",
 		"MixinFloatyBoaty",
 		"MixinChunkSerializer",
 		"MixinBlock",
 		"MixinPlayerChunkSender",
 		"MixinC2MECompilerShield",
 		"MixinWorldGenRegionCache",
-		"MixinNoiseFill",
-		"MixinChunkGeneratorTiming",
 		"MixinHeightRangePlacement",
 		"MixinCountPlacement",
 		"MixinRepeatingPlacement",
@@ -36,8 +36,6 @@
 		"MixinInSquarePlacement",
 		"MixinEnvironmentScanPlacement",
 		"MixinPlacedFeature",
-		"BeardifierAccessor",
-		"LevelChunkSectionAccessor",
 		"StructurePiecesBuilderAccessor",
 		"MixinOceanMonumentBuilding",
 		"MixinOceanMonumentPiece",
@@ -46,11 +44,11 @@
 		"MixinServerLevel"
 		,"compat.MixinBiolithDimensionBiomePlacement"
 		,"compat.MixinLithostitchedBiomeInjectorManager"
+		,"compat.MixinLithostitchedEvent"
 		],
 	"client": [
 			"MixinCreateWorldScreenWorldTab",
 			"MixinWorldCreationUiState",
-			"MixinGuaranteeData",
 			"ScreenInvoker"
 		],
   	"injectors": {

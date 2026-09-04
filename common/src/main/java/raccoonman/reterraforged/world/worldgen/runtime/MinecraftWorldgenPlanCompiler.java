@@ -7,8 +7,11 @@ import java.util.List;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.function.BooleanSupplier;
+import java.util.concurrent.CancellationException;
 import java.util.LinkedHashMap;
 
 import com.mojang.datafixers.util.Pair;
@@ -33,6 +36,7 @@ import net.minecraft.world.level.levelgen.structure.StructureSet;
 import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureProcessorList;
 import raccoonman.reterraforged.RTFCommon;
+import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.biome.UndergroundBiomeBanding;
 import raccoonman.reterraforged.world.worldgen.biome.UndergroundBiomeSurfaceProtection;
 import raccoonman.reterraforged.world.worldgen.biome.SurfaceBiomeFilter;
@@ -44,6 +48,7 @@ import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan;
 import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlanner;
 import raccoonman.reterraforged.world.worldgen.biome.modifier.BiomeModifier;
 import raccoonman.reterraforged.world.worldgen.biome.RTFClimateSampler;
+import raccoonman.reterraforged.world.worldgen.biome.ClimateQueryPolicy;
 
 /** Compiles the final selected Minecraft graph without cloning roots or inspecting object fields. */
 public final class MinecraftWorldgenPlanCompiler {
@@ -64,51 +69,185 @@ public final class MinecraftWorldgenPlanCompiler {
 		List<? extends WorldgenCapabilityProvider> providers,
 		WorldgenCompilationPurpose purpose
 	) {
-		long started = System.nanoTime();
-		WorldgenPlan base = compileBase(owner, purpose);
-		WorldgenPlan negotiated = new WorldgenPlanCompiler(providers).compile(
-			base, purpose
+		return compile(owner, new WorldgenPlanCompiler(providers), purpose, () -> false);
+	}
+
+	public static WorldgenPlan compile(
+		WorldgenOwner owner,
+		WorldgenProviderCatalog providers
+	) {
+		return compile(owner, providers, WorldgenCompilationPurpose.WORLDGEN);
+	}
+
+	public static WorldgenPlan compile(
+		WorldgenOwner owner,
+		WorldgenProviderCatalog providers,
+		WorldgenCompilationPurpose purpose
+	) {
+		return compile(owner, providers, purpose, () -> false);
+	}
+
+	public static WorldgenPlan compile(
+		WorldgenOwner owner,
+		WorldgenProviderCatalog providers,
+		WorldgenCompilationPurpose purpose,
+		BooleanSupplier cancelled
+	) {
+		Objects.requireNonNull(owner, "owner");
+		Objects.requireNonNull(providers, "providers");
+		Objects.requireNonNull(purpose, "purpose");
+		Objects.requireNonNull(cancelled, "cancelled");
+		return providers.inAcquisitionSession(
+			cancelled, () -> compileAcquired(owner, providers, purpose, cancelled)
 		);
+	}
+
+	private static WorldgenPlan compileAcquired(
+		WorldgenOwner owner,
+		WorldgenProviderCatalog providers,
+		WorldgenCompilationPurpose purpose,
+		BooleanSupplier cancelled
+	) {
+		checkCancelled(cancelled);
+		requireContributionRevision(owner, providers, "before plan compilation");
+		WorldgenPlan plan = compile(owner, new WorldgenPlanCompiler(providers), purpose, cancelled);
+		checkCancelled(cancelled);
+		requireContributionRevision(owner, providers, "after plan compilation");
+		return plan;
+	}
+
+	private static void requireContributionRevision(
+		WorldgenOwner owner,
+		WorldgenProviderCatalog providers,
+		String boundary
+	) {
+		WorldgenContributionRevision.Snapshot current = WorldgenContributionRevision.snapshot(
+			owner.dimension(), providers
+		);
+		if (!current.equals(owner.contributionRevision())) {
+			throw new IllegalStateException(
+				"Worldgen contributions changed " + boundary + "; expected "
+					+ owner.contributionRevision() + " but acquired " + current
+			);
+		}
+	}
+
+	private static WorldgenPlan compile(
+		WorldgenOwner owner,
+		WorldgenPlanCompiler compiler,
+		WorldgenCompilationPurpose purpose,
+		BooleanSupplier cancelled
+	) {
+		long started = System.nanoTime();
+		checkCancelled(cancelled);
+		WorldgenPlan base = compileBase(owner, purpose);
+		checkCancelled(cancelled);
+		WorldgenPlan negotiated = compiler.compile(base, purpose, cancelled);
+		checkCancelled(cancelled);
 		WorldgenPlan selected = finalizeSelectionPipeline(
 			materializeCandidateOwnership(negotiated), purpose
 		);
+		checkCancelled(cancelled);
 		WorldgenPlan plan = materializeGraphDependentFacets(base, selected, purpose);
-		Map<CapabilityState, Long> states = plan.report().nodes().stream().collect(
-			java.util.stream.Collectors.groupingBy(
-				CapabilityNodeReport::state,
-				() -> new java.util.EnumMap<>(CapabilityState.class),
-				java.util.stream.Collectors.counting()
-			)
-		);
-		RTFCommon.LOGGER.info(
-			"Compiled worldgen plan owner={} type={} purpose={} tag_epoch={} contribution_epoch={} elapsed_ms={} capability_nodes={} states={}",
-			owner.id(),
-			owner.type(),
-			purpose,
-			owner.tagEpoch().sequence(),
-			owner.contributionSequence(),
-			String.format(java.util.Locale.ROOT, "%.3f", (System.nanoTime() - started) / 1_000_000.0D),
-			plan.report().nodes().size(),
-			states
-		);
+		checkCancelled(cancelled);
+		if (RTFCommon.LOGGER.isDebugEnabled()) {
+			Map<CapabilityState, Long> states = plan.report().nodes().stream().collect(
+				java.util.stream.Collectors.groupingBy(
+					CapabilityNodeReport::state,
+					() -> new java.util.EnumMap<>(CapabilityState.class),
+					java.util.stream.Collectors.counting()
+				)
+			);
+			RTFCommon.LOGGER.debug(
+				"Compiled worldgen plan owner={} type={} purpose={} tag_epoch={} contribution_epoch={} elapsed_ms={} capability_nodes={} states={}",
+				owner.id(),
+				owner.type(),
+				purpose,
+				owner.tagEpoch().sequence(),
+				owner.contributionRevision().revisions(),
+				String.format(java.util.Locale.ROOT, "%.3f", (System.nanoTime() - started) / 1_000_000.0D),
+				plan.report().nodes().size(),
+				states
+			);
+		}
 		return plan;
+	}
+
+	private static void checkCancelled(BooleanSupplier cancelled) {
+		if (cancelled.getAsBoolean() || Thread.currentThread().isInterrupted()) {
+			throw new CancellationException("Worldgen plan acquisition was superseded");
+		}
 	}
 
 	private static WorldgenPlan compileBase(WorldgenOwner owner, WorldgenCompilationPurpose purpose) {
 		ChunkGenerator generator = owner.selectedStem().generator();
 		BiomeSource source = MinecraftBiomeSourceGraphs.acquisitionSource(generator);
+		Optional<BiomeSourcePlanInput> directInput = Optional.empty();
+		Optional<BiomeCandidateRoot> candidateRoot = Optional.empty();
+		Optional<CapabilityFailure> directInputFailure = Optional.empty();
+		if (generator instanceof TerraForgedChunkGenerator terraForged) {
+			candidateRoot = terraForged.acquisitionBiomeCandidateRoot();
+			try {
+				directInput = terraForged.acquireBiomePlanInput(owner);
+				} catch (CancellationException failure) {
+					throw failure;
+				} catch (RuntimeException | LinkageError failure) {
+				directInputFailure = Optional.of(CapabilityFailure.of(
+					"custom_source_plan_acquisition_failed", failure
+				));
+			}
+		}
+		Optional<BiomeCandidateRoot> retainedCandidateRoot = candidateRoot;
 		List<CapabilityNodeReport> reports = new ArrayList<>();
 
-		WorldgenPlans.BiomeComposition biomePlan = compileFacet(
-			WorldgenFacet.BIOME_COMPOSITION,
-			() -> compileBiomes(owner, source),
-			failure -> new WorldgenPlans.BiomeComposition(failure, List.of())
-		);
-		WorldgenPlans.ProviderSelection providerPlan = new WorldgenPlans.ProviderSelection(
-			unavailable(WorldgenFacet.PROVIDER_SELECTION, "no_provider_contract",
-				"No public provider snapshot was supplied for the selected root"),
-			0L, List.of(), Optional.empty(), Optional.empty(), Optional.empty()
-		);
+		WorldgenPlans.BiomeComposition biomePlan = directInputFailure.isPresent()
+			? new WorldgenPlans.BiomeComposition(
+				new PlanDescriptor(
+					RTFCommon.location("runtime/custom_source_acquisition"),
+					WorldgenFacet.BIOME_COMPOSITION, CapabilityState.UNAVAILABLE,
+					"request_owned_custom_source_root",
+					"The custom source failed to produce its immutable plan input",
+					directInputFailure
+				),
+				List.of()
+			)
+			: directInput.isPresent()
+			? new WorldgenPlans.BiomeComposition(
+				descriptor(WorldgenFacet.BIOME_COMPOSITION, CapabilityState.PROVIDER_CONTRACT,
+					"The request-owned custom source supplies a complete executable root instead of a candidate table"),
+				List.of()
+			)
+			: compileFacet(
+				WorldgenFacet.BIOME_COMPOSITION,
+				() -> compileBiomes(owner, source, retainedCandidateRoot),
+				failure -> new WorldgenPlans.BiomeComposition(failure, List.of())
+			);
+		WorldgenPlans.ProviderSelection providerPlan = directInputFailure.isPresent()
+			? new WorldgenPlans.ProviderSelection(
+				new PlanDescriptor(
+					RTFCommon.location("runtime/custom_source_acquisition"),
+					WorldgenFacet.PROVIDER_SELECTION, CapabilityState.UNAVAILABLE,
+					"request_owned_custom_source_root",
+					"The custom source failed to produce its immutable plan input",
+					directInputFailure
+				),
+				0L, List.of(), Optional.empty(), Optional.empty(), Optional.empty()
+			)
+			: directInput.isPresent()
+			? new WorldgenPlans.ProviderSelection(
+				new PlanDescriptor(
+					directInput.orElseThrow().id(), WorldgenFacet.PROVIDER_SELECTION,
+					CapabilityState.PROVIDER_CONTRACT, "request_owned_custom_source_root",
+					"A complete owner-scoped custom source query and output closure were acquired before execution",
+					Optional.empty()
+				),
+				0L, List.of(), Optional.empty(), Optional.empty(), Optional.empty(), directInput
+			)
+			: new WorldgenPlans.ProviderSelection(
+				unavailable(WorldgenFacet.PROVIDER_SELECTION, "no_provider_contract",
+					"No public provider snapshot was supplied for the selected root"),
+				0L, List.of(), Optional.empty(), Optional.empty(), Optional.empty()
+			);
 		WorldgenPlans.SelectionDecoration decorationPlan = new WorldgenPlans.SelectionDecoration(
 			new PlanDescriptor(
 				RTFCommon.location("runtime/selection_mechanisms"),
@@ -120,25 +259,24 @@ public final class MinecraftWorldgenPlanCompiler {
 			),
 			List.of()
 		);
-		WorldgenPlans.SpatialOwnership spatialPlan = new WorldgenPlans.SpatialOwnership(
-			unavailable(WorldgenFacet.SPATIAL_OWNERSHIP, "no_spatial_contract",
-				"The selected biome source does not expose provider-domain ownership"),
-			Optional.empty()
-		);
+		WorldgenPlans.SpatialOwnership spatialPlan = directInput.isPresent()
+			? new WorldgenPlans.SpatialOwnership(
+				descriptor(WorldgenFacet.SPATIAL_OWNERSHIP, CapabilityState.NORMALIZED,
+					"The direct custom source root owns positional selection and requires no FTF provider-domain resolver"),
+				Optional.empty()
+			)
+			: new WorldgenPlans.SpatialOwnership(
+				unavailable(WorldgenFacet.SPATIAL_OWNERSHIP, "no_spatial_contract",
+					"The selected biome source does not expose provider-domain ownership"),
+				Optional.empty()
+			);
 		WorldgenPlans.SamplerDecoration samplerPlan = new WorldgenPlans.SamplerDecoration(
 			descriptor(WorldgenFacet.SAMPLER_DECORATION, CapabilityState.NORMALIZED,
-				"Realized and request-owned samplers receive the same owner-local plan and FTF state"),
-			Optional.of((plan, inputs, sampler) -> {
-				if (!plan.owner().id().equals(owner.id())) {
-					throw new IllegalArgumentException("Sampler decorator received a plan for a different owner");
-				}
-				if (!((Object) sampler instanceof RTFClimateSampler rtfSampler)) {
-					throw new IllegalArgumentException("Climate sampler does not expose the FTF public sampler contract");
-				}
-				rtfSampler.setUndergroundBiomeBandingPreset(inputs.preset(), owner.seed());
-				rtfSampler.setUndergroundBiomeSurfaceContext(inputs.generatorContext());
-				return sampler;
-			})
+				"Realized and request-owned samplers receive purpose-scoped owner-local plan and FTF state"),
+			purpose == WorldgenCompilationPurpose.BIOME_PREVIEW
+				? ClimateQueryPolicy.SURFACE_PREVIEW
+				: ClimateQueryPolicy.WORLDGEN,
+			Optional.empty()
 		);
 
 		WorldgenPlans.DensitySettings densityPlan;
@@ -191,12 +329,15 @@ public final class MinecraftWorldgenPlanCompiler {
 			);
 		WorldgenPlans.Structures structurePlan = !purpose.includes(WorldgenFacet.STRUCTURES)
 			? new WorldgenPlans.Structures(
-				notMaterialized(WorldgenFacet.STRUCTURES, purpose), List.of(), List.of(), List.of(), List.of()
+				notMaterialized(WorldgenFacet.STRUCTURES, purpose),
+				List.of(), List.of(), List.of(), List.of(), List.of()
 			)
 			: compileFacet(
 			WorldgenFacet.STRUCTURES,
 			() -> compileStructures(owner),
-			failure -> new WorldgenPlans.Structures(failure, List.of(), List.of(), List.of(), List.of())
+			failure -> new WorldgenPlans.Structures(
+				failure, List.of(), List.of(), List.of(), List.of(), List.of()
+			)
 		);
 
 		List<WorldgenPlans.DomainPlan> plans = List.of(
@@ -207,7 +348,15 @@ public final class MinecraftWorldgenPlanCompiler {
 		addCarverReports(owner, carverPlan, reports);
 		addFeatureReports(owner, featurePlan, reports);
 		addStructureReports(owner, structurePlan, reports);
-		WorldgenExecution execution = WorldgenExecution.serial();
+		WorldgenExecution execution = WorldgenExecution.serial().withQueryMode(
+			WorldgenFacet.SAMPLER_DECORATION, WorldgenQueryMode.ISOLATED_PARALLEL_READ
+		);
+		if (directInput.isPresent()) {
+			execution = execution
+				.withQueryMode(WorldgenFacet.PROVIDER_SELECTION, directInput.orElseThrow().queryMode())
+				.withQueryMode(WorldgenFacet.SELECTION_DECORATION, WorldgenQueryMode.ISOLATED_PARALLEL_READ)
+				.withQueryMode(WorldgenFacet.SPATIAL_OWNERSHIP, WorldgenQueryMode.ISOLATED_PARALLEL_READ);
+		}
 		return new WorldgenPlan(
 			owner, biomePlan, providerPlan, decorationPlan, spatialPlan, samplerPlan,
 			densityPlan, surfacePlan, carverPlan, featurePlan, structurePlan,
@@ -215,19 +364,33 @@ public final class MinecraftWorldgenPlanCompiler {
 		);
 	}
 
-	private static WorldgenPlans.BiomeComposition compileBiomes(WorldgenOwner owner, BiomeSource source) {
+	private static WorldgenPlans.BiomeComposition compileBiomes(
+		WorldgenOwner owner,
+		BiomeSource source,
+		Optional<BiomeCandidateRoot> retainedRoot
+	) {
 		if (source instanceof MultiNoiseBiomeSource) {
-			List<Pair<Climate.ParameterPoint, Holder<Biome>>> entries =
-				MinecraftBiomeSourceGraphs.multiNoiseEntries(source, owner.registries());
+			BiomeCandidateRoot root = retainedRoot.orElseGet(
+				() -> MinecraftBiomeSourceGraphs.multiNoiseRoot(source, owner.registries())
+			);
 			return new WorldgenPlans.BiomeComposition(
 				descriptor(WorldgenFacet.BIOME_COMPOSITION, CapabilityState.NORMALIZED,
-					"Public multi-noise parameter entries were copied into immutable plan data"),
-				entries
+					"Public multi-noise candidates and their immutable search index were retained as plan data"),
+				root.entries(), List.of(), Optional.of(root)
+			);
+		}
+		List<Holder<Biome>> possible = source.possibleBiomes().stream().toList();
+		if (possible.size() == 1) {
+			return new WorldgenPlans.BiomeComposition(
+				descriptor(WorldgenFacet.BIOME_COMPOSITION, CapabilityState.NORMALIZED,
+					"The public source output closure contains one biome and is normalized as a constant candidate root"),
+				List.of(Pair.of(Climate.parameters(0, 0, 0, 0, 0, 0, 0), possible.getFirst()))
 			);
 		}
 		return new WorldgenPlans.BiomeComposition(
 			unavailable(WorldgenFacet.BIOME_COMPOSITION, "source_composition_opaque",
-				"The selected source exposes only its public positional query boundary"),
+				"The selected multi-output source exposes only a positional query boundary; it requires a "
+					+ "metadata-discovered provider that compiles an immutable candidate/provider plan"),
 			List.of()
 		);
 	}
@@ -305,7 +468,9 @@ public final class MinecraftWorldgenPlanCompiler {
 			owner, selected.biomeComposition(), selected.providerSelection(),
 			selected.selectionDecoration(), selected.spatialOwnership(), selected.samplerDecoration(),
 			selected.densitySettings(), selected.surface(), carvers, features, selected.structures(),
-			selected.execution(), new WorldgenCapabilityReport(reports, selected.execution())
+			selected.execution(), new WorldgenCapabilityReport(
+				reports, selected.execution(), selected.report().providerDiagnostics()
+			)
 		);
 	}
 
@@ -314,14 +479,23 @@ public final class MinecraftWorldgenPlanCompiler {
 		WorldgenPlans.BiomeComposition candidateOperations = composition;
 		WorldgenPlans.ProviderSelection providers = plan.providerSelection();
 		WorldgenPlans.SpatialOwnership spatial = plan.spatialOwnership();
+		if (providers.directInput().isPresent()) {
+			return plan;
+		}
 		boolean compositionChanged = false;
 		boolean providerChanged = false;
 		boolean spatialChanged = false;
 
 		if (!composition.entries().isEmpty() && !candidateOperations.stages().isEmpty()
 			&& composition.descriptor().state() != CapabilityState.UNAVAILABLE) {
+			WorldgenPlans.BiomeComposition sourceComposition = composition;
+			BiomeCandidateRoot finalizedRoot = sourceComposition.candidateRoot()
+				.map(candidateOperations::applyTo)
+				.orElseGet(() -> BiomeCandidateRoot.fromEntries(
+					candidateOperations.applyTo(sourceComposition.entries())
+				));
 			composition = new WorldgenPlans.BiomeComposition(
-				composition.descriptor(), candidateOperations.applyTo(composition.entries())
+				sourceComposition.descriptor(), finalizedRoot.entries(), List.of(), Optional.of(finalizedRoot)
 			);
 			compositionChanged = true;
 		}
@@ -329,8 +503,11 @@ public final class MinecraftWorldgenPlanCompiler {
 		if (providers.providers().isEmpty() && !composition.entries().isEmpty()
 			&& composition.descriptor().state() != CapabilityState.UNAVAILABLE) {
 			ResourceLocation id = RTFCommon.location("selected_source_root");
+			Climate.ParameterList<Holder<Biome>> candidateTable = composition.candidateRoot().isPresent()
+				? composition.candidateRoot().orElseThrow().candidates()
+				: new Climate.ParameterList<>(composition.entries());
 			WorldgenPlans.ProviderDomain domain = new WorldgenPlans.ProviderDomain(
-				id, 1.0D, new Climate.ParameterList<>(composition.entries()), 0
+				id, 1.0D, candidateTable, 0
 			);
 			providers = new WorldgenPlans.ProviderSelection(
 				new PlanDescriptor(
@@ -361,11 +538,16 @@ public final class MinecraftWorldgenPlanCompiler {
 					compositionChanged, false, false);
 			}
 			List<Pair<Climate.ParameterPoint, Holder<Biome>>> rootEntries = composition.entries();
+			Climate.ParameterList<Holder<Biome>> retainedTable = composition.candidateRoot()
+				.map(BiomeCandidateRoot::candidates)
+				.orElse(null);
 			List<WorldgenPlans.ProviderDomain> transformed = providers.providers().stream()
 				.map(domain -> new WorldgenPlans.ProviderDomain(
 					domain.id(), domain.weight(),
 					domain.id().equals(rootDomain)
-						? new Climate.ParameterList<>(rootEntries)
+						? (retainedTable != null
+							? retainedTable
+							: new Climate.ParameterList<>(rootEntries))
 						: domain.candidates(),
 					domain.registrationOrder()
 				))
@@ -444,14 +626,23 @@ public final class MinecraftWorldgenPlanCompiler {
 			reports.removeIf(node -> node.facet() == WorldgenFacet.SPATIAL_OWNERSHIP);
 			reports.add(spatial.descriptor().report(plan.owner()));
 		}
-		WorldgenExecution execution = plan.execution()
-			.withQueryMode(WorldgenFacet.PROVIDER_SELECTION, WorldgenQueryMode.ISOLATED_PARALLEL_READ)
-			.withQueryMode(WorldgenFacet.SPATIAL_OWNERSHIP, WorldgenQueryMode.ISOLATED_PARALLEL_READ);
+		WorldgenExecution execution = plan.execution();
+		if (providerChanged && (plan.providerSelection().providers().isEmpty()
+			|| plan.providerSelection().descriptor().state() == CapabilityState.NORMALIZED)) {
+			execution = execution.withQueryMode(
+				WorldgenFacet.PROVIDER_SELECTION, WorldgenQueryMode.ISOLATED_PARALLEL_READ
+			);
+		}
+		if (spatialChanged) {
+			execution = execution.withQueryMode(
+				WorldgenFacet.SPATIAL_OWNERSHIP, WorldgenQueryMode.ISOLATED_PARALLEL_READ
+			);
+		}
 		return new WorldgenPlan(
 			plan.owner(), composition, providers,
 			plan.selectionDecoration(), spatial, plan.samplerDecoration(), plan.densitySettings(),
 			plan.surface(), plan.carvers(), plan.placedFeatures(), plan.structures(), execution,
-			new WorldgenCapabilityReport(reports, execution)
+			new WorldgenCapabilityReport(reports, execution, plan.report().providerDiagnostics())
 		);
 	}
 
@@ -462,6 +653,57 @@ public final class MinecraftWorldgenPlanCompiler {
 		WorldgenPlans.SelectionDecoration mechanisms = plan.selectionDecoration();
 		if (mechanisms.descriptor().state() == CapabilityState.UNAVAILABLE) {
 			return plan;
+		}
+		if (plan.providerSelection().directInput().isPresent()) {
+			boolean unsupportedSelection = !mechanisms.stages().isEmpty()
+				|| !plan.biomeComposition().stages().isEmpty();
+			boolean unsupportedSampler = !plan.samplerDecoration().stages().isEmpty();
+			if (!unsupportedSelection && !unsupportedSampler) {
+				return plan;
+			}
+			WorldgenPlans.SelectionDecoration selection = unsupportedSelection
+				? new WorldgenPlans.SelectionDecoration(
+				unavailable(
+					WorldgenFacet.SELECTION_DECORATION,
+					"custom_source_composition_unsupported",
+					"The direct custom source root does not expose candidate-table semantics required by active composition or selection transforms"
+				),
+				List.of()
+			) : mechanisms;
+			WorldgenPlans.SamplerDecoration sampler = unsupportedSampler
+				? new WorldgenPlans.SamplerDecoration(
+					unavailable(
+						WorldgenFacet.SAMPLER_DECORATION,
+						"custom_source_sampler_transform_unsupported",
+						"The direct custom source query cannot consume plan-owned climate-target transforms"
+					),
+					plan.samplerDecoration().queryPolicy(),
+					List.of()
+				) : plan.samplerDecoration();
+			List<CapabilityNodeReport> reports = new ArrayList<>(plan.report().nodes());
+			if (unsupportedSelection) {
+				reports.add(selection.descriptor().report(plan.owner()));
+			}
+			if (unsupportedSampler) {
+				reports.add(sampler.descriptor().report(plan.owner()));
+			}
+			WorldgenExecution execution = plan.execution();
+			if (unsupportedSelection) {
+				execution = execution.withQueryMode(
+					WorldgenFacet.SELECTION_DECORATION, WorldgenQueryMode.OWNER_SERIAL
+				);
+			}
+			if (unsupportedSampler) {
+				execution = execution.withQueryMode(
+					WorldgenFacet.SAMPLER_DECORATION, WorldgenQueryMode.OWNER_SERIAL
+				);
+			}
+			return new WorldgenPlan(
+				plan.owner(), plan.biomeComposition(), plan.providerSelection(), selection,
+				plan.spatialOwnership(), sampler, plan.densitySettings(),
+				plan.surface(), plan.carvers(), plan.placedFeatures(), plan.structures(), execution,
+				new WorldgenCapabilityReport(reports, execution, plan.report().providerDiagnostics())
+			);
 		}
 		WorldgenPlans.SelectionDecoration policy = compileFacet(
 			WorldgenFacet.SELECTION_DECORATION,
@@ -514,7 +756,7 @@ public final class MinecraftWorldgenPlanCompiler {
 			plan.owner(), plan.biomeComposition(), plan.providerSelection(),
 			finalized, plan.spatialOwnership(), plan.samplerDecoration(), plan.densitySettings(),
 			plan.surface(), plan.carvers(), plan.placedFeatures(), plan.structures(), execution,
-			new WorldgenCapabilityReport(reports, execution)
+			new WorldgenCapabilityReport(reports, execution, plan.report().providerDiagnostics())
 		);
 	}
 
@@ -545,11 +787,11 @@ public final class MinecraftWorldgenPlanCompiler {
 			Map<ResourceLocation, SurfaceBiomeFilter<Holder<Biome>>> filters = providers.providers().stream()
 				.collect(java.util.stream.Collectors.toUnmodifiableMap(
 					WorldgenPlans.ProviderDomain::id,
-					domain -> surfaceFilter(domain.candidates().values())
+					domain -> surfaceFilter(domain.candidates())
 				));
 			return selectionPolicy(
 				"Provider-neutral surface filtering executes after all mechanism decorators",
-				(result, spatial, target, quartX, quartY, quartZ, sampler) -> {
+				(result, spatial, target, quartX, quartY, quartZ, sampler, surfaceContext) -> {
 					ResourceLocation domain = result.usedFallback() ? fallback : result.domain();
 					SurfaceBiomeFilter<Holder<Biome>> filter = filters.get(domain);
 					if (filter == null) {
@@ -564,12 +806,12 @@ public final class MinecraftWorldgenPlanCompiler {
 			.collect(java.util.stream.Collectors.toUnmodifiableMap(
 				WorldgenPlans.ProviderDomain::id,
 				domain -> UndergroundBiomeBanding.apply(
-					preset, domain.candidates().values(), owner.seed()
+					preset, domain.candidates(), owner.seed()
 				)
 			));
 		return selectionPolicy(
 			"Provider-neutral FTF underground policy executes after all mechanism decorators",
-			(result, spatial, target, quartX, quartY, quartZ, sampler) -> {
+			(result, spatial, target, quartX, quartY, quartZ, sampler, surfaceContext) -> {
 				Holder<Biome> selected = result.biome();
 				if (!selected.equals(result.baseBiome())) {
 					return selected;
@@ -579,7 +821,9 @@ public final class MinecraftWorldgenPlanCompiler {
 				if (layout == null) {
 					throw new IllegalStateException("No underground policy for candidate domain " + domain);
 				}
-				return applyUndergroundPolicy(preset, layout, selected, target, quartX, quartY, quartZ, sampler);
+				return applyUndergroundPolicy(
+					preset, layout, selected, target, quartX, quartY, quartZ, sampler, surfaceContext
+				);
 			}
 		);
 	}
@@ -598,7 +842,7 @@ public final class MinecraftWorldgenPlanCompiler {
 				Optional.empty()
 			),
 			List.of(new WorldgenPlans.SelectionDecoratorStage(
-				RTFCommon.location("ftf_selection_policy"), decorator
+				RTFCommon.location("ftf_selection_policy"), 0, decorator
 			))
 		);
 	}
@@ -611,14 +855,14 @@ public final class MinecraftWorldgenPlanCompiler {
 	}
 
 	private static SurfaceBiomeFilter<Holder<Biome>> surfaceFilter(
-		List<Pair<Climate.ParameterPoint, Holder<Biome>>> entries
+		Climate.ParameterList<Holder<Biome>> candidates
 	) {
 		SurfaceBiomeFilter<Holder<Biome>> filter = SurfaceBiomeFilter.create(
-			entries,
+			candidates,
 			(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value)),
 			UndergroundBiomeTags::isCave,
 			List.of(),
-			entries.getFirst().getSecond()
+			candidates.values().getFirst().getSecond()
 		);
 		if (!filter.hasSurfaceCandidate()) {
 			throw new IllegalStateException("Selected candidate domain exposes no sound surface biome");
@@ -634,10 +878,11 @@ public final class MinecraftWorldgenPlanCompiler {
 		int quartX,
 		int quartY,
 		int quartZ,
-		Climate.Sampler sampler
+		Climate.Sampler sampler,
+		GeneratorContext surfaceContext
 	) {
 		float coverage = UndergroundBiomeSurfaceProtection.coverageFactor(
-			sampler, target, quartX, quartY, quartZ
+			sampler, target, quartX, quartY, quartZ, surfaceContext
 		);
 		if (layout.appliesAt(target)) {
 			return layout.findValue(target, quartX, quartY, quartZ, coverage);
@@ -674,37 +919,33 @@ public final class MinecraftWorldgenPlanCompiler {
 				.sorted(Comparator.comparing(holder -> holder.key().location().toString()))
 				.toList())
 			.orElse(List.of());
+		Map<ResourceKey<Biome>, BiomeGenerationSettings> generationSettings =
+			compileRegisteredBiomeGenerationSettings(owner, generator, modifiers);
 		for (Holder<Biome> biome : biomes) {
 			ResourceKey<Biome> biomeKey = biome.unwrapKey().orElseThrow(
 				() -> new IllegalStateException("Selected biome is not registry-keyed")
 			);
-			List<net.minecraft.core.HolderSet<PlacedFeature>> steps = realizedGenerationSettings(generator, biome)
+			List<net.minecraft.core.HolderSet<PlacedFeature>> steps = generationSettings.get(biomeKey)
 				.features()
 				.stream()
 				.map(step -> net.minecraft.core.HolderSet.direct(step.stream().toList()))
 				.collect(java.util.stream.Collectors.toCollection(ArrayList::new));
-			for (Holder.Reference<BiomeModifier> modifier : modifiers) {
-				int step = modifier.value().step().ordinal();
-				while (steps.size() <= step) {
-					steps.add(net.minecraft.core.HolderSet.direct());
-				}
-				List<Holder<PlacedFeature>> updated = modifier.value().apply(
-					biome, steps.get(step).stream().toList(), owner.lookups()
-				);
-				steps.set(step, net.minecraft.core.HolderSet.direct(updated));
-			}
 			featuresByBiome.put(biomeKey, List.copyOf(steps));
 			for (int step = 0; step < steps.size(); step++) {
 				int index = 0;
 				for (Holder<PlacedFeature> placed : steps.get(step)) {
 					PlacedFeature value = placed.value();
-					surfaceClassifications.computeIfAbsent(
-						value,
-						feature -> SurfacePlacementClassifier.classify(feature, owner.lookups())
+					SurfacePlacementClassifier.Classification classification =
+						SurfacePlacementClassifier.classify(
+							value,
+							placed.unwrapKey().map(ResourceKey::location),
+							owner.lookups()
+						);
+					surfaceClassifications.merge(
+						value, classification, MinecraftWorldgenPlanCompiler::mergeSurfaceClassification
 					);
 					pipelines.add(new WorldgenPlans.PlacedFeaturePipeline(
-						biomeKey, step, index++, placed, value.feature(), value.placement(),
-						value.feature().value().getFeatures().toList()
+						biomeKey, step, index++, placed
 					));
 				}
 			}
@@ -731,8 +972,74 @@ public final class MinecraftWorldgenPlanCompiler {
 			pipelines,
 			steps,
 			surfaceClassifications,
-			ores
+			ores,
+			generationSettings
 		);
+	}
+
+	static Map<ResourceKey<Biome>, BiomeGenerationSettings> compileRegisteredBiomeGenerationSettings(
+		WorldgenOwner owner,
+		ChunkGenerator generator,
+		List<Holder.Reference<BiomeModifier>> modifiers
+	) {
+		Map<ResourceKey<Biome>, BiomeGenerationSettings> generationSettings = new LinkedHashMap<>();
+		for (Holder<Biome> biome : sortedBiomes(
+			owner, registryHolders(owner.registries().registryOrThrow(Registries.BIOME))
+		)) {
+			ResourceKey<Biome> biomeKey = biome.unwrapKey().orElseThrow(
+				() -> new IllegalStateException("Registered biome is not registry-keyed")
+			);
+			generationSettings.put(
+				biomeKey, compileGenerationSettings(owner, generator, biome, modifiers)
+			);
+		}
+		return Map.copyOf(generationSettings);
+	}
+
+	private static BiomeGenerationSettings compileGenerationSettings(
+		WorldgenOwner owner,
+		ChunkGenerator generator,
+		Holder<Biome> biome,
+		List<Holder.Reference<BiomeModifier>> modifiers
+	) {
+		BiomeGenerationSettings realized = realizedGenerationSettings(generator, biome);
+		List<net.minecraft.core.HolderSet<PlacedFeature>> features = realized.features()
+			.stream()
+			.map(step -> net.minecraft.core.HolderSet.direct(step.stream().toList()))
+			.collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+		for (Holder.Reference<BiomeModifier> modifier : modifiers) {
+			int step = modifier.value().step().ordinal();
+			while (features.size() <= step) {
+				features.add(net.minecraft.core.HolderSet.direct());
+			}
+			List<Holder<PlacedFeature>> updated = modifier.value().apply(
+				biome, features.get(step).stream().toList(), owner.lookups()
+			);
+			features.set(step, net.minecraft.core.HolderSet.direct(updated));
+		}
+		BiomeGenerationSettings.PlainBuilder builder = new BiomeGenerationSettings.PlainBuilder();
+		for (GenerationStep.Carving step : GenerationStep.Carving.values()) {
+			realized.getCarvers(step).forEach(carver -> builder.addCarver(step, carver));
+		}
+		for (int step = 0; step < features.size(); step++) {
+			for (Holder<PlacedFeature> feature : features.get(step)) {
+				builder.addFeature(step, feature);
+			}
+		}
+		return builder.build();
+	}
+
+	private static SurfacePlacementClassifier.Classification mergeSurfaceClassification(
+		SurfacePlacementClassifier.Classification first,
+		SurfacePlacementClassifier.Classification second
+	) {
+		if (first.eligible() && second.eligible()
+			&& !first.pipeline().featureId().equals(second.pipeline().featureId())) {
+			return SurfacePlacementClassifier.Classification.rejected(
+				"CONFLICTING_PLACED_FEATURE_IDENTITIES"
+			);
+		}
+		return first;
 	}
 
 	private static BiomeGenerationSettings realizedGenerationSettings(
@@ -748,20 +1055,22 @@ public final class MinecraftWorldgenPlanCompiler {
 	private static WorldgenPlans.Structures compileStructures(WorldgenOwner owner) {
 		return new WorldgenPlans.Structures(
 			descriptor(WorldgenFacet.STRUCTURES, CapabilityState.NORMALIZED,
-				"Structure sets, structures, pools, and processors retain selected-registry execution order"),
+				"Structure sets, structures, pools, processors, and FTF rules retain selected-registry execution order"),
 			registryHolders(owner.registries().registryOrThrow(Registries.STRUCTURE)),
 			registryHolders(owner.registries().registryOrThrow(Registries.STRUCTURE_SET)),
 			registryHolders(owner.registries().registryOrThrow(Registries.TEMPLATE_POOL)),
-			registryHolders(owner.registries().registryOrThrow(Registries.PROCESSOR_LIST))
+			registryHolders(owner.registries().registryOrThrow(Registries.PROCESSOR_LIST)),
+			registryHolders(owner.registries().registryOrThrow(RTFRegistries.STRUCTURE_RULE))
 		);
 	}
 
 	private static List<Holder<Biome>> sortedBiomes(
 		WorldgenOwner owner,
-		Collection<Holder<Biome>> biomes
+		Collection<? extends Holder<Biome>> biomes
 	) {
 		Registry<Biome> registry = owner.registries().registryOrThrow(Registries.BIOME);
 		return biomes.stream()
+			.<Holder<Biome>>map(biome -> biome)
 			.sorted(Comparator.comparing(holder -> holder.unwrapKey()
 				.or(() -> registry.getResourceKey(holder.value()))
 				.map(key -> key.location().toString())
@@ -782,11 +1091,13 @@ public final class MinecraftWorldgenPlanCompiler {
 		WorldgenPlans.Carvers carvers,
 		List<CapabilityNodeReport> reports
 	) {
-		for (WorldgenPlans.CarverPipeline pipeline : carvers.pipelines()) {
+		int occurrences = carvers.pipelines().size();
+		if (occurrences > 0) {
 			reports.add(new CapabilityNodeReport(
-				occurrence("carver", pipeline.biome(), pipeline.step().ordinal(), pipeline.index()),
-				WorldgenFacet.CARVERS, CapabilityState.OPAQUE_LEAF, "minecraft_executable_interface",
-				owner.type(), "ConfiguredWorldCarver public carve boundary", Optional.empty()
+				RTFCommon.location("runtime/carver_leaves"), WorldgenFacet.CARVERS,
+				CapabilityState.OPAQUE_LEAF, "minecraft_executable_interface", owner.type(),
+				occurrences + " ordered ConfiguredWorldCarver occurrences execute through the public carve boundary",
+				Optional.empty()
 			));
 		}
 	}
@@ -796,13 +1107,27 @@ public final class MinecraftWorldgenPlanCompiler {
 		WorldgenPlans.PlacedFeatures features,
 		List<CapabilityNodeReport> reports
 	) {
-		for (WorldgenPlans.PlacedFeaturePipeline pipeline : features.pipelines()) {
-			reports.add(new CapabilityNodeReport(
-				occurrence("feature", pipeline.biome(), pipeline.generationStep(), pipeline.index()),
-				WorldgenFacet.PLACED_FEATURES, CapabilityState.OPAQUE_LEAF, "minecraft_executable_interface",
-				owner.type(), "Placed modifier pipeline and configured Feature public place boundary", Optional.empty()
-			));
+		int occurrences = features.pipelines().size();
+		if (occurrences == 0) {
+			return;
 		}
+		int surfaceEligible = 0;
+		for (WorldgenPlans.PlacedFeaturePipeline pipeline : features.pipelines()) {
+			SurfacePlacementClassifier.Classification surface = features.surfaceClassification(
+				pipeline.placedFeature().value()
+			);
+			if (surface.eligible()) {
+				surfaceEligible++;
+			}
+		}
+		int passthrough = occurrences - surfaceEligible;
+		reports.add(new CapabilityNodeReport(
+			RTFCommon.location("runtime/placed_feature_leaves"), WorldgenFacet.PLACED_FEATURES,
+			CapabilityState.OPAQUE_LEAF, "minecraft_executable_interface", owner.type(),
+			occurrences + " ordered placed-feature occurrences execute through the public place boundary; "
+				+ "surface_rescue supported=" + surfaceEligible + ", passthrough=" + passthrough,
+			Optional.empty()
+		));
 	}
 
 	private static void addStructureReports(
@@ -810,17 +1135,17 @@ public final class MinecraftWorldgenPlanCompiler {
 		WorldgenPlans.Structures structures,
 		List<CapabilityNodeReport> reports
 	) {
-		for (Holder.Reference<Structure> structure : structures.structures()) {
+		int registered = structures.structures().size();
+		int rules = structures.rules().size();
+		if (registered > 0 || rules > 0) {
 			reports.add(new CapabilityNodeReport(
-				structure.key().location(), WorldgenFacet.STRUCTURES, CapabilityState.OPAQUE_LEAF,
-				"minecraft_executable_interface", owner.type(), "Registered Structure public generate boundary", Optional.empty()
+				RTFCommon.location("runtime/structure_leaves"), WorldgenFacet.STRUCTURES,
+				CapabilityState.OPAQUE_LEAF, "minecraft_executable_interface", owner.type(),
+				registered + " registered structures execute through the public generate boundary; "
+					+ rules + " FTF structure rules execute from the immutable owner plan",
+				Optional.empty()
 			));
 		}
-	}
-
-	private static ResourceLocation occurrence(String domain, ResourceKey<Biome> biome, int step, int index) {
-		ResourceLocation id = biome.location();
-		return RTFCommon.location("runtime/" + domain + "/" + id.getNamespace() + "/" + id.getPath() + "/" + step + "/" + index);
 	}
 
 	private static PlanDescriptor descriptor(WorldgenFacet facet, CapabilityState state, String detail) {
@@ -865,6 +1190,8 @@ public final class MinecraftWorldgenPlanCompiler {
 	) {
 		try {
 			return compiler.get();
+		} catch (CancellationException failure) {
+			throw failure;
 		} catch (RuntimeException | LinkageError failure) {
 			PlanDescriptor descriptor = new PlanDescriptor(
 				RTFCommon.location("runtime/" + facet.name().toLowerCase()), facet, CapabilityState.UNAVAILABLE,

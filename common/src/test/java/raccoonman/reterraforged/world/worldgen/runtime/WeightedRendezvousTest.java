@@ -57,6 +57,30 @@ class WeightedRendezvousTest {
 	}
 
 	@Test
+	void preparedSelectorMatchesTheOriginalScoringContract() {
+		List<WorldgenPlans.ProviderDomain> providers = List.of(
+			domain("alpha", 1), domain("beta", 3), domain("gamma", 0.5D)
+		);
+		WeightedRendezvous.Selector selector = new WeightedRendezvous.Selector(781L, providers);
+		for (int x = -40; x <= 40; x++) {
+			for (int z = -40; z <= 40; z++) {
+				WorldgenPlans.ProviderDomain expected = null;
+				double expectedScore = Double.POSITIVE_INFINITY;
+				for (WorldgenPlans.ProviderDomain provider : providers) {
+					double score = WeightedRendezvous.score(781L, x, z, provider);
+					if (expected == null || score < expectedScore
+						|| (Double.compare(score, expectedScore) == 0
+							&& provider.id().toString().compareTo(expected.id().toString()) < 0)) {
+						expected = provider;
+						expectedScore = score;
+					}
+				}
+				assertEquals(expected, selector.select(x, z));
+			}
+		}
+	}
+
+	@Test
 	void emptyProviderSetFailsClosed() {
 		assertThrows(IllegalArgumentException.class, () -> WeightedRendezvous.select(0, 0, 0, List.of()));
 	}

@@ -6,12 +6,25 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
+import net.minecraft.core.Holder;
+import net.minecraft.world.level.biome.Biome;
+
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
 import net.minecraft.resources.ResourceLocation;
 
 class WorldgenBiomeSelectionTest {
+	@BeforeAll
+	static void bootstrapMinecraft() {
+		SharedConstants.tryDetectVersion();
+		Bootstrap.bootStrap();
+	}
+
 	@Test
 	void rejectsTheExactUnavailableSelectionCauseBeforeExecution() {
 		WorldgenPlan base = WorldgenPlanCompilerTest.emptyPlan();
@@ -73,7 +86,8 @@ class WorldgenBiomeSelectionTest {
 			base.selectionDecoration().descriptor(),
 			List.of(new WorldgenPlans.SelectionDecoratorStage(
 				id("decorator"),
-				(result, spatial, target, x, y, z, sampler) -> result.biome()
+				0,
+				(result, spatial, target, x, y, z, sampler, surfaceContext) -> result.biome()
 			))
 		);
 		WorldgenPlan plan = new WorldgenPlan(
@@ -96,6 +110,30 @@ class WorldgenBiomeSelectionTest {
 				+ "cell resolver is unavailable",
 			failure.getMessage()
 		);
+	}
+
+	@Test
+	void completeDirectCustomRootNeedsNoCandidateOrSpatialPlan() {
+		WorldgenPlan base = WorldgenPlanCompilerTest.emptyPlan();
+		Holder<Biome> output = Holder.direct((Biome) null);
+		WorldgenPlans.ProviderSelection direct = new WorldgenPlans.ProviderSelection(
+			base.providerSelection().descriptor(), 0L, List.of(), Optional.empty(), Optional.empty(),
+			Optional.empty(), Optional.of(new BiomeSourcePlanInput(
+				id("direct"), Set.of(output), WorldgenQueryMode.OWNER_SERIAL,
+				(x, y, z, sampler) -> output
+			))
+		);
+		WorldgenPlan plan = new WorldgenPlan(
+			base.owner(), base.biomeComposition(), direct,
+			new WorldgenPlans.SelectionDecoration(base.selectionDecoration().descriptor(), List.of()),
+			new WorldgenPlans.SpatialOwnership(base.spatialOwnership().descriptor(), Optional.empty()),
+			base.samplerDecoration(), base.densitySettings(), base.surface(), base.carvers(),
+			base.placedFeatures(), base.structures(), base.execution(), base.report()
+		);
+
+		assertDoesNotThrow(() -> WorldgenBiomeSelection.requireExecutablePlan(plan));
+		assertEquals(Set.of(output), WorldgenBiomeSelection.possibleBiomes(plan));
+		assertEquals(Set.of(output), WorldgenBiomeSelection.prepare(plan).possibleBiomes());
 	}
 
 	private static WorldgenPlan withSelection(

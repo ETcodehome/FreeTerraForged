@@ -15,7 +15,7 @@ public class RTFClientPayloadHandler {
         if (player != null && player.level() instanceof ClientLevel clientLevel) {
             ChunkAccess chunk = clientLevel.getChunk(payload.pos().x, payload.pos().z, ChunkStatus.FULL, false);
             if (chunk instanceof IFlowFieldHolder holder) {
-                holder.reterraforged$getFlowField().loadRawGrid(payload.rawGrid());
+                holder.reterraforged$getOrCreateFlowField().loadRawGrid(payload.rawGrid());
 			}
 		}
 	}

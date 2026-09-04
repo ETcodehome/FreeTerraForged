@@ -1,6 +1,5 @@
 package raccoonman.reterraforged.world.worldgen.biolith;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -13,7 +12,7 @@ import net.minecraft.world.level.biome.Biome;
 
 class BiolithPlacementBridgeTest {
 	@Test
-	void dataReloadPreservesEquivalentCodeReplacementAndDropsEmptyTargets() {
+	void acceptedDuplicateRuleMatchesBiolithAndDataReloadDropsEmptyTargets() {
 		BiolithPlacementBridge.Collector collector = new BiolithPlacementBridge.Collector();
 		ResourceKey<Biome> sharedTarget = biome("shared_target");
 		ResourceKey<Biome> dataOnlyTarget = biome("data_only_target");
@@ -22,7 +21,7 @@ class BiolithPlacementBridgeTest {
 		assertTrue(collector.addReplacement(new BiolithPlacementBridge.Replacement(
 			sharedTarget, output, 0.3D, true
 		)));
-		assertTrue(collector.addReplacement(new BiolithPlacementBridge.Replacement(
+		assertFalse(collector.addReplacement(new BiolithPlacementBridge.Replacement(
 			sharedTarget, output, 0.3D, false
 		)));
 		assertTrue(collector.addReplacement(new BiolithPlacementBridge.Replacement(
@@ -34,14 +33,10 @@ class BiolithPlacementBridgeTest {
 
 		assertTrue(collector.clearFromData());
 		BiolithPlacementBridge.Snapshot snapshot = collector.snapshot(
-			BiolithPlacementBridge.Dimension.OVERWORLD, BiolithPlacementBridge.SUPPORTED_VERSION
+			BiolithPlacementBridge.Dimension.OVERWORLD, "3.0.14"
 		);
 
-		assertEquals(1, snapshot.replacements().size());
-		assertEquals(
-			new BiolithPlacementBridge.Replacement(sharedTarget, output, 0.3D, false),
-			snapshot.replacements().get(sharedTarget).getFirst()
-		);
+		assertTrue(snapshot.replacements().isEmpty());
 	}
 
 	private static ResourceKey<Biome> biome(String path) {

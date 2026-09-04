@@ -15,13 +15,12 @@ class ClimatePointCacheTest {
 		ClimatePointCache cache = new ClimatePointCache();
 		ClimatePointCache other = new ClimatePointCache();
 		Climate.TargetPoint target = target(1L);
-		Object owner = new Object();
+		Object sampler = new Object();
+		cache.store(sampler, 11, -7, 23, target);
 
-		cache.store(owner, 11, -7, 23, target);
-
-		assertSame(target, cache.find(owner, 11, -7, 23));
-		assertNull(other.find(owner, 11, -7, 23));
-		assertNull(cache.find(owner, 12, -7, 23));
+		assertSame(target, cache.find(sampler, 11, -7, 23));
+		assertNull(other.find(sampler, 11, -7, 23));
+		assertNull(cache.find(sampler, 12, -7, 23));
 		assertNull(cache.find(new Object(), 11, -7, 23));
 	}
 
@@ -29,19 +28,19 @@ class ClimatePointCacheTest {
 	void cacheIsSafeToShareWithSamplerAcrossThreads() throws InterruptedException {
 		ClimatePointCache cache = new ClimatePointCache();
 		Climate.TargetPoint target = target(2L);
-		Object owner = new Object();
+		Object sampler = new Object();
 		AtomicReference<Climate.TargetPoint> otherThreadResult = new AtomicReference<>();
 
-		cache.store(owner, 3, 5, 7, target);
+		cache.store(sampler, 3, 5, 7, target);
 		Thread thread = new Thread(
-			() -> otherThreadResult.set(cache.find(owner, 3, 5, 7)),
+			() -> otherThreadResult.set(cache.find(sampler, 3, 5, 7)),
 			"climate-point-cache-test"
 		);
 		thread.start();
 		thread.join();
 
 		assertSame(target, otherThreadResult.get());
-		assertSame(target, cache.find(owner, 3, 5, 7));
+		assertSame(target, cache.find(sampler, 3, 5, 7));
 	}
 
 	private static Climate.TargetPoint target(long value) {

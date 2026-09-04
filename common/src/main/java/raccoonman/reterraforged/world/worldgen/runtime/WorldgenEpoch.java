@@ -16,20 +16,25 @@ public record WorldgenEpoch(
 	RegistryAccess.Frozen registries,
 	LevelStem selectedStem,
 	String settingsIdentity,
+	long resourceRevision,
 	String resourceLayerFingerprint,
 	TagEpoch tagEpoch,
-	long contributionSequence
+	WorldgenContributionRevision.Snapshot contributionRevision
 ) implements WorldgenOwner {
 	public WorldgenEpoch {
 		id = Objects.requireNonNull(id, "id");
 		dimension = Objects.requireNonNull(dimension, "dimension");
-		registries = Objects.requireNonNull(registries, "registries").freeze();
+		registries = Objects.requireNonNull(registries, "registries");
 		selectedStem = Objects.requireNonNull(selectedStem, "selectedStem");
 		settingsIdentity = Objects.requireNonNull(settingsIdentity, "settingsIdentity");
+		if (resourceRevision < 0L) {
+			throw new IllegalArgumentException("Resource revision must be non-negative");
+		}
 		resourceLayerFingerprint = Objects.requireNonNull(resourceLayerFingerprint, "resourceLayerFingerprint");
 		tagEpoch = Objects.requireNonNull(tagEpoch, "tagEpoch");
-		if (contributionSequence < 0L) {
-			throw new IllegalArgumentException("Contribution sequence must be non-negative");
+		contributionRevision = Objects.requireNonNull(contributionRevision, "contributionRevision");
+		if (!contributionRevision.dimension().equals(dimension.location())) {
+			throw new IllegalArgumentException("Contribution revision belongs to a different dimension");
 		}
 	}
 
@@ -39,12 +44,15 @@ public record WorldgenEpoch(
 		RegistryAccess registries,
 		LevelStem selectedStem,
 		String settingsIdentity,
+		long resourceRevision,
 		String resourceLayerFingerprint,
-		TagEpoch tagEpoch
+		TagEpoch tagEpoch,
+		WorldgenContributionRevision.Snapshot contributionRevision
 	) {
 		return new WorldgenEpoch(
 			UUID.randomUUID(), dimension, seed, registries.freeze(), selectedStem,
-			settingsIdentity, resourceLayerFingerprint, tagEpoch, 0L
+			settingsIdentity, resourceRevision, resourceLayerFingerprint, tagEpoch,
+			contributionRevision
 		);
 	}
 
@@ -58,19 +66,48 @@ public record WorldgenEpoch(
 		return this.registries;
 	}
 
-	public WorldgenEpoch withTagEpoch(TagEpoch replacement) {
-		return new WorldgenEpoch(
-			this.id, this.dimension, this.seed, this.registries, this.selectedStem,
-			this.settingsIdentity, this.resourceLayerFingerprint, replacement,
-			this.contributionSequence
-		);
+	public boolean inputRevisionStrictlyAdvances(WorldgenEpoch previous) {
+		requireSameOwner(previous);
+		return this.resourceRevision > previous.resourceRevision
+			|| this.tagEpoch.sequence() > previous.tagEpoch.sequence()
+			|| this.contributionRevision.strictlyAdvances(previous.contributionRevision);
 	}
 
-	public WorldgenEpoch nextContributionSequence() {
-		return new WorldgenEpoch(
+	public boolean inputRevisionRegressesFrom(WorldgenEpoch previous) {
+		requireSameOwner(previous);
+		return this.resourceRevision < previous.resourceRevision
+			|| this.tagEpoch.sequence() < previous.tagEpoch.sequence()
+			|| this.contributionRevision.regressesFrom(previous.contributionRevision);
+	}
+
+	private void requireSameOwner(WorldgenEpoch previous) {
+		Objects.requireNonNull(previous, "previous");
+		if (!this.id.equals(previous.id) || !this.dimension.equals(previous.dimension)) {
+			throw new IllegalArgumentException("Worldgen input revisions belong to different owners");
+		}
+	}
+
+	public WorldgenEpoch withInputs(
+		long replacementResourceRevision,
+		String replacementResourceLayerFingerprint,
+		TagEpoch replacementTags,
+		WorldgenContributionRevision.Snapshot replacementContributions
+	) {
+		Objects.requireNonNull(replacementResourceLayerFingerprint, "replacementResourceLayerFingerprint");
+		Objects.requireNonNull(replacementTags, "replacementTags");
+		Objects.requireNonNull(replacementContributions, "replacementContributions");
+		WorldgenEpoch replacement = new WorldgenEpoch(
 			this.id, this.dimension, this.seed, this.registries, this.selectedStem,
-			this.settingsIdentity, this.resourceLayerFingerprint, this.tagEpoch,
-			Math.addExact(this.contributionSequence, 1L)
+			this.settingsIdentity, replacementResourceRevision,
+			replacementResourceLayerFingerprint, replacementTags,
+			replacementContributions
 		);
+		if (!replacement.inputRevisionStrictlyAdvances(this)) {
+			throw new IllegalArgumentException("Replacement worldgen inputs do not advance this epoch");
+		}
+		if (replacement.inputRevisionRegressesFrom(this)) {
+			throw new IllegalArgumentException("Replacement worldgen inputs regress this epoch");
+		}
+		return replacement;
 	}
 }

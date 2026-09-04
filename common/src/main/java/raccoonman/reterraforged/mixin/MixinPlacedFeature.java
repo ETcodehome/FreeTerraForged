@@ -20,11 +20,11 @@ class MixinPlacedFeature {
 		BlockPos origin,
 		Operation<Boolean> original
 	) {
-		SurfaceFeatureRescue.begin((PlacedFeature)(Object)this, context);
+		boolean rescueScope = SurfaceFeatureRescue.begin((PlacedFeature)(Object)this, context);
 		try {
 			return original.call(context, random, origin);
 		} finally {
-			SurfaceFeatureRescue.finish();
+			SurfaceFeatureRescue.finish(rescueScope);
 		}
 	}
 }

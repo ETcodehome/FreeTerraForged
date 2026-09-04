@@ -25,11 +25,9 @@ public final class UndergroundBiomeSurfaceProtection {
 		Climate.TargetPoint target,
 		int quartX,
 		int quartY,
-		int quartZ
+		int quartZ,
+		GeneratorContext context
 	) {
-		GeneratorContext context = (Object) sampler instanceof RTFClimateSampler rtfSampler
-			? rtfSampler.getUndergroundBiomeSurfaceContext()
-			: null;
 		if (context == null) {
 			float localClearance = (
 				Climate.unquantizeCoord(target.depth()) - SURFACE_DEPTH

@@ -31,6 +31,8 @@ import raccoonman.reterraforged.world.worldgen.runtime.TagEpoch;
 import raccoonman.reterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenEpoch;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenFingerprints;
+import raccoonman.reterraforged.world.worldgen.runtime.WorldgenResourceRevision;
+import raccoonman.reterraforged.world.worldgen.runtime.WorldgenContributionRevision;
 
 @Mixin(ChunkMap.class)
 public class MixinChunkMap {
@@ -42,36 +44,40 @@ public class MixinChunkMap {
 		method = "<init>"
 	)
 	public void ChunkMap(ServerLevel serverLevel, LevelStorageSource.LevelStorageAccess storageAccess, DataFixer dataFixer, StructureTemplateManager templateLoader, Executor executor, BlockableEventLoop<Runnable> eventLoop, LightChunkGetter lightChunkGetter, ChunkGenerator chunkGenerator, ChunkProgressListener chunkProgressListener, ChunkStatusUpdateListener chunkStatusListener, Supplier<DimensionDataStorage> dimensionStorage, int viewDistance, boolean syncChunkWrites, CallbackInfo callback) {
-		if (!((Object) this.randomState instanceof RTFRandomState rtfRandomState)
-			|| !rtfRandomState.isTerraForged()) {
+		if (!((Object) this.randomState instanceof RTFRandomState rtfRandomState)) {
+			throw new IllegalStateException("RandomState does not expose the FTF ownership contract");
+		}
+		if (!(chunkGenerator instanceof TerraForgedChunkGenerator terraForged)) {
+			if (rtfRandomState.isTerraForged()) {
+				throw new IllegalStateException(
+					"FTF density functions require the registered TerraForged generator root"
+				);
+			}
 			return;
 		}
 		LevelStem selectedStem = new LevelStem(serverLevel.dimensionTypeRegistration(), chunkGenerator);
-		String generatorType = chunkGenerator.getTypeNameForDataFixer()
-			.map(key -> key.location().toString())
-			.orElse("unregistered");
-		String settingsIdentity = generatorType;
-		if (chunkGenerator instanceof net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator noiseGenerator) {
-			settingsIdentity += "|" + noiseGenerator.generatorSettings().unwrapKey()
-				.map(key -> key.location().toString())
-				.orElse("inline_noise_settings");
-		}
+		String settingsIdentity = raccoonman.reterraforged.world.worldgen.runtime.WorldgenSettingsIdentity
+			.describe(chunkGenerator);
+		long resourceRevision = ((WorldgenResourceRevision) serverLevel.getServer())
+			.worldgenResourceRevision();
+		var providerCatalog = terraForged.acquireProviderCatalog();
+		var dimension = Registries.levelToLevelStem(serverLevel.dimension());
 		WorldgenEpoch epoch = WorldgenEpoch.create(
-			Registries.levelToLevelStem(serverLevel.dimension()),
+			dimension,
 			serverLevel.getSeed(),
 			serverLevel.registryAccess(),
 			selectedStem,
 			settingsIdentity,
-			"unavailable:resource_layers_not_exposed_at_level_construction",
-			new TagEpoch(0L, WorldgenFingerprints.tags(serverLevel.registryAccess()))
+			resourceRevision,
+			WorldgenFingerprints.resourceLayers(
+				serverLevel.getServer(),
+				resourceRevision
+			),
+			new TagEpoch(0L, WorldgenFingerprints.tags(serverLevel.registryAccess())),
+			WorldgenContributionRevision.snapshot(dimension, providerCatalog)
 		);
 		try {
-			if (!(chunkGenerator instanceof TerraForgedChunkGenerator terraForged)) {
-				throw new IllegalStateException(
-					"FTF terrain requires the registered TerraForged generator root"
-				);
-			}
-			terraForged.initializeEpoch(epoch, rtfRandomState);
+			terraForged.initializeEpoch(epoch, rtfRandomState, providerCatalog);
 			((IFlowSettingsHolder) serverLevel).reterraforged$setFlowSettings(
 				FlowSettingsSnapshot.from(Objects.requireNonNull(
 					rtfRandomState.preset(),

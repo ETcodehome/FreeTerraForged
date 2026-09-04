@@ -15,14 +15,23 @@ public final class WorldgenCapabilityReport {
 	private final List<CapabilityNodeReport> nodes;
 	private final Map<WorldgenFacet, List<CapabilityNodeReport>> byFacet;
 	private final WorldgenExecution execution;
+	private final List<WorldgenProviderDiagnostic> providerDiagnostics;
 
 	public WorldgenCapabilityReport(List<CapabilityNodeReport> nodes) {
-		this(nodes, WorldgenExecution.serial());
+		this(nodes, WorldgenExecution.serial(), List.of());
 	}
 
 	public WorldgenCapabilityReport(
 		List<CapabilityNodeReport> nodes,
 		WorldgenExecution execution
+	) {
+		this(nodes, execution, List.of());
+	}
+
+	public WorldgenCapabilityReport(
+		List<CapabilityNodeReport> nodes,
+		WorldgenExecution execution,
+		List<WorldgenProviderDiagnostic> providerDiagnostics
 	) {
 		this.nodes = nodes.stream()
 			.map(Objects::requireNonNull)
@@ -35,6 +44,12 @@ public final class WorldgenCapabilityReport {
 		}
 		this.byFacet = Map.copyOf(index);
 		this.execution = Objects.requireNonNull(execution, "execution");
+		this.providerDiagnostics = providerDiagnostics.stream()
+			.map(Objects::requireNonNull)
+			.sorted(Comparator.comparing(WorldgenProviderDiagnostic::source)
+				.thenComparing(value -> value.provider().map(Object::toString).orElse(""))
+				.thenComparing(value -> value.facet().map(Enum::name).orElse("")))
+			.toList();
 	}
 
 	public List<CapabilityNodeReport> nodes() {
@@ -53,10 +68,14 @@ public final class WorldgenCapabilityReport {
 		return this.execution;
 	}
 
+	public List<WorldgenProviderDiagnostic> providerDiagnostics() {
+		return this.providerDiagnostics;
+	}
+
 	/** Stable machine-readable representation containing values only, never live worldgen objects. */
 	public JsonObject toJson() {
 		JsonObject root = new JsonObject();
-		root.addProperty("schema_version", 2);
+		root.addProperty("schema_version", 3);
 		JsonObject queryModes = new JsonObject();
 		for (WorldgenFacet facet : WorldgenFacet.values()) {
 			queryModes.addProperty(
@@ -87,6 +106,22 @@ public final class WorldgenCapabilityReport {
 			nodes.add(value);
 		}
 		root.add("nodes", nodes);
+		JsonArray providerDiagnostics = new JsonArray();
+		for (WorldgenProviderDiagnostic diagnostic : this.providerDiagnostics) {
+			JsonObject value = new JsonObject();
+			value.addProperty("source", diagnostic.source());
+			diagnostic.provider().ifPresent(provider -> value.addProperty("provider", provider.toString()));
+			diagnostic.facet().ifPresent(facet -> value.addProperty("facet", facet.name().toLowerCase()));
+			CapabilityFailure failure = diagnostic.failure();
+			value.addProperty("code", failure.code());
+			value.addProperty("message", failure.message());
+			value.addProperty("exception_type", failure.exceptionType());
+			JsonArray chain = new JsonArray();
+			failure.causeChain().forEach(chain::add);
+			value.add("cause_chain", chain);
+			providerDiagnostics.add(value);
+		}
+		root.add("provider_diagnostics", providerDiagnostics);
 		return root;
 	}
 }

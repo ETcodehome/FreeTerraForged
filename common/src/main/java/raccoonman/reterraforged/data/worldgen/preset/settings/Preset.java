@@ -51,7 +51,7 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 		return new Preset(this.world.copy(), this.surface.copy(), this.caves.copy(), this.climate.copy(), this.terrain.copy(), this.rivers.copy(), this.flow.copy(), this.island.copy(), this.filters.copy(), this.structures.copy(), this.miscellaneous.copy(), this.presentation.copy());
 	}
 
-	public HolderLookup.Provider buildPatch(RegistryAccess registries) {
+	public HolderLookup.Provider buildPatch(HolderLookup.Provider registries) {
 		return this.buildPatchedRegistries(registries).patches();
 	}
 
@@ -62,11 +62,21 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 	 */
 	public HolderLookup.Provider buildPreviewLookups(RegistryAccess registries) {
 		RegistryAccess.Frozen selected = registries.freeze();
-		HolderLookup.Provider patches = this.buildPatchedRegistries(selected).patches();
 		Set<ResourceKey<? extends Registry<?>>> overrides = Set.of(
 			RTFRegistries.PRESET,
 			RTFRegistries.NOISE
 		);
+		RegistrySetBuilder builder = new RegistrySetBuilder();
+		this.addPatch(builder, RTFRegistries.PRESET, (preset, ctx) -> ctx.register(KEY, preset));
+		this.addPatch(builder, RTFRegistries.NOISE, PresetNoiseData::bootstrap);
+		Cloner.Factory factory = new Cloner.Factory();
+		factory.addCodec(RTFRegistries.PRESET, Preset.DIRECT_CODEC);
+		factory.addCodec(RTFRegistries.NOISE, Noise.DIRECT_CODEC);
+		HolderLookup.Provider patches = builder.buildPatch(
+			RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY),
+			this.filterToArmedOnly(selected, overrides),
+			factory
+		).patches();
 		return new HolderLookup.Provider() {
 			@Override
 			public Stream<ResourceKey<? extends Registry<?>>> listRegistries() {
@@ -82,7 +92,7 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 		};
 	}
 
-	private RegistrySetBuilder.PatchedRegistries buildPatchedRegistries(RegistryAccess registries) {
+	private RegistrySetBuilder.PatchedRegistries buildPatchedRegistries(HolderLookup.Provider registries) {
 		RegistrySetBuilder builder = new RegistrySetBuilder();
 
 		// 1. Setup Patches
@@ -123,7 +133,7 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 		// 5. Wrap registries in a safety shield
 		// This ensures the cloner only sees registries for which a public codec is available.
 		// Unknown custom registries remain outside the patch instead of being guessed or cloned.
-		RegistryAccess safeSource = this.filterToArmedOnly(registries, armedRegistries);
+		HolderLookup.Provider safeSource = this.filterToArmedOnly(registries, armedRegistries);
 
 		return builder.buildPatch(
 				RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY),
@@ -143,23 +153,16 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 	/**
 	 * Creates a virtual view of the RegistryAccess that hides any folders we don't have a cloner for.
 	 */
-	private RegistryAccess filterToArmedOnly(RegistryAccess original, Set<ResourceKey<? extends Registry<?>>> armed) {
-		return new RegistryAccess() {
+	private HolderLookup.Provider filterToArmedOnly(HolderLookup.Provider original, Set<ResourceKey<? extends Registry<?>>> armed) {
+		return new HolderLookup.Provider() {
 			@Override
-			public <T> Optional<Registry<T>> registry(ResourceKey<? extends Registry<? extends T>> key) {
-				// ONLY allow the registry if we have explicitly armed it with a cloner.
-				if (armed.contains(key)) {
-					return original.registry(key);
-				}
-
-				// Hide everything else to keep the cloner happy
-				return Optional.empty();
+			public <T> Optional<HolderLookup.RegistryLookup<T>> lookup(ResourceKey<? extends Registry<? extends T>> key) {
+				return armed.contains(key) ? original.lookup(key) : Optional.empty();
 			}
 
 			@Override
-			public Stream<RegistryEntry<?>> registries() {
-				// Filter out any registry that hasn't been explicitly armed
-				return original.registries().filter(entry -> armed.contains(entry.key()));
+			public Stream<ResourceKey<? extends Registry<?>>> listRegistries() {
+				return original.listRegistries().filter(armed::contains);
 			}
 		};
 	}

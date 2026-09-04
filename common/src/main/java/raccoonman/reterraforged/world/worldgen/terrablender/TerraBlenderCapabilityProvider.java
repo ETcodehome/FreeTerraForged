@@ -33,6 +33,7 @@ import raccoonman.reterraforged.world.worldgen.runtime.WorldgenOwnerType;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenPlans;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenQueryMode;
 import raccoonman.reterraforged.world.worldgen.runtime.WeightedRendezvous;
+import terrablender.DimensionTypeTags;
 import terrablender.api.Region;
 import terrablender.api.RegionType;
 import terrablender.api.Regions;
@@ -76,6 +77,11 @@ public final class TerraBlenderCapabilityProvider implements WorldgenCapabilityP
 	}
 
 	@Override
+	public WorldgenQueryMode declaredQueryMode(WorldgenFacet facet) {
+		return WorldgenQueryMode.ISOLATED_PARALLEL_READ;
+	}
+
+	@Override
 	public WorldgenQueryMode queryMode(
 		WorldgenFacet facet,
 		WorldgenCompilationContext context
@@ -89,7 +95,7 @@ public final class TerraBlenderCapabilityProvider implements WorldgenCapabilityP
 		WorldgenCompilationContext context
 	) {
 		if (!ModLoaderUtil.isLoaded("terrablender")
-			|| !context.owner().dimension().equals(net.minecraft.world.level.dimension.LevelStem.OVERWORLD)
+			|| !isOverworldRegionGraph(context)
 			|| !(MinecraftBiomeSourceGraphs.acquisitionSource(
 				context.owner().selectedStem().generator()
 			) instanceof MultiNoiseBiomeSource)) {
@@ -113,7 +119,8 @@ public final class TerraBlenderCapabilityProvider implements WorldgenCapabilityP
 		if (!ModLoaderUtil.isLoaded("terrablender")) {
 			return Optional.empty();
 		}
-		if (!(MinecraftBiomeSourceGraphs.acquisitionSource(
+		if (!isOverworldRegionGraph(context)
+			|| !(MinecraftBiomeSourceGraphs.acquisitionSource(
 			context.owner().selectedStem().generator()
 		) instanceof MultiNoiseBiomeSource)) {
 			return Optional.empty();
@@ -129,7 +136,7 @@ public final class TerraBlenderCapabilityProvider implements WorldgenCapabilityP
 				descriptor(WorldgenFacet.SPATIAL_OWNERSHIP,
 					"FTF cell coordinates select exactly one public TerraBlender provider domain"),
 				Optional.of((cellX, cellZ) -> new WorldgenPlans.SpatialResult(
-					WeightedRendezvous.select(selection.salt(), cellX, cellZ, selection.providers()).id(),
+					selection.selectDomain(cellX, cellZ),
 					cellX,
 					cellZ
 				))
@@ -139,6 +146,7 @@ public final class TerraBlenderCapabilityProvider implements WorldgenCapabilityP
 	}
 
 	private static WorldgenPlans.ProviderSelection snapshot(WorldgenCompilationContext context) {
+		context.checkCancelled();
 		Registry<Biome> biomes = context.owner().registries().registryOrThrow(Registries.BIOME);
 		List<Region> regions = List.copyOf(Regions.get(RegionType.OVERWORLD));
 		if (regions.isEmpty()) {
@@ -148,6 +156,7 @@ public final class TerraBlenderCapabilityProvider implements WorldgenCapabilityP
 		List<WorldgenPlans.ProviderDomain> providers = new ArrayList<>(regions.size());
 		Holder<Biome> deferred = biomes.getHolderOrThrow(Region.DEFERRED_PLACEHOLDER);
 		for (int order = 0; order < regions.size(); order++) {
+			context.checkCancelled();
 			Region region = regions.get(order);
 			if (!ids.add(region.getName())) {
 				throw new IllegalStateException("Duplicate TerraBlender provider ID: " + region.getName());
@@ -164,6 +173,7 @@ public final class TerraBlenderCapabilityProvider implements WorldgenCapabilityP
 				region.getName(), region.getWeight(), new Climate.ParameterList<>(entries), order
 			));
 		}
+		context.checkCancelled();
 		return new WorldgenPlans.ProviderSelection(
 			descriptor(WorldgenFacet.PROVIDER_SELECTION,
 				"Public provider IDs, positive weights, climate tables, order, and index-zero fallback were snapshotted"),
@@ -183,6 +193,10 @@ public final class TerraBlenderCapabilityProvider implements WorldgenCapabilityP
 
 	static boolean isContributingRegionIds(List<ResourceLocation> ids) {
 		return ids.stream().anyMatch(id -> !id.equals(ResourceLocation.withDefaultNamespace("overworld")));
+	}
+
+	private static boolean isOverworldRegionGraph(WorldgenCompilationContext context) {
+		return context.owner().selectedStem().type().is(DimensionTypeTags.OVERWORLD_REGIONS);
 	}
 
 	private static PlanDescriptor descriptor(WorldgenFacet facet, String detail) {

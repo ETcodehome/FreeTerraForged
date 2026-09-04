@@ -5,7 +5,9 @@ import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 
 import com.mojang.datafixers.util.Pair;
@@ -13,6 +15,7 @@ import com.mojang.datafixers.util.Pair;
 import net.minecraft.core.Holder;
 import net.minecraft.core.QuartPos;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.BiomeSource;
 import net.minecraft.world.level.biome.Climate;
@@ -22,14 +25,17 @@ import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.platform.ModLoaderUtil;
 import raccoonman.reterraforged.world.worldgen.runtime.CapabilityFailure;
 import raccoonman.reterraforged.world.worldgen.runtime.CapabilityState;
+import raccoonman.reterraforged.world.worldgen.runtime.BiomeCandidateRoot;
 import raccoonman.reterraforged.world.worldgen.runtime.CellRendezvous;
 import raccoonman.reterraforged.world.worldgen.runtime.MinecraftBiomeSourceGraphs;
 import raccoonman.reterraforged.world.worldgen.runtime.PlanDescriptor;
+import raccoonman.reterraforged.world.worldgen.runtime.PreServerWorldgenContext;
 import raccoonman.reterraforged.world.worldgen.runtime.ProviderOrder;
 import raccoonman.reterraforged.world.worldgen.runtime.PreviewSourceContext;
 import raccoonman.reterraforged.world.worldgen.runtime.RequestOwnedBiomeSource;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenCapabilityProvider;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenCompilationContext;
+import raccoonman.reterraforged.world.worldgen.runtime.WorldgenContributionKind;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenFacet;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenApplicability;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenOwnerType;
@@ -70,6 +76,43 @@ public final class LithostitchedCapabilityProvider implements WorldgenCapability
 	}
 
 	@Override
+	public WorldgenContributionKind contributionKind(WorldgenFacet facet) {
+		return WorldgenContributionKind.ORDERED_TRANSFORM;
+	}
+
+	@Override
+	public boolean providesPreviewFactory() {
+		return true;
+	}
+
+	@Override
+	public boolean requiresPreServerFinalization() {
+		return true;
+	}
+
+	@Override
+	public boolean providesContributionRevision() {
+		return true;
+	}
+
+	@Override
+	public OptionalLong contributionRevision(ResourceKey<LevelStem> dimension) {
+		return OptionalLong.of(LithostitchedInjectionBridge.revision());
+	}
+
+	@Override
+	public WorldgenQueryMode declaredQueryMode(WorldgenFacet facet) {
+		return WorldgenQueryMode.ISOLATED_PARALLEL_READ;
+	}
+
+	@Override
+	public void finalizePreServer(PreServerWorldgenContext context) {
+		if (ModLoaderUtil.isLoaded("lithostitched")) {
+			LithostitchedInjectionBridge.finalizePreServer(context);
+		}
+	}
+
+	@Override
 	public WorldgenQueryMode queryMode(WorldgenFacet facet, WorldgenCompilationContext context) {
 		return WorldgenQueryMode.ISOLATED_PARALLEL_READ;
 	}
@@ -83,12 +126,18 @@ public final class LithostitchedCapabilityProvider implements WorldgenCapability
 			return WorldgenApplicability.NOT_APPLICABLE;
 		}
 		Acquisition acquisition = acquisition(context);
+		if (acquisition.preServerFailure().isPresent()) {
+			return WorldgenApplicability.APPLICABLE;
+		}
 		if (acquisition.snapshot().isEmpty()) {
 			return acquisition.declarativeContribution()
 				? WorldgenApplicability.APPLICABLE
 				: WorldgenApplicability.NOT_APPLICABLE;
 		}
 		LithostitchedInjectionBridge.Snapshot snapshot = acquisition.snapshot().orElseThrow();
+		if (!snapshot.cloneFailures().isEmpty()) {
+			return WorldgenApplicability.APPLICABLE;
+		}
 		boolean applies = switch (facet) {
 			case BIOME_COMPOSITION -> snapshot.injectors().stream()
 					.anyMatch(injector -> injector.kind() == LithostitchedInjectionBridge.Kind.ADD_POINTS);
@@ -101,31 +150,34 @@ public final class LithostitchedCapabilityProvider implements WorldgenCapability
 
 	@Override
 	public Optional<RequestOwnedBiomeSource> previewSource(PreviewSourceContext context) {
+		context.checkCancelled();
 		if (!ModLoaderUtil.isLoaded("lithostitched")) {
 			return Optional.empty();
 		}
 		LithostitchedInjectionBridge.Snapshot captured = LithostitchedInjectionBridge
 			.snapshot(context.realizedSource())
 			.orElse(null);
-		if (captured == null) {
+		if (captured == null || LithostitchedInjectionBridge.preServerFailure(
+			context.realizedSource()
+		).isPresent()) {
 			return Optional.empty();
 		}
 		if (!LithostitchedInjectionBridge.SUPPORTED_VERSIONS.contains(captured.mechanismVersion())
 			|| !captured.cloneFailures().isEmpty()
-			|| captured.injectors().stream().anyMatch(value -> value.kind() == LithostitchedInjectionBridge.Kind.UNKNOWN)
-			|| captured.seed() != context.seed()) {
+			|| captured.injectors().stream().anyMatch(value -> value.kind() == LithostitchedInjectionBridge.Kind.UNKNOWN)) {
 			throw new IllegalStateException("The finalized Lithostitched snapshot cannot create an isolated preview request");
 		}
 		LithostitchedInjectionBridge.Snapshot rebound = LithostitchedInjectionBridge.rebind(
-			captured, captured.root(), context.lookups(), context.noiseSettings().value()
+			captured, context.lookups(), context.noiseSettings().value(), context.seed()
 		);
-		BiomeSource preview = MultiNoiseBiomeSource.createFromList(new Climate.ParameterList<>(
-			rebound.baseEntries()
+		context.checkCancelled();
+		BiomeCandidateRoot root = rebound.baseRoot().orElseThrow(() -> new IllegalStateException(
+			"The finalized Lithostitched snapshot has no public multi-noise candidate root"
 		));
-		rebound = rebound.withRoot(preview);
+		BiomeSource preview = MultiNoiseBiomeSource.createFromList(root.candidates());
 		LithostitchedInjectionBridge.bind(preview, rebound);
 		return Optional.of(new RequestOwnedBiomeSource(
-			preview, () -> LithostitchedInjectionBridge.release(preview)
+			preview, root, () -> LithostitchedInjectionBridge.release(preview)
 		));
 	}
 
@@ -134,6 +186,7 @@ public final class LithostitchedCapabilityProvider implements WorldgenCapability
 		WorldgenFacet facet,
 		WorldgenCompilationContext context
 	) {
+		context.checkCancelled();
 		if (!ModLoaderUtil.isLoaded("lithostitched")) {
 			return Optional.empty();
 		}
@@ -141,6 +194,14 @@ public final class LithostitchedCapabilityProvider implements WorldgenCapability
 			context.owner().selectedStem().generator()
 		);
 		Acquisition acquisition = acquisition(context);
+		if (acquisition.preServerFailure().isPresent()) {
+			String detail = acquisition.preServerFailure().orElseThrow();
+			return Optional.of(unavailable(
+				facet,
+				"lithostitched_pre_server_finalization_failed",
+				"Lithostitched could not produce a stable pre-server snapshot: " + detail
+			));
+		}
 		Optional<LithostitchedInjectionBridge.Snapshot> found = acquisition.snapshot();
 		if (found.isEmpty()) {
 			if (acquisition.mechanismSource()) {
@@ -218,14 +279,19 @@ public final class LithostitchedCapabilityProvider implements WorldgenCapability
 	private static Acquisition acquisition(WorldgenCompilationContext context) {
 		try {
 			return context.snapshot(ID, Acquisition.class, () -> {
+				context.checkCancelled();
 				BiomeSource selected = MinecraftBiomeSourceGraphs.acquisitionSource(
 					context.owner().selectedStem().generator()
 				);
 				Optional<LithostitchedInjectionBridge.Snapshot> captured =
 					LithostitchedInjectionBridge.snapshot(selected);
+				Optional<String> preServerFailure = LithostitchedInjectionBridge.preServerFailure(selected);
 				boolean mechanismSource = LithostitchedInjectionBridge.isInjectorSource(selected);
 				if (captured.isPresent()) {
-					return new Acquisition(captured, mechanismSource, true);
+					return new Acquisition(captured, mechanismSource, true, preServerFailure);
+				}
+				if (preServerFailure.isPresent()) {
+					return new Acquisition(Optional.empty(), mechanismSource, true, preServerFailure);
 				}
 				boolean declarative = LithostitchedInjectionBridge.hasDeclarativeInjectors(
 					context.owner().lookups(), context.owner().dimension()
@@ -234,12 +300,12 @@ public final class LithostitchedCapabilityProvider implements WorldgenCapability
 					ModLoaderUtil.version("lithostitched").orElse("unknown")
 				)) {
 					return new Acquisition(
-						Optional.empty(), mechanismSource, declarative
+						Optional.empty(), mechanismSource, declarative, Optional.empty()
 					);
 				}
 				if (!(context.owner().selectedStem().generator()
 					instanceof net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator generator)) {
-					return new Acquisition(Optional.empty(), mechanismSource, true);
+					return new Acquisition(Optional.empty(), mechanismSource, true, Optional.empty());
 				}
 				Optional<LithostitchedInjectionBridge.Snapshot> snapshot =
 					LithostitchedInjectionBridge.captureDeclarative(
@@ -249,7 +315,8 @@ public final class LithostitchedCapabilityProvider implements WorldgenCapability
 						generator.generatorSettings().value(),
 						context.owner().seed()
 					);
-				return new Acquisition(snapshot, mechanismSource, true);
+				context.checkCancelled();
+				return new Acquisition(snapshot, mechanismSource, true, Optional.empty());
 			});
 		} catch (RuntimeException failure) {
 			throw failure;
@@ -261,8 +328,12 @@ public final class LithostitchedCapabilityProvider implements WorldgenCapability
 	private record Acquisition(
 		Optional<LithostitchedInjectionBridge.Snapshot> snapshot,
 		boolean mechanismSource,
-		boolean declarativeContribution
+		boolean declarativeContribution,
+		Optional<String> preServerFailure
 	) {
+		private Acquisition {
+			preServerFailure = preServerFailure.map(String::strip);
+		}
 	}
 
 	private static WorldgenPlans.BiomeComposition candidateComposition(
@@ -306,6 +377,14 @@ public final class LithostitchedCapabilityProvider implements WorldgenCapability
 		List<LithostitchedInjectionBridge.CapturedInjector> dispatches = ordered(
 			snapshot, LithostitchedInjectionBridge.Kind.DISPATCH
 		);
+		List<CompiledDispatch> compiledDispatches = dispatches.stream()
+			.map(injector -> new CompiledDispatch(
+				injector,
+				new Climate.ParameterList<>(injector.points())
+			))
+			.toList();
+		Map<Holder<Biome>, CellRendezvous.Selector<ResourceLocation>> regionSelectors =
+			compileRegionSelectors(snapshot.regions(), seed);
 		List<LithostitchedInjectionBridge.CapturedInjector> partials = ordered(
 			snapshot, LithostitchedInjectionBridge.Kind.REPLACE_PARTIALLY
 		);
@@ -329,11 +408,12 @@ public final class LithostitchedCapabilityProvider implements WorldgenCapability
 			),
 			List.of(new WorldgenPlans.SelectionDecoratorStage(
 				ID,
-				(selection, spatial, target, quartX, quartY, quartZ, sampler) -> {
+				200,
+				(selection, spatial, target, quartX, quartY, quartZ, sampler, surfaceContext) -> {
 					Holder<Biome> biome = selection.biome();
 					ResourceLocation region = selectRegion(
-						snapshot.regions(), snapshot.nativeRegionFunctionPresent(), biome,
-						seed, spatial.cellX(), spatial.cellZ()
+						regionSelectors, snapshot.nativeRegionFunctionPresent(), biome,
+						spatial.cellX(), spatial.cellZ()
 					);
 					int blockX = QuartPos.toBlock(quartX);
 					int blockY = QuartPos.toBlock(quartY);
@@ -343,9 +423,10 @@ public final class LithostitchedCapabilityProvider implements WorldgenCapability
 							return injector.output().orElseThrow();
 						}
 					}
-					for (LithostitchedInjectionBridge.CapturedInjector injector : dispatches) {
+					for (CompiledDispatch dispatch : compiledDispatches) {
+						LithostitchedInjectionBridge.CapturedInjector injector = dispatch.injector();
 						if (injector.criteria().orElseThrow().matches(blockX, blockY, blockZ, target, region)) {
-							biome = new Climate.ParameterList<>(injector.points()).findValue(target);
+							biome = dispatch.candidates().findValue(target);
 							break;
 						}
 					}
@@ -368,6 +449,12 @@ public final class LithostitchedCapabilityProvider implements WorldgenCapability
 		);
 	}
 
+	private record CompiledDispatch(
+		LithostitchedInjectionBridge.CapturedInjector injector,
+		Climate.ParameterList<Holder<Biome>> candidates
+	) {
+	}
+
 	private static List<LithostitchedInjectionBridge.CapturedInjector> ordered(
 		LithostitchedInjectionBridge.Snapshot snapshot,
 		LithostitchedInjectionBridge.Kind kind
@@ -383,28 +470,42 @@ public final class LithostitchedCapabilityProvider implements WorldgenCapability
 			.thenComparing(LithostitchedInjectionBridge.CapturedInjector::id);
 	}
 
-	private static ResourceLocation selectRegion(
+	private static Map<Holder<Biome>, CellRendezvous.Selector<ResourceLocation>> compileRegionSelectors(
 		List<LithostitchedInjectionBridge.CapturedRegion> regions,
+		long seed
+	) {
+		Map<Holder<Biome>, List<CellRendezvous.Choice<ResourceLocation>>> choices = new java.util.HashMap<>();
+		for (LithostitchedInjectionBridge.CapturedRegion region : regions) {
+			if (region.weight() <= 0) {
+				continue;
+			}
+			CellRendezvous.Choice<ResourceLocation> choice = new CellRendezvous.Choice<>(
+				region.id(), region.weight(), region.id()
+			);
+			for (Holder<Biome> biome : region.biomes()) {
+				choices.computeIfAbsent(biome, ignored -> new ArrayList<>()).add(choice);
+			}
+		}
+		return choices.entrySet().stream().collect(java.util.stream.Collectors.toUnmodifiableMap(
+			Map.Entry::getKey,
+			entry -> new CellRendezvous.Selector<>(seed ^ REGION_SALT, entry.getValue())
+		));
+	}
+
+	private static ResourceLocation selectRegion(
+		Map<Holder<Biome>, CellRendezvous.Selector<ResourceLocation>> selectors,
 		boolean enabled,
 		Holder<Biome> biome,
-		long seed,
 		long cellX,
 		long cellZ
 	) {
 		if (!enabled) {
 			return LithostitchedInjectionBridge.noRegion();
 		}
-		List<CellRendezvous.Choice<ResourceLocation>> choices = new ArrayList<>();
-		for (LithostitchedInjectionBridge.CapturedRegion region : regions) {
-			if (region.weight() > 0 && region.biomes().contains(biome)) {
-				choices.add(new CellRendezvous.Choice<>(
-					region.id(), region.weight(), region.id()
-				));
-			}
-		}
-		return choices.isEmpty()
+		CellRendezvous.Selector<ResourceLocation> selector = selectors.get(biome);
+		return selector == null
 			? LithostitchedInjectionBridge.noRegion()
-			: CellRendezvous.select(seed ^ REGION_SALT, cellX, cellZ, choices);
+			: selector.select(cellX, cellZ);
 	}
 
 	private static PlanDescriptor descriptor(WorldgenFacet facet, String detail) {
