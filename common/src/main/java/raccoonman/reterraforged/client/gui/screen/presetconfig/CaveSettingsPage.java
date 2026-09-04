@@ -17,11 +17,8 @@ public class CaveSettingsPage extends PresetEditorPage {
 	private Slider cheeseCaveProbability;
 	private Slider spaghettiProbability;
 	private Slider noodleCaveProbability;
-	private Slider carverCaveProbability;
-	private Slider deepCarverCaveProbability;
 	private Slider ravineProbability;
 	private CycleButton<Boolean> largeOreVeins;
-	private CycleButton<Boolean> legacyCarverDistribution;
 	
 	public CaveSettingsPage(PresetConfigScreen screen, PresetEntry preset) {
 		super(screen, preset);
@@ -59,23 +56,12 @@ public class CaveSettingsPage extends PresetEditorPage {
 			caves.noodleCaveProbability = (float) slider.scaleValue(value);
 			return value;
 		});
-		this.carverCaveProbability = PresetWidgets.createFloatSlider(caves.caveCarverProbability, 0.0F, 1.0F, RTFTranslationKeys.GUI_SLIDER_CAVE_CARVER_PROBABILITY, (slider, value) -> {
-			caves.caveCarverProbability = (float) slider.scaleValue(value);
-			return value;
-		});
-		this.deepCarverCaveProbability = PresetWidgets.createFloatSlider(caves.deepCaveCarverProbability, 0.0F, 1.0F, RTFTranslationKeys.GUI_SLIDER_DEEP_CAVE_CARVER_PROBABILITY, (slider, value) -> {
-			caves.deepCaveCarverProbability = (float) slider.scaleValue(value);
-			return value;
-		});
 		this.ravineProbability = PresetWidgets.createFloatSlider(caves.ravineCarverProbability, 0.0F, 1.0F, RTFTranslationKeys.GUI_SLIDER_RAVINE_CARVER_PROBABILITY, (slider, value) -> {
 			caves.ravineCarverProbability = (float) slider.scaleValue(value);
 			return value;
 		});
 		this.largeOreVeins = PresetWidgets.createToggle(caves.largeOreVeins, RTFTranslationKeys.GUI_BUTTON_LARGE_ORE_VEINS, (button, value) -> {
 			caves.largeOreVeins = value;
-		});
-		this.legacyCarverDistribution = PresetWidgets.createToggle(caves.legacyCarverDistribution, RTFTranslationKeys.GUI_BUTTON_LEGACY_CARVER_DISTRIBUTION, (button, value) -> {
-			caves.legacyCarverDistribution = value;
 		});
 
 		this.left.addWidget(PresetWidgets.createLabel(RTFTranslationKeys.GUI_LABEL_NOISE_CAVES));
@@ -86,11 +72,8 @@ public class CaveSettingsPage extends PresetEditorPage {
 		this.left.addWidget(this.noodleCaveProbability);
 
 		this.left.addWidget(PresetWidgets.createLabel(RTFTranslationKeys.GUI_LABEL_CARVERS));
-		this.left.addWidget(this.carverCaveProbability);
-		this.left.addWidget(this.deepCarverCaveProbability);
 		this.left.addWidget(this.ravineProbability);
 		this.left.addWidget(this.largeOreVeins);
-		this.left.addWidget(this.legacyCarverDistribution);
 	}
 	
 	@Override
