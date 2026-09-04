@@ -33,7 +33,7 @@ public final class RTFLanguageProvider {
 			this.add(RTFTranslationKeys.GUI_RIVERS_PRESET_NAME, "Modern - Default with 3D Rivers");
 			this.add(RTFTranslationKeys.GUI_WORLD_SETTINGS_TITLE, "World Settings");
 			this.add(RTFTranslationKeys.GUI_SURFACE_SETTINGS_TITLE, "Surface Settings (Experimental)");
-			this.add(RTFTranslationKeys.GUI_CAVE_SETTINGS_TITLE, "Cave Settings (Experimental)");
+			this.add(RTFTranslationKeys.GUI_UNDERGROUND_SETTINGS_TITLE, "Underground Settings");
 			this.add(RTFTranslationKeys.GUI_CLIMATE_SETTINGS_TITLE, "Climate Settings");
 			this.add(RTFTranslationKeys.GUI_TERRAIN_SETTINGS_TITLE, "Terrain Settings");
 			this.add(RTFTranslationKeys.GUI_RIVER_SETTINGS_TITLE, "River Settings");

@@ -1,6 +1,5 @@
 package raccoonman.reterraforged.client.data;
 
-import net.minecraft.network.chat.Component;
 import raccoonman.reterraforged.RTFCommon;
 
 public final class RTFTranslationKeys {
@@ -35,7 +34,7 @@ public final class RTFTranslationKeys {
 	public static final String GUI_COMMUNITY1_PRESET_NAME = resolve("gui.preset.community1.name");
 	public static final String GUI_WORLD_SETTINGS_TITLE = resolve("gui.worldSettings.title");
 	public static final String GUI_SURFACE_SETTINGS_TITLE = resolve("gui.surfaceSettings.title");
-	public static final String GUI_CAVE_SETTINGS_TITLE = resolve("gui.caveSettings.title");
+	public static final String GUI_UNDERGROUND_SETTINGS_TITLE = resolve("gui.undergroundSettings.title");
 	public static final String GUI_CLIMATE_SETTINGS_TITLE = resolve("gui.climateSettings.title");
 	public static final String GUI_TERRAIN_SETTINGS_TITLE = resolve("gui.terrainSettings.title");
 	public static final String GUI_RIVER_SETTINGS_TITLE = resolve("gui.riverSettings.title");
