@@ -86,7 +86,7 @@
   "reterraforged.gui.button.river.flow.particles.tooltip": "Allow rivers to spawn particles that show flow direction",
   "reterraforged.gui.button.boat.flow.dynamics.tooltip": "Allow river water flow direction to apply force to boats",
   "reterraforged.gui.button.boat.navigable.waterfalls.tooltip": "Prevent boats sinking while they are on rivers allowing waterfalls to be climbed",
-  "reterraforged.gui.caveSettings.title": "Cave Settings",
+  "reterraforged.gui.undergroundSettings.title": "Underground Settings",
   "reterraforged.gui.climateSettings.title": "Climate Settings",
   "reterraforged.gui.filterSettings.title": "Filter Settings",
   "reterraforged.gui.islandSettings.title": "Island Settings",

@@ -114,6 +114,6 @@ public class SurfaceSettingsPage extends PresetEditorPage {
 
 	@Override
 	public Optional<Page> next() {
-		return Optional.of(new CaveSettingsPage(this.screen, this.preset));
+		return Optional.of(new UndergroundSettingsPage(this.screen, this.preset));
 	}
 }
