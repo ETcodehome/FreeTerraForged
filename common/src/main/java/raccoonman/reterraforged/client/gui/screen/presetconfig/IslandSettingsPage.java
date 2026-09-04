@@ -19,6 +19,8 @@ public class IslandSettingsPage extends PresetEditorPage {
 	private Slider islandBaseScale;
 	private Slider islandVerticalScale;
 	private Slider islandHorizontalScale;
+	private Slider mountainHorizontalScale;
+	private Slider volcanismHorizontalScale;
 	private Slider mountainChance;
 	private Slider mountainScale;
 	private Slider volcanoChance;
@@ -26,6 +28,7 @@ public class IslandSettingsPage extends PresetEditorPage {
 	private Slider offshoreDepth;
 	private Slider beachWidth;
 	private Slider beachCoverage;
+	private Slider macroDensityPercentage;
 
 	public IslandSettingsPage(PresetConfigScreen screen, PresetEntry preset) {
 		super(screen, preset);
@@ -52,6 +55,11 @@ public class IslandSettingsPage extends PresetEditorPage {
 			this.regenerate();
 			return value;
 		});
+		this.macroDensityPercentage = PresetWidgets.createFloatSlider(island.macroDensityPercentage, 0.0F, 1.0F, RTFTranslationKeys.GUI_SLIDER_ISLAND_MACRO_DENSITY, (slider, value) -> {
+			island.macroDensityPercentage = (float) slider.scaleValue(value);
+			this.regenerate();
+			return value;
+		});
 		this.islandSize = PresetWidgets.createFloatSlider(island.islandSize, 50.0F, 500.0F, RTFTranslationKeys.GUI_SLIDER_ISLAND_SIZE, (slider, value) -> {
 			island.islandSize = (float) slider.scaleValue(value);
 			this.regenerate();
@@ -72,7 +80,7 @@ public class IslandSettingsPage extends PresetEditorPage {
 			this.regenerate();
 			return value;
 		});
-		this.islandHorizontalScale = PresetWidgets.createFloatSlider(island.islandHorizontalScale, 0.1F, 3.0F, RTFTranslationKeys.GUI_SLIDER_ISLAND_HORIZONTAL_SCALE, (slider, value) -> {
+		this.islandHorizontalScale = PresetWidgets.createFloatSlider(island.islandHorizontalScale, 0.1F, 10.0F, RTFTranslationKeys.GUI_SLIDER_ISLAND_HORIZONTAL_SCALE, (slider, value) -> {
 			island.islandHorizontalScale = (float) slider.scaleValue(value);
 			this.regenerate();
 			return value;
@@ -112,19 +120,41 @@ public class IslandSettingsPage extends PresetEditorPage {
 			this.regenerate();
 			return value;
 		});
+		this.mountainHorizontalScale = PresetWidgets.createFloatSlider(island.mountainHorizontalScale, 0.1F, 3.0F, RTFTranslationKeys.GUI_SLIDER_ISLAND_MOUNTAIN_HORIZONTAL_SCALE, (slider, value) -> {
+			island.mountainHorizontalScale = (float) slider.scaleValue(value);
+			this.regenerate();
+			return value;
+		});
+		this.volcanismHorizontalScale = PresetWidgets.createFloatSlider(island.volcanismHorizontalScale, 0.1F, 3.0F, RTFTranslationKeys.GUI_SLIDER_ISLAND_VOLCANISM_HORIZONTAL_SCALE, (slider, value) -> {
+			island.volcanismHorizontalScale = (float) slider.scaleValue(value);
+			this.regenerate();
+			return value;
+		});
 
+		// islands
 		this.left.addWidget(PresetWidgets.createLabel(RTFTranslationKeys.GUI_LABEL_ISLAND));
 		this.left.addWidget(this.enableArchipelago);
+
+		this.left.addWidget(PresetWidgets.createLabel(RTFTranslationKeys.GUI_LABEL_ISLAND_CHANCES));
 		this.left.addWidget(this.islandDensity);
+		this.left.addWidget(this.macroDensityPercentage);
+		this.left.addWidget(this.volcanoChance);
+		this.left.addWidget(this.mountainChance);
+
+		// island scales
+		this.left.addWidget(PresetWidgets.createLabel(RTFTranslationKeys.GUI_LABEL_ISLAND_SCALES));
 		this.left.addWidget(this.islandSize);
 		this.left.addWidget(this.islandHeight);
 		this.left.addWidget(this.islandBaseScale);
-		this.left.addWidget(this.islandVerticalScale);
 		this.left.addWidget(this.islandHorizontalScale);
-		this.left.addWidget(this.mountainChance);
+		this.left.addWidget(this.islandVerticalScale);
 		this.left.addWidget(this.mountainScale);
-		this.left.addWidget(this.volcanoChance);
 		this.left.addWidget(this.volcanismScale);
+		this.left.addWidget(this.mountainHorizontalScale);
+		this.left.addWidget(this.volcanismHorizontalScale);
+
+		// Transitions
+		this.left.addWidget(PresetWidgets.createLabel(RTFTranslationKeys.GUI_LABEL_ISLAND_TRANSITIONS));
 		this.left.addWidget(this.offshoreDepth);
 		this.left.addWidget(this.beachWidth);
 		this.left.addWidget(this.beachCoverage);

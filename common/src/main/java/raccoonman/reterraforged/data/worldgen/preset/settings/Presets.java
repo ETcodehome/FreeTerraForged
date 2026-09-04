@@ -487,8 +487,10 @@ public class Presets {
 						0.1561F,
 						1.0F,
 						0.5F,
-						0.355F
-
+						0.355F,
+						1.0F,
+						1.0F,
+						0.5F
 				),
 				new FilterSettings(
 
@@ -543,11 +545,11 @@ public class Presets {
 								0.4717F),
 
 						new Properties(SpawnType.CONTINENT_CENTER,
-								640,
-								128,
+								512,
+								256,
 								63,
-								-109,
-								63,
+								-236,
+								256,
 								0,
 								0)
 				),
@@ -623,27 +625,27 @@ public class Presets {
 								0.2513F),
 
 						// hills
-						new Terrain(0.8118F,
+						new Terrain(2.5F,
 								1.5889F,
-								2.7577F,
+								2.5F,
 								4.9291F),
 
 						// dales
 						new Terrain(1.184F,
 								1.3685F,
-								7.2745F,
+								2.5F,
 								5.5347F),
 
 						// plateau
 						new Terrain(2.576F,
 								1.0309F,
-								3.7371F,
+								2.5F,
 								3.1894F),
 
 						// badlands
 						new Terrain(5.3737F,
 								1.5940F,
-								2.8866F,
+								2.5F,
 								1.9329F),
 
 						// torridonian
