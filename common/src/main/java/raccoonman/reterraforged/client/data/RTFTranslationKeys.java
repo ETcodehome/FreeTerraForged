@@ -1,5 +1,6 @@
 package raccoonman.reterraforged.client.data;
 
+import net.minecraft.network.chat.Component;
 import raccoonman.reterraforged.RTFCommon;
 
 public final class RTFTranslationKeys {
@@ -230,6 +231,12 @@ public final class RTFTranslationKeys {
 	public static final String GUI_BUTTON_FLOW_PARTICLES = resolve("gui.button.river.flow.particles");
 	public static final String GUI_BUTTON_BOAT_FLOW_DYNAMICS = resolve("gui.button.boat.flow.dynamics");
 	public static final String GUI_BUTTON_NAVIGABLE_WATERFALLS = resolve("gui.button.boat.navigable.waterfalls");
+    public static final String GUI_SLIDER_ISLAND_MOUNTAIN_HORIZONTAL_SCALE = resolve("gui.slider.islandMountainHorizontalScale");
+	public static final String GUI_SLIDER_ISLAND_VOLCANISM_HORIZONTAL_SCALE = resolve("gui.slider.islandVolcanismHorizontalScale");
+    public static final String GUI_SLIDER_ISLAND_MACRO_DENSITY = resolve("gui.slider.islandMacroDensityPercentage");
+	public static final String GUI_LABEL_ISLAND_TRANSITIONS = resolve("gui.label.islandTransitions");
+	public static final String GUI_LABEL_ISLAND_SCALES = resolve("gui.label.islandScales");
+	public static final String GUI_LABEL_ISLAND_CHANCES = resolve("gui.label.islandChances");
 
 	private static String resolve(String key) {
 		return RTFCommon.MOD_ID + "." + key;
