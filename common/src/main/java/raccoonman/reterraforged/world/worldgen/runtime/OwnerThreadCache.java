@@ -5,15 +5,6 @@ import java.util.concurrent.atomic.AtomicReferenceArray;
 
 import it.unimi.dsi.fastutil.HashCommon;
 
-/**
- * Strictly bounded, owner-held exact cache with per-worker locality.
- *
- * <p>The shared table lets work migrate between threads. Lazily allocated locality tables prevent
- * unrelated worldgen workers from continually evicting one another's hot entries. Thread identity
- * selects only a cache stripe and never changes the computed value. All mutable storage remains
- * reachable from, and is retired with, the sampler/request owner; no thread-local state survives an
- * owner lifetime.</p>
- */
 public final class OwnerThreadCache<V> {
 	static final int STRIPE_COUNT = 8;
 	private static final int STRIPE_MASK = STRIPE_COUNT - 1;

@@ -20,7 +20,6 @@ public interface BiomeModifier {
 
 	GenerationStep.Decoration step();
 
-	/** Applies this declarative mutation to one immutable feature-step value. */
 	List<Holder<PlacedFeature>> apply(
 		Holder<Biome> biome,
 		List<Holder<PlacedFeature>> features,

@@ -10,7 +10,6 @@ import net.minecraft.world.level.biome.BiomeSource;
 import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.biome.MultiNoiseBiomeSource;
 
-/** Deterministic negotiation of a fresh preview source before the request plan is compiled. */
 public final class PreviewSourceNegotiator {
 	private PreviewSourceNegotiator() {
 	}

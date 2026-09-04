@@ -43,6 +43,7 @@ import raccoonman.reterraforged.world.worldgen.biome.SurfaceBiomeFilter;
 import raccoonman.reterraforged.world.worldgen.biome.UndergroundBiomeTags;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.registries.RTFRegistries;
+import raccoonman.reterraforged.world.worldgen.feature.placement.ChunkLocalPlacementClassifier;
 import raccoonman.reterraforged.world.worldgen.feature.placement.SurfacePlacementClassifier;
 import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan;
 import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlanner;
@@ -50,7 +51,6 @@ import raccoonman.reterraforged.world.worldgen.biome.modifier.BiomeModifier;
 import raccoonman.reterraforged.world.worldgen.biome.RTFClimateSampler;
 import raccoonman.reterraforged.world.worldgen.biome.ClimateQueryPolicy;
 
-/** Compiles the final selected Minecraft graph without cloning roots or inspecting object fields. */
 public final class MinecraftWorldgenPlanCompiler {
 	private static final String REGISTRY_GRAPH = "minecraft_registry_graph";
 
@@ -911,6 +911,8 @@ public final class MinecraftWorldgenPlanCompiler {
 		List<WorldgenPlans.PlacedFeaturePipeline> pipelines = new ArrayList<>();
 		Map<PlacedFeature, SurfacePlacementClassifier.Classification> surfaceClassifications =
 			new IdentityHashMap<>();
+		Map<PlacedFeature, ChunkLocalPlacementClassifier.Classification> chunkLocalClassifications =
+			new IdentityHashMap<>();
 		Map<ResourceKey<Biome>, List<net.minecraft.core.HolderSet<PlacedFeature>>> featuresByBiome =
 			new LinkedHashMap<>();
 		List<Holder.Reference<BiomeModifier>> modifiers = owner.lookups()
@@ -944,6 +946,15 @@ public final class MinecraftWorldgenPlanCompiler {
 					surfaceClassifications.merge(
 						value, classification, MinecraftWorldgenPlanCompiler::mergeSurfaceClassification
 					);
+					ChunkLocalPlacementClassifier.Classification chunkLocal =
+						ChunkLocalPlacementClassifier.classify(
+							value,
+							placed.unwrapKey().map(ResourceKey::location),
+							owner.lookups()
+						);
+					chunkLocalClassifications.merge(
+						value, chunkLocal, MinecraftWorldgenPlanCompiler::mergeChunkLocalClassification
+					);
 					pipelines.add(new WorldgenPlans.PlacedFeaturePipeline(
 						biomeKey, step, index++, placed
 					));
@@ -972,6 +983,7 @@ public final class MinecraftWorldgenPlanCompiler {
 			pipelines,
 			steps,
 			surfaceClassifications,
+			chunkLocalClassifications,
 			ores,
 			generationSettings
 		);
@@ -1040,6 +1052,22 @@ public final class MinecraftWorldgenPlanCompiler {
 			);
 		}
 		return first;
+	}
+
+	private static ChunkLocalPlacementClassifier.Classification mergeChunkLocalClassification(
+		ChunkLocalPlacementClassifier.Classification first,
+		ChunkLocalPlacementClassifier.Classification second
+	) {
+		if (first.eligible() && second.eligible()
+			&& first.confinement().featureId().equals(second.confinement().featureId())) {
+			return first;
+		}
+		if (!first.eligible() && !second.eligible()) {
+			return first;
+		}
+		return ChunkLocalPlacementClassifier.Classification.rejected(
+			"CONFLICTING_CHUNK_LOCAL_PLACEMENT_IDENTITIES"
+		);
 	}
 
 	private static BiomeGenerationSettings realizedGenerationSettings(
@@ -1112,12 +1140,15 @@ public final class MinecraftWorldgenPlanCompiler {
 			return;
 		}
 		int surfaceEligible = 0;
+		int chunkLocalEligible = 0;
 		for (WorldgenPlans.PlacedFeaturePipeline pipeline : features.pipelines()) {
-			SurfacePlacementClassifier.Classification surface = features.surfaceClassification(
-				pipeline.placedFeature().value()
-			);
+			PlacedFeature feature = pipeline.placedFeature().value();
+			SurfacePlacementClassifier.Classification surface = features.surfaceClassification(feature);
 			if (surface.eligible()) {
 				surfaceEligible++;
+			}
+			if (features.chunkLocalClassification(feature).eligible()) {
+				chunkLocalEligible++;
 			}
 		}
 		int passthrough = occurrences - surfaceEligible;
@@ -1125,7 +1156,8 @@ public final class MinecraftWorldgenPlanCompiler {
 			RTFCommon.location("runtime/placed_feature_leaves"), WorldgenFacet.PLACED_FEATURES,
 			CapabilityState.OPAQUE_LEAF, "minecraft_executable_interface", owner.type(),
 			occurrences + " ordered placed-feature occurrences execute through the public place boundary; "
-				+ "surface_rescue supported=" + surfaceEligible + ", passthrough=" + passthrough,
+				+ "surface_rescue supported=" + surfaceEligible + ", passthrough=" + passthrough
+				+ "; chunk_local_placement supported=" + chunkLocalEligible,
 			Optional.empty()
 		));
 	}

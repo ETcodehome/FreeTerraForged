@@ -2,7 +2,6 @@ package raccoonman.reterraforged.world.worldgen.runtime;
 
 import java.lang.ref.WeakReference;
 
-/** Sampler-owned exact memoization of the 2D FTF cell/provider domain for a quart column. */
 public final class BiomeCellCache<O> {
 	private static final int CAPACITY = 1024;
 

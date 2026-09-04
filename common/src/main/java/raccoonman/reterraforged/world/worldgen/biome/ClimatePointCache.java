@@ -4,11 +4,6 @@ import net.minecraft.world.level.biome.Climate;
 import raccoonman.reterraforged.world.worldgen.runtime.OwnerThreadCache;
 import java.lang.ref.WeakReference;
 
-/**
- * Sampler-owned memoization for climate samples. Keeping this cache at the sampler boundary lets
- * every biome selector observe the same point without caching or bypassing any selector's result.
- * Immutable entries and atomic replacement make concurrent generation against one sampler safe.
- */
 public final class ClimatePointCache {
 
     private static final int SIZE = 1024; // Power of two for rapid bit-masking

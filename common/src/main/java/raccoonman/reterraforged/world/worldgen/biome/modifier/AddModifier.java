@@ -14,7 +14,6 @@ import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.levelgen.GenerationStep;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 
-/** Declarative, loader-neutral feature insertion compiled into FTF's placed-feature plan. */
 public record AddModifier(
 	Order order,
 	GenerationStep.Decoration step,

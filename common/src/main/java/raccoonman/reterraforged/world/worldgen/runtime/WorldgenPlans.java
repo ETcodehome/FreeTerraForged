@@ -24,6 +24,7 @@ import net.minecraft.world.level.levelgen.GenerationStep;
 import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 import net.minecraft.world.level.levelgen.carver.ConfiguredWorldCarver;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
+import raccoonman.reterraforged.world.worldgen.feature.placement.ChunkLocalPlacementClassifier;
 import raccoonman.reterraforged.world.worldgen.feature.placement.SurfacePlacementClassifier.Classification;
 import raccoonman.reterraforged.world.worldgen.structure.rule.StructureRule;
 import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan;
@@ -38,7 +39,6 @@ import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.biome.ClimateQueryPolicy;
 import raccoonman.reterraforged.world.worldgen.biome.RTFClimateSampler;
 
-/** Separately typed immutable plans consumed by runtime stages. */
 public final class WorldgenPlans {
 	private WorldgenPlans() {
 	}
@@ -364,13 +364,11 @@ public final class WorldgenPlans {
 			);
 		}
 
-		/** Computes extended candidate metadata only for decorators that explicitly need it. */
 		public CandidateFit candidateFit() {
 			return CandidateFit.find(this.candidates.values(), this.target, this.baseBiome);
 		}
 	}
 
-	/** FTF-owned climate candidate metadata used by normalized selection decorators. */
 	public record CandidateMatch(
 		Climate.ParameterPoint point,
 		Holder<Biome> biome,
@@ -825,6 +823,7 @@ public final class WorldgenPlans {
 		List<PlacedFeaturePipeline> pipelines,
 		List<FeatureSorter.StepFeatureData> steps,
 		Map<PlacedFeature, Classification> surfaceClassifications,
+		Map<PlacedFeature, ChunkLocalPlacementClassifier.Classification> chunkLocalClassifications,
 		DynamicOrePlan ores,
 		Map<ResourceKey<Biome>, BiomeGenerationSettings> generationSettings,
 		Map<ResourceKey<Biome>, Map<Integer, List<Holder<PlacedFeature>>>> byBiome,
@@ -838,7 +837,7 @@ public final class WorldgenPlans {
 			DynamicOrePlan ores
 		) {
 			this(
-				descriptor, pipelines, steps, surfaceClassifications, ores,
+				descriptor, pipelines, steps, surfaceClassifications, Map.of(), ores,
 				Map.of(), indexPlacedFeatures(pipelines), indexOreTransforms(pipelines, ores)
 			);
 		}
@@ -852,7 +851,22 @@ public final class WorldgenPlans {
 			Map<ResourceKey<Biome>, BiomeGenerationSettings> generationSettings
 		) {
 			this(
-				descriptor, pipelines, steps, surfaceClassifications, ores,
+				descriptor, pipelines, steps, surfaceClassifications, Map.of(), ores,
+				generationSettings, indexPlacedFeatures(pipelines), indexOreTransforms(pipelines, ores)
+			);
+		}
+
+		public PlacedFeatures(
+			PlanDescriptor descriptor,
+			List<PlacedFeaturePipeline> pipelines,
+			List<FeatureSorter.StepFeatureData> steps,
+			Map<PlacedFeature, Classification> surfaceClassifications,
+			Map<PlacedFeature, ChunkLocalPlacementClassifier.Classification> chunkLocalClassifications,
+			DynamicOrePlan ores,
+			Map<ResourceKey<Biome>, BiomeGenerationSettings> generationSettings
+		) {
+			this(
+				descriptor, pipelines, steps, surfaceClassifications, chunkLocalClassifications, ores,
 				generationSettings, indexPlacedFeatures(pipelines), indexOreTransforms(pipelines, ores)
 			);
 		}
@@ -863,6 +877,9 @@ public final class WorldgenPlans {
 			steps = List.copyOf(steps);
 			surfaceClassifications = Collections.unmodifiableMap(
 				new IdentityHashMap<>(surfaceClassifications)
+			);
+			chunkLocalClassifications = Collections.unmodifiableMap(
+				new IdentityHashMap<>(chunkLocalClassifications)
 			);
 			ores = Objects.requireNonNull(ores, "ores");
 			generationSettings = Map.copyOf(generationSettings);
@@ -883,6 +900,14 @@ public final class WorldgenPlans {
 
 		public Classification surfaceClassification(PlacedFeature feature) {
 			return this.surfaceClassifications.getOrDefault(feature, Classification.rejected());
+		}
+
+		public ChunkLocalPlacementClassifier.Classification chunkLocalClassification(
+			PlacedFeature feature
+		) {
+			return this.chunkLocalClassifications.getOrDefault(
+				feature, ChunkLocalPlacementClassifier.Classification.rejected()
+			);
 		}
 
 		public Optional<DynamicOrePlan.VerticalTransform> oreTransform(PlacedFeature feature) {

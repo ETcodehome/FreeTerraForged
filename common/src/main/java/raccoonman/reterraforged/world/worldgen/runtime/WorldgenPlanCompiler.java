@@ -16,7 +16,6 @@ import java.util.function.BooleanSupplier;
 
 import net.minecraft.resources.ResourceLocation;
 
-/** Deterministic capability negotiation and independently failed facet compilation. */
 public final class WorldgenPlanCompiler {
 	private final List<WorldgenCapabilityProvider> providers;
 	private final WorldgenProviderCatalog catalog;

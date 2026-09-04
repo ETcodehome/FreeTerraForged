@@ -13,7 +13,6 @@ import raccoonman.reterraforged.world.worldgen.runtime.TerraForgedChunkGenerator
 import raccoonman.reterraforged.world.worldgen.runtime.PreServerWorldgenContext;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenPreServerFinalizer;
 
-/** Keeps selected dimensions aligned when the active datapack replaces the selected preset root. */
 @Mixin(WorldCreationUiState.class)
 public class MixinWorldCreationUiState {
 	@Shadow

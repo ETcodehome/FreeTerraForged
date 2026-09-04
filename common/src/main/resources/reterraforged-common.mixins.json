@@ -35,6 +35,7 @@
 		"MixinPlacementFilter",
 		"MixinInSquarePlacement",
 		"MixinEnvironmentScanPlacement",
+		"MixinRandomOffsetPlacement",
 		"MixinPlacedFeature",
 		"StructurePiecesBuilderAccessor",
 		"MixinOceanMonumentBuilding",

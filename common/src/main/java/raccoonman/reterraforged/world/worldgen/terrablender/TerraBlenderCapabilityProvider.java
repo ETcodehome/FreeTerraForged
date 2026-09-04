@@ -38,7 +38,6 @@ import terrablender.api.Region;
 import terrablender.api.RegionType;
 import terrablender.api.Regions;
 
-/** Public TerraBlender mechanism snapshot; ordinary plan consumers never depend on TerraBlender. */
 public final class TerraBlenderCapabilityProvider implements WorldgenCapabilityProvider {
 	private static final ResourceLocation ID = RTFCommon.location("terrablender_regions");
 	private static final long SALT = 0x5d6f7a2c8b9134e1L;
@@ -114,8 +113,6 @@ public final class TerraBlenderCapabilityProvider implements WorldgenCapabilityP
 		WorldgenFacet facet,
 		WorldgenCompilationContext context
 	) throws Exception {
-		// The service entry is loader-neutral and always present in FTF's jar. Keep an absent optional
-		// mechanism out of negotiation before resolving any of its API types.
 		if (!ModLoaderUtil.isLoaded("terrablender")) {
 			return Optional.empty();
 		}

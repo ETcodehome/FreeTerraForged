@@ -4,7 +4,6 @@ import java.util.Objects;
 
 import net.minecraft.resources.ResourceLocation;
 
-/** Explicit partial-order edge between mechanism providers. */
 public record ProviderOrder(ResourceLocation before, ResourceLocation after, boolean required) {
 	public ProviderOrder {
 		before = Objects.requireNonNull(before, "before");

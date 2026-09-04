@@ -8,6 +8,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.minecraft.world.level.levelgen.placement.PlacementContext;
+import raccoonman.reterraforged.world.worldgen.feature.placement.ChunkLocalFeaturePlacement;
 import raccoonman.reterraforged.world.worldgen.feature.placement.SurfaceFeatureRescue;
 
 @Mixin(PlacedFeature.class)
@@ -20,11 +21,17 @@ class MixinPlacedFeature {
 		BlockPos origin,
 		Operation<Boolean> original
 	) {
-		boolean rescueScope = SurfaceFeatureRescue.begin((PlacedFeature)(Object)this, context);
+		PlacedFeature feature = (PlacedFeature)(Object)this;
+		boolean chunkLocalScope = ChunkLocalFeaturePlacement.begin(feature, context, origin);
 		try {
-			return original.call(context, random, origin);
+			boolean rescueScope = SurfaceFeatureRescue.begin(feature, context);
+			try {
+				return original.call(context, random, origin);
+			} finally {
+				SurfaceFeatureRescue.finish(rescueScope);
+			}
 		} finally {
-			SurfaceFeatureRescue.finish(rescueScope);
+			ChunkLocalFeaturePlacement.finish(chunkLocalScope);
 		}
 	}
 }

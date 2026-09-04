@@ -112,7 +112,6 @@ public final class SurfaceFeatureRescue {
 	}
 
 	private static final class Run {
-		/** Stable occurrence identity consumed by retained placement telemetry. */
 		private final PlacedFeature feature;
 		private final PlacementContext context;
 		private final SurfacePipeline pipeline;

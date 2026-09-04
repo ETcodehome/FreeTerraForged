@@ -18,6 +18,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.biome.Biome;
 import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOrePlan;
+import raccoonman.reterraforged.world.worldgen.feature.placement.ChunkLocalPlacementClassifier;
 import raccoonman.reterraforged.world.worldgen.feature.placement.SurfacePlacementClassifier;
 
 public final class WorldgenPlanDiagnostics {
@@ -234,12 +235,31 @@ public final class WorldgenPlanDiagnostics {
 			}
 		}
 		surfaceFailures.sort(String::compareTo);
+		int chunkLocalAdapted = 0;
+		Map<String, Integer> chunkLocalPassthrough = new TreeMap<>();
+		List<String> chunkLocalFailures = new ArrayList<>();
+		for (ChunkLocalPlacementClassifier.Classification classification
+			: features.chunkLocalClassifications().values()) {
+			if (classification.eligible()) {
+				chunkLocalAdapted++;
+			} else {
+				chunkLocalPassthrough.merge(classification.reasonCode(), 1, Integer::sum);
+				if (classification.failure() != null) {
+					chunkLocalFailures.add(classification.reasonCode() + " | " + classification.failure());
+				}
+			}
+		}
+		chunkLocalFailures.sort(String::compareTo);
 
 		DynamicOrePlan ores = features.ores();
 		return new AdaptationSummary(
 			new Adaptation(
 				features.surfaceClassifications().size(), surfaceAdapted, 0,
 				surfacePassthrough, surfaceFailures
+			),
+			new Adaptation(
+				features.chunkLocalClassifications().size(), chunkLocalAdapted, 0,
+				chunkLocalPassthrough, chunkLocalFailures
 			),
 			new Adaptation(
 				ores.standardOres(), ores.verticalTransforms().size(), ores.delegatedFeatures(),
@@ -483,15 +503,21 @@ public final class WorldgenPlanDiagnostics {
 		}
 	}
 
-	public record AdaptationSummary(Adaptation surfaceRescue, Adaptation dynamicOre) {
+	public record AdaptationSummary(
+		Adaptation surfaceRescue,
+		Adaptation chunkLocalPlacement,
+		Adaptation dynamicOre
+	) {
 		public AdaptationSummary {
 			surfaceRescue = Objects.requireNonNull(surfaceRescue, "surfaceRescue");
+			chunkLocalPlacement = Objects.requireNonNull(chunkLocalPlacement, "chunkLocalPlacement");
 			dynamicOre = Objects.requireNonNull(dynamicOre, "dynamicOre");
 		}
 
 		private JsonObject toJson() {
 			JsonObject value = new JsonObject();
 			value.add("surface_rescue", this.surfaceRescue.toJson());
+			value.add("chunk_local_placement", this.chunkLocalPlacement.toJson());
 			value.add("dynamic_ore", this.dynamicOre.toJson());
 			return value;
 		}

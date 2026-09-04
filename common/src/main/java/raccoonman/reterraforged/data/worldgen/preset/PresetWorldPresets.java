@@ -21,7 +21,6 @@ import net.minecraft.world.level.levelgen.presets.WorldPresets;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
 
-/** Makes FTF's registered generator root the persisted authority for an exported FTF preset. */
 public final class PresetWorldPresets {
 	private PresetWorldPresets() {
 	}

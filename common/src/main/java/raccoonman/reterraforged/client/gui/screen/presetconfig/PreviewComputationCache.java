@@ -14,14 +14,6 @@ import java.util.function.Function;
 import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
 
-/**
- * A screen-scoped cache for immutable preview results.
- *
- * Tiles are pooled/mutable objects in the generator, so callers receive leases
- * rather than the raw tile.  An entry is only recycled after it has been evicted
- * and its last lease is released.  This makes sharing between the 2D and 3D
- * previews safe while keeping the cache bounded to the current editor screen.
- */
 final class PreviewComputationCache implements AutoCloseable {
     private static final int MAX_TILE_ENTRIES = 6;
     private static final int MAX_SIDECAR_ENTRIES = 8;

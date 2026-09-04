@@ -56,6 +56,7 @@ class WorldgenPlanDiagnosticsTest {
 		assertTrue(snapshot.toJson().has("possible_outputs"));
 		assertTrue(snapshot.toJson().has("density_extent"));
 		assertTrue(snapshot.toJson().has("adaptations"));
+		assertTrue(snapshot.toJson().getAsJsonObject("adaptations").has("chunk_local_placement"));
 		assertTrue(snapshot.toJson().has("capability_summary"));
 		assertEquals(
 			plan.report().nodes().size(),

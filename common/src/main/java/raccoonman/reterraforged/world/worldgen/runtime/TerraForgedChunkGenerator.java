@@ -39,7 +39,6 @@ import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
 
-/** FTF-owned generator root. Stage behavior is initially inherited exactly from vanilla noise generation. */
 public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 	implements AutoCloseable, PlanBackedBiomeDecoration {
 	public static final MapCodec<TerraForgedChunkGenerator> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
@@ -311,7 +310,6 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 		return super.createBiomes(randomState, blender, structureManager, chunk);
 	}
 
-	/** Biome resolver owned by this generator root, independent of third-party Mixin ordering. */
 	public Holder<Biome> resolveBiome(int quartX, int quartY, int quartZ, Climate.Sampler sampler) {
 		WorldgenRuntimeBinding binding = Objects.requireNonNull(
 			this.runtime, "Generator root has no active worldgen epoch"
@@ -341,19 +339,11 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 	public BiomeGenerationSettings getBiomeGenerationSettings(Holder<Biome> biome) {
 		WorldgenRuntimeBinding current = this.runtime;
 		if (current == null) {
-			// Compilation itself queries the realized pre-plan graph.
 			return super.getBiomeGenerationSettings(biome);
 		}
 		return current.current().biomeDecorationPlan().generationSettings(biome);
 	}
 
-	/**
-	 * Returns the realized selected-graph settings beneath the plan overlay.
-	 *
-	 * <p>Tag refresh recompiles modifier operations against this stable base. Reading through
-	 * {@link #getBiomeGenerationSettings(Holder)} during a refresh would feed the previous plan
-	 * back into the compiler and apply every modifier a second time.</p>
-	 */
 	BiomeGenerationSettings realizedBiomeGenerationSettings(Holder<Biome> biome) {
 		return super.getBiomeGenerationSettings(biome);
 	}

@@ -22,10 +22,6 @@ import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Climate;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenPlans;
 
-/**
- * Exact-version acquisition adapter for Biolith's built-in criterion types. No Biolith criterion,
- * holder cache, world, callback, or placement object crosses this boundary.
- */
 final class BiolithCriterionBridge {
 	private static final java.util.Set<String> NORMALIZED_TYPES = java.util.Set.of(
 		"not", "all_of", "any_of", "value", "deviation", "ratio", "alternate", "original", "neighbor"

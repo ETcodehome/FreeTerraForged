@@ -8,7 +8,6 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.dimension.LevelStem;
 
-/** Server-side authority for one realized dimension worldgen bootstrap. */
 public record WorldgenEpoch(
 	UUID id,
 	ResourceKey<LevelStem> dimension,

@@ -3,7 +3,6 @@ package raccoonman.reterraforged.world.worldgen.biome;
 import net.minecraft.core.Holder;
 import net.minecraft.world.level.biome.Biome;
 
-/** Exact bounded request-worker memoization; hash collisions miss rather than aliasing a quart. */
 final class PreviewQuartCache {
 	private static final int CAPACITY = 256;
 	private static final int MASK = CAPACITY - 1;

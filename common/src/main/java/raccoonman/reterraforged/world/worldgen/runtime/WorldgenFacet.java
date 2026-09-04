@@ -1,6 +1,5 @@
 package raccoonman.reterraforged.world.worldgen.runtime;
 
-/** Independently compiled and failed worldgen domains. */
 public enum WorldgenFacet {
 	BIOME_COMPOSITION,
 	PROVIDER_SELECTION,

@@ -5,7 +5,6 @@ import net.minecraft.server.level.ServerLevel;
 import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
 
-/** Owner-preserving invalidation for reloadable inputs such as registry tag bindings. */
 public final class WorldgenLifecycle {
 	private WorldgenLifecycle() {
 	}

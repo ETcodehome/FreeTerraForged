@@ -16,7 +16,6 @@ import raccoonman.reterraforged.world.worldgen.biome.RTFClimateSampler;
 import raccoonman.reterraforged.world.worldgen.biome.ClimateQuerySemantics;
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
 
-/** Shared generation/preview consumer for provider, spatial, and selection-decoration plans. */
 public final class WorldgenBiomeSelection {
 	private static final Set<WorldgenFacet> QUERY_FACETS = Set.of(
 		WorldgenFacet.PROVIDER_SELECTION,
@@ -95,7 +94,6 @@ public final class WorldgenBiomeSelection {
 		return prepare(plan).resolve(quartX, quartY, quartZ, sampler);
 	}
 
-	/** Uses spatial coordinates already computed by the request's prepared FTF tile. */
 	public static Holder<Biome> resolveInCell(
 		WorldgenPlan plan,
 		int quartX,

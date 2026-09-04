@@ -2,7 +2,6 @@ package raccoonman.reterraforged.world.worldgen.runtime;
 
 import java.util.Objects;
 
-/** Immutable identity for one binding of registry tags. */
 public record TagEpoch(long sequence, String fingerprint) {
 	public TagEpoch {
 		if (sequence < 0L) {

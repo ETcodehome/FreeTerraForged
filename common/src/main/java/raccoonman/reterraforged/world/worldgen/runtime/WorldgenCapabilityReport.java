@@ -10,7 +10,6 @@ import java.util.Optional;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
-/** Deterministically ordered, immutable capability and provenance report. */
 public final class WorldgenCapabilityReport {
 	private final List<CapabilityNodeReport> nodes;
 	private final Map<WorldgenFacet, List<CapabilityNodeReport>> byFacet;
@@ -72,7 +71,6 @@ public final class WorldgenCapabilityReport {
 		return this.providerDiagnostics;
 	}
 
-	/** Stable machine-readable representation containing values only, never live worldgen objects. */
 	public JsonObject toJson() {
 		JsonObject root = new JsonObject();
 		root.addProperty("schema_version", 3);

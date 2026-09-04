@@ -20,7 +20,6 @@ import net.minecraft.world.level.biome.MultiNoiseBiomeSource;
 import net.minecraft.world.level.biome.MultiNoiseBiomeSourceParameterList;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 
-/** Public codec/registry extraction for the selected multi-noise source graph. */
 public final class MinecraftBiomeSourceGraphs {
 	private MinecraftBiomeSourceGraphs() {
 	}

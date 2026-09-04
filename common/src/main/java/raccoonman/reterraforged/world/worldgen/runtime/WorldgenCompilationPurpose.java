@@ -3,7 +3,6 @@ package raccoonman.reterraforged.world.worldgen.runtime;
 import java.util.EnumSet;
 import java.util.Set;
 
-/** Selects the facets a concrete owner will execute without changing their typed plan boundaries. */
 public enum WorldgenCompilationPurpose {
 	WORLDGEN(EnumSet.allOf(WorldgenFacet.class)),
 	BIOME_PREVIEW(EnumSet.of(

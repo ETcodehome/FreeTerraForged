@@ -9,10 +9,6 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.dimension.LevelStem;
 
-/**
- * Loader-neutral, mechanism-oriented capability SPI. Implementations expose public snapshots or
- * factories; they must not infer private state from fields, namespaces, or implementation names.
- */
 public interface WorldgenCapabilityProvider {
 	ResourceLocation id();
 
@@ -52,10 +48,6 @@ public interface WorldgenCapabilityProvider {
 		return OptionalLong.empty();
 	}
 
-	/**
-	 * Optionally resolves immutable mechanism inputs from a completed pre-server creation graph.
-	 * The default is intentionally inert for providers whose public data is already request-readable.
-	 */
 	default void finalizePreServer(PreServerWorldgenContext context) throws Exception {
 	}
 
@@ -71,11 +63,6 @@ public interface WorldgenCapabilityProvider {
 		WorldgenCompilationContext context
 	) throws Exception;
 
-	/**
-	 * Declares the query concurrency of a facet actually supplied by this provider. The conservative
-	 * default prevents an unknown executable closure from being queried concurrently. Parallel mode
-	 * requires immutable shared plan state and worker-confined mutable query state.
-	 */
 	WorldgenQueryMode queryMode(
 		WorldgenFacet facet,
 		WorldgenCompilationContext context

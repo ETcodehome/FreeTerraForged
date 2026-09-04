@@ -48,7 +48,6 @@ import raccoonman.reterraforged.world.worldgen.runtime.WorldgenPlan;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenPlans;
 import raccoonman.reterraforged.world.worldgen.runtime.WorldgenProviderCatalog;
 
-/** Request-owned consumer of the same immutable worldgen plan used by server generation. */
 public final class BiomePreviewResolver implements AutoCloseable {
 	private final GeneratorContext generatorContext;
 	private final Preset preset;
@@ -311,7 +310,6 @@ public final class BiomePreviewResolver implements AutoCloseable {
 		return this.tileRequestAtOrigin(tile, originX, originZ, zoom).climateSampler();
 	}
 
-	/** Creates one backend request that owns exact climate and FTF-cell lookup for a prepared tile. */
 	public TileBiomeRequest tileRequest(Tile tile, int centerX, int centerZ, int zoom) {
 		if (zoom <= 0) {
 			throw new IllegalArgumentException("Preview zoom must be positive");
@@ -328,11 +326,6 @@ public final class BiomePreviewResolver implements AutoCloseable {
 		return this.tileRequestAtOrigin(tile, (float) originX, (float) originZ, zoom);
 	}
 
-	/**
-	 * Resolves the exact surface biome for every prepared tile pixel. This is the complete backend
-	 * operation consumed by preview widgets: coordinate mapping, sampler ownership, query execution,
-	 * cancellation, and concurrency policy do not leak to the client.
-	 */
 	public ResolvedTile resolveSurfaceTile(
 		Tile tile,
 		int centerX,
@@ -464,10 +457,6 @@ public final class BiomePreviewResolver implements AutoCloseable {
 		return this.plan;
 	}
 
-	/**
-	 * True only when every plan facet executed by a tile query permits parallel reads with one
-	 * sampler/request per worker. Unknown provider and source implementations remain serial.
-	 */
 	public boolean supportsParallelTileQueries() {
 		return this.biomeSelection.supportsIsolatedParallelRead();
 	}

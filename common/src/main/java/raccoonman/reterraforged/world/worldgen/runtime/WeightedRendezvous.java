@@ -4,7 +4,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Objects;
 
-/** Query-order-independent weighted rendezvous assignment for stable FTF cell coordinates. */
 public final class WeightedRendezvous {
 	private WeightedRendezvous() {
 	}
@@ -38,12 +37,10 @@ public final class WeightedRendezvous {
 		for (byte value : id) {
 			hash = mix64(hash ^ Byte.toUnsignedLong(value));
 		}
-		// The numerator is in [1, 2^53], so u is in (0, 1] and log(0) is impossible.
 		double uniform = ((hash >>> 11) + 1.0D) * 0x1.0p-53;
 		return -Math.log(uniform) / weight;
 	}
 
-	/** Immutable query kernel with provider identity bytes compiled once. */
 	public static final class Selector {
 		private final long salt;
 		private final PreparedProvider[] providers;

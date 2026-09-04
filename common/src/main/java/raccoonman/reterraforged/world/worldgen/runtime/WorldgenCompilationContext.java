@@ -8,7 +8,6 @@ import java.util.function.BooleanSupplier;
 
 import net.minecraft.resources.ResourceLocation;
 
-/** Owner-local compilation state. Scratch snapshots are discarded when compilation returns. */
 public final class WorldgenCompilationContext {
 	private final WorldgenOwner owner;
 	private final WorldgenCompilationPurpose purpose;

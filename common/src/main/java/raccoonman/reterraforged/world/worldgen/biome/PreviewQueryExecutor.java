@@ -10,7 +10,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.function.BooleanSupplier;
 
-/** Deterministic row-band execution with one mutable query object per worker. */
 final class PreviewQueryExecutor {
 	private PreviewQueryExecutor() {
 	}

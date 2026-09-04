@@ -2,7 +2,6 @@ package raccoonman.reterraforged.world.worldgen.runtime;
 
 import java.util.Objects;
 
-/** One immutable, owner-bound plan spanning every independent worldgen facet. */
 public record WorldgenPlan(
 	WorldgenOwner owner,
 	WorldgenPlans.BiomeComposition biomeComposition,

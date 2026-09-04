@@ -15,7 +15,6 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.tags.TagKey;
 import net.minecraft.server.MinecraftServer;
 
-/** Public registry/tag identities used for diagnostics and invalidation, never guessed provenance. */
 public final class WorldgenFingerprints {
 	private WorldgenFingerprints() {
 	}

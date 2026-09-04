@@ -49,7 +49,6 @@ public final class DynamicOrePlanner {
 		return new DynamicOrePlanner(new OreContractClassifier(registries)).build(biomes, verticalFrame);
 	}
 
-	/** Builds from the exact placed-feature holder occurrences already compiled for an owner. */
 	public DynamicOrePlan build(
 		net.minecraft.core.HolderLookup.Provider lookups,
 		Iterable<Holder<PlacedFeature>> features,

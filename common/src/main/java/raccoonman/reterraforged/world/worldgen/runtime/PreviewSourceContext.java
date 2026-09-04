@@ -10,12 +10,6 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.world.level.biome.BiomeSource;
 import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 
-/**
- * Public inputs from which a mechanism provider may create one request-owned preview source.
- *
- * <p>The realized source is an input boundary, not preview-owned state. A provider must use only
- * public APIs to create a fresh source backed by immutable snapshots or request-confined state.
- */
 public record PreviewSourceContext(
 	long seed,
 	RegistryAccess.Frozen registries,

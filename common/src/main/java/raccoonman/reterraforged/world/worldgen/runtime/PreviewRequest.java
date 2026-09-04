@@ -8,7 +8,6 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.dimension.LevelStem;
 
-/** Request-owned preview authority. It is never interchangeable with a server epoch. */
 public record PreviewRequest(
 	UUID id,
 	ResourceKey<LevelStem> dimension,

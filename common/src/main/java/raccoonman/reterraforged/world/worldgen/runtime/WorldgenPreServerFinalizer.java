@@ -10,7 +10,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import raccoonman.reterraforged.RTFCommon;
 
-/** Resolves provider inputs at the completed world-creation boundary, before preview workers run. */
 public final class WorldgenPreServerFinalizer {
 	private WorldgenPreServerFinalizer() {
 	}

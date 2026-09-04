@@ -55,11 +55,6 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 		return this.buildPatchedRegistries(registries).patches();
 	}
 
-	/**
-	 * Request-owned preview inputs overlay only FTF's declarative preset/noise values. Every other
-	 * lookup remains the already-realized selected registry graph, so opening a preview never codec-
-	 * clones arbitrary registered worldgen implementations.
-	 */
 	public HolderLookup.Provider buildPreviewLookups(RegistryAccess registries) {
 		RegistryAccess.Frozen selected = registries.freeze();
 		Set<ResourceKey<? extends Registry<?>>> overrides = Set.of(
@@ -114,8 +109,6 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 		Cloner.Factory factory = new Cloner.Factory();
 		Set<ResourceKey<? extends Registry<?>>> armedRegistries = new HashSet<>();
 
-		// 3. Arm every public Minecraft worldgen registry for which RegistryDataLoader supplies a codec.
-		// Registry identity, rather than the namespaces of its entries, defines this cloning contract.
 		RegistryDataLoader.WORLDGEN_REGISTRIES.forEach(registryData -> {
 			ResourceKey<? extends Registry<?>> key = registryData.key();
 			registryData.runWithArguments(factory::addCodec);
@@ -131,8 +124,6 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 		this.addAndTrack(factory, armedRegistries, RTFRegistries.PRESET, Preset.DIRECT_CODEC);
 
 		// 5. Wrap registries in a safety shield
-		// This ensures the cloner only sees registries for which a public codec is available.
-		// Unknown custom registries remain outside the patch instead of being guessed or cloned.
 		HolderLookup.Provider safeSource = this.filterToArmedOnly(registries, armedRegistries);
 
 		return builder.buildPatch(

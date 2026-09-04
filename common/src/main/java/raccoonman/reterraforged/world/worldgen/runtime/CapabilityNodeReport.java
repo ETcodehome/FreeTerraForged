@@ -5,7 +5,6 @@ import java.util.Optional;
 
 import net.minecraft.resources.ResourceLocation;
 
-/** Immutable explanation for one compiled plan node. */
 public record CapabilityNodeReport(
 	ResourceLocation id,
 	WorldgenFacet facet,
