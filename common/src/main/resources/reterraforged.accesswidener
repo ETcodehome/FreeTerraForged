@@ -66,3 +66,4 @@ accessible field net/minecraft/world/level/biome/Climate$RTree$Node parameterSpa
 accessible class net/minecraft/world/level/biome/Climate$RTree$Leaf
 accessible field net/minecraft/world/level/biome/Climate$RTree$Leaf value Ljava/lang/Object;
 accessible method net/minecraft/world/level/biome/Climate$RTree$Leaf <init> (Lnet/minecraft/world/level/biome/Climate$ParameterPoint;Ljava/lang/Object;)V
+accessible class net/minecraft/world/level/levelgen/structure/structures/OceanMonumentPieces$OceanMonumentPiece

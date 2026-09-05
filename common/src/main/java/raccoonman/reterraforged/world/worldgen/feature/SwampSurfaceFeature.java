@@ -49,6 +49,8 @@ public class SwampSurfaceFeature extends Feature<Config> {
 
 				// Level.getHeight uses absolute coordinates safely
 				int surfaceY = level.getHeight(Heightmap.Types.WORLD_SURFACE, worldX, worldZ);
+
+				@SuppressWarnings({"deprecation", "removal"})
 				double noise = Biome.BIOME_INFO_NOISE.getValue(worldX * 0.25D, worldZ * 0.25D, false);
 				BlockState filler = getMaterial(worldX, waterY, worldZ, waterY, config);
 

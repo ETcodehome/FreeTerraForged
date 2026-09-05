@@ -418,14 +418,27 @@ abstract class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 			: this.reterraforged$compositionFallbackReason;
 	}
 
-	@Inject(method = "getTree", at = @At("HEAD"), require = 1)
+	@Dynamic("Added by TerraBlender")
+	@Inject(
+			method = "getTree(I)Lnet/minecraft/world/level/biome/Climate$RTree;",
+			at = @At("HEAD"),
+			require = 0,
+			remap = false
+	)
 	private void reterraforged$composeBeforeTreeLookup(int uniqueness, CallbackInfoReturnable<Climate.RTree<T>> callback) {
 		if (this.reterraforged$bandingInitialized) {
 			this.reterraforged$ensureComposedTrees();
 		}
 	}
 
-	@Inject(method = "getUniqueness", at = @At("HEAD"), cancellable = true, require = 1)
+	@Dynamic("Added by TerraBlender")
+	@Inject(
+			method = "getUniqueness(III)I",
+			at = @At("HEAD"),
+			cancellable = true,
+			require = 0,
+			remap = false
+	)
 	private void reterraforged$skipRedundantUniqueness(int x, int y, int z, CallbackInfoReturnable<Integer> callback) {
 		if (this.maxIndex <= 0) {
 			callback.setReturnValue(0);
