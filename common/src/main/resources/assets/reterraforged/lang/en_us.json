@@ -376,5 +376,15 @@
   "reterraforged.gui.worldSettings.title": "World Settings",
   "reterraforged.metadata.description": "ReTerraForged resources",
   "reterraforged.mudSwamps.metadata.description": "Changes the swamp material to mud",
-  "reterraforged.preset.metadata.description": "ReTerraForged preset"
+  "reterraforged.preset.metadata.description": "ReTerraForged preset",
+  "reterraforged.gui.c2me.title": "§cFreeTerraForged has detected a critical incompatibility.",
+  "reterraforged.gui.c2me.descLine1": "C2ME's Density Function Compiler is currently enabled.",
+  "reterraforged.gui.c2me.descLine2": "This modification is incompatible and causes generation problems.",
+  "reterraforged.gui.c2me.changeRequired": "§eA configuration change is required to resolve:",
+  "reterraforged.gui.c2me.instruction": "§7Update §fconfig/c2me.toml§7 and set §fuseDensityFunctionCompiler = false",
+  "reterraforged.gui.c2me.restartRequired": "§eA Minecraft restart is required after making this config change.",
+  "reterraforged.gui.button.c2meAutoPatch": "§aAuto Patch Config Then Quit",
+  "reterraforged.gui.button.c2meFixFailed": "§cFix Failed - Check Logs",
+  "reterraforged.gui.button.openConfigFolder": "Open Config Folder",
+  "reterraforged.gui.button.returnToMenu": "Return To Menu"
 }
