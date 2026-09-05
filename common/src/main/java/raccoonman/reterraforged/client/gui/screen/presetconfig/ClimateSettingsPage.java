@@ -10,7 +10,9 @@ import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetListPage.Pr
 import raccoonman.reterraforged.client.gui.widget.Slider;
 import raccoonman.reterraforged.client.gui.widget.ValueButton;
 import raccoonman.reterraforged.data.worldgen.preset.settings.ClimateSettings;
+import raccoonman.reterraforged.data.worldgen.preset.settings.ContinentType;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
+import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings;
 
 class ClimateSettingsPage extends PresetEditorPage {
 	private ValueButton<Integer> temperatureSeedOffset;
