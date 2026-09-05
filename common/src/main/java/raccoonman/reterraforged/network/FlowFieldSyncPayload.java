@@ -16,8 +16,8 @@ public record FlowFieldSyncPayload(ChunkPos pos, byte[] rawGrid) implements Cust
             (buf, payload) -> {
                 buf.writeLong(payload.pos.toLong());
                 buf.writeByteArray(payload.rawGrid);
-            },
-            buf -> new FlowFieldSyncPayload(new ChunkPos(buf.readLong()), buf.readByteArray(256))
+			},
+			buf -> new FlowFieldSyncPayload(new ChunkPos(buf.readLong()), buf.readByteArray(256))
     );
 
     @Override

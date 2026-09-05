@@ -1,0 +1,88 @@
+{
+  "providers": [
+    {
+      "id": "reterraforged:terrablender_regions",
+      "protocol_version": 1,
+      "adapter_version": 3,
+      "implementation": "raccoonman.reterraforged.world.worldgen.terrablender.TerraBlenderCapabilityProvider",
+      "owners": ["worldgen_epoch", "preview_request"],
+      "contributions": {
+        "provider_selection": "unique_root",
+        "spatial_ownership": "unique_root"
+      },
+      "query_modes": {
+        "provider_selection": "isolated_parallel_read",
+        "spatial_ownership": "isolated_parallel_read"
+      },
+      "mechanisms": [
+        {
+          "mod_id": "terrablender",
+          "supported_versions": ["4.1.0.8"],
+          "optional": true
+        }
+      ]
+    },
+    {
+      "id": "reterraforged:biolith_placements",
+      "protocol_version": 1,
+      "adapter_version": 1,
+      "implementation": "raccoonman.reterraforged.world.worldgen.biolith.BiolithCapabilityProvider",
+      "owners": ["worldgen_epoch", "preview_request"],
+      "contributions": {
+        "biome_composition": "ordered_transform",
+        "selection_decoration": "ordered_transform"
+      },
+      "query_modes": {
+        "biome_composition": "isolated_parallel_read",
+        "selection_decoration": "isolated_parallel_read"
+      },
+      "ordering": [
+        {
+          "before": "reterraforged:biolith_placements",
+          "after": "reterraforged:lithostitched_injectors",
+          "required": false
+        }
+      ],
+      "mechanisms": [
+        {
+          "mod_id": "biolith",
+          "supported_versions": ["3.0.11", "3.0.14"],
+          "optional": true
+        }
+      ],
+      "contribution_revision": true
+    },
+    {
+      "id": "reterraforged:lithostitched_injectors",
+      "protocol_version": 1,
+      "adapter_version": 1,
+      "implementation": "raccoonman.reterraforged.world.worldgen.lithostitched.LithostitchedCapabilityProvider",
+      "owners": ["worldgen_epoch", "preview_request"],
+      "contributions": {
+        "biome_composition": "ordered_transform",
+        "selection_decoration": "ordered_transform"
+      },
+      "query_modes": {
+        "biome_composition": "isolated_parallel_read",
+        "selection_decoration": "isolated_parallel_read"
+      },
+      "ordering": [
+        {
+          "before": "reterraforged:biolith_placements",
+          "after": "reterraforged:lithostitched_injectors",
+          "required": false
+        }
+      ],
+      "mechanisms": [
+        {
+          "mod_id": "lithostitched",
+          "supported_versions": ["1.8.0+beta4", "1.8.0+beta5"],
+          "optional": true
+        }
+      ],
+      "preview_factory": true,
+      "pre_server_finalizer": true,
+      "contribution_revision": true
+    }
+  ]
+}

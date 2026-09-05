@@ -3,6 +3,8 @@ package raccoonman.reterraforged.world.worldgen;
 import net.minecraft.nbt.CompoundTag;
 
 public class ChunkFlowField {
+    private static final String FLOW_FIELD_KEY = "RTFFlowField";
+
     private final byte[] flowGrid = new byte[256];
     private boolean hasRivers = false;
 
@@ -80,15 +82,19 @@ public class ChunkFlowField {
     public boolean hasRivers() { return this.hasRivers; }
     public byte[] getRawGrid() { return this.flowGrid; }
 
+    public static boolean hasData(CompoundTag tag) {
+        return tag.contains(FLOW_FIELD_KEY);
+    }
+
     public void writeToNbt(CompoundTag tag) {
         if (hasRivers) {
-            tag.putByteArray("RTFFlowField", flowGrid);
+            tag.putByteArray(FLOW_FIELD_KEY, flowGrid);
         }
     }
 
     public void readFromNbt(CompoundTag tag) {
-        if (tag.contains("RTFFlowField")) {
-            byte[] read = tag.getByteArray("RTFFlowField");
+        if (tag.contains(FLOW_FIELD_KEY)) {
+            byte[] read = tag.getByteArray(FLOW_FIELD_KEY);
             System.arraycopy(read, 0, this.flowGrid, 0, Math.min(read.length, 256));
             this.hasRivers = false;
             for (byte b : this.flowGrid) {

@@ -5,22 +5,19 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.mojang.serialization.JsonOps;
+
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.level.levelgen.VerticalAnchor;
-import net.minecraft.world.level.levelgen.heightproviders.HeightProvider;
-import net.minecraft.world.level.levelgen.heightproviders.UniformHeight;
 import net.minecraft.world.level.levelgen.placement.HeightRangePlacement;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.minecraft.world.level.levelgen.placement.PlacementContext;
-import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
-import raccoonman.reterraforged.mixin.HeightRangePlacementAccessor;
-import raccoonman.reterraforged.mixin.UniformHeightAccessor;
-import raccoonman.reterraforged.registries.RTFRegistries;
+import raccoonman.reterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
+import raccoonman.reterraforged.world.worldgen.runtime.WorldgenPlan;
 
 /**
  * Extends vanilla's canonical bottom-to-max-terrain placement semantics into
@@ -41,22 +38,29 @@ public final class DynamicHeightRangePlacement {
 	private DynamicHeightRangePlacement() {
 	}
 
-	/**
-	 * Returns replacement positions only when the current modifier is the exact
-	 * canonical {@code uniform(bottom, absolute(256))} range in an extended RTF
-	 * Overworld. Returning empty leaves vanilla and custom placement behavior
-	 * untouched.
-	 */
 	public static Optional<Stream<BlockPos>> getPositions(
 		HeightRangePlacement placement,
 		PlacementContext context,
 		RandomSource random,
 		BlockPos origin
 	) {
-		if (!isCanonicalRange(placement) || !isRtfOverworld(context)) {
+		if (!(context.generator() instanceof TerraForgedChunkGenerator generator)) {
 			return Optional.empty();
 		}
-		Optional<ResourceLocation> featureId = getTopLevelFeatureId(placement, context);
+		WorldgenPlan plan = generator.plan().orElse(null);
+		if (plan == null) {
+			return Optional.empty();
+		}
+		Optional<PlacedFeature> topFeature = getTopLevelFeature(placement, context);
+		if (topFeature.isEmpty()) {
+			return Optional.empty();
+		}
+		SurfacePlacementClassifier.Classification classification =
+			plan.placedFeatures().surfaceClassification(topFeature.orElseThrow());
+		if (!classification.eligible() || classification.pipeline().heightRange() != placement) {
+			return Optional.empty();
+		}
+		Optional<ResourceLocation> featureId = classification.pipeline().featureId();
 		if (featureId.isEmpty()) {
 			return Optional.empty();
 		}
@@ -87,18 +91,37 @@ public final class DynamicHeightRangePlacement {
 	}
 
 	public static boolean isCanonicalRange(HeightRangePlacement placement) {
-		HeightProvider provider = ((HeightRangePlacementAccessor)(Object)placement).reterraforged$getHeightProvider();
-		if (!(provider instanceof UniformHeight uniform)) {
+		JsonElement encoded = HeightRangePlacement.CODEC.codec()
+			.encodeStart(JsonOps.INSTANCE, placement)
+			.result()
+			.orElse(null);
+		if (encoded == null || !encoded.isJsonObject()) {
 			return false;
 		}
+		JsonElement heightElement = encoded.getAsJsonObject().get("height");
+		if (heightElement == null || !heightElement.isJsonObject()) {
+			return false;
+		}
+		JsonObject height = heightElement.getAsJsonObject();
+		return "minecraft:uniform".equals(string(height, "type"))
+			&& anchorEquals(height.get("min_inclusive"), "above_bottom", 0)
+			&& anchorEquals(height.get("max_inclusive"), "absolute", REFERENCE_MAX_Y);
+	}
 
-		UniformHeightAccessor accessor = (UniformHeightAccessor)(Object)uniform;
-		VerticalAnchor min = accessor.reterraforged$getMinInclusive();
-		VerticalAnchor max = accessor.reterraforged$getMaxInclusive();
-		return min instanceof VerticalAnchor.AboveBottom aboveBottom
-			&& aboveBottom.offset() == 0
-			&& max instanceof VerticalAnchor.Absolute absolute
-			&& absolute.y() == REFERENCE_MAX_Y;
+	private static String string(JsonObject object, String member) {
+		JsonElement value = object.get(member);
+		return value != null && value.isJsonPrimitive() ? value.getAsString() : null;
+	}
+
+	private static boolean anchorEquals(JsonElement value, String member, int expected) {
+		if (value == null || !value.isJsonObject()) {
+			return false;
+		}
+		JsonObject anchor = value.getAsJsonObject();
+		return anchor.size() == 1
+			&& anchor.has(member)
+			&& anchor.get(member).isJsonPrimitive()
+			&& anchor.get(member).getAsInt() == expected;
 	}
 
 	static List<HeightBand> createBands(int minY, int maxY) {
@@ -159,29 +182,9 @@ public final class DynamicHeightRangePlacement {
 		);
 	}
 
-	static boolean isRtfOverworld(PlacementContext context) {
-		if (!Level.OVERWORLD.equals(context.getLevel().getLevel().dimension())) {
-			return false;
-		}
-		return context.getLevel()
-			.registryAccess()
-			.lookup(RTFRegistries.PRESET)
-			.flatMap(registry -> registry.get(Preset.KEY))
-			.isPresent();
-	}
-
-	private static Optional<ResourceLocation> getTopLevelFeatureId(HeightRangePlacement placement, PlacementContext context) {
-		Optional<PlacedFeature> feature = context.topFeature()
+	private static Optional<PlacedFeature> getTopLevelFeature(HeightRangePlacement placement, PlacementContext context) {
+		return context.topFeature()
 			.filter(topFeature -> topFeature.placement().stream().anyMatch(modifier -> modifier == placement));
-		if (feature.isEmpty()) {
-			return Optional.empty();
-		}
-		return Optional.ofNullable(
-			context.getLevel()
-				.registryAccess()
-				.registryOrThrow(Registries.PLACED_FEATURE)
-				.getKey(feature.get())
-		);
 	}
 
 	private static long extensionSeed(PlacementContext context, ResourceLocation featureId, BlockPos origin, int baseY) {

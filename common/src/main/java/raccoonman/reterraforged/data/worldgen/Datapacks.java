@@ -58,10 +58,10 @@ public class Datapacks {
 		return dataGenerator;
 	}
 
-	public static DataGenerator makePreset(Preset preset, RegistryAccess registryAccess, Path dataGenPath, Path dataGenOutputPath, String presetName) {
+	public static DataGenerator makePreset(Preset preset, HolderLookup.Provider registries, Path dataGenPath, Path dataGenOutputPath, String presetName) {
 		DataGenerator dataGenerator = new DataGenerator(dataGenPath, SharedConstants.getCurrentVersion(), true);
 		PackGenerator packGenerator = dataGenerator.new PackGenerator(true, presetName, new PackOutput(dataGenOutputPath));
-		CompletableFuture<HolderLookup.Provider> lookup = CompletableFuture.supplyAsync(() -> preset.buildPatch(registryAccess));
+		CompletableFuture<HolderLookup.Provider> lookup = CompletableFuture.supplyAsync(() -> preset.buildPatch(registries));
 		
 		packGenerator.addProvider((output) -> {
 			return DataGenUtil.createRegistryProvider(output, lookup);

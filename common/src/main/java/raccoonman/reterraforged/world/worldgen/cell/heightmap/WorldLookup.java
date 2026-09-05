@@ -3,7 +3,6 @@ package raccoonman.reterraforged.world.worldgen.cell.heightmap;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainType;
-import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.TileCache;
 
 public class WorldLookup {
@@ -39,16 +38,23 @@ public class WorldLookup {
 		return this.compute(cell, x, z, applyClimate);
 	}
 
+	public void applyBiomeRegion(Cell cell, int x, int z) {
+		if (!this.computeCached(cell, x, z)) {
+			this.heightmap.applyBiomeRegion(cell, x, z);
+		}
+	}
+
 	private boolean computeAccurate(Cell cell, int x, int z) {
 		if (this.cache == null) {
 			return false;
 		}
 		int rx = this.cache.chunkToTile(x >> 4);
 		int rz = this.cache.chunkToTile(z >> 4);
-		Tile tile = this.cache.provide(rx, rz);
-		Cell c = tile.lookup(x, z);
-		if (c != null) {
-			cell.copyFrom(c);
+		try (TileCache.Lease lease = this.cache.acquire(rx, rz)) {
+			Cell c = lease.tile().lookup(x, z);
+			if (c != null) {
+				cell.copyFrom(c);
+			}
 		}
 		return cell.terrain != null;
 	}
@@ -59,13 +65,15 @@ public class WorldLookup {
 		}
 		int rx = this.cache.chunkToTile(x >> 4);
 		int rz = this.cache.chunkToTile(z >> 4);
-		Tile tile = this.cache.provideIfPresent(rx, rz);
-		if (tile != null) {
-			Cell c = tile.lookup(x, z);
-			if (c != null) {
-				cell.copyFrom(c);
+		TileCache.Lease lease = this.cache.acquireIfPresent(rx, rz);
+		if (lease != null) {
+			try (lease) {
+				Cell c = lease.tile().lookup(x, z);
+				if (c != null) {
+					cell.copyFrom(c);
+				}
+				return cell.terrain != null;
 			}
-			return cell.terrain != null;
 		}
 		return false;
 	}

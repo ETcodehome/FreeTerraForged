@@ -28,28 +28,13 @@ import raccoonman.reterraforged.world.worldgen.util.PosUtil;
 
 public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) implements MarkerFunction.Mapped {
 	private static final ThreadLocal<Cache2d> CELL = ThreadLocal.withInitial(Cache2d::new);
-	private static final ThreadLocal<Cell> SHARED_FAST_CELL = ThreadLocal.withInitial(Cell::new);
 
 	@Override
 	public double compute(DensityFunction.FunctionContext ctx) {
-		try {
-			WorldLookup lookup = this.deferredLookup.get();
-			if (lookup != null) {
-				// Grab the reusable cell for this specific worker thread
-				Cell cell = SHARED_FAST_CELL.get();
-
-				// Populate it via the zero-allocation fast path
-				PointCellCache.fill(lookup, ctx.blockX(), ctx.blockZ(), cell);
-
-				// Read and return the data
-				return this.field.read(cell, lookup.getHeightmap());
-			}
-		} catch (Throwable t) {
-			// Intentionally swallowed to fall through to original logic on failure
-		}
-
-		// Fallback to original single-slot Cache2d path if the cache fails/is uninitialized
 		WorldLookup worldLookup = this.deferredLookup.get();
+		if (worldLookup == null) {
+			throw new IllegalStateException("FTF cell sampler used before its world lookup was initialized");
+		}
 		Cell cell = CELL.get().getAndUpdate(worldLookup, ctx.blockX(), ctx.blockZ(), true);
 		return this.field.read(cell, worldLookup.getHeightmap());
 	}
@@ -82,12 +67,11 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 	}
 	
 	public class CacheChunk implements MarkerFunction.Mapped {
-		@Nullable
-		private Tile.Chunk chunk;
+		private Supplier<@Nullable Tile.Chunk> chunk;
 		private Cache2d cache2d;
 		private int chunkX, chunkZ;
 		
-		public CacheChunk(@Nullable Tile.Chunk chunk, @Nullable Cache2d cache2d, int chunkX, int chunkZ) {
+		public CacheChunk(Supplier<@Nullable Tile.Chunk> chunk, @Nullable Cache2d cache2d, int chunkX, int chunkZ) {
 			this.chunk = chunk;
 			this.cache2d = cache2d != null ? cache2d : new Cache2d();
 			this.chunkX = chunkX;
@@ -101,8 +85,9 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 			int chunkX = SectionPos.blockToSectionCoord(blockX);
 			int chunkZ = SectionPos.blockToSectionCoord(blockZ);
 			WorldLookup worldLookup = CellSampler.this.deferredLookup.get();
-			Cell cell = (this.chunk != null && this.chunkX == chunkX && this.chunkZ == chunkZ) ? 
-				this.chunk.getCell(blockX, blockZ) :
+			Tile.Chunk current = this.chunk.get();
+			Cell cell = (current != null && this.chunkX == chunkX && this.chunkZ == chunkZ) ?
+				current.getCell(blockX, blockZ) :
 				this.cache2d.getAndUpdate(worldLookup, blockX, blockZ, false);
 			return CellSampler.this.field.read(cell, worldLookup.getHeightmap());
 		}

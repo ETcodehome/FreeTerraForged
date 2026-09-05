@@ -31,6 +31,7 @@ import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainType;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
+import raccoonman.reterraforged.world.worldgen.densityfunction.tile.TileCache;
 import raccoonman.reterraforged.world.worldgen.feature.ErodeFeature.Config;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noises;
@@ -83,7 +84,8 @@ public class ErodeFeature extends Feature<Config> {
             int chunkZ = chunkPos.z;
             ChunkGenerator generator = placeContext.chunkGenerator();
             ChunkAccess chunk = level.getChunk(chunkX, chunkZ);
-            Tile.Chunk tileChunk = generatorContext.cache.provideAtChunk(chunkX, chunkZ).getChunkReader(chunkX, chunkZ);
+			try (TileCache.Lease lease = generatorContext.cache.acquireAtChunk(chunkX, chunkZ)) {
+				Tile.Chunk tileChunk = lease.tile().getChunkReader(chunkX, chunkZ);
             raccoonman.reterraforged.world.worldgen.cell.heightmap.Heightmap heightmap = generatorContext.generator.getHeightmap();
             Levels levels = heightmap.levels();
 
@@ -124,7 +126,8 @@ public class ErodeFeature extends Feature<Config> {
                     }
                 }
             }
-            return true;
+				return true;
+			}
         } else {
             return false;
         }

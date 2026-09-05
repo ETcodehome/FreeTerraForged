@@ -4,7 +4,7 @@ import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.cell.CellPopulator;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.Rivermap;
 
-public interface Continent extends CellPopulator {
+public interface Continent extends CellPopulator, AutoCloseable {
     float getEdgeValue(float x, float z);
     
     default float getLandValue(float x, float z) {
@@ -18,4 +18,7 @@ public interface Continent extends CellPopulator {
     default Rivermap getRivermap(Cell cell) {
         return this.getRivermap(cell.continentX, cell.continentZ);
     }
+
+	@Override
+	void close();
 }

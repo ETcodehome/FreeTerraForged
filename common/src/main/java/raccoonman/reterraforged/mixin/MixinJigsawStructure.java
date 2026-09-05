@@ -17,9 +17,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.QuartPos;
 import net.minecraft.core.SectionPos;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.tags.StructureTags;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.biome.Biome;
@@ -28,7 +26,6 @@ import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.WorldGenerationContext;
 import net.minecraft.world.level.levelgen.heightproviders.HeightProvider;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
-import net.minecraft.world.level.levelgen.structure.BuiltinStructures;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.pieces.StructurePiecesBuilder;
 import net.minecraft.world.level.levelgen.structure.pools.DimensionPadding;
@@ -44,6 +41,8 @@ import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.RiverCarverSettings;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
+import raccoonman.reterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
+import raccoonman.reterraforged.world.worldgen.runtime.WorldgenPlans.StructureAdaptation;
 
 /**
  * 1) Keeps Trial Chamber and Ancient City jigsaw starts within a terrain-bounded vertical window, then validates the
@@ -59,10 +58,6 @@ public class MixinJigsawStructure {
 	private static final int rtf$BOUNDARY_TOLERANCE = 8;
 	@Unique
 	private static final int rtf$GRID_STEPS_PER_SIDE = 3;
-
-	// 0 = unchecked, 1 = subterranean (Trial Chambers / Ancient City), 2 = village, 3 = unhandled structure
-	@Unique
-	private byte rtf$targetStatus;
 
 	@Shadow
 	@Final
@@ -97,31 +92,20 @@ public class MixinJigsawStructure {
 
 	@Inject(method = "findGenerationPoint", at = @At("HEAD"), cancellable = true)
 	private void rtf$correctOrSkip(Structure.GenerationContext generationContext, CallbackInfoReturnable<Optional<Structure.GenerationStub>> cir) {
-		if (this.rtf$targetStatus == 0) {
-			Structure self = (Structure) (Object) this;
-			var registry = generationContext.registryAccess().registryOrThrow(Registries.STRUCTURE);
-			Structure trialChambers = registry.get(BuiltinStructures.TRIAL_CHAMBERS);
-			Structure ancientCity = registry.get(BuiltinStructures.ANCIENT_CITY);
-
-			boolean isVillage = registry.getResourceKey(self)
-					.flatMap(registry::getHolder)
-					.map(holder -> holder.is(StructureTags.VILLAGE))
-					.orElse(false);
-
-			if (self == trialChambers || self == ancientCity) {
-				this.rtf$targetStatus = (byte) 1;
-			} else if (isVillage) {
-				this.rtf$targetStatus = (byte) 2;
-			} else {
-				this.rtf$targetStatus = (byte) 3;
-			}
+		if (!(generationContext.chunkGenerator() instanceof TerraForgedChunkGenerator generator)
+			|| !((Object) generationContext.randomState() instanceof RTFRandomState randomState)
+			|| !randomState.isTerraForged()
+			|| randomState.generatorContext() == null) {
+			return;
 		}
-
-		if (this.rtf$targetStatus == 3) {
+		StructureAdaptation adaptation = generator.activeStructurePlan().adaptation(
+			(Structure)(Object)this
+		);
+		if (adaptation == StructureAdaptation.NONE) {
 			return;
 		}
 
-		if (this.rtf$targetStatus == 2) {
+		if (adaptation == StructureAdaptation.VILLAGE) {
 			rtf$handleVillageRetryPlacement(generationContext, cir);
 			return;
 		}
@@ -310,7 +294,9 @@ public class MixinJigsawStructure {
 
 	@Unique
 	private boolean rtf$isRiverCell(int x, int z, RandomState randomState) {
-		RTFRandomState rtfRandomState = (RTFRandomState) (Object) randomState;
+		if (!((Object) randomState instanceof RTFRandomState rtfRandomState)) {
+			return false;
+		}
 		GeneratorContext generatorContext = rtfRandomState.generatorContext();
 		if (generatorContext == null) {
 			return false;
@@ -321,11 +307,11 @@ public class MixinJigsawStructure {
 		int localX = x & 15;
 		int localZ = z & 15;
 
-		Tile tile = generatorContext.cache.provideAtChunk(chunkX, chunkZ);
-		Tile.Chunk tileChunk = tile.getChunkReader(chunkX, chunkZ);
-		Cell cell = tileChunk.getCell(localX, localZ);
-
-		return cell.riverZone == RiverCarverSettings.RiverZone.Riverbed;
+		try (var lease = generatorContext.cache.acquireAtChunk(chunkX, chunkZ)) {
+			Tile.Chunk tileChunk = lease.tile().getChunkReader(chunkX, chunkZ);
+			Cell cell = tileChunk.getCell(localX, localZ);
+			return cell.riverZone == RiverCarverSettings.RiverZone.Riverbed;
+		}
 	}
 
 	@Unique

@@ -19,6 +19,7 @@ import raccoonman.reterraforged.data.worldgen.preset.PresetNoiseGeneratorSetting
 import raccoonman.reterraforged.data.worldgen.preset.PresetNoiseRouterData;
 import raccoonman.reterraforged.data.worldgen.preset.PresetPlacedFeatures;
 import raccoonman.reterraforged.data.worldgen.preset.PresetStructureRuleData;
+import raccoonman.reterraforged.data.worldgen.preset.PresetWorldPresets;
 import raccoonman.reterraforged.registries.RTFRegistries;
 import raccoonman.reterraforged.world.worldgen.biome.modifier.BiomeModifier;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
@@ -28,13 +29,6 @@ import java.util.*;
 import java.util.stream.Stream;
 
 public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings caves, ClimateSettings climate, TerrainSettings terrain, RiverSettings rivers, FlowSettings flow, IslandSettings island, FilterSettings filters, StructureSettings structures, MiscellaneousSettings miscellaneous, PresentationSettings presentation) {
-	private static final Set<ResourceKey<? extends Registry<?>>> PREVIEW_REGISTRIES = Set.of(
-		RTFRegistries.PRESET,
-		RTFRegistries.NOISE,
-		Registries.DENSITY_FUNCTION,
-		Registries.NOISE_SETTINGS
-	);
-
 	public static final Codec<Preset> DIRECT_CODEC = RecordCodecBuilder.create(instance -> instance.group(
 			WorldSettings.CODEC.fieldOf("world").forGetter(Preset::world),
 			SurfaceSettings.CODEC.optionalFieldOf("surface", new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F))).forGetter(Preset::surface),
@@ -57,26 +51,43 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 		return new Preset(this.world.copy(), this.surface.copy(), this.caves.copy(), this.climate.copy(), this.terrain.copy(), this.rivers.copy(), this.flow.copy(), this.island.copy(), this.filters.copy(), this.structures.copy(), this.miscellaneous.copy(), this.presentation.copy());
 	}
 
-	public HolderLookup.Provider buildPatch(RegistryAccess registries) {
+	public HolderLookup.Provider buildPatch(HolderLookup.Provider registries) {
 		return this.buildPatchedRegistries(registries).patches();
 	}
 
-	public HolderLookup.Provider buildFullPatch(RegistryAccess registries) {
-		return materialize(this.buildPatchedRegistries(registries).full());
+	public HolderLookup.Provider buildPreviewLookups(RegistryAccess registries) {
+		RegistryAccess.Frozen selected = registries.freeze();
+		Set<ResourceKey<? extends Registry<?>>> overrides = Set.of(
+			RTFRegistries.PRESET,
+			RTFRegistries.NOISE
+		);
+		RegistrySetBuilder builder = new RegistrySetBuilder();
+		this.addPatch(builder, RTFRegistries.PRESET, (preset, ctx) -> ctx.register(KEY, preset));
+		this.addPatch(builder, RTFRegistries.NOISE, PresetNoiseData::bootstrap);
+		Cloner.Factory factory = new Cloner.Factory();
+		factory.addCodec(RTFRegistries.PRESET, Preset.DIRECT_CODEC);
+		factory.addCodec(RTFRegistries.NOISE, Noise.DIRECT_CODEC);
+		HolderLookup.Provider patches = builder.buildPatch(
+			RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY),
+			this.filterToArmedOnly(selected, overrides),
+			factory
+		).patches();
+		return new HolderLookup.Provider() {
+			@Override
+			public Stream<ResourceKey<? extends Registry<?>>> listRegistries() {
+				return Stream.concat(selected.listRegistries(), overrides.stream()).distinct();
+			}
+
+			@Override
+			public <T> Optional<HolderLookup.RegistryLookup<T>> lookup(
+				ResourceKey<? extends Registry<? extends T>> key
+			) {
+				return overrides.contains(key) ? patches.lookup(key) : selected.lookup(key);
+			}
+		};
 	}
 
-	private static final Set<String> PREVIEW_NAMESPACES = Set.of("minecraft", "reterraforged");
-
-	private static HolderLookup.Provider materialize(HolderLookup.Provider provider) {
-		provider.listRegistries()
-			.filter(PREVIEW_REGISTRIES::contains)
-			.forEach(key -> provider.lookupOrThrow(key).listElements()
-				.filter(holder -> PREVIEW_NAMESPACES.contains(holder.key().location().getNamespace()))
-				.forEach(holder -> holder.value()));
-		return provider;
-	}
-
-	private RegistrySetBuilder.PatchedRegistries buildPatchedRegistries(RegistryAccess registries) {
+	private RegistrySetBuilder.PatchedRegistries buildPatchedRegistries(HolderLookup.Provider registries) {
 		RegistrySetBuilder builder = new RegistrySetBuilder();
 
 		// 1. Setup Patches
@@ -92,21 +103,16 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 			TBNoiseRouterData.bootstrap(ctx);
 		});
 		this.addPatch(builder, Registries.NOISE_SETTINGS, PresetNoiseGeneratorSettings::bootstrap);
+		this.addPatch(builder, Registries.WORLD_PRESET, PresetWorldPresets::bootstrap);
 
 		// 2. Initialize Cloner and Gatekeeper tracking
 		Cloner.Factory factory = new Cloner.Factory();
 		Set<ResourceKey<? extends Registry<?>>> armedRegistries = new HashSet<>();
 
-		// 3. Process Vanilla Worldgen Registries
 		RegistryDataLoader.WORLDGEN_REGISTRIES.forEach(registryData -> {
 			ResourceKey<? extends Registry<?>> key = registryData.key();
-			// Only arm registries from known safe namespaces to be extra cautious
-			String namespace = key.location().getNamespace();
-
-			if (namespace.equals("minecraft") || namespace.equals("reterraforged")) {
-				registryData.runWithArguments(factory::addCodec);
-				armedRegistries.add(key);
-			}
+			registryData.runWithArguments(factory::addCodec);
+			armedRegistries.add(key);
 		});
 
 		armedRegistries.add(Registries.STRUCTURE_SET);
@@ -118,9 +124,7 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 		this.addAndTrack(factory, armedRegistries, RTFRegistries.PRESET, Preset.DIRECT_CODEC);
 
 		// 5. Wrap registries in a safety shield
-		// This ensures the cloner only sees registries we explicitly gave it a codec for.
-		// Unarmed registries (like mixed_litter) will be ignored safely.
-		RegistryAccess safeSource = this.filterToArmedOnly(registries, armedRegistries);
+		HolderLookup.Provider safeSource = this.filterToArmedOnly(registries, armedRegistries);
 
 		return builder.buildPatch(
 				RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY),
@@ -140,24 +144,16 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 	/**
 	 * Creates a virtual view of the RegistryAccess that hides any folders we don't have a cloner for.
 	 */
-	private RegistryAccess filterToArmedOnly(RegistryAccess original, Set<ResourceKey<? extends Registry<?>>> armed) {
-		return new RegistryAccess() {
+	private HolderLookup.Provider filterToArmedOnly(HolderLookup.Provider original, Set<ResourceKey<? extends Registry<?>>> armed) {
+		return new HolderLookup.Provider() {
 			@Override
-			public <T> Optional<Registry<T>> registry(ResourceKey<? extends Registry<? extends T>> key) {
-				// ONLY allow the registry if we have explicitly armed it with a cloner.
-				// This prevents third-party registries injected into the 'minecraft' namespace from crashing us.
-				if (armed.contains(key)) {
-					return original.registry(key);
-				}
-
-				// Hide everything else to keep the cloner happy
-				return Optional.empty();
+			public <T> Optional<HolderLookup.RegistryLookup<T>> lookup(ResourceKey<? extends Registry<? extends T>> key) {
+				return armed.contains(key) ? original.lookup(key) : Optional.empty();
 			}
 
 			@Override
-			public Stream<RegistryEntry<?>> registries() {
-				// Filter out any registry that hasn't been explicitly armed
-				return original.registries().filter(entry -> armed.contains(entry.key()));
+			public Stream<ResourceKey<? extends Registry<?>>> listRegistries() {
+				return original.listRegistries().filter(armed::contains);
 			}
 		};
 	}

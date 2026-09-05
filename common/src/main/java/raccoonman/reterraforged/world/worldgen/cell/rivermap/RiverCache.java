@@ -6,7 +6,7 @@ import raccoonman.reterraforged.concurrent.cache.Cache;
 import raccoonman.reterraforged.concurrent.cache.map.StampedLongMap;
 import raccoonman.reterraforged.world.worldgen.util.PosUtil;
 
-public class RiverCache {
+public class RiverCache implements AutoCloseable {
     protected RiverGenerator generator;
     protected Cache<Rivermap> cache;
     
@@ -20,4 +20,9 @@ public class RiverCache {
         	return this.generator.generateRivers(PosUtil.unpackLeft(id), PosUtil.unpackRight(id), id);
         });
     }
+
+	@Override
+	public void close() {
+		this.cache.close();
+	}
 }

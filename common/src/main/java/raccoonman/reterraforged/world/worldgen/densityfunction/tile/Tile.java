@@ -1,6 +1,7 @@
 package raccoonman.reterraforged.world.worldgen.densityfunction.tile;
 
 import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import raccoonman.reterraforged.concurrent.Resource;
 import raccoonman.reterraforged.concurrent.cache.SafeCloseable;
@@ -19,6 +20,7 @@ public class Tile implements SafeCloseable, Filterable, CellLookup {
 	private Resource<Chunk[]> chunkResource;
 	private Cell[] cache;
 	private Chunk[] chunks;
+	private final AtomicBoolean closed = new AtomicBoolean();
 	
 	public Tile(int x, int z, int size, int border, Size blockSize, Size chunkSize, Resource<Cell[]> cacheResource, Resource<Chunk[]> chunkResource) {
 		this.x = x;
@@ -111,12 +113,46 @@ public class Tile implements SafeCloseable, Filterable, CellLookup {
 
 	@Override
 	public void close() {
-        for (Cell cell : this.cache) {
-        	cell.reset();
-        }
-        Arrays.fill(this.chunks, null);
-		this.cacheResource.close();
-		this.chunkResource.close();
+		if (!this.closed.compareAndSet(false, true)) {
+			return;
+		}
+		Throwable failure = null;
+		try {
+			for (Cell cell : this.cache) {
+				cell.reset();
+			}
+			Arrays.fill(this.chunks, null);
+		} catch (RuntimeException | Error resetFailure) {
+			failure = resetFailure;
+		}
+		try {
+			this.cacheResource.close();
+		} catch (RuntimeException | Error closeFailure) {
+			failure = mergeFailure(failure, closeFailure);
+		}
+		try {
+			this.chunkResource.close();
+		} catch (RuntimeException | Error closeFailure) {
+			failure = mergeFailure(failure, closeFailure);
+		}
+		if (failure instanceof RuntimeException runtime) {
+			throw runtime;
+		}
+		if (failure instanceof Error error) {
+			throw error;
+		}
+	}
+
+	private static Throwable mergeFailure(Throwable current, Throwable next) {
+		if (current == null) {
+			return next;
+		}
+		if (next instanceof Error && !(current instanceof Error)) {
+			next.addSuppressed(current);
+			return next;
+		}
+		current.addSuppressed(next);
+		return current;
 	}
 	
     private Chunk computeChunk(int index, int chunkX, int chunkZ) {
