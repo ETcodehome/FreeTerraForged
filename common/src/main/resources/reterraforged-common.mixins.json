@@ -33,7 +33,6 @@
 		"MixinChunkSerializer",
 		"MixinBlock",
 		"MixinPlayerChunkSender",
-		"MixinC2MECompilerShield",
 		"MixinMultiNoiseBiomeSource",
 		"MixinWorldGenRegionCache",
 		"MixinNoiseFill",

@@ -237,6 +237,20 @@ public final class RTFTranslationKeys {
 	public static final String GUI_LABEL_ISLAND_SCALES = resolve("gui.label.islandScales");
 	public static final String GUI_LABEL_ISLAND_CHANCES = resolve("gui.label.islandChances");
 
+	// C2ME Incompatibility Overlay Titles & Body Text
+	public static final String GUI_C2ME_TITLE = resolve("gui.c2me.title");
+	public static final String GUI_C2ME_DESC_LINE_1 = resolve("gui.c2me.descLine1");
+	public static final String GUI_C2ME_DESC_LINE_2 = resolve("gui.c2me.descLine2");
+	public static final String GUI_C2ME_CHANGE_REQUIRED = resolve("gui.c2me.changeRequired");
+	public static final String GUI_C2ME_INSTRUCTION = resolve("gui.c2me.instruction");
+	public static final String GUI_C2ME_RESTART_REQUIRED = resolve("gui.c2me.restartRequired");
+
+	// C2ME Incompatibility Overlay Buttons
+	public static final String GUI_BUTTON_C2ME_AUTO_PATCH = resolve("gui.button.c2meAutoPatch");
+	public static final String GUI_BUTTON_C2ME_FIX_FAILED = resolve("gui.button.c2meFixFailed");
+	public static final String GUI_BUTTON_OPEN_CONFIG_FOLDER = resolve("gui.button.openConfigFolder");
+	public static final String GUI_BUTTON_RETURN_TO_MENU = resolve("gui.button.returnToMenu");
+
 	private static String resolve(String key) {
 		return RTFCommon.MOD_ID + "." + key;
 	}
