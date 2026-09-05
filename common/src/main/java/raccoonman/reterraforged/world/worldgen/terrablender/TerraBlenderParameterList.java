@@ -24,6 +24,9 @@ public interface TerraBlenderParameterList<T> {
 		float surfaceCoverageFactor
 	);
 
+	int getTreeCount();
+	int getUniqueness(int x, int y, int z);
+
 	CompositionDiagnostics<T> reterraforged$getCompositionDiagnostics();
 
 	SelectionDiagnostics<T> reterraforged$inspectSelection(Climate.TargetPoint target, int x, int y, int z);

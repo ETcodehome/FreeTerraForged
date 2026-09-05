@@ -1,11 +1,8 @@
 package raccoonman.reterraforged.world.worldgen.noise.module;
 
-import com.mojang.serialization.Codec;
-
 import com.mojang.serialization.MapCodec;
 import raccoonman.reterraforged.world.worldgen.util.PosUtil;
 
-@Deprecated
 public record Cache2d(Noise noise, ThreadLocal<Cached> cache) implements Noise {
 	public static final MapCodec<Cache2d> CODEC = Noise.HOLDER_HELPER_CODEC.xmap(Cache2d::new, Cache2d::noise).fieldOf("value");
 	

@@ -593,14 +593,6 @@ abstract class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 		return this.reterraforged$bandingInitialized;
 	}
 
-	@Dynamic("Added by TerraBlender")
-	@Shadow(remap = false)
-	public abstract int getTreeCount();
-
-	@Dynamic("Added by TerraBlender")
-	@Shadow(remap = false)
-	public abstract int getUniqueness(int x, int y, int z);
-
 	@Unique
 	private static <T> List<Pair<Climate.ParameterPoint, T>> reterraforged$deduplicateEntries(
 			List<Pair<Climate.ParameterPoint, T>> entries

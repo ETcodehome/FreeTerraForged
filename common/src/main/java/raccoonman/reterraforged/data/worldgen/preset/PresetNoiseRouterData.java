@@ -225,7 +225,6 @@ public class PresetNoiseRouterData {
     }
 
     // do this a different way, since this affects the size of the cave as well
-    @Deprecated
     private static DensityFunction probabilityDensity(float probability, DensityFunction function) {
     	if(probability == 0.0F) {
     		return DensityFunctions.constant(1.0F);

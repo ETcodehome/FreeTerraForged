@@ -22,7 +22,6 @@ import raccoonman.reterraforged.client.gui.widget.Slider;
 import raccoonman.reterraforged.client.gui.widget.Slider.Format;
 import raccoonman.reterraforged.client.gui.widget.ValueButton;
 
-@Deprecated
 final class PresetWidgets {
 	
 	public static EditBox createEditBox(Font font, Consumer<String> responder, Component prompt) {

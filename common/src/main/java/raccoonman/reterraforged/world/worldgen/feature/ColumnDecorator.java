@@ -6,7 +6,6 @@ import net.minecraft.world.level.chunk.ChunkAccess;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noises;
 
-@Deprecated
 public class ColumnDecorator {
 	private static final Noise VARIANCE = Noises.perlin(0, 100, 1);
 

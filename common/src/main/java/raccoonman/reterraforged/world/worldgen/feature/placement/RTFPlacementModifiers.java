@@ -21,7 +21,6 @@ public class RTFPlacementModifiers {
     }
     
     @SafeVarargs
-    @Deprecated(forRemoval = true) // use biome modifiers to remove features instead
 	public static BlacklistDimensionFilter blacklistDimensions(ResourceKey<LevelStem>... levels) {
     	return new BlacklistDimensionFilter(ImmutableList.copyOf(levels));
     }
@@ -33,8 +32,7 @@ public class RTFPlacementModifiers {
     public static FastPoissonModifier poisson(int radius, float scale, float jitter, float biomeFade, int densityVariationScale, float densityVariation) {
 		 return new FastPoissonModifier(radius, scale, jitter, biomeFade, densityVariationScale, densityVariation);
 	}
-    
-    @Deprecated
+
     public static LegacyCountExtraModifier countExtra(int count, float extraChance, int extraCount) {
     	return new LegacyCountExtraModifier(count, extraChance, extraCount);
     }

@@ -144,7 +144,6 @@ public class WorldSettings {
         	return new Properties(this.spawnType, this.worldHeight, this.worldDepth, this.seaLevel, this.lavaLevel, this.oceanDepth, this.spawnX, this.spawnZ);
         }
         
-        @Deprecated
         public int terrainScaler() {
         	return Math.min(this.worldHeight, 256);
         }

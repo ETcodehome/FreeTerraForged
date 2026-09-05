@@ -130,7 +130,6 @@ public class ErodeFeature extends Feature<Config> {
         }
     }
 
-    @Deprecated(forRemoval = true)
     private static Noise makeDesertErosionVariance(Levels levels) {
         Noise noise = Noises.perlin(435, 8, 1);
         return Noises.mul(noise, levels.scale(16));

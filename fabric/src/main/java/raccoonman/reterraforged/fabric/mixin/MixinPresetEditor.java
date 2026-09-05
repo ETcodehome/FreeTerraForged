@@ -12,12 +12,10 @@ import net.minecraft.client.gui.screens.worldselection.PresetEditor;
 import net.minecraft.world.level.levelgen.presets.WorldPresets;
 import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetConfigScreen;
 
-// why the fuck does mojang hardcode everything??
-@Deprecated 
+// This is the entry point of the customize button, we link the PresetConfigScreen in vanillas original map of menus
 @Mixin(PresetEditor.class)
 interface MixinPresetEditor {
-	
-	// there has to be a better way to do this right?
+
 	@Redirect(
 		method = "<clinit>",
 		at = @At(

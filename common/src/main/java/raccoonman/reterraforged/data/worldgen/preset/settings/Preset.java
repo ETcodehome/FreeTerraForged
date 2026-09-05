@@ -50,7 +50,6 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 			PresentationSettings.CODEC.optionalFieldOf("presentation").xmap(optional -> optional.orElseGet(PresentationSettings::makeDefault),Optional::of).forGetter(Preset::presentation)
 	).apply(instance, Preset::new));
 
-	@Deprecated
 	public static final ResourceKey<Preset> KEY = RTFRegistries.createKey(RTFRegistries.PRESET, "preset");
 
 	public Preset copy() {
