@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+import org.spongepowered.asm.mixin.Dynamic;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -39,7 +40,7 @@ import terrablender.api.Regions;
 	value = Climate.ParameterList.class,
 	priority = 1001
 )
-class MixinParameterList<T> implements TerraBlenderParameterList<T> {
+abstract class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 	private int maxIndex;
 
 	@Shadow
@@ -592,15 +593,13 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 		return this.reterraforged$bandingInitialized;
 	}
 
-	@Shadow
-	public int getTreeCount() {
-		throw new UnsupportedOperationException();
-	}
+	@Dynamic("Added by TerraBlender")
+	@Shadow(remap = false)
+	public abstract int getTreeCount();
 
-	@Shadow
-	public int getUniqueness(int x, int y, int z) {
-		throw new UnsupportedOperationException();
-	}
+	@Dynamic("Added by TerraBlender")
+	@Shadow(remap = false)
+	public abstract int getUniqueness(int x, int y, int z);
 
 	@Unique
 	private static <T> List<Pair<Climate.ParameterPoint, T>> reterraforged$deduplicateEntries(
