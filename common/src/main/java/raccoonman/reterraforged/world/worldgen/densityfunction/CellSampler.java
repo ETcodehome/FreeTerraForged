@@ -109,7 +109,7 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 			WorldLookup worldLookup = CellSampler.this.deferredLookup.get();
 			Cell cell = (this.chunk != null && this.chunkX == currentChunkX && this.chunkZ == currentChunkZ) ?
 					this.chunk.getCell(blockX, blockZ) :
-					this.cache2d.getAndUpdate(worldLookup, blockX, blockZ, false);
+					this.cache2d.getAndUpdate(worldLookup, blockX, blockZ, true);
 			return CellSampler.this.field.read(cell, worldLookup.getHeightmap());
 		}
 
