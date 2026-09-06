@@ -39,6 +39,15 @@ dependencies {
     compileOnly "dev.architectury:architectury-injectables:1.0.13"
 }
 
+tasks.register("prodServer", net.fabricmc.loom.task.prod.ServerProductionRunTask) {
+    group = "fabric"
+    description = "Runs the remapped production artifact with Fabric's production server launcher"
+    loaderVersion = rootProject.fabric_loader_version
+    minecraftVersion = rootProject.minecraft_version
+    runDir = file("run")
+    jvmArgs.add("-Xmx4G")
+}
+
 repositories {
     maven { url "https://api.modrinth.com/maven" }
 }

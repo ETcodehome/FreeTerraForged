@@ -9,7 +9,6 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Map;
 
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Renderable;
 import net.minecraft.client.gui.components.events.GuiEventListener;
@@ -38,38 +37,10 @@ public class PresetConfigScreen extends LinkedPageScreen {
 	private String seed;
 	private boolean seedInitialized;
 	private boolean applySeedOnClose;
-	private boolean isDfcActive;
 
 	public PresetConfigScreen(CreateWorldScreen parent) {
 		this.parent = parent;
-		this.isDfcActive = C2MEChecker.isDfcActive();
-
-		if (!this.isDfcActive) {
-			this.currentPage = new PresetListPage(this);
-		}
-	}
-
-	@Override
-	public void init() {
-		if (this.isDfcActive) {
-			this.clearWidgets();
-			C2MEChecker.initIncompatibilityScreen(this, this.parent);
-			return;
-		}
-
-		super.init();
-	}
-
-	@Override
-	public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float delta) {
-		if (this.isDfcActive) {
-			this.renderBackground(guiGraphics, mouseX, mouseY, delta);
-			super.render(guiGraphics, mouseX, mouseY, delta);
-			C2MEChecker.renderIncompatibilityOverlay(guiGraphics, this.font, this.width, this.height);
-			return;
-		}
-
-		super.render(guiGraphics, mouseX, mouseY, delta);
+		this.currentPage = new PresetListPage(this);
 	}
 
 	@Override
