@@ -7,7 +7,7 @@ import org.spongepowered.asm.mixin.*;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
-import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import net.minecraft.core.SectionPos;
@@ -22,6 +22,7 @@ import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 import net.minecraft.world.level.levelgen.NoiseRouter;
 import net.minecraft.world.level.levelgen.NoiseSettings;
 import net.minecraft.world.level.levelgen.RandomState;
+import net.minecraft.world.level.levelgen.blending.Blender;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings;
 import raccoonman.reterraforged.world.worldgen.ActiveChunk;
@@ -50,24 +51,27 @@ class MixinNoiseChunk {
 	@Shadow
     @Final
     private int cellHeight;
-	@Shadow
-    @Final
-	int firstNoiseX;
-	@Shadow
-    @Final
-    int firstNoiseZ;
-	@Shadow
-    @Final
-	private int cellCountXZ;
-	
-	@Redirect(
-		method = "<init>",
-		at = @At(
-			value = "INVOKE",
-			target = "Lnet/minecraft/world/level/levelgen/NoiseRouter;mapAll(Lnet/minecraft/world/level/levelgen/DensityFunction$Visitor;)Lnet/minecraft/world/level/levelgen/NoiseRouter;"
-		)
+
+	@Inject(
+			method = "<init>",
+			at = @At(
+					value = "INVOKE",
+					target = "Lnet/minecraft/world/level/levelgen/NoiseRouter;mapAll(Lnet/minecraft/world/level/levelgen/DensityFunction$Visitor;)Lnet/minecraft/world/level/levelgen/NoiseRouter;",
+					shift = At.Shift.BEFORE
+			)
 	)
-	private NoiseRouter init(NoiseRouter noiseRouter, DensityFunction.Visitor visitor, int cellCountXZ, RandomState randomState, int minBlockX, int minBlockZ, NoiseSettings noiseSettings, DensityFunctions.BeardifierOrMarker beardifierOrMarker, NoiseGeneratorSettings generatorSettings) {
+	private void reterraforged$initializeBeforeRouterMapping(
+			int cellCountXZ,
+			RandomState randomState,
+			int minBlockX,
+			int minBlockZ,
+			NoiseSettings noiseSettings,
+			DensityFunctions.BeardifierOrMarker beardifierOrMarker,
+			NoiseGeneratorSettings generatorSettings,
+			Aquifer.FluidPicker fluidPicker,
+			Blender blender,
+			CallbackInfo callback
+	) {
 		this.randomState = randomState;
 		this.chunkX = SectionPos.blockToSectionCoord(minBlockX);
 		this.chunkZ = SectionPos.blockToSectionCoord(minBlockZ);
@@ -80,7 +84,6 @@ class MixinNoiseChunk {
 			this.cellCountY = Math.min(this.cellCountY, maxHeight / this.cellHeight);
 		}
 		this.cache2d = new CellSampler.Cache2d();
-		return randomState.router();
 	}
 
 	@ModifyVariable(
