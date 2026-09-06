@@ -187,18 +187,12 @@ class MixinNoiseChunk {
 		}
 	}
 
-	@Inject(at = @At("HEAD"), method = "wrapNew", cancellable = true)
+	@Inject(at = @At("RETURN"), method = "wrapNew", cancellable = true)
 	private void wrapNew(DensityFunction function, CallbackInfoReturnable<DensityFunction> callback) {
 		if ((Object) this.randomState instanceof RTFRandomState randomState) {
 			CellSampler mapped = rtf$findCellSampler(function);
 			if (mapped != null) {
-				// 1. Create custom CacheChunk instance
-				DensityFunction cacheChunk = mapped.new CacheChunk(this.chunk, this.cache2d, this.chunkX, this.chunkZ);
-
-				// 2. Wrap inside Vanilla's Marker record with CACHE2D type so C2ME DFC recognizes it
-				DensityFunction vanillaMarker = new DensityFunctions.Marker(DensityFunctions.Marker.Type.Cache2D, cacheChunk);
-
-				callback.setReturnValue(vanillaMarker);
+				callback.setReturnValue(mapped.new CacheChunk(this.chunk, this.cache2d, this.chunkX, this.chunkZ));
 			}
 		}
 	}
