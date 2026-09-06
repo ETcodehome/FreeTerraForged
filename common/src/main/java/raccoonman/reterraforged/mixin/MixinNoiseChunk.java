@@ -3,10 +3,7 @@ package raccoonman.reterraforged.mixin;
 import java.util.List;
 
 import org.jetbrains.annotations.Nullable;
-import org.spongepowered.asm.mixin.Final;
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Mutable;
-import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.*;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
@@ -35,6 +32,7 @@ import raccoonman.reterraforged.world.worldgen.RTFRandomState;
 import raccoonman.reterraforged.world.worldgen.biome.RTFClimateSampler;
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.densityfunction.CellSampler;
+import raccoonman.reterraforged.world.worldgen.densityfunction.RTFCellFunction;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.TileCache;
 
@@ -189,14 +187,30 @@ class MixinNoiseChunk {
 		}
 	}
 
-	@Inject(
-		at = @At("HEAD"),
-		method = "wrapNew",
-		cancellable = true
-	)
+	@Inject(at = @At("HEAD"), method = "wrapNew", cancellable = true)
 	private void wrapNew(DensityFunction function, CallbackInfoReturnable<DensityFunction> callback) {
-		if((Object) this.randomState instanceof RTFRandomState randomState && function instanceof CellSampler mapped) {
-			callback.setReturnValue(mapped.new CacheChunk(this.chunk, this.cache2d, this.chunkX, this.chunkZ));
+		if ((Object) this.randomState instanceof RTFRandomState randomState) {
+			CellSampler mapped = rtf$findCellSampler(function);
+			if (mapped != null) {
+				// 1. Create custom CacheChunk instance
+				DensityFunction cacheChunk = mapped.new CacheChunk(this.chunk, this.cache2d, this.chunkX, this.chunkZ);
+
+				// 2. Wrap inside Vanilla's Marker record with CACHE2D type so C2ME DFC recognizes it
+				DensityFunction vanillaMarker = new DensityFunctions.Marker(DensityFunctions.Marker.Type.Cache2D, cacheChunk);
+
+				callback.setReturnValue(vanillaMarker);
+			}
 		}
+	}
+
+	@Unique
+	private static CellSampler rtf$findCellSampler(DensityFunction function) {
+		if (function instanceof CellSampler mapped) {
+			return mapped;
+		}
+		if (function instanceof RTFCellFunction f) {
+			return f.rtf$unwrap();
+		}
+		return null;
 	}
 }

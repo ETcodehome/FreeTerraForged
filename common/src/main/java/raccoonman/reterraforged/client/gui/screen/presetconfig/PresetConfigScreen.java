@@ -42,7 +42,7 @@ public class PresetConfigScreen extends LinkedPageScreen {
 
 	public PresetConfigScreen(CreateWorldScreen parent) {
 		this.parent = parent;
-		this.isDfcActive = C2MEChecker.isDfcActive();
+		this.isDfcActive = false;//C2MEChecker.isDfcActive();
 
 		if (!this.isDfcActive) {
 			this.currentPage = new PresetListPage(this);
