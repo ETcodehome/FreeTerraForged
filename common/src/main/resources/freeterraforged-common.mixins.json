@@ -2,7 +2,7 @@
 
   	"required": true,
   	"plugin": "etcodehome.freeterraforged.mixin.plugin.MixinPlugin",
-  	"package": "raccoonman.reterraforged.mixin",
+  	"package": "etcodehome.freeterraforged.mixin",
   	"minVersion": "0.8",
   	"compatibilityLevel": "JAVA_21",
   	"mixins": [

@@ -54,7 +54,7 @@ public class FlowFieldDebugRenderer {
         for (int x = -renderVectorRadius; x <= renderVectorRadius; x++) {
             for (int z = -renderVectorRadius; z <= renderVectorRadius; z++) {
 
-                // Guard against rendering for non rtf chunks
+                // Guard against rendering for non ftf chunks
                 int worldX = playerPos.getX() + x;
                 int worldZ = playerPos.getZ() + z;
                 ChunkAccess chunk = level.getChunk(worldX >> 4, worldZ >> 4);

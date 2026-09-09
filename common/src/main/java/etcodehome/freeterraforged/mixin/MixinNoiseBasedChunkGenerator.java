@@ -51,14 +51,14 @@ abstract class MixinNoiseBasedChunkGenerator extends ChunkGenerator {
 			at = @At("HEAD")
 	)
 	public void doCreateBiomes(Blender blender, RandomState randomState, StructureManager structureManager, ChunkAccess chunk, CallbackInfo callback) {
-		FTFRandomState rtfRandomState = (FTFRandomState) (Object) randomState;
-		GeneratorContext generatorContext = rtfRandomState.generatorContext();
+		FTFRandomState ftfRandomState = (FTFRandomState) (Object) randomState;
+		GeneratorContext generatorContext = ftfRandomState.generatorContext();
 
 		if(generatorContext == null) {
 			return;
 		}
 
-		FTFChunk rtfChunk = (FTFChunk) chunk;
+		FTFChunk ftfChunk = (FTFChunk) chunk;
 
 		ChunkPos chunkPos = chunk.getPos();
 		Tile tile = generatorContext.cache.provideAtChunk(chunkPos.x, chunkPos.z);
@@ -85,7 +85,7 @@ abstract class MixinNoiseBasedChunkGenerator extends ChunkGenerator {
 			}
 		}
 
-		rtfChunk.setMaxHeight(Mth.ceil(maxHeight));
+		ftfChunk.setMaxHeight(Mth.ceil(maxHeight));
 	}
 
 	@Redirect(
@@ -97,13 +97,13 @@ abstract class MixinNoiseBasedChunkGenerator extends ChunkGenerator {
 	)
     public int fillFromNoise(NoiseSettings settings, Blender blender, RandomState randomState, StructureManager structureManager, ChunkAccess chunk) {
 
-		FTFRandomState rtfRandomState = (FTFRandomState) (Object) randomState;
-		if (rtfRandomState.generatorContext() == null) {
+		FTFRandomState ftfRandomState = (FTFRandomState) (Object) randomState;
+		if (ftfRandomState.generatorContext() == null) {
 			return settings.height();
 		}
 
-		FTFChunk rtfChunk = (FTFChunk) chunk;
-		int maxHeight = rtfChunk.getMaxHeight().orElseGet(settings::height);
+		FTFChunk ftfChunk = (FTFChunk) chunk;
+		int maxHeight = ftfChunk.getMaxHeight().orElseGet(settings::height);
 		maxHeight = MaxHeightUtil.getMaxHeight(chunk.getPos(), maxHeight, this.settings.value(), settings, structureManager);
 		return maxHeight;
     }
@@ -114,8 +114,8 @@ abstract class MixinNoiseBasedChunkGenerator extends ChunkGenerator {
 	)
     private void createNoiseChunk(ChunkAccess chunkAccess, StructureManager structureManager, Blender blender, RandomState randomState, CallbackInfoReturnable<NoiseChunk> callback) {
 
-		FTFRandomState rtfRandomState = (FTFRandomState) (Object) randomState;
-		if (rtfRandomState.generatorContext() == null) {
+		FTFRandomState ftfRandomState = (FTFRandomState) (Object) randomState;
+		if (ftfRandomState.generatorContext() == null) {
 			return;
 		}
 

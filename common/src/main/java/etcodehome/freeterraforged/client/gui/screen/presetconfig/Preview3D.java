@@ -233,7 +233,7 @@ public class Preview3D extends Button implements IPreviewHandler {
                 Minecraft.getInstance().getTextureManager().release(STATIC_CACHE_LOCATION);
             }
             STATIC_TEXTURE_CACHE = new DynamicTexture(new NativeImage(this.pendingTextureWidth, this.pendingTextureHeight, true));
-            STATIC_CACHE_LOCATION = Minecraft.getInstance().getTextureManager().register("rtf_preview_cache_3d", STATIC_TEXTURE_CACHE);
+            STATIC_CACHE_LOCATION = Minecraft.getInstance().getTextureManager().register("ftf_preview_cache_3d", STATIC_TEXTURE_CACHE);
         }
 
         NativeImage image = STATIC_TEXTURE_CACHE.getPixels();

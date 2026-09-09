@@ -43,8 +43,8 @@ public class MixinChunkMap {
 		method = "<init>"
 	)
 	public void ChunkMap(ServerLevel serverLevel, LevelStorageSource.LevelStorageAccess storageAccess, DataFixer dataFixer, StructureTemplateManager templateLoader, Executor executor, BlockableEventLoop<Runnable> eventLoop, LightChunkGetter lightChunkGetter, ChunkGenerator chunkGenerator, ChunkProgressListener chunkProgressListener, ChunkStatusUpdateListener chunkStatusListener, Supplier<DimensionDataStorage> dimensionStorage, int viewDistance, boolean syncChunkWrites, CallbackInfo callback) {
-		if((Object) this.randomState instanceof FTFRandomState rtfRandomState) {
-			rtfRandomState.initialize(serverLevel.registryAccess());
+		if((Object) this.randomState instanceof FTFRandomState ftfRandomState) {
+			ftfRandomState.initialize(serverLevel.registryAccess());
 		}
 		FTFWorldGenContext.IS_VANILLA_OVERWORLD.remove();
 	}

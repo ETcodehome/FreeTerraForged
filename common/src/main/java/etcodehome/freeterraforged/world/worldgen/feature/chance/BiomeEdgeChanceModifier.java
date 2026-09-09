@@ -34,7 +34,7 @@ class BiomeEdgeChanceModifier extends RangeChanceModifier {
 		BlockPos pos = placeCtx.origin();
 		@Nullable
         GeneratorContext generatorContext;
-		if((Object) placeCtx.level().getLevel().getChunkSource().randomState() instanceof FTFRandomState rtfRandomState && (generatorContext = rtfRandomState.generatorContext()) != null) {
+		if((Object) placeCtx.level().getLevel().getChunkSource().randomState() instanceof FTFRandomState ftfRandomState && (generatorContext = ftfRandomState.generatorContext()) != null) {
 			int x = pos.getX();
 			int z = pos.getZ();
 			int chunkX = SectionPos.blockToSectionCoord(x);

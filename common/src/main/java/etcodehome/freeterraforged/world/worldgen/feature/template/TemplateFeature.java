@@ -54,13 +54,13 @@ public class TemplateFeature extends Feature<Config<?>> {
             return false;
         }
         
-        if(world.getServer() instanceof FTFMinecraftServer rtfMinecraftServer) {
+        if(world.getServer() instanceof FTFMinecraftServer ftfMinecraftServer) {
 	        DecoratorConfig<T> decoratorConfig = config.decorator();
 	        
 	        ResourceLocation templateName = nextTemplate(config.templates, rand);
 
 			// safely load features and fail verbosely otherwise
-	        FeatureTemplate template = rtfMinecraftServer.getFeatureTemplateManager().load(templateName);
+	        FeatureTemplate template = ftfMinecraftServer.getFeatureTemplateManager().load(templateName);
 			if (template == null) {
 				FTFCommon.LOGGER.error("Template failed to load: " + templateName);
 				return false;

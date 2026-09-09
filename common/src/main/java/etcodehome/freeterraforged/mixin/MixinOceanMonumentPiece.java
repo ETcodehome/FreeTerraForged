@@ -16,7 +16,7 @@ abstract class MixinOceanMonumentPiece {
 			target = "Lnet/minecraft/world/level/WorldGenLevel;getSeaLevel()I"
 		)
 	)
-	private int rtf$useConfiguredSeaLevel(WorldGenLevel level) {
+	private int ftf$useConfiguredSeaLevel(WorldGenLevel level) {
 		return OceanMonumentSeaLevel.effective(level);
 	}
 }

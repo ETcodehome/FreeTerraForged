@@ -22,7 +22,7 @@ public class MixinGuaranteeData {
             require = 0,
             cancellable = true
     )
-    private void rtf$verifyAndRetryPresetPresence(CallbackInfo ci) {
+    private void ftf$verifyAndRetryPresetPresence(CallbackInfo ci) {
         CreateWorldScreen screen = (CreateWorldScreen) (Object) this;
         WorldCreationUiState uiState = screen.getUiState();
 

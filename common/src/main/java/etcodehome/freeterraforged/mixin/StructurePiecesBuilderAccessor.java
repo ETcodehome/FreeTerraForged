@@ -11,5 +11,5 @@ import net.minecraft.world.level.levelgen.structure.pieces.StructurePiecesBuilde
 @Mixin(StructurePiecesBuilder.class)
 public interface StructurePiecesBuilderAccessor {
 	@Accessor("pieces")
-	List<StructurePiece> rtf$getPieces();
+	List<StructurePiece> ftf$getPieces();
 }

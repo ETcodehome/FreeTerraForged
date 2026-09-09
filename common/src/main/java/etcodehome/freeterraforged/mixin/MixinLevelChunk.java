@@ -20,8 +20,8 @@ public abstract class MixinLevelChunk implements FTFChunk {
 			at = @At("TAIL")
 	)
 	private void bridgeFlowFieldOnChunkPromotion(ServerLevel serverLevel, ProtoChunk protoChunk, @Nullable LevelChunk.PostLoadProcessor postLoadProcessor, CallbackInfo ci) {
-		FTFChunk rtfChunk = (FTFChunk) protoChunk;
-		rtfChunk.getMaxHeight().ifPresent(this::setMaxHeight);
+		FTFChunk ftfChunk = (FTFChunk) protoChunk;
+		ftfChunk.getMaxHeight().ifPresent(this::setMaxHeight);
 		if ((Object) protoChunk instanceof IFlowFieldHolder protoHolder && (Object) this instanceof IFlowFieldHolder levelHolder) {
 			levelHolder.reterraforged$getFlowField().copyFrom(protoHolder.reterraforged$getFlowField());
 		}

@@ -32,8 +32,8 @@ public final class UndergroundBiomeSurfaceProtection {
 		int quartY,
 		int quartZ
 	) {
-		GeneratorContext context = (Object) sampler instanceof FTFClimateSampler rtfSampler
-			? rtfSampler.getUndergroundBiomeSurfaceContext()
+		GeneratorContext context = (Object) sampler instanceof FTFClimateSampler ftfSampler
+			? ftfSampler.getUndergroundBiomeSurfaceContext()
 			: null;
 		if (context == null) {
 			float localClearance = (

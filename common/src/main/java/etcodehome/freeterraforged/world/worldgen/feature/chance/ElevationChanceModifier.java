@@ -34,13 +34,13 @@ class ElevationChanceModifier extends RangeChanceModifier {
 		BlockPos pos = placeCtx.origin();
 		@Nullable
         GeneratorContext generatorContext;
-		if((Object) placeCtx.level().getLevel().getChunkSource().randomState() instanceof FTFRandomState rtfRandomState && (generatorContext = rtfRandomState.generatorContext()) != null) {
+		if((Object) placeCtx.level().getLevel().getChunkSource().randomState() instanceof FTFRandomState ftfRandomState && (generatorContext = ftfRandomState.generatorContext()) != null) {
 			int x = pos.getX();
 			int z = pos.getZ();
 			int chunkX = SectionPos.blockToSectionCoord(x);
 			int chunkZ = SectionPos.blockToSectionCoord(z);
 			Tile.Chunk chunk = generatorContext.cache.provideAtChunk(chunkX, chunkZ).getChunkReader(chunkX, chunkZ);
-			return rtfRandomState.generatorContext().generator.getHeightmap().levels().elevation(chunk.getCell(x, z).height);
+			return ftfRandomState.generatorContext().generator.getHeightmap().levels().elevation(chunk.getCell(x, z).height);
 		} else {
 			throw new UnsupportedOperationException();
 		}

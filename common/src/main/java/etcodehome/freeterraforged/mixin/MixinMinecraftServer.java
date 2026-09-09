@@ -32,9 +32,9 @@ class MixinMinecraftServer {
 		serverLevel.registryAccess().lookup(FTFRegistries.PRESET).flatMap((registry) -> {
 			return registry.get(Preset.KEY);
 		}).ifPresent((preset) -> {
-			if((Object) randomState instanceof FTFRandomState rtfRandomState && (Object) sampler instanceof FTFClimateSampler rtfClimateSampler) {
-				BlockPos searchCenter = preset.value().world().properties.spawnType.getSearchCenter(rtfRandomState.generatorContext(), preset.value().world().properties);
-				rtfClimateSampler.setSpawnSearchCenter(searchCenter);
+			if((Object) randomState instanceof FTFRandomState ftfRandomState && (Object) sampler instanceof FTFClimateSampler ftfClimateSampler) {
+				BlockPos searchCenter = preset.value().world().properties.spawnType.getSearchCenter(ftfRandomState.generatorContext(), preset.value().world().properties);
+				ftfClimateSampler.setSpawnSearchCenter(searchCenter);
 			} else {
 				throw new IllegalStateException();
 			}

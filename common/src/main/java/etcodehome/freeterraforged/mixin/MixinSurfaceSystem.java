@@ -60,8 +60,8 @@ class MixinSurfaceSystem {
 			at = @At("HEAD")
 	)
 	private void onBuildSurface(RandomState randomState, BiomeManager biomeManager, Registry<Biome> biomes, boolean useLegacyRandom, WorldGenerationContext context, final ChunkAccess chunk, NoiseChunk noiseChunk, SurfaceRules.RuleSource ruleSource, CallbackInfo ci) {
-		if ((Object) randomState instanceof FTFRandomState rtfRandomState) {
-			GeneratorContext genCtx = rtfRandomState.generatorContext();
+		if ((Object) randomState instanceof FTFRandomState ftfRandomState) {
+			GeneratorContext genCtx = ftfRandomState.generatorContext();
 			if (genCtx != null) {
 				this.reterraforged$placeRiverWater(chunk, biomeManager, genCtx);
 			}

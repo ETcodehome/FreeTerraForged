@@ -50,28 +50,28 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.LiquidSetting
 @Mixin(JigsawStructure.class)
 public class MixinJigsawStructure {
 	@Unique
-	private static final byte rtf$TARGET_UNCHECKED = 0;
+	private static final byte ftf$TARGET_UNCHECKED = 0;
 	@Unique
-	private static final byte rtf$TARGET_SUBTERRANEAN = 1;
+	private static final byte ftf$TARGET_SUBTERRANEAN = 1;
 	@Unique
-	private static final byte rtf$TARGET_VILLAGE = 2;
+	private static final byte ftf$TARGET_VILLAGE = 2;
 	@Unique
-	private static final byte rtf$TARGET_TRAIL_RUINS = 3;
+	private static final byte ftf$TARGET_TRAIL_RUINS = 3;
 	@Unique
-	private static final byte rtf$TARGET_UNHANDLED = 4;
+	private static final byte ftf$TARGET_UNHANDLED = 4;
 	@Unique
-	private static final int rtf$MARGIN = 10;
+	private static final int ftf$MARGIN = 10;
 	@Unique
-	private static final int rtf$BOUNDARY_TOLERANCE = 8;
+	private static final int ftf$BOUNDARY_TOLERANCE = 8;
 	@Unique
-	private static final int rtf$GRID_STEPS_PER_SIDE = 3;
+	private static final int ftf$GRID_STEPS_PER_SIDE = 3;
 	@Unique
-	private static final int rtf$BURY_RADIUS = 6;
+	private static final int ftf$BURY_RADIUS = 6;
 	@Unique
-	private static final int rtf$TRAIL_RUINS_MAX_ATTEMPTS = 16;
+	private static final int ftf$TRAIL_RUINS_MAX_ATTEMPTS = 16;
 
 	@Unique
-	private byte rtf$targetStatus = rtf$TARGET_UNCHECKED;
+	private byte ftf$targetStatus = ftf$TARGET_UNCHECKED;
 
 	@Shadow
 	@Final
@@ -105,8 +105,8 @@ public class MixinJigsawStructure {
 	private LiquidSettings liquidSettings;
 
 	@Inject(method = "findGenerationPoint", at = @At("HEAD"), cancellable = true)
-	private void rtf$correctOrSkip(Structure.GenerationContext generationContext, CallbackInfoReturnable<Optional<Structure.GenerationStub>> cir) {
-		if (this.rtf$targetStatus == rtf$TARGET_UNCHECKED) {
+	private void ftf$correctOrSkip(Structure.GenerationContext generationContext, CallbackInfoReturnable<Optional<Structure.GenerationStub>> cir) {
+		if (this.ftf$targetStatus == ftf$TARGET_UNCHECKED) {
 			Structure self = (Structure) (Object) this;
 			var registry = generationContext.registryAccess().registryOrThrow(Registries.STRUCTURE);
 			Structure trialChambers = registry.get(BuiltinStructures.TRIAL_CHAMBERS);
@@ -119,37 +119,37 @@ public class MixinJigsawStructure {
 					.orElse(false);
 
 			if (self == trialChambers || self == ancientCity) {
-				this.rtf$targetStatus = rtf$TARGET_SUBTERRANEAN;
+				this.ftf$targetStatus = ftf$TARGET_SUBTERRANEAN;
 			} else if (isVillage) {
-				this.rtf$targetStatus = rtf$TARGET_VILLAGE;
+				this.ftf$targetStatus = ftf$TARGET_VILLAGE;
 			} else if (self == trailRuins) {
-				this.rtf$targetStatus = rtf$TARGET_TRAIL_RUINS;
+				this.ftf$targetStatus = ftf$TARGET_TRAIL_RUINS;
 			} else {
-				this.rtf$targetStatus = rtf$TARGET_UNHANDLED;
+				this.ftf$targetStatus = ftf$TARGET_UNHANDLED;
 			}
 		}
 
-		if (this.rtf$targetStatus == rtf$TARGET_UNHANDLED) {
+		if (this.ftf$targetStatus == ftf$TARGET_UNHANDLED) {
 			return;
 		}
-		if (this.rtf$targetStatus == rtf$TARGET_TRAIL_RUINS) {
-			GeneratorContext generatorContext = rtf$generatorContext(generationContext.randomState());
+		if (this.ftf$targetStatus == ftf$TARGET_TRAIL_RUINS) {
+			GeneratorContext generatorContext = ftf$generatorContext(generationContext.randomState());
 			if (generatorContext != null) {
-				rtf$handleTrailRuinsPlacement(generationContext, generatorContext, cir);
+				ftf$handleTrailRuinsPlacement(generationContext, generatorContext, cir);
 			}
 			return;
 		}
 
-		if (this.rtf$targetStatus == rtf$TARGET_VILLAGE) {
-			rtf$handleVillageRetryPlacement(generationContext, cir);
+		if (this.ftf$targetStatus == ftf$TARGET_VILLAGE) {
+			ftf$handleVillageRetryPlacement(generationContext, cir);
 			return;
 		}
 
-		rtf$handleSubterraneanPlacement(generationContext, cir);
+		ftf$handleSubterraneanPlacement(generationContext, cir);
 	}
 
 	@Unique
-	private void rtf$handleTrailRuinsPlacement(
+	private void ftf$handleTrailRuinsPlacement(
 		Structure.GenerationContext generationContext,
 		GeneratorContext generatorContext,
 		CallbackInfoReturnable<Optional<Structure.GenerationStub>> cir
@@ -163,7 +163,7 @@ public class MixinJigsawStructure {
 			generationContext.heightAccessor()
 		);
 
-		for (int attempt = 0; attempt < rtf$TRAIL_RUINS_MAX_ATTEMPTS; attempt++) {
+		for (int attempt = 0; attempt < ftf$TRAIL_RUINS_MAX_ATTEMPTS; attempt++) {
 			int offsetX = attempt == 0 ? 0 : random.nextIntBetweenInclusive(-32, 32);
 			int offsetZ = attempt == 0 ? 0 : random.nextIntBetweenInclusive(-32, 32);
 			int sampledY = this.startHeight.sample(random, heightContext);
@@ -180,11 +180,11 @@ public class MixinJigsawStructure {
 			}
 
 			Structure.GenerationStub stub = result.get();
-			if (!rtf$isValidBiome(generationContext, stub.position())) {
+			if (!ftf$isValidBiome(generationContext, stub.position())) {
 				continue;
 			}
 			StructurePiecesBuilder builder = stub.getPiecesBuilder();
-			int maxSuspension = rtf$maxBuryPlaneSuspension(builder, generatorContext);
+			int maxSuspension = ftf$maxBuryPlaneSuspension(builder, generatorContext);
 			if (maxSuspension > 0) {
 				continue;
 			}
@@ -199,7 +199,7 @@ public class MixinJigsawStructure {
 	}
 
 	@Unique
-	private boolean rtf$isValidBiome(Structure.GenerationContext generationContext, BlockPos position) {
+	private boolean ftf$isValidBiome(Structure.GenerationContext generationContext, BlockPos position) {
 		Holder<Biome> biome = generationContext.chunkGenerator()
 			.getBiomeSource()
 			.getNoiseBiome(
@@ -212,7 +212,7 @@ public class MixinJigsawStructure {
 	}
 
 	@Unique
-	private int rtf$maxBuryPlaneSuspension(
+	private int ftf$maxBuryPlaneSuspension(
 		StructurePiecesBuilder builder,
 		GeneratorContext generatorContext
 	) {
@@ -228,9 +228,9 @@ public class MixinJigsawStructure {
 
 			BoundingBox box = poolPiece.getBoundingBox();
 			int groundPlane = box.minY() + poolPiece.getGroundLevelDelta();
-			for (int x = box.minX() - rtf$BURY_RADIUS + 1; x <= box.maxX() + rtf$BURY_RADIUS - 1; x++) {
-				for (int z = box.minZ() - rtf$BURY_RADIUS + 1; z <= box.maxZ() + rtf$BURY_RADIUS - 1; z++) {
-					if (!rtf$isInsideBurySupport(box, x, z)) {
+			for (int x = box.minX() - ftf$BURY_RADIUS + 1; x <= box.maxX() + ftf$BURY_RADIUS - 1; x++) {
+				for (int z = box.minZ() - ftf$BURY_RADIUS + 1; z <= box.maxZ() + ftf$BURY_RADIUS - 1; z++) {
+					if (!ftf$isInsideBurySupport(box, x, z)) {
 						continue;
 					}
 					int chunkX = SectionPos.blockToSectionCoord(x);
@@ -250,22 +250,22 @@ public class MixinJigsawStructure {
 	}
 
 	@Unique
-	private static boolean rtf$isInsideBurySupport(BoundingBox box, int x, int z) {
+	private static boolean ftf$isInsideBurySupport(BoundingBox box, int x, int z) {
 		int dx = Math.max(0, Math.max(box.minX() - x, x - box.maxX()));
 		int dz = Math.max(0, Math.max(box.minZ() - z, z - box.maxZ()));
-		return dx * dx + dz * dz < rtf$BURY_RADIUS * rtf$BURY_RADIUS;
+		return dx * dx + dz * dz < ftf$BURY_RADIUS * ftf$BURY_RADIUS;
 	}
 
 	@Unique
-	private static GeneratorContext rtf$generatorContext(RandomState randomState) {
-		if ((Object) randomState instanceof FTFRandomState rtfRandomState) {
-			return rtfRandomState.generatorContext();
+	private static GeneratorContext ftf$generatorContext(RandomState randomState) {
+		if ((Object) randomState instanceof FTFRandomState ftfRandomState) {
+			return ftfRandomState.generatorContext();
 		}
 		return null;
 	}
 
 	@Unique
-	private void rtf$handleVillageRetryPlacement(Structure.GenerationContext generationContext, CallbackInfoReturnable<Optional<Structure.GenerationStub>> cir) {
+	private void ftf$handleVillageRetryPlacement(Structure.GenerationContext generationContext, CallbackInfoReturnable<Optional<Structure.GenerationStub>> cir) {
 		ChunkPos chunkPos = generationContext.chunkPos();
 		int originX = chunkPos.getMinBlockX();
 		int originZ = chunkPos.getMinBlockZ();
@@ -281,7 +281,7 @@ public class MixinJigsawStructure {
 			int candidateX = originX + offsetX;
 			int candidateZ = originZ + offsetZ;
 
-			if (rtf$isRiverCell(candidateX, candidateZ, generationContext.randomState())) {
+			if (ftf$isRiverCell(candidateX, candidateZ, generationContext.randomState())) {
 				continue;
 			}
 
@@ -328,7 +328,7 @@ public class MixinJigsawStructure {
 				continue;
 			}
 
-			if (rtf$footprintIntersectsRiver(builder.getBoundingBox(), generationContext.randomState())) {
+			if (ftf$footprintIntersectsRiver(builder.getBoundingBox(), generationContext.randomState())) {
 				continue;
 			}
 
@@ -342,17 +342,17 @@ public class MixinJigsawStructure {
 	}
 
 	@Unique
-	private void rtf$handleSubterraneanPlacement(Structure.GenerationContext generationContext, CallbackInfoReturnable<Optional<Structure.GenerationStub>> cir) {
+	private void ftf$handleSubterraneanPlacement(Structure.GenerationContext generationContext, CallbackInfoReturnable<Optional<Structure.GenerationStub>> cir) {
 		int sampledY = this.startHeight.sample(generationContext.random(), new WorldGenerationContext(generationContext.chunkGenerator(), generationContext.heightAccessor()));
 
 		ChunkPos chunkPos = generationContext.chunkPos();
 		int originX = chunkPos.getMinBlockX();
 		int originZ = chunkPos.getMinBlockZ();
-		FloorRange floorRange = rtf$sampleFloorRange(generationContext, originX, originZ);
+		FloorRange floorRange = ftf$sampleFloorRange(generationContext, originX, originZ);
 
-		int naiveTarget = Math.min(sampledY, floorRange.worst() - rtf$MARGIN);
-		int minWorldY = generationContext.heightAccessor().getMinBuildHeight() + this.dimensionPadding.bottom() + rtf$BOUNDARY_TOLERANCE;
-		int maxLocalY = floorRange.best() - rtf$MARGIN;
+		int naiveTarget = Math.min(sampledY, floorRange.worst() - ftf$MARGIN);
+		int minWorldY = generationContext.heightAccessor().getMinBuildHeight() + this.dimensionPadding.bottom() + ftf$BOUNDARY_TOLERANCE;
+		int maxLocalY = floorRange.best() - ftf$MARGIN;
 
 		int target = naiveTarget;
 		if (naiveTarget < minWorldY || naiveTarget > maxLocalY) {
@@ -390,7 +390,7 @@ public class MixinJigsawStructure {
 		StructurePiecesBuilder builder = stub.getPiecesBuilder();
 		BoundingBox realBbox = builder.getBoundingBox();
 
-		int realMaxLocalY = rtf$sampleLocalCeiling(generationContext, realBbox) - rtf$MARGIN;
+		int realMaxLocalY = ftf$sampleLocalCeiling(generationContext, realBbox) - ftf$MARGIN;
 		if (realBbox.minY() <= minWorldY || realBbox.maxY() >= realMaxLocalY) {
 			cir.setReturnValue(Optional.empty());
 			cir.cancel();
@@ -402,7 +402,7 @@ public class MixinJigsawStructure {
 	}
 
 	@Unique
-	private boolean rtf$footprintIntersectsRiver(BoundingBox box, RandomState randomState) {
+	private boolean ftf$footprintIntersectsRiver(BoundingBox box, RandomState randomState) {
 		int step = 3;
 
 		int minX = box.minX();
@@ -411,20 +411,20 @@ public class MixinJigsawStructure {
 		int maxZ = box.maxZ();
 
 		for (int x = minX; x <= maxX; x += step) {
-			if (rtf$isRiverCell(x, minZ, randomState) || rtf$isRiverCell(x, maxZ, randomState)) {
+			if (ftf$isRiverCell(x, minZ, randomState) || ftf$isRiverCell(x, maxZ, randomState)) {
 				return true;
 			}
 		}
-		if (rtf$isRiverCell(maxX, minZ, randomState) || rtf$isRiverCell(maxX, maxZ, randomState)) {
+		if (ftf$isRiverCell(maxX, minZ, randomState) || ftf$isRiverCell(maxX, maxZ, randomState)) {
 			return true;
 		}
 
 		for (int z = minZ; z <= maxZ; z += step) {
-			if (rtf$isRiverCell(minX, z, randomState) || rtf$isRiverCell(maxX, z, randomState)) {
+			if (ftf$isRiverCell(minX, z, randomState) || ftf$isRiverCell(maxX, z, randomState)) {
 				return true;
 			}
 		}
-		if (rtf$isRiverCell(minX, maxZ, randomState) || rtf$isRiverCell(maxX, maxZ, randomState)) {
+		if (ftf$isRiverCell(minX, maxZ, randomState) || ftf$isRiverCell(maxX, maxZ, randomState)) {
 			return true;
 		}
 
@@ -432,9 +432,9 @@ public class MixinJigsawStructure {
 	}
 
 	@Unique
-	private boolean rtf$isRiverCell(int x, int z, RandomState randomState) {
-		FTFRandomState rtfRandomState = (FTFRandomState) (Object) randomState;
-		GeneratorContext generatorContext = rtfRandomState.generatorContext();
+	private boolean ftf$isRiverCell(int x, int z, RandomState randomState) {
+		FTFRandomState ftfRandomState = (FTFRandomState) (Object) randomState;
+		GeneratorContext generatorContext = ftfRandomState.generatorContext();
 		if (generatorContext == null) {
 			return false;
 		}
@@ -452,14 +452,14 @@ public class MixinJigsawStructure {
 	}
 
 	@Unique
-	private FloorRange rtf$sampleFloorRange(Structure.GenerationContext generationContext, int originX, int originZ) {
+	private FloorRange ftf$sampleFloorRange(Structure.GenerationContext generationContext, int originX, int originZ) {
 		int radius = this.maxDistanceFromCenter;
 		int worst = Integer.MAX_VALUE;
 		int best = Integer.MIN_VALUE;
-		for (int xi = -rtf$GRID_STEPS_PER_SIDE; xi <= rtf$GRID_STEPS_PER_SIDE; xi++) {
-			for (int zi = -rtf$GRID_STEPS_PER_SIDE; zi <= rtf$GRID_STEPS_PER_SIDE; zi++) {
-				int x = originX + radius * xi / rtf$GRID_STEPS_PER_SIDE;
-				int z = originZ + radius * zi / rtf$GRID_STEPS_PER_SIDE;
+		for (int xi = -ftf$GRID_STEPS_PER_SIDE; xi <= ftf$GRID_STEPS_PER_SIDE; xi++) {
+			for (int zi = -ftf$GRID_STEPS_PER_SIDE; zi <= ftf$GRID_STEPS_PER_SIDE; zi++) {
+				int x = originX + radius * xi / ftf$GRID_STEPS_PER_SIDE;
+				int z = originZ + radius * zi / ftf$GRID_STEPS_PER_SIDE;
 				int floor = generationContext.chunkGenerator()
 						.getFirstOccupiedHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, generationContext.heightAccessor(), generationContext.randomState());
 				if (floor < worst) {
@@ -474,8 +474,8 @@ public class MixinJigsawStructure {
 	}
 
 	@Unique
-	private int rtf$sampleLocalCeiling(Structure.GenerationContext generationContext, BoundingBox realBbox) {
-		int steps = rtf$GRID_STEPS_PER_SIDE * 2;
+	private int ftf$sampleLocalCeiling(Structure.GenerationContext generationContext, BoundingBox realBbox) {
+		int steps = ftf$GRID_STEPS_PER_SIDE * 2;
 		int lowest = Integer.MAX_VALUE;
 		for (int xi = 0; xi <= steps; xi++) {
 			int x = realBbox.minX() + (realBbox.maxX() - realBbox.minX()) * xi / steps;

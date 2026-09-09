@@ -83,8 +83,8 @@ public class FastPoissonModifier extends PlacementModifier {
 		BiomeVariance biomeVariance = BiomeVariance.NONE;
 		
 		if (this.biomeFade > BiomeVariance.MIN_FADE) {
-			if((Object) randomState instanceof FTFRandomState rtfRandomState) {
-				Tile.Chunk reader = rtfRandomState.generatorContext().cache.provideAtChunk(chunkPos.x, chunkPos.z).getChunkReader(chunkPos.x, chunkPos.z);
+			if((Object) randomState instanceof FTFRandomState ftfRandomState) {
+				Tile.Chunk reader = ftfRandomState.generatorContext().cache.provideAtChunk(chunkPos.x, chunkPos.z).getChunkReader(chunkPos.x, chunkPos.z);
 				if (reader != null) {
 					biomeVariance = new BiomeVariance(reader, this.biomeFade);
 				}

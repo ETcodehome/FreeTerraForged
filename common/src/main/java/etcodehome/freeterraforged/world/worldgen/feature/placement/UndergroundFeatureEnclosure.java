@@ -19,8 +19,8 @@ final class UndergroundFeatureEnclosure {
 
 	static Optional<Guard> create(PlacementContext context) {
 		Object randomState = context.getLevel().getLevel().getChunkSource().randomState();
-		if (randomState instanceof FTFRandomState rtfRandomState) {
-			GeneratorContext generatorContext = rtfRandomState.generatorContext();
+		if (randomState instanceof FTFRandomState ftfRandomState) {
+			GeneratorContext generatorContext = ftfRandomState.generatorContext();
 			if (generatorContext != null) {
 				return Optional.of(new Guard(generatorContext));
 			}

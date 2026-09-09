@@ -64,11 +64,11 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
         WorldGenLevel level = placeContext.level();
         RandomState randomState = level.getLevel().getChunkSource().randomState();
 
-        if (!((Object) randomState instanceof FTFRandomState rtfRandomState)) {
+        if (!((Object) randomState instanceof FTFRandomState ftfRandomState)) {
             return false;
         }
 
-        GeneratorContext generatorContext = rtfRandomState.generatorContext();
+        GeneratorContext generatorContext = ftfRandomState.generatorContext();
         if (generatorContext == null) {
             return false;
         }

@@ -42,8 +42,8 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
 
 	@Override
 	public Source apply(Context ctx) {
-		if(ctx.system instanceof FTFSurfaceSystem rtfSurfaceSystem && (Object) ctx.randomState instanceof FTFRandomState rtfRandomState) {
-			return new Source(ctx, rtfRandomState.seed(this.selector.value()), rtfSurfaceSystem.getOrCreateStrata(this.name, this::generateStrata));
+		if(ctx.system instanceof FTFSurfaceSystem ftfSurfaceSystem && (Object) ctx.randomState instanceof FTFRandomState ftfRandomState) {
+			return new Source(ctx, ftfRandomState.seed(this.selector.value()), ftfSurfaceSystem.getOrCreateStrata(this.name, this::generateStrata));
 		} else {
 			throw new IllegalStateException();
 		}

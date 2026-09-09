@@ -35,11 +35,11 @@ public abstract class MixinMultiNoiseBiomeSource implements FTFMultiNoiseBiomeSo
     private Either<Climate.ParameterList<Holder<Biome>>, Holder<MultiNoiseBiomeSourceParameterList>> parameters;
 
     @Unique
-    private volatile UndergroundBiomeBanding.Layout<Holder<Biome>> rtf$undergroundBanding;
+    private volatile UndergroundBiomeBanding.Layout<Holder<Biome>> ftf$undergroundBanding;
     @Unique
-    private Preset rtf$undergroundBandingPreset;
+    private Preset ftf$undergroundBandingPreset;
     @Unique
-    private long rtf$undergroundBandingSeed;
+    private long ftf$undergroundBandingSeed;
 
     @Shadow
     protected abstract Climate.ParameterList<Holder<Biome>> parameters();
@@ -53,7 +53,7 @@ public abstract class MixinMultiNoiseBiomeSource implements FTFMultiNoiseBiomeSo
             method = "getNoiseBiome(IIILnet/minecraft/world/level/biome/Climate$Sampler;)Lnet/minecraft/core/Holder;",
             at = @At("RETURN"),
             cancellable = true)
-    private void rtf$composeUndergroundBanding(final int x, final int y, final int z,
+    private void ftf$composeUndergroundBanding(final int x, final int y, final int z,
                                                 final Climate.Sampler sampler,
                                                 final CallbackInfoReturnable<Holder<Biome>> cir) {
         Holder<Biome> selected = cir.getReturnValue();
@@ -90,27 +90,27 @@ public abstract class MixinMultiNoiseBiomeSource implements FTFMultiNoiseBiomeSo
             return;
         }
 
-        if (!((Object) sampler instanceof FTFClimateSampler rtfSampler)) {
+        if (!((Object) sampler instanceof FTFClimateSampler ftfSampler)) {
             return;
         }
-        Preset preset = rtfSampler.getUndergroundBiomeBandingPreset();
+        Preset preset = ftfSampler.getUndergroundBiomeBandingPreset();
         boolean ownsSelection = Objects.equals(selected, parameters.findValue(target));
         if (preset == null || !ownsSelection) {
             return;
         }
 
-        UndergroundBiomeBanding.Layout<Holder<Biome>> banding = this.rtf$undergroundBanding;
-        long seed = rtfSampler.getUndergroundBiomeBandingSeed();
-        if (banding == null || this.rtf$undergroundBandingPreset != preset || this.rtf$undergroundBandingSeed != seed) {
+        UndergroundBiomeBanding.Layout<Holder<Biome>> banding = this.ftf$undergroundBanding;
+        long seed = ftfSampler.getUndergroundBiomeBandingSeed();
+        if (banding == null || this.ftf$undergroundBandingPreset != preset || this.ftf$undergroundBandingSeed != seed) {
             synchronized (this) {
-                banding = this.rtf$undergroundBanding;
-                if (banding == null || this.rtf$undergroundBandingPreset != preset || this.rtf$undergroundBandingSeed != seed) {
+                banding = this.ftf$undergroundBanding;
+                if (banding == null || this.ftf$undergroundBandingPreset != preset || this.ftf$undergroundBandingSeed != seed) {
                     banding = UndergroundBiomeBanding.apply(
 						preset, parameters.values(), seed
 					);
-                    this.rtf$undergroundBandingPreset = preset;
-					this.rtf$undergroundBandingSeed = seed;
-                    this.rtf$undergroundBanding = banding;
+                    this.ftf$undergroundBandingPreset = preset;
+					this.ftf$undergroundBandingSeed = seed;
+                    this.ftf$undergroundBanding = banding;
                 }
             }
         }
@@ -132,7 +132,7 @@ public abstract class MixinMultiNoiseBiomeSource implements FTFMultiNoiseBiomeSo
             cancellable = true,
             require = 0
     )
-    private void rtf$bypassInlinePossibleBiomesCrash(CallbackInfoReturnable<java.util.Set<Holder<Biome>>> cir) {
+    private void ftf$bypassInlinePossibleBiomesCrash(CallbackInfoReturnable<java.util.Set<Holder<Biome>>> cir) {
         // Only intercept inline parameter lists (Either.left) used by preset previews.
         // Runtime worldgen sources (Either.right) are left untouched.
         if (this.parameters != null && this.parameters.left().isPresent()) {

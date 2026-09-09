@@ -31,9 +31,9 @@ record CellTest(float cutoff, Set<Terrain> terrainTypeBlacklist) implements Stru
 	
 	@Override
 	public boolean test(RandomState randomState, BlockPos pos) {
-		if((Object) randomState instanceof FTFRandomState rtfRandomState) {
+		if((Object) randomState instanceof FTFRandomState ftfRandomState) {
 			@Nullable
-            GeneratorContext generatorContext = rtfRandomState.generatorContext();
+            GeneratorContext generatorContext = ftfRandomState.generatorContext();
 			if(generatorContext != null) {
 				WorldLookup worldLookup = generatorContext.lookup;
 				Cell cell = new Cell();

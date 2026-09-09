@@ -16,10 +16,10 @@ public final class UndergroundBiomeClimatePolicy {
 		int quartY,
 		int quartZ
 	) {
-		if (!((Object) sampler instanceof FTFClimateSampler rtfSampler)) {
+		if (!((Object) sampler instanceof FTFClimateSampler ftfSampler)) {
 			return target;
 		}
-		Preset preset = rtfSampler.getUndergroundBiomeBandingPreset();
+		Preset preset = ftfSampler.getUndergroundBiomeBandingPreset();
 		if (preset == null) {
 			return target;
 		}
@@ -32,7 +32,7 @@ public final class UndergroundBiomeClimatePolicy {
 		);
 		if (UndergroundBiomeBanding.allowsCaveBiome(
 			preset,
-			rtfSampler.getUndergroundBiomeBandingSeed(),
+			ftfSampler.getUndergroundBiomeBandingSeed(),
 			target,
 			quartX,
 			quartY,

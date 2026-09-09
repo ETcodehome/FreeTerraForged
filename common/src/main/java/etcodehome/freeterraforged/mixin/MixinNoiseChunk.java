@@ -76,11 +76,11 @@ class MixinNoiseChunk {
 		this.chunkX = SectionPos.blockToSectionCoord(minBlockX);
 		this.chunkZ = SectionPos.blockToSectionCoord(minBlockZ);
 		GeneratorContext generatorContext;
-		if((Object) randomState instanceof FTFRandomState rtfRandomState && cellCountXZ > 1 && (generatorContext = rtfRandomState.generatorContext()) != null) {
+		if((Object) randomState instanceof FTFRandomState ftfRandomState && cellCountXZ > 1 && (generatorContext = ftfRandomState.generatorContext()) != null) {
 			this.chunk = generatorContext.cache.provideAtChunk(this.chunkX, this.chunkZ).getChunkReader(this.chunkX, this.chunkZ);
 
-			FTFChunk rtfChunk = (FTFChunk) ActiveChunk.get();
-			int maxHeight = Math.min(noiseSettings.height(), MaxHeightUtil.getMaxHeight(this.chunkX, this.chunkZ, rtfChunk.getMaxHeight().orElseGet(noiseSettings::height), generatorSettings, noiseSettings, beardifierOrMarker));
+			FTFChunk ftfChunk = (FTFChunk) ActiveChunk.get();
+			int maxHeight = Math.min(noiseSettings.height(), MaxHeightUtil.getMaxHeight(this.chunkX, this.chunkZ, ftfChunk.getMaxHeight().orElseGet(noiseSettings::height), generatorSettings, noiseSettings, beardifierOrMarker));
 			this.cellCountY = Math.min(this.cellCountY, maxHeight / this.cellHeight);
 		}
 		this.cache2d = new CellSampler.Cache2d();
@@ -95,11 +95,11 @@ class MixinNoiseChunk {
 		argsOnly = true
 	)
 	private static Aquifer.FluidPicker modifyFluidPicker(Aquifer.FluidPicker fluidPicker, int i, RandomState randomState, int j, int k, NoiseSettings noiseSettings, DensityFunctions.BeardifierOrMarker beardifierOrMarker, NoiseGeneratorSettings noiseGeneratorSettings) {
-		if((Object) randomState instanceof FTFRandomState rtfRandomState) {
+		if((Object) randomState instanceof FTFRandomState ftfRandomState) {
 			@Nullable
-			Preset preset = rtfRandomState.preset();
+			Preset preset = ftfRandomState.preset();
 			GeneratorContext generatorContext;
-			if(preset != null && (generatorContext = rtfRandomState.generatorContext()) != null) {
+			if(preset != null && (generatorContext = ftfRandomState.generatorContext()) != null) {
 				int globalLavaLevel = preset.world().properties.lavaLevel;
 				int seaLevel = noiseGeneratorSettings.seaLevel();
 				int oceanDepth = preset.world().properties.oceanDepth;
@@ -193,7 +193,7 @@ class MixinNoiseChunk {
 	@Inject(at = @At("RETURN"), method = "wrapNew", cancellable = true)
 	private void wrapNew(DensityFunction function, CallbackInfoReturnable<DensityFunction> callback) {
 		if ((Object) this.randomState instanceof FTFRandomState randomState) {
-			CellSampler mapped = rtf$findCellSampler(function);
+			CellSampler mapped = ftf$findCellSampler(function);
 			if (mapped != null) {
 				callback.setReturnValue(mapped.new CacheChunk(this.chunk, this.cache2d, this.chunkX, this.chunkZ));
 			}
@@ -201,12 +201,12 @@ class MixinNoiseChunk {
 	}
 
 	@Unique
-	private static CellSampler rtf$findCellSampler(DensityFunction function) {
+	private static CellSampler ftf$findCellSampler(DensityFunction function) {
 		if (function instanceof CellSampler mapped) {
 			return mapped;
 		}
 		if (function instanceof FTFCellFunction f) {
-			return f.rtf$unwrap();
+			return f.ftf$unwrap();
 		}
 		return null;
 	}

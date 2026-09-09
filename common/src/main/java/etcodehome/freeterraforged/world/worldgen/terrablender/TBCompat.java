@@ -18,6 +18,6 @@ public class TBCompat {
 	}
 	
 	private static String mixinClass(String className) {
-		return "raccoonman.reterraforged.mixin." + className;
+		return "etcodehome.freeterraforged.mixin." + className;
 	}
 }

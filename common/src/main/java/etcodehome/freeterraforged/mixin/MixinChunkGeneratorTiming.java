@@ -16,18 +16,18 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ChunkGenerator.class)
 public abstract class MixinChunkGeneratorTiming {
 
-    private static final ThreadLocal<Long> rtf$structureStart = ThreadLocal.withInitial(() -> 0L);
-    private static final ThreadLocal<Long> rtf$featureStart = ThreadLocal.withInitial(() -> 0L);
+    private static final ThreadLocal<Long> ftf$structureStart = ThreadLocal.withInitial(() -> 0L);
+    private static final ThreadLocal<Long> ftf$featureStart = ThreadLocal.withInitial(() -> 0L);
 
     // 1. Track Structure Logic Generation
     @Inject(
             method = "createStructures(Lnet/minecraft/core/RegistryAccess;Lnet/minecraft/world/level/chunk/ChunkGeneratorStructureState;Lnet/minecraft/world/level/StructureManager;Lnet/minecraft/world/level/chunk/ChunkAccess;Lnet/minecraft/world/level/levelgen/structure/templatesystem/StructureTemplateManager;)V",
             at = @At("HEAD")
     )
-    private void rtf$structureStart(RegistryAccess registryAccess, ChunkGeneratorStructureState structureState,
+    private void ftf$structureStart(RegistryAccess registryAccess, ChunkGeneratorStructureState structureState,
                                     StructureManager structureManager, ChunkAccess chunk,
                                     StructureTemplateManager templateManager, CallbackInfo ci) {
-        rtf$structureStart.set(System.nanoTime());
+        ftf$structureStart.set(System.nanoTime());
         int active = WorldGenTracker.ACTIVE_THREADS.incrementAndGet();
         WorldGenTracker.PEAK_CONCURRENCY.updateAndGet(peak -> Math.max(peak, active));
     }
@@ -36,10 +36,10 @@ public abstract class MixinChunkGeneratorTiming {
             method = "createStructures(Lnet/minecraft/core/RegistryAccess;Lnet/minecraft/world/level/chunk/ChunkGeneratorStructureState;Lnet/minecraft/world/level/StructureManager;Lnet/minecraft/world/level/chunk/ChunkAccess;Lnet/minecraft/world/level/levelgen/structure/templatesystem/StructureTemplateManager;)V",
             at = @At("RETURN")
     )
-    private void rtf$structureEnd(RegistryAccess registryAccess, ChunkGeneratorStructureState structureState,
+    private void ftf$structureEnd(RegistryAccess registryAccess, ChunkGeneratorStructureState structureState,
                                   StructureManager structureManager, ChunkAccess chunk,
                                   StructureTemplateManager templateManager, CallbackInfo ci) {
-        long start = rtf$structureStart.get();
+        long start = ftf$structureStart.get();
         if (start != 0) {
             WorldGenTracker.TOTAL_NANOS.add(System.nanoTime() - start);
         }
@@ -51,8 +51,8 @@ public abstract class MixinChunkGeneratorTiming {
             method = "applyBiomeDecoration(Lnet/minecraft/world/level/WorldGenLevel;Lnet/minecraft/world/level/chunk/ChunkAccess;Lnet/minecraft/world/level/StructureManager;)V",
             at = @At("HEAD")
     )
-    private void rtf$featureStart(WorldGenLevel level, ChunkAccess chunk, StructureManager structureManager, CallbackInfo ci) {
-        rtf$featureStart.set(System.nanoTime());
+    private void ftf$featureStart(WorldGenLevel level, ChunkAccess chunk, StructureManager structureManager, CallbackInfo ci) {
+        ftf$featureStart.set(System.nanoTime());
         int active = WorldGenTracker.ACTIVE_THREADS.incrementAndGet();
         WorldGenTracker.PEAK_CONCURRENCY.updateAndGet(peak -> Math.max(peak, active));
     }
@@ -61,8 +61,8 @@ public abstract class MixinChunkGeneratorTiming {
             method = "applyBiomeDecoration(Lnet/minecraft/world/level/WorldGenLevel;Lnet/minecraft/world/level/chunk/ChunkAccess;Lnet/minecraft/world/level/StructureManager;)V",
             at = @At("RETURN")
     )
-    private void rtf$featureEnd(WorldGenLevel level, ChunkAccess chunk, StructureManager structureManager, CallbackInfo ci) {
-        long start = rtf$featureStart.get();
+    private void ftf$featureEnd(WorldGenLevel level, ChunkAccess chunk, StructureManager structureManager, CallbackInfo ci) {
+        long start = ftf$featureStart.get();
         long now = System.nanoTime();
         if (start != 0) {
             WorldGenTracker.TOTAL_NANOS.add(now - start);

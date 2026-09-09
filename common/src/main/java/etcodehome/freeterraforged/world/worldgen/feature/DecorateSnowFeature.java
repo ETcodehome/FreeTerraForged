@@ -51,7 +51,7 @@ public class DecorateSnowFeature extends Feature<Config> {
 		
 		@Nullable
 		GeneratorContext generatorContext;
-		if((Object) randomState instanceof FTFRandomState rtfRandomState && (generatorContext = rtfRandomState.generatorContext()) != null) {
+		if((Object) randomState instanceof FTFRandomState ftfRandomState && (generatorContext = ftfRandomState.generatorContext()) != null) {
 			ChunkGenerator generator = placeContext.chunkGenerator();
 			ChunkPos chunkPos = new ChunkPos(placeContext.origin());
 			int chunkX = chunkPos.x;

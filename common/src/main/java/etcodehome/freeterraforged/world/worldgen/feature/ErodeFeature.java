@@ -77,7 +77,7 @@ public class ErodeFeature extends Feature<Config> {
 
         @Nullable
         GeneratorContext generatorContext;
-        if((Object) randomState instanceof FTFRandomState rtfRandomState && (generatorContext = rtfRandomState.generatorContext()) != null) {
+        if((Object) randomState instanceof FTFRandomState ftfRandomState && (generatorContext = ftfRandomState.generatorContext()) != null) {
             ChunkPos chunkPos = new ChunkPos(placeContext.origin());
             int chunkX = chunkPos.x;
             int chunkZ = chunkPos.z;

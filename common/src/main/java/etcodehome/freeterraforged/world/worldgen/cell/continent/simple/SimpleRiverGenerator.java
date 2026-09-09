@@ -10,7 +10,7 @@ import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.continent.SimpleContinent;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.gen.GenWarp;
-import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.*;
+import etcodehome.freeterraforged.world.worldgen.cell.rivermap.river.*;
 
 public class SimpleRiverGenerator extends BaseRiverGenerator<SimpleContinent> {
 	

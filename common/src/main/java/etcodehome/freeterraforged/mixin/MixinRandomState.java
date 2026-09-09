@@ -111,8 +111,8 @@ class MixinRandomState {
 		// Only compile global density tags and build a heavy Overworld GeneratorContext
 		// if the base router mapping verified that this instance is actually an RTF worldgen dimension.
 		if (this.reterraforged$isRTFDimension) {
-			if (this.preset != null && (Object) this.sampler instanceof FTFClimateSampler rtfClimateSampler) {
-				rtfClimateSampler.setUndergroundBiomeBandingPreset(this.preset, this.seed);
+			if (this.preset != null && (Object) this.sampler instanceof FTFClimateSampler ftfClimateSampler) {
+				ftfClimateSampler.setUndergroundBiomeBandingPreset(this.preset, this.seed);
 			}
 
 			RegistryLookup<Noise> noises = registries.lookupOrThrow(FTFRegistries.NOISE);
@@ -127,8 +127,8 @@ class MixinRandomState {
 						.resultOrPartial(FTFCommon.LOGGER::error)
 						.orElseGet(PerformanceConfig::makeDefault);
 				this.generatorContext = GeneratorContext.makeCached(this.preset, noises, (int) this.seed, config.tileSize(), config.batchCount(), ThreadPools.availableProcessors() > 4);
-				if ((Object) this.sampler instanceof FTFClimateSampler rtfClimateSampler) {
-					rtfClimateSampler.setUndergroundBiomeSurfaceContext(this.generatorContext);
+				if ((Object) this.sampler instanceof FTFClimateSampler ftfClimateSampler) {
+					ftfClimateSampler.setUndergroundBiomeSurfaceContext(this.generatorContext);
 				}
 			}
 

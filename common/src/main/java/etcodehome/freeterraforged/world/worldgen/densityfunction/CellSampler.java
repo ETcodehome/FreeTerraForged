@@ -31,7 +31,7 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 	private static final ThreadLocal<Cell> SHARED_FAST_CELL = ThreadLocal.withInitial(Cell::new);
 
 	@Override
-	public CellSampler rtf$unwrap() { return this; }
+	public CellSampler ftf$unwrap() { return this; }
 
 	@Override
 	public double compute(DensityFunction.FunctionContext ctx) {

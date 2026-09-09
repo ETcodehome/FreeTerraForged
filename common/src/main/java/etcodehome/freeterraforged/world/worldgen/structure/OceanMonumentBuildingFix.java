@@ -1,9 +1,9 @@
 package etcodehome.freeterraforged.world.worldgen.structure;
 
 public interface OceanMonumentBuildingFix {
-	void rtf$moveBuilding(int dy);
+	void ftf$moveBuilding(int dy);
 
-	void rtf$markOceanDepthAdjusted();
+	void ftf$markOceanDepthAdjusted();
 
-	boolean rtf$isOceanDepthAdjusted();
+	boolean ftf$isOceanDepthAdjusted();
 }

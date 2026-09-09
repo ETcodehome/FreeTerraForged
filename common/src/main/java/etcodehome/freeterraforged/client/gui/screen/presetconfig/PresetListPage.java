@@ -46,8 +46,8 @@ import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Presets;
 
 class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, AbstractWidget> {
-	private static final Path PRESET_PATH = ConfigUtil.rtf("presets");
-	private static final Path EXPORT_PATH = ConfigUtil.rtf("exports");
+	private static final Path PRESET_PATH = ConfigUtil.ftf("presets");
+	private static final Path EXPORT_PATH = ConfigUtil.ftf("exports");
 	private static final Path LEGACY_PRESET_PATH = ConfigUtil.legacy("presets");
 
 	private static final Predicate<String> IS_VALID = Pattern.compile("^[A-Za-z0-9\\-_ ()]+(?<! )$").asPredicate();

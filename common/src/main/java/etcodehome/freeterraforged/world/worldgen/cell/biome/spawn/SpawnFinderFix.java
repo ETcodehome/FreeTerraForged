@@ -14,8 +14,8 @@ public class SpawnFinderFix {
 	public Result result;
 
 	public SpawnFinderFix(List<ParameterPoint> list, Sampler sampler) {
-		if ((Object) sampler instanceof FTFClimateSampler rtfClimateSampler) {
-			BlockPos center = rtfClimateSampler.getSpawnSearchCenter();
+		if ((Object) sampler instanceof FTFClimateSampler ftfClimateSampler) {
+			BlockPos center = ftfClimateSampler.getSpawnSearchCenter();
 
 			this.result = SpawnFinderFix.getSpawnPositionAndFitness(list, sampler, center.getX(), center.getZ());
 			this.radialSearch(list, sampler, 2048.0f, 512.0f);

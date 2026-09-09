@@ -29,17 +29,17 @@ import net.minecraft.world.level.levelgen.structure.structures.OceanMonumentPiec
 @Mixin(OceanMonumentPieces.MonumentBuilding.class)
 public class MixinOceanMonumentBuilding implements OceanMonumentBuildingFix {
 	@Unique
-	private static final int rtf$FOOTPRINT_SAMPLE_STEPS = 4;
+	private static final int ftf$FOOTPRINT_SAMPLE_STEPS = 4;
 
 	@Shadow
 	@Final
 	private List<StructurePiece> childPieces;
 
 	@Unique
-	private final AtomicBoolean rtf$oceanDepthAdjusted = new AtomicBoolean(false);
+	private final AtomicBoolean ftf$oceanDepthAdjusted = new AtomicBoolean(false);
 
 	@Unique
-	private volatile int rtf$configuredSeaLevel = Integer.MIN_VALUE;
+	private volatile int ftf$configuredSeaLevel = Integer.MIN_VALUE;
 
 	@Redirect(
 		method = "postProcess",
@@ -48,14 +48,14 @@ public class MixinOceanMonumentBuilding implements OceanMonumentBuildingFix {
 			target = "Ljava/lang/Math;max(II)I"
 		)
 	)
-	private int rtf$useConfiguredSeaLevel(int seaLevel, int vanillaMinimum) {
-		return this.rtf$configuredSeaLevel == Integer.MIN_VALUE
+	private int ftf$useConfiguredSeaLevel(int seaLevel, int vanillaMinimum) {
+		return this.ftf$configuredSeaLevel == Integer.MIN_VALUE
 			? Math.max(seaLevel, vanillaMinimum)
-			: this.rtf$configuredSeaLevel;
+			: this.ftf$configuredSeaLevel;
 	}
 
 	@Inject(method = "postProcess", at = @At("HEAD"))
-	private void rtf$fitToOceanFloor(
+	private void ftf$fitToOceanFloor(
 		WorldGenLevel level,
 		StructureManager structureManager,
 		ChunkGenerator chunkGenerator,
@@ -65,23 +65,23 @@ public class MixinOceanMonumentBuilding implements OceanMonumentBuildingFix {
 		BlockPos blockPos,
 		CallbackInfo ci
 	) {
-		this.rtf$configuredSeaLevel = OceanMonumentSeaLevel.configured(level);
+		this.ftf$configuredSeaLevel = OceanMonumentSeaLevel.configured(level);
 
 		// CAS guards against concurrent postProcess() calls across this monument's chunks double-moving the piece.
-		if (!this.rtf$oceanDepthAdjusted.compareAndSet(false, true)) {
+		if (!this.ftf$oceanDepthAdjusted.compareAndSet(false, true)) {
 			return;
 		}
 
 		BoundingBox box = ((StructurePiece) (Object) this).getBoundingBox();
-		int targetMinY = rtf$sampleHighestOceanFloor(level, chunkGenerator, box);
+		int targetMinY = ftf$sampleHighestOceanFloor(level, chunkGenerator, box);
 		int dy = targetMinY - box.minY();
 		if (dy != 0) {
-			this.rtf$moveBuilding(dy);
+			this.ftf$moveBuilding(dy);
 		}
 	}
 
 	@Override
-	public void rtf$moveBuilding(int dy) {
+	public void ftf$moveBuilding(int dy) {
 		((StructurePiece) (Object) this).move(0, dy, 0);
 		for (StructurePiece childPiece : this.childPieces) {
 			childPiece.move(0, dy, 0);
@@ -89,25 +89,25 @@ public class MixinOceanMonumentBuilding implements OceanMonumentBuildingFix {
 	}
 
 	@Override
-	public void rtf$markOceanDepthAdjusted() {
-		this.rtf$oceanDepthAdjusted.set(true);
+	public void ftf$markOceanDepthAdjusted() {
+		this.ftf$oceanDepthAdjusted.set(true);
 	}
 
 	@Override
-	public boolean rtf$isOceanDepthAdjusted() {
-		return this.rtf$oceanDepthAdjusted.get();
+	public boolean ftf$isOceanDepthAdjusted() {
+		return this.ftf$oceanDepthAdjusted.get();
 	}
 
 	@Unique
-	private static int rtf$sampleHighestOceanFloor(WorldGenLevel level, ChunkGenerator chunkGenerator, BoundingBox box) {
+	private static int ftf$sampleHighestOceanFloor(WorldGenLevel level, ChunkGenerator chunkGenerator, BoundingBox box) {
 		// getFirstOccupiedHeight samples density functions directly, avoiding the chunk-loaded-radius
 		// bound that level.getHeight() would hit sampling this far across the monument's footprint.
 		RandomState randomState = level.getLevel().getChunkSource().randomState();
 		int highest = level.getMinBuildHeight();
-		for (int ix = 0; ix <= rtf$FOOTPRINT_SAMPLE_STEPS; ix++) {
-			int x = rtf$sampleCoord(box.minX(), box.maxX(), ix);
-			for (int iz = 0; iz <= rtf$FOOTPRINT_SAMPLE_STEPS; iz++) {
-				int z = rtf$sampleCoord(box.minZ(), box.maxZ(), iz);
+		for (int ix = 0; ix <= ftf$FOOTPRINT_SAMPLE_STEPS; ix++) {
+			int x = ftf$sampleCoord(box.minX(), box.maxX(), ix);
+			for (int iz = 0; iz <= ftf$FOOTPRINT_SAMPLE_STEPS; iz++) {
+				int z = ftf$sampleCoord(box.minZ(), box.maxZ(), iz);
 				int floor = chunkGenerator.getFirstOccupiedHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, level, randomState);
 				highest = Math.max(highest, floor);
 			}
@@ -116,7 +116,7 @@ public class MixinOceanMonumentBuilding implements OceanMonumentBuildingFix {
 	}
 
 	@Unique
-	private static int rtf$sampleCoord(int min, int max, int index) {
-		return min + Math.round((max - min) * (index / (float) rtf$FOOTPRINT_SAMPLE_STEPS));
+	private static int ftf$sampleCoord(int min, int max, int index) {
+		return min + Math.round((max - min) * (index / (float) ftf$FOOTPRINT_SAMPLE_STEPS));
 	}
 }

@@ -30,10 +30,10 @@ public class MixinChunkStatusTasks {
 	)
 	private static void generateStructureStarts(WorldGenContext worldGenContext, ChunkStep chunkStep, StaticCache2D<GenerationChunkHolder> staticCache2D, ChunkAccess chunkAccess, CallbackInfoReturnable<CompletableFuture<ChunkAccess>> callback) {
 		RandomState randomState = worldGenContext.level().getChunkSource().randomState();
-		if((Object) randomState instanceof FTFRandomState rtfRandomState) {
+		if((Object) randomState instanceof FTFRandomState ftfRandomState) {
 			ChunkPos chunkPos = chunkAccess.getPos();
 			@org.jetbrains.annotations.Nullable
-			GeneratorContext context = rtfRandomState.generatorContext();
+			GeneratorContext context = ftfRandomState.generatorContext();
 
 			if(context != null) {
 				context.cache.queueAtChunk(chunkPos.x, chunkPos.z);
@@ -48,10 +48,10 @@ public class MixinChunkStatusTasks {
 	)
 	private static void generateFeatures(WorldGenContext worldGenContext, ChunkStep chunkStep, StaticCache2D<GenerationChunkHolder> staticCache2D, ChunkAccess chunkAccess, CallbackInfoReturnable<CompletableFuture<ChunkAccess>> callback) {
 		RandomState randomState = worldGenContext.level().getChunkSource().randomState();
-		if((Object) randomState instanceof FTFRandomState rtfRandomState) {
+		if((Object) randomState instanceof FTFRandomState ftfRandomState) {
 			ChunkPos chunkPos = chunkAccess.getPos();
 			@Nullable
-			GeneratorContext context = rtfRandomState.generatorContext();
+			GeneratorContext context = ftfRandomState.generatorContext();
 
 			if(context != null) {
 				context.cache.dropAtChunk(chunkPos.x, chunkPos.z);

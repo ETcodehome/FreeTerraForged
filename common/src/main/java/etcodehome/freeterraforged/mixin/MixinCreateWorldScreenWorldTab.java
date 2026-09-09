@@ -16,7 +16,7 @@ public abstract class MixinCreateWorldScreenWorldTab {
 	private EditBox seedEdit;
 
 	@Inject(method = "<init>", at = @At("TAIL"))
-	private void rtf$syncSeedEditWithUiState(CreateWorldScreen screen, CallbackInfo callbackInfo) {
+	private void ftf$syncSeedEditWithUiState(CreateWorldScreen screen, CallbackInfo callbackInfo) {
 		screen.getUiState().addListener((uiState) -> {
 			String seed = uiState.getSeed();
 			if(seed == null) {

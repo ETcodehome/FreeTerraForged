@@ -17,7 +17,7 @@ public abstract class MixinImposterProtoChunk implements FTFChunk {
 		at = @At("TAIL")
 	)
 	public void init(LevelChunk levelChunk, boolean bl, CallbackInfo callback) {
-		FTFChunk rtfChunk = (FTFChunk) levelChunk;
-		rtfChunk.getMaxHeight().ifPresent(this::setMaxHeight);
+		FTFChunk ftfChunk = (FTFChunk) levelChunk;
+		ftfChunk.getMaxHeight().ifPresent(this::setMaxHeight);
 	}
 }

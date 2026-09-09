@@ -8,7 +8,7 @@ import etcodehome.freeterraforged.concurrent.ThreadPools;
 import etcodehome.freeterraforged.platform.ConfigUtil;
 
 public record PerformanceConfig(int tileSize, int batchCount, int threadCount) {
-	public static final Path DEFAULT_FILE_PATH = ConfigUtil.rtf("performance_internal.conf");
+	public static final Path DEFAULT_FILE_PATH = ConfigUtil.ftf("performance_internal.conf");
 	
     public static final int MAX_TILE_SIZE = 8;
     public static final int MAX_BATCH_COUNT = 20;
