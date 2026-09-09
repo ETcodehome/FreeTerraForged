@@ -3,30 +3,30 @@ loaderVersion="[4,)"
 license="MIT"
 
 [[mixins]]
-    config = "reterraforged-common.mixins.json"
+    config = "freeterraforged-common.mixins.json"
 
 [[mixins]]
-    config = "reterraforged-neoforge.mixins.json"
+    config = "freeterraforged-neoforge.mixins.json"
 
 [[mods]]
-    modId="reterraforged"
-    displayName="ReTerraForged"
+    modId="freeterraforged"
+    displayName="FreeTerraForged"
     version="0.0.6005"
     authors="dags,Won-Ton,raccoonman,psiber"
     credits="dags,Won-Ton,raccoonman,psiber"
     logoFile="logo.png"
-    displayURL="https://github.com/racoonman2/reterraforged/"
-    issueTrackerURL="https://github.com/racoonman2/reterraforged/issues"
+    displayURL="https://github.com/etcodehome/freeterraforged/"
+    issueTrackerURL="https://github.com/etcodehome/freeterraforged/issues"
     description="A continuation of https://github.com/TerraForged/TerraForged"
 
-[[dependencies.reterraforged]]
+[[dependencies.freeterraforged]]
     modId="neoforge"
     mandatory=true
     versionRange="[21,)"
     ordering="NONE"
     side="BOTH"
 
-[[dependencies.reterraforged]]
+[[dependencies.freeterraforged]]
 	modId = "minecraft"
 	mandatory = true
 	versionRange = "[1.21.1,)"
@@ -34,7 +34,7 @@ license="MIT"
 	side = "BOTH"
 
 # We enforce 3.0.14 because otherwise biome previews break in a non-obvious manner
-[[dependencies.reterraforged]]
+[[dependencies.freeterraforged]]
     modId = "biolith"
     type = "optional"
     versionRange = "[3.0.14,)"

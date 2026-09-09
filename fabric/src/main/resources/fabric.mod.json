@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "id": "reterraforged",
+  "id": "freeterraforged",
   "version": "${version}",
-  "name": "ReTerraForged",
+  "name": "FreeTerraForged",
   "description": "A continuation of https://github.com/TerraForged/TerraForged",
   "authors": [
 	"dags",
@@ -11,20 +11,20 @@
     "psiber"
   ],
   "contact": {
-    "repo": "https://github.com/racoonman2/reterraforged/",
-    "issues": "https://github.com/racoonman2/reterraforged/issues"
+    "repo": "https://github.com/etcodehome/freeterraforged/",
+    "issues": "https://github.com/etcodehome/freeterraforged/issues"
   },
   "license": "MIT",
   "environment": "*",
   "entrypoints": {
     "main": [
-      "raccoonman.reterraforged.fabric.RTFFabric"
+      "etcodehome.freeterraforged.fabric.RTFFabric"
     ],
     "client": [
-      "raccoonman.reterraforged.fabric.RTFFabricClient"
+      "etcodehome.freeterraforged.fabric.RTFFabricClient"
     ],
     "fabric-datagen": [
-      "raccoonman.reterraforged.fabric.RTFFabric"
+      "etcodehome.freeterraforged.fabric.RTFFabric"
     ]
   },
   "depends": {
@@ -36,8 +36,8 @@
     "biolith": "<3.0.14"
   },
   "mixins": [
-    "reterraforged-common.mixins.json",
-    "reterraforged-fabric.mixins.json"
+    "freeterraforged-common.mixins.json",
+    "freeterraforged-fabric.mixins.json"
   ],
-  "icon": "assets/reterraforged/icon.png"
+  "icon": "assets/freeterraforged/icon.png"
 }

@@ -1,0 +1,17 @@
+{
+  "required": true,
+  "package": "raccoonman.reterraforged.neoforge.mixin",
+  "minVersion": "0.8",
+  "compatibilityLevel": "JAVA_21",
+  "plugin": "etcodehome.freeterraforged.neoforge.mixin.NeoForgeOptionalMixinPlugin",
+	"mixins": [
+      "etcodehome.freeterraforged.neoforge.mixin.MixinBiolithTerraBlenderCompat",
+  	"MixinTagsProvider",
+      "etcodehome.freeterraforged.neoforge.mixin.MixinBiomeGenerationSettingsPlainsBuilder",
+      "etcodehome.freeterraforged.neoforge.mixin.MixinChunkStatusTasks",
+      "etcodehome.freeterraforged.neoforge.mixin.MixinMinecraftServer"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

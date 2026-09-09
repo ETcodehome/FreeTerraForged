@@ -1,0 +1,19 @@
+{
+  
+  "required": true,
+  "package": "raccoonman.reterraforged.fabric.mixin",
+  "minVersion": "0.8",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+  	"MixinPresetEditor"
+  ],
+  "mixins": [
+    "etcodehome.freeterraforged.fabric.mixin.MixinBiolithTerraBlenderCompat",
+    "etcodehome.freeterraforged.fabric.mixin.MixinChunkStatusTasks",
+    "etcodehome.freeterraforged.fabric.mixin.MixinMinecraftServer",
+    "etcodehome.freeterraforged.fabric.mixin.MixinBiomeModificationImpl"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
