@@ -84,7 +84,7 @@ public class VolcanoPopulator implements CellPopulator, WeightedPopulator {
             float delta = (value - maxHeight) * steepnessModifier;
             float range = limit - maxHeight;
             float alpha = delta / range;
-            if (alpha > 0.925F) {
+            if (alpha > 0.6F) {
                 cell.terrain = this.inner;
             }
             value = maxHeight - maxHeight / 5.0F * alpha;
@@ -100,7 +100,7 @@ public class VolcanoPopulator implements CellPopulator, WeightedPopulator {
     }
     
     public static void modifyVolcanoType(Cell cell, Levels levels) {
-        if (cell.terrain == TerrainType.VOLCANO_PIPE && (cell.height < levels.water || cell.riverMask < 0.85F)) {
+        if (cell.terrain == TerrainType.VOLCANO_PIPE && (cell.height < levels.water || cell.riverMask < 0.25F)) {
             cell.terrain = TerrainType.VOLCANO;
         }
     }
