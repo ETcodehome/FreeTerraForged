@@ -26,9 +26,10 @@ import etcodehome.freeterraforged.world.worldgen.feature.chance.FTFChanceModifie
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 
 public class FTFCommon {
-	public static final String MOD_ID = "reterraforged";
-	public static final String LEGACY_MOD_ID = "terraforged";
-	public static final Logger LOGGER = LogManager.getLogger("ReTerraForged");
+	public static final String MOD_ID = "freeterraforged";
+	public static final String LEGACY_TF_MOD_ID = "terraforged";
+	public static final String LEGACY_RTF_MOD_ID = "reterraforged";
+	public static final Logger LOGGER = LogManager.getLogger("FreeTerraForged");
 
 	public static void bootstrap() {
 		FTFBuiltInRegistries.bootstrap();

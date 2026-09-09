@@ -48,7 +48,8 @@ import etcodehome.freeterraforged.data.worldgen.preset.settings.Presets;
 class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, AbstractWidget> {
 	private static final Path PRESET_PATH = ConfigUtil.ftf("presets");
 	private static final Path EXPORT_PATH = ConfigUtil.ftf("exports");
-	private static final Path LEGACY_PRESET_PATH = ConfigUtil.legacy("presets");
+	private static final Path LEGACY_TF_PRESET_PATH = ConfigUtil.legacy_tf("presets");
+	private static final Path LEGACY_RTF_PRESET_PATH = ConfigUtil.legacy_rtf("presets");
 
 	private static final Predicate<String> IS_VALID = Pattern.compile("^[A-Za-z0-9\\-_ ()]+(?<! )$").asPredicate();
 
@@ -349,7 +350,8 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 		widgets.add(new CategoryHeader(Component.translatable(FTFTranslationKeys.GUI_HEADER_YOUR_PRESETS).withStyle(ChatFormatting.GOLD)));
 		List<PresetEntry> userPresets = new ArrayList<>();
 		userPresets.addAll(this.listPresets(PRESET_PATH));
-		userPresets.addAll(this.listPresets(LEGACY_PRESET_PATH));
+		userPresets.addAll(this.listPresets(LEGACY_TF_PRESET_PATH));
+		userPresets.addAll(this.listPresets(LEGACY_RTF_PRESET_PATH));
 
 		// Sort user presets by last modified timestamp ascending (oldest first at top, newest last at bottom)
 		userPresets.sort((a, b) -> {
