@@ -41,6 +41,10 @@ public class Cell {
     public float terrainRegionCenterZ;
     public float biomeRegionId;
     public float biomeRegionEdge;
+    public float biomeRegionCenterX;
+    public float biomeRegionCenterZ;
+    public long biomeRegionX;
+    public long biomeRegionZ;
     public float macroBiomeId;
     public float riverMask;
     public float riverWaterLevel = 0.0F;
@@ -88,6 +92,10 @@ public class Cell {
         this.terrainRegionCenterZ = other.terrainRegionCenterZ;
         this.biomeRegionId = other.biomeRegionId;
         this.biomeRegionEdge = other.biomeRegionEdge;
+        this.biomeRegionCenterX = other.biomeRegionCenterX;
+        this.biomeRegionCenterZ = other.biomeRegionCenterZ;
+        this.biomeRegionX = other.biomeRegionX;
+        this.biomeRegionZ = other.biomeRegionZ;
         this.macroBiomeId = other.macroBiomeId;
         this.riverMask = other.riverMask;
         this.continentX = other.continentX;

@@ -120,14 +120,14 @@ public class WorldSettings {
             Codec.INT.optionalFieldOf("spawnZ", 0).forGetter((o) -> o.spawnZ)
     	).apply(instance, Properties::new));
 
-        public static SpawnType spawnType;
+        public SpawnType spawnType;
         public int worldHeight;
         public int worldDepth;
         public int seaLevel;
         public int lavaLevel;
         public int oceanDepth;
-        public static int spawnX;
-        public static int spawnZ;
+        public int spawnX;
+        public int spawnZ;
 
         public Properties(SpawnType spawnType, int worldHeight, int worldDepth, int seaLevel, int lavaLevel, int oceanDepth, int spawnX, int spawnZ) {
         	this.spawnType = spawnType;

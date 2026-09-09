@@ -19,9 +19,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.QuartPos;
 import net.minecraft.core.SectionPos;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.tags.StructureTags;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.biome.Biome;
@@ -30,7 +28,6 @@ import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.WorldGenerationContext;
 import net.minecraft.world.level.levelgen.heightproviders.HeightProvider;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
-import net.minecraft.world.level.levelgen.structure.BuiltinStructures;
 import net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.pieces.StructurePiecesBuilder;
@@ -47,19 +44,12 @@ import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.RiverCarverSettings;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
+import raccoonman.reterraforged.world.worldgen.densityfunction.tile.TileCache;
+import raccoonman.reterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
+import raccoonman.reterraforged.world.worldgen.runtime.WorldgenPlans.StructureAdaptation;
 
 @Mixin(JigsawStructure.class)
 public class MixinJigsawStructure {
-	@Unique
-	private static final byte rtf$TARGET_UNCHECKED = 0;
-	@Unique
-	private static final byte rtf$TARGET_SUBTERRANEAN = 1;
-	@Unique
-	private static final byte rtf$TARGET_VILLAGE = 2;
-	@Unique
-	private static final byte rtf$TARGET_TRAIL_RUINS = 3;
-	@Unique
-	private static final byte rtf$TARGET_UNHANDLED = 4;
 	@Unique
 	private static final int rtf$MARGIN = 10;
 	@Unique
@@ -70,9 +60,6 @@ public class MixinJigsawStructure {
 	private static final int rtf$BURY_RADIUS = 6;
 	@Unique
 	private static final int rtf$TRAIL_RUINS_MAX_ATTEMPTS = 16;
-
-	@Unique
-	private byte rtf$targetStatus = rtf$TARGET_UNCHECKED;
 
 	@Shadow
 	@Final
@@ -107,41 +94,25 @@ public class MixinJigsawStructure {
 
 	@Inject(method = "findGenerationPoint", at = @At("HEAD"), cancellable = true)
 	private void rtf$correctOrSkip(Structure.GenerationContext generationContext, CallbackInfoReturnable<Optional<Structure.GenerationStub>> cir) {
-		if (this.rtf$targetStatus == rtf$TARGET_UNCHECKED) {
-			Structure self = (Structure) (Object) this;
-			var registry = generationContext.registryAccess().registryOrThrow(Registries.STRUCTURE);
-			Structure trialChambers = registry.get(BuiltinStructures.TRIAL_CHAMBERS);
-			Structure ancientCity = registry.get(BuiltinStructures.ANCIENT_CITY);
-			Structure trailRuins = registry.get(BuiltinStructures.TRAIL_RUINS);
-
-			boolean isVillage = registry.getResourceKey(self)
-					.flatMap(registry::getHolder)
-					.map(holder -> holder.is(StructureTags.VILLAGE))
-					.orElse(false);
-
-			if (self == trialChambers || self == ancientCity) {
-				this.rtf$targetStatus = rtf$TARGET_SUBTERRANEAN;
-			} else if (isVillage) {
-				this.rtf$targetStatus = rtf$TARGET_VILLAGE;
-			} else if (self == trailRuins) {
-				this.rtf$targetStatus = rtf$TARGET_TRAIL_RUINS;
-			} else {
-				this.rtf$targetStatus = rtf$TARGET_UNHANDLED;
-			}
-		}
-
-		if (this.rtf$targetStatus == rtf$TARGET_UNHANDLED) {
+		if (!(generationContext.chunkGenerator() instanceof TerraForgedChunkGenerator generator)
+			|| !((Object) generationContext.randomState() instanceof RTFRandomState randomState)
+			|| !randomState.isTerraForged()
+			|| randomState.generatorContext() == null) {
 			return;
 		}
-		if (this.rtf$targetStatus == rtf$TARGET_TRAIL_RUINS) {
-			GeneratorContext generatorContext = rtf$generatorContext(generationContext.randomState());
-			if (generatorContext != null) {
-				rtf$handleTrailRuinsPlacement(generationContext, generatorContext, cir);
-			}
+		StructureAdaptation adaptation = generator.activeStructurePlan().adaptation(
+			(Structure)(Object)this
+		);
+		if (adaptation == StructureAdaptation.NONE) {
 			return;
 		}
 
-		if (this.rtf$targetStatus == rtf$TARGET_VILLAGE) {
+		if (adaptation == StructureAdaptation.TRAIL_RUINS) {
+			rtf$handleTrailRuinsPlacement(generationContext, randomState.generatorContext(), cir);
+			return;
+		}
+
+		if (adaptation == StructureAdaptation.VILLAGE) {
 			rtf$handleVillageRetryPlacement(generationContext, cir);
 			return;
 		}
@@ -217,37 +188,43 @@ public class MixinJigsawStructure {
 		StructurePiecesBuilder builder,
 		GeneratorContext generatorContext
 	) {
-		Map<Long, Tile.Chunk> chunks = new HashMap<>();
-		int maxSuspension = Integer.MIN_VALUE;
-		for (var piece : builder.build().pieces()) {
-			if (!(piece instanceof PoolElementStructurePiece poolPiece)) {
-				continue;
-			}
-			if (poolPiece.getElement().getProjection() != StructureTemplatePool.Projection.RIGID) {
-				continue;
-			}
+		Map<Long, TileCache.Lease> chunks = new HashMap<>();
+		try {
+			int maxSuspension = Integer.MIN_VALUE;
+			for (var piece : builder.build().pieces()) {
+				if (!(piece instanceof PoolElementStructurePiece poolPiece)) {
+					continue;
+				}
+				if (poolPiece.getElement().getProjection() != StructureTemplatePool.Projection.RIGID) {
+					continue;
+				}
 
-			BoundingBox box = poolPiece.getBoundingBox();
-			int groundPlane = box.minY() + poolPiece.getGroundLevelDelta();
-			for (int x = box.minX() - rtf$BURY_RADIUS + 1; x <= box.maxX() + rtf$BURY_RADIUS - 1; x++) {
-				for (int z = box.minZ() - rtf$BURY_RADIUS + 1; z <= box.maxZ() + rtf$BURY_RADIUS - 1; z++) {
-					if (!rtf$isInsideBurySupport(box, x, z)) {
-						continue;
+				BoundingBox box = poolPiece.getBoundingBox();
+				int groundPlane = box.minY() + poolPiece.getGroundLevelDelta();
+				for (int x = box.minX() - rtf$BURY_RADIUS + 1; x <= box.maxX() + rtf$BURY_RADIUS - 1; x++) {
+					for (int z = box.minZ() - rtf$BURY_RADIUS + 1; z <= box.maxZ() + rtf$BURY_RADIUS - 1; z++) {
+						if (!rtf$isInsideBurySupport(box, x, z)) {
+							continue;
+						}
+						int chunkX = SectionPos.blockToSectionCoord(x);
+						int chunkZ = SectionPos.blockToSectionCoord(z);
+						long chunkKey = ChunkPos.asLong(chunkX, chunkZ);
+						TileCache.Lease lease = chunks.computeIfAbsent(
+							chunkKey,
+							ignored -> generatorContext.cache.acquireAtChunk(chunkX, chunkZ)
+						);
+						Tile.Chunk chunk = lease.tile().getChunkReader(chunkX, chunkZ);
+						maxSuspension = Math.max(
+							maxSuspension,
+							groundPlane - generatorContext.levels.scale(chunk.getCell(x, z).height)
+						);
 					}
-					int chunkX = SectionPos.blockToSectionCoord(x);
-					int chunkZ = SectionPos.blockToSectionCoord(z);
-					long chunkKey = ChunkPos.asLong(chunkX, chunkZ);
-					Tile.Chunk chunk = chunks.computeIfAbsent(chunkKey, ignored ->
-						generatorContext.cache.provideAtChunk(chunkX, chunkZ).getChunkReader(chunkX, chunkZ)
-					);
-					maxSuspension = Math.max(
-						maxSuspension,
-						groundPlane - generatorContext.levels.scale(chunk.getCell(x, z).height)
-					);
 				}
 			}
+			return maxSuspension == Integer.MIN_VALUE ? 0 : maxSuspension;
+		} finally {
+			rtf$closeTileLeases(chunks);
 		}
-		return maxSuspension == Integer.MIN_VALUE ? 0 : maxSuspension;
 	}
 
 	@Unique
@@ -258,11 +235,25 @@ public class MixinJigsawStructure {
 	}
 
 	@Unique
-	private static GeneratorContext rtf$generatorContext(RandomState randomState) {
-		if ((Object) randomState instanceof RTFRandomState rtfRandomState) {
-			return rtfRandomState.generatorContext();
+	private static void rtf$closeTileLeases(Map<Long, TileCache.Lease> leases) {
+		Throwable failure = null;
+		for (TileCache.Lease lease : leases.values()) {
+			try {
+				lease.close();
+			} catch (RuntimeException | Error closeFailure) {
+				if (failure == null) {
+					failure = closeFailure;
+				} else {
+					failure.addSuppressed(closeFailure);
+				}
+			}
 		}
-		return null;
+		if (failure instanceof RuntimeException runtimeFailure) {
+			throw runtimeFailure;
+		}
+		if (failure instanceof Error error) {
+			throw error;
+		}
 	}
 
 	@Unique
@@ -434,7 +425,9 @@ public class MixinJigsawStructure {
 
 	@Unique
 	private boolean rtf$isRiverCell(int x, int z, RandomState randomState) {
-		RTFRandomState rtfRandomState = (RTFRandomState) (Object) randomState;
+		if (!((Object) randomState instanceof RTFRandomState rtfRandomState)) {
+			return false;
+		}
 		GeneratorContext generatorContext = rtfRandomState.generatorContext();
 		if (generatorContext == null) {
 			return false;
@@ -445,11 +438,11 @@ public class MixinJigsawStructure {
 		int localX = x & 15;
 		int localZ = z & 15;
 
-		Tile tile = generatorContext.cache.provideAtChunk(chunkX, chunkZ);
-		Tile.Chunk tileChunk = tile.getChunkReader(chunkX, chunkZ);
-		Cell cell = tileChunk.getCell(localX, localZ);
-
-		return cell.riverZone == RiverCarverSettings.RiverZone.Riverbed;
+		try (var lease = generatorContext.cache.acquireAtChunk(chunkX, chunkZ)) {
+			Tile.Chunk tileChunk = lease.tile().getChunkReader(chunkX, chunkZ);
+			Cell cell = tileChunk.getCell(localX, localZ);
+			return cell.riverZone == RiverCarverSettings.RiverZone.Riverbed;
+		}
 	}
 
 	@Unique

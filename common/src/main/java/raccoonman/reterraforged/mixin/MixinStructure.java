@@ -5,14 +5,10 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import net.minecraft.core.Holder;
-import net.minecraft.core.HolderLookup.RegistryLookup;
-import net.minecraft.core.RegistryAccess;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.Structure.GenerationContext;
 import net.minecraft.world.level.levelgen.structure.Structure.GenerationStub;
-import raccoonman.reterraforged.registries.RTFRegistries;
-import raccoonman.reterraforged.world.worldgen.structure.rule.StructureRule;
+import raccoonman.reterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
 
 @Mixin(Structure.class)
 public class MixinStructure {
@@ -22,13 +18,15 @@ public class MixinStructure {
 		method = "isValidBiome",
 		cancellable = true
 	)
-    private static void isValidBiome(GenerationStub generationStub, GenerationContext generationContext, CallbackInfoReturnable<Boolean> callback) {
-		RegistryAccess registry = generationContext.registryAccess();
-		RegistryLookup<StructureRule> structureRules = registry.lookupOrThrow(RTFRegistries.STRUCTURE_RULE);
-		for(StructureRule structureRule : structureRules.listElements().map(Holder::value).toList()) {
-			if(!structureRule.test(generationContext.randomState(), generationStub.position())) {
+	private static void isValidBiome(GenerationStub generationStub, GenerationContext generationContext, CallbackInfoReturnable<Boolean> callback) {
+		if (!(generationContext.chunkGenerator() instanceof TerraForgedChunkGenerator generator)) {
+			return;
+		}
+		for (var rule : generator.activeStructurePlan().rules()) {
+			if (!rule.value().test(generationContext.randomState(), generationStub.position())) {
 				callback.setReturnValue(false);
+				return;
 			}
 		}
-    }
+	}
 }

@@ -11,7 +11,10 @@ dependencies {
     modImplementation "com.github.glitchfiend:TerraBlender-neoforge:${rootProject.minecraft_version}-${rootProject.terrablender_version}"
 	compileOnly "com.electronwill.night-config:toml:3.6.7"
 	modCompileOnly "maven.modrinth:biolith:3.0.14-neoforge"
-    modApi "dev.architectury:architectury:${rootProject.architectury_version}"
+	modCompileOnly "maven.modrinth:lithostitched:1.8.0+beta4-neoforge-21.1"
+	testRuntimeOnly "maven.modrinth:biolith:3.0.14-neoforge"
+	testRuntimeOnly "maven.modrinth:lithostitched:1.8.0+beta4-neoforge-21.1"
+	compileOnly "dev.architectury:architectury-injectables:1.0.13"
 	testImplementation "org.junit.jupiter:junit-jupiter:5.11.4"
 }
 

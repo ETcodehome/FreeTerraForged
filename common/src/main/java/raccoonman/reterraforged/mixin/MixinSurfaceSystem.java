@@ -2,6 +2,7 @@ package raccoonman.reterraforged.mixin;
 
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
@@ -23,6 +24,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.levelgen.NoiseChunk;
 import net.minecraft.world.level.levelgen.PositionalRandomFactory;
 import net.minecraft.world.level.levelgen.RandomState;
@@ -34,6 +36,8 @@ import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.RiverCarverSettings;
+import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
+import raccoonman.reterraforged.world.worldgen.densityfunction.tile.TileCache;
 import raccoonman.reterraforged.world.worldgen.surface.RTFSurfaceSystem;
 import raccoonman.reterraforged.world.worldgen.surface.rule.StrataRule;
 
@@ -41,8 +45,10 @@ import raccoonman.reterraforged.world.worldgen.surface.rule.StrataRule;
 @Implements(@Interface(iface = RTFSurfaceSystem.class, prefix = RTFCommon.MOD_ID + "$RTFSurfaceSystem$"))
 class MixinSurfaceSystem {
 	private static final ResourceLocation GEOLOGY_RANDOM = RTFCommon.location("geology");
+	private static final int[] NEIGHBOR_X = {0, 0, 1, -1};
+	private static final int[] NEIGHBOR_Z = {-1, 1, 0, 0};
 	private RandomState randomState;
-	private Map<ResourceLocation, List<List<StrataRule.Layer>>> strata;
+	private volatile Map<ResourceLocation, List<List<StrataRule.Layer>>> strata;
 
 	@Inject(
 			at = @At("TAIL"),
@@ -50,7 +56,6 @@ class MixinSurfaceSystem {
 	)
 	public void SurfaceSystem(RandomState randomState, BlockState blockState, int i, PositionalRandomFactory positionalRandomFactory, CallbackInfo callback) {
 		this.randomState = randomState;
-		this.strata = new ConcurrentHashMap<>();
 	}
 
 	// INJECT AT HEAD to carve out rivers and lakes before surface rules run
@@ -62,26 +67,47 @@ class MixinSurfaceSystem {
 		if ((Object) randomState instanceof RTFRandomState rtfRandomState) {
 			GeneratorContext genCtx = rtfRandomState.generatorContext();
 			if (genCtx != null) {
-				this.reterraforged$placeRiverWater(chunk, biomeManager, genCtx);
+				this.reterraforged$placeRiverWater(chunk, biomeManager, genCtx, noiseChunk);
 			}
 		}
 	}
 
 	public List<List<StrataRule.Layer>> reterraforged$RTFSurfaceSystem$getOrCreateStrata(ResourceLocation name, Function<RandomSource, List<List<StrataRule.Layer>>> strata) {
-		return this.strata.computeIfAbsent(name, (k) -> {
+		return this.reterraforged$strata().computeIfAbsent(name, (k) -> {
 			PositionalRandomFactory factory = this.randomState.getOrCreateRandomFactory(GEOLOGY_RANDOM);
 			return strata.apply(factory.fromHashOf(k));
 		});
 	}
 
 	@Unique
-	private void reterraforged$placeRiverWater(ChunkAccess chunk, BiomeManager biomeManager, GeneratorContext genCtx) {
+	private Map<ResourceLocation, List<List<StrataRule.Layer>>> reterraforged$strata() {
+		Map<ResourceLocation, List<List<StrataRule.Layer>>> current = this.strata;
+		if (current != null) {
+			return current;
+		}
+		synchronized (this) {
+			current = this.strata;
+			if (current == null) {
+				current = new ConcurrentHashMap<>();
+				this.strata = current;
+			}
+		}
+		return current;
+	}
+
+	@Unique
+	private void reterraforged$placeRiverWater(ChunkAccess chunk, BiomeManager biomeManager, GeneratorContext genCtx, NoiseChunk noiseChunk) {
 		var chunkPos = chunk.getPos();
-		var tile = genCtx.cache.provideAtChunk(chunkPos.x, chunkPos.z);
-		var reader = tile.getChunkReader(chunkPos.x, chunkPos.z);
+		TileCache cache = java.util.Objects.requireNonNull(genCtx.cache, "FTF surface tile cache");
+		Tile.Chunk ownedChunk = noiseChunk instanceof raccoonman.reterraforged.world.worldgen.densityfunction.tile.NoiseChunkTileOwner owner
+			? owner.reterraforged$currentTileChunk()
+			: null;
+		try (SurfaceTiles tiles = new SurfaceTiles(cache, chunkPos.x, chunkPos.z, ownedChunk)) {
+		var reader = tiles.reader(chunkPos.x, chunkPos.z);
 		var levels = genCtx.generator.getHeightmap().levels();
 
 		float oceanLevel = levels.water;
+		int oceanY = levels.scale(oceanLevel);
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 		BlockState water = Blocks.WATER.defaultBlockState();
 		BlockState flowingWater = water.setValue(BlockStateProperties.LEVEL, 1);
@@ -106,23 +132,19 @@ class MixinSurfaceSystem {
 							) + oceanLevel
 					);
 
-					if (waterY < levels.scale(levels.water)) waterY = levels.scale(levels.water);
+					if (waterY < oceanY) waterY = oceanY;
 
 					if (waterY > scaledY) {
 						boolean isTransitionColumn = false;
 						boolean multiBlockDrop = false;
 						int lowestNeighborWaterY = waterY;
 
-						int[] dx = {0, 0, 1, -1};
-						int[] dz = {-1, 1, 0, 0};
-
 						// Check neighbors to determine if we are an edge/waterfall
 						for (int i = 0; i < 4; i++) {
-							int nx = globalX + dx[i];
-							int nz = globalZ + dz[i];
+							int nx = globalX + NEIGHBOR_X[i];
+							int nz = globalZ + NEIGHBOR_Z[i];
 
-							var neighborTile = genCtx.cache.provideAtChunk(nx >> 4, nz >> 4);
-							var neighborReader = neighborTile.getChunkReader(nx >> 4, nz >> 4);
+							var neighborReader = tiles.reader(nx >> 4, nz >> 4);
 							var neighborCell = neighborReader.getCell(nx & 0xF, nz & 0xF);
 
 							// Only consider the neighbor's water height if it is actually a water cell
@@ -136,7 +158,7 @@ class MixinSurfaceSystem {
 										) + levels.water
 								);
 
-								if (nWaterY < levels.scale(levels.water)) nWaterY = levels.scale(levels.water);
+								if (nWaterY < oceanY) nWaterY = oceanY;
 
 								if (nWaterY < waterY) {
 									isTransitionColumn = true;
@@ -190,8 +212,6 @@ class MixinSurfaceSystem {
 				} else {
 
 					// GASKET LOGIC
-					int oceanY = levels.scale(levels.water);
-
 					// Only run gasket logic if this land cell is above ocean level
 					if (scaledY >= oceanY) {
 
@@ -199,13 +219,10 @@ class MixinSurfaceSystem {
 						int maxNeighborWaterY = scaledY;
 
 						// Check neighbors for water and record the strongest mask influence
-						int[] dx = {0, 0, 1, -1};
-						int[] dz = {-1, 1, 0, 0};
 						for (int i = 0; i < 4; i++) {
-							int nx = globalX + dx[i];
-							int nz = globalZ + dz[i];
-							var neighborTile = genCtx.cache.provideAtChunk(nx >> 4, nz >> 4);
-							var neighborReader = neighborTile.getChunkReader(nx >> 4, nz >> 4);
+							int nx = globalX + NEIGHBOR_X[i];
+							int nz = globalZ + NEIGHBOR_Z[i];
+							var neighborReader = tiles.reader(nx >> 4, nz >> 4);
 							var neighborCell = neighborReader.getCell(nx & 0xF, nz & 0xF);
 
 							if ((neighborCell.terrain.isRiver() || neighborCell.terrain.isLake())) {
@@ -254,6 +271,61 @@ class MixinSurfaceSystem {
 						}
 					}
 				}
+			}
+		}
+		}
+	}
+
+	@Unique
+	private static final class SurfaceTiles implements AutoCloseable {
+		private final TileCache cache;
+		private final int ownedChunkX;
+		private final int ownedChunkZ;
+		private final Tile.Chunk ownedChunk;
+		private final Map<Long, TileCache.Lease> leases = new HashMap<>(4);
+
+		private SurfaceTiles(TileCache cache, int ownedChunkX, int ownedChunkZ, Tile.Chunk ownedChunk) {
+			this.cache = cache;
+			this.ownedChunkX = ownedChunkX;
+			this.ownedChunkZ = ownedChunkZ;
+			this.ownedChunk = ownedChunk;
+		}
+
+		private Tile.Chunk reader(int chunkX, int chunkZ) {
+			if (this.ownedChunk != null && chunkX == this.ownedChunkX && chunkZ == this.ownedChunkZ) {
+				return this.ownedChunk;
+			}
+			int tileX = this.cache.chunkToTile(chunkX);
+			int tileZ = this.cache.chunkToTile(chunkZ);
+			long key = ChunkPos.asLong(tileX, tileZ);
+			TileCache.Lease lease = this.leases.get(key);
+			if (lease == null) {
+				lease = this.cache.acquire(tileX, tileZ);
+				this.leases.put(key, lease);
+			}
+			return lease.tile().getChunkReader(chunkX, chunkZ);
+		}
+
+		@Override
+		public void close() {
+			Throwable failure = null;
+			for (TileCache.Lease lease : this.leases.values()) {
+				try {
+					lease.close();
+				} catch (RuntimeException | Error cleanupFailure) {
+					if (failure == null) {
+						failure = cleanupFailure;
+					} else {
+						failure.addSuppressed(cleanupFailure);
+					}
+				}
+			}
+			this.leases.clear();
+			if (failure instanceof RuntimeException runtimeFailure) {
+				throw runtimeFailure;
+			}
+			if (failure instanceof Error error) {
+				throw error;
 			}
 		}
 	}

@@ -8,11 +8,8 @@ import raccoonman.reterraforged.world.worldgen.densityfunction.MarkerFunction;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
 
 final class PreviewTileClimateSampler implements MarkerFunction.Mapped {
-	private final Tile tile;
+	private final TileLookup tileLookup;
 	private final Heightmap heightmap;
-	private final float translateX;
-	private final float translateZ;
-	private final float zoom;
 	private final CellSampler.Field field;
 
 	PreviewTileClimateSampler(
@@ -23,20 +20,18 @@ final class PreviewTileClimateSampler implements MarkerFunction.Mapped {
 		int zoom,
 		CellSampler.Field field
 	) {
-		this.tile = tile;
+		this(new TileLookup(tile, originX, originZ, zoom), heightmap, field);
+	}
+
+	PreviewTileClimateSampler(TileLookup tileLookup, Heightmap heightmap, CellSampler.Field field) {
+		this.tileLookup = tileLookup;
 		this.heightmap = heightmap;
-		this.translateX = originX;
-		this.translateZ = originZ;
-		this.zoom = zoom;
 		this.field = field;
 	}
 
 	@Override
 	public double compute(FunctionContext context) {
-		int x = clamp(Math.round((context.blockX() - this.translateX) / this.zoom), 0, this.tile.getBlockSize().size() - 1);
-		int z = clamp(Math.round((context.blockZ() - this.translateZ) / this.zoom), 0, this.tile.getBlockSize().size() - 1);
-		Cell cell = this.tile.lookup(x, z);
-		return this.field.read(cell, this.heightmap);
+		return this.field.read(this.tileLookup.lookup(context), this.heightmap);
 	}
 
 	@Override
@@ -49,7 +44,43 @@ final class PreviewTileClimateSampler implements MarkerFunction.Mapped {
 		return 1.0D;
 	}
 
-	private static int clamp(int value, int min, int max) {
-		return Math.max(min, Math.min(max, value));
+	static final class TileLookup {
+		private final Tile tile;
+		private final float translateX;
+		private final float translateZ;
+		private final float zoom;
+		private int lastX = Integer.MIN_VALUE;
+		private int lastZ = Integer.MIN_VALUE;
+		private Cell lastCell;
+
+		TileLookup(Tile tile, float originX, float originZ, int zoom) {
+			if (zoom <= 0) {
+				throw new IllegalArgumentException("Preview zoom must be positive");
+			}
+			this.tile = tile;
+			this.translateX = originX;
+			this.translateZ = originZ;
+			this.zoom = zoom;
+		}
+
+		Cell lookup(FunctionContext context) {
+			return this.lookupBlock(context.blockX(), context.blockZ());
+		}
+
+		Cell lookupBlock(int blockX, int blockZ) {
+			int size = this.tile.getBlockSize().size();
+			int x = clamp(Math.round((blockX - this.translateX) / this.zoom), 0, size - 1);
+			int z = clamp(Math.round((blockZ - this.translateZ) / this.zoom), 0, size - 1);
+			if (this.lastCell == null || x != this.lastX || z != this.lastZ) {
+				this.lastCell = this.tile.lookup(x, z);
+				this.lastX = x;
+				this.lastZ = z;
+			}
+			return this.lastCell;
+		}
+
+		private static int clamp(int value, int min, int max) {
+			return Math.max(min, Math.min(max, value));
+		}
 	}
 }

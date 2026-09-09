@@ -2,6 +2,7 @@ package raccoonman.reterraforged.world.worldgen.biome;
 
 import net.minecraft.world.level.biome.Climate;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
+import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 
 public final class UndergroundBiomeClimatePolicy {
 	private static final long SURFACE_DEPTH = Climate.quantizeCoord(0.0F);
@@ -14,12 +15,18 @@ public final class UndergroundBiomeClimatePolicy {
 		Climate.TargetPoint target,
 		int quartX,
 		int quartY,
-		int quartZ
+		int quartZ,
+		ClimateQueryPolicy policy,
+		Preset preset,
+		long seed,
+		GeneratorContext surfaceContext
 	) {
 		if (!((Object) sampler instanceof RTFClimateSampler rtfSampler)) {
 			return target;
 		}
-		Preset preset = rtfSampler.getUndergroundBiomeBandingPreset();
+		if (!policy.appliesUndergroundBanding()) {
+			return target;
+		}
 		if (preset == null) {
 			return target;
 		}
@@ -28,11 +35,12 @@ public final class UndergroundBiomeClimatePolicy {
 			target,
 			quartX,
 			quartY,
-			quartZ
+			quartZ,
+			surfaceContext
 		);
 		if (UndergroundBiomeBanding.allowsCaveBiome(
 			preset,
-			rtfSampler.getUndergroundBiomeBandingSeed(),
+			seed,
 			target,
 			quartX,
 			quartY,

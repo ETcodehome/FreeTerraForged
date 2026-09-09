@@ -29,6 +29,7 @@ import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainType;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
+import raccoonman.reterraforged.world.worldgen.densityfunction.tile.TileCache;
 import raccoonman.reterraforged.world.worldgen.feature.DecorateSnowFeature.Config;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
@@ -57,13 +58,14 @@ public class DecorateSnowFeature extends Feature<Config> {
 			int chunkX = chunkPos.x;
 			int chunkZ = chunkPos.z;
 			ChunkAccess chunk = level.getChunk(chunkX, chunkZ);
-			Tile.Chunk tileChunk = generatorContext.cache.provideAtChunk(chunkX, chunkZ).getChunkReader(chunkX, chunkZ);
-			raccoonman.reterraforged.world.worldgen.cell.heightmap.Heightmap heightmap = generatorContext.generator.getHeightmap();
-			Levels levels = heightmap.levels();
-			Noise rand = Noises.white(heightmap.climate().randomSeed(), 1);
-			BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
-			Config config = placeContext.config();
-			ErodeFeature.Config erodeConfig = config.erodeConfig();
+			try (TileCache.Lease lease = generatorContext.cache.acquireAtChunk(chunkX, chunkZ)) {
+				Tile.Chunk tileChunk = lease.tile().getChunkReader(chunkX, chunkZ);
+				raccoonman.reterraforged.world.worldgen.cell.heightmap.Heightmap heightmap = generatorContext.generator.getHeightmap();
+				Levels levels = heightmap.levels();
+				Noise rand = Noises.white(heightmap.climate().randomSeed(), 1);
+				BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+				Config config = placeContext.config();
+				ErodeFeature.Config erodeConfig = config.erodeConfig();
 			
 			for(int x = 0; x < 16; x++) {
 				for(int z = 0; z < 16; z++) {
@@ -115,7 +117,8 @@ public class DecorateSnowFeature extends Feature<Config> {
 			        }
 				}
 			}
-	        return true;
+				return true;
+			}
 		} else {
 			// Gracefully abort generation if the active dimension context is missing or non-ReTerraForged
 			return false;

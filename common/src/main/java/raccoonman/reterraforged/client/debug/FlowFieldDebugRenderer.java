@@ -64,6 +64,7 @@ public class FlowFieldDebugRenderer {
                 int localX = worldX & 15;
                 int localZ = worldZ & 15;
                 ChunkFlowField flowField = holder.reterraforged$getFlowField();
+				if (flowField == null) continue;
                 if (!flowField.hasFlow(localX, localZ)) continue;
 
                 // Calculate rendering positions
@@ -115,6 +116,7 @@ public class FlowFieldDebugRenderer {
 
                 // Guard against this specific position having no flow
                 ChunkFlowField flowField = holder.reterraforged$getFlowField();
+				if (flowField == null) continue;
                 int localX = worldX & 15;
                 int localZ = worldZ & 15;
                 if (!flowField.hasFlow(localX, localZ)) continue;

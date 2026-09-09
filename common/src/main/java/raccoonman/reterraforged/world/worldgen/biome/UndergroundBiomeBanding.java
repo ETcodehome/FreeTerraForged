@@ -59,6 +59,17 @@ public final class UndergroundBiomeBanding {
 
 	public static <T> Layout<T> apply(
 		Preset preset,
+		Climate.ParameterList<T> source,
+		long seed
+	) {
+		return apply(
+			preset, source, source.values(), seed,
+			(point, value) -> classify(point, false)
+		);
+	}
+
+	public static <T> Layout<T> apply(
+		Preset preset,
 		List<Pair<Climate.ParameterPoint, T>> entries,
 		BiFunction<Climate.ParameterPoint, T, CandidateRole> classifier
 	) {
@@ -81,7 +92,23 @@ public final class UndergroundBiomeBanding {
 		long seed,
 		BiFunction<Climate.ParameterPoint, T, CandidateRole> classifier
 	) {
-		Climate.ParameterList<T> original = new Climate.ParameterList<>(sourceEntries);
+		return apply(
+			preset,
+			new Climate.ParameterList<>(sourceEntries),
+			candidateEntries,
+			seed,
+			classifier
+		);
+	}
+
+	private static <T> Layout<T> apply(
+		Preset preset,
+		Climate.ParameterList<T> original,
+		List<Pair<Climate.ParameterPoint, T>> candidateEntries,
+		long seed,
+		BiFunction<Climate.ParameterPoint, T, CandidateRole> classifier
+	) {
+		List<Pair<Climate.ParameterPoint, T>> sourceEntries = original.values();
 		Map<T, Candidate<T>> candidates = new LinkedHashMap<>();
 		int unknownEntryCount = 0;
 		int classificationFailureCount = 0;

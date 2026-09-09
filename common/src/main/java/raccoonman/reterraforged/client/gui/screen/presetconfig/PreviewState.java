@@ -2,9 +2,12 @@ package raccoonman.reterraforged.client.gui.screen.presetconfig;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 import net.minecraft.network.chat.Component;
 import raccoonman.reterraforged.client.data.RTFTranslationKeys;
+import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings;
+import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
 
 /**
@@ -24,14 +27,15 @@ final class PreviewState {
     Tile tile;
     PreviewComputationCache.TileLease tileLease;
     BiomePreview.Sidecar biomes;
+    WorldSettings.Properties frameProperties;
+    Levels frameLevels;
     boolean generatedWithBiomePipeline;
-    BiomePreview.CacheKey cacheKey;
     int centerX, centerZ;
     int hoveredCoordX, hoveredCoordZ;
     String hoveredCoords = "";
 
     CompletableFuture<IPreviewHandler.FrameResult> pendingGeneration;
-    volatile IPreviewHandler.PreparedContext preparedContext;
+    final AtomicReference<IPreviewHandler.FrameResult> pendingFrame = new AtomicReference<>();
     volatile PreviewCancellation generationCancellation;
     volatile PreviewFailure previewFailure;
 
@@ -40,8 +44,8 @@ final class PreviewState {
     final AtomicLong rasterRequestVersion = new AtomicLong();
     CompletableFuture<?> pendingRasterization;
 
-    boolean isRunning;
+    volatile boolean isRunning;
     boolean isDirty;
-    boolean closed;
+    volatile boolean closed;
     long refreshRequestNanos;
 }

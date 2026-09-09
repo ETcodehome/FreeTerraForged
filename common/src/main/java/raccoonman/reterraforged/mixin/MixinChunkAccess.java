@@ -1,96 +1,114 @@
 package raccoonman.reterraforged.mixin;
 
-import java.util.OptionalInt;
-
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import net.minecraft.core.Holder;
-import net.minecraft.core.QuartPos;
-import net.minecraft.core.SectionPos;
-import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.LevelHeightAccessor;
-import net.minecraft.world.level.biome.Biome;
-import net.minecraft.world.level.biome.BiomeResolver;
-import net.minecraft.world.level.biome.Climate;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import org.jetbrains.annotations.Nullable;
 import net.minecraft.world.level.chunk.ChunkAccess;
-import net.minecraft.world.level.chunk.LevelChunkSection;
-import net.minecraft.world.level.chunk.PalettedContainer;
+import net.minecraft.world.level.levelgen.NoiseChunk;
 import raccoonman.reterraforged.world.worldgen.IFlowFieldHolder;
-import raccoonman.reterraforged.world.worldgen.RTFChunk;
 import raccoonman.reterraforged.world.worldgen.ChunkFlowField;
+import raccoonman.reterraforged.world.worldgen.NoiseChunkHolder;
+import raccoonman.reterraforged.world.worldgen.densityfunction.tile.NoiseChunkTileOwner;
 
 @Mixin(ChunkAccess.class)
-public abstract class MixinChunkAccess implements RTFChunk, LevelHeightAccessor, IFlowFieldHolder {
+public abstract class MixinChunkAccess implements IFlowFieldHolder, NoiseChunkHolder {
+	@Shadow @Nullable protected NoiseChunk noiseChunk;
 
 	@Unique
-	private final ChunkFlowField reterraforged$flowField = new ChunkFlowField();
+	@Nullable
+	private volatile ChunkFlowField reterraforged$flowField;
+	@Unique
+	private int reterraforged$tileStageDepth;
+	@Unique
+	private int reterraforged$attachedTileStageDepth;
 
 	@Override
 	public ChunkFlowField reterraforged$getFlowField() {
 		return this.reterraforged$flowField;
 	}
 
-	private OptionalInt maxHeight = OptionalInt.empty();
-
 	@Override
-	public void setMaxHeight(int maxHeight) {
-		this.maxHeight = OptionalInt.of(maxHeight);
-	}
-
-	@Override
-	public OptionalInt getMaxHeight() {
-		return this.maxHeight;
-	}
-	
-	@Inject(
-		method = "fillBiomesFromNoise",
-		at = @At("HEAD"),
-		cancellable = true
-	)
-	public void fillBiomesFromNoise(BiomeResolver biomeResolver, Climate.Sampler sampler, CallbackInfo callback) {
-		if(this.maxHeight.isEmpty()) {
-			return;
+	public ChunkFlowField reterraforged$getOrCreateFlowField() {
+		ChunkFlowField current = this.reterraforged$flowField;
+		if (current != null) {
+			return current;
 		}
-		
-		ChunkPos chunkPos = this.getPos();
-		int quartX = QuartPos.fromBlock(chunkPos.getMinBlockX());
-		int quartZ = QuartPos.fromBlock(chunkPos.getMinBlockZ());
-		LevelHeightAccessor levelHeightAccessor = this.getHeightAccessorForGeneration();
-		
-		int maxHeight = this.maxHeight.getAsInt();
-		int highestSectionY = SectionPos.blockToSectionCoord(maxHeight) + 1;
-		int maxSectionY = levelHeightAccessor.getMaxSection();
-
-		for (int sectionY = levelHeightAccessor.getMinSection(); sectionY < Math.min(highestSectionY + 1, maxSectionY); sectionY++) {
-			LevelChunkSection levelChunkSection = this.getSection(this.getSectionIndexFromSectionY(sectionY));
-			int quartY = QuartPos.fromSection(sectionY);
-			levelChunkSection.fillBiomesFromNoise(biomeResolver, sampler, quartX, quartY, quartZ);
-		}
-		
-		if(highestSectionY < maxSectionY) {
-			LevelChunkSection highestChunkSection = this.getSection(this.getSectionIndexFromSectionY(highestSectionY));
-			PalettedContainer<Holder<Biome>> highestBiomes = (PalettedContainer<Holder<Biome>>) highestChunkSection.getBiomes();
-			
-			for(int sectionY = highestSectionY; sectionY < maxSectionY; sectionY++) {
-				LevelChunkSection levelChunkSection = this.getSection(this.getSectionIndexFromSectionY(sectionY));
-				LevelChunkSectionAccessor accessor = (LevelChunkSectionAccessor) levelChunkSection;
-				accessor.setBiomes(highestBiomes.copy());
+		synchronized (this) {
+			current = this.reterraforged$flowField;
+			if (current == null) {
+				current = new ChunkFlowField();
+				this.reterraforged$flowField = current;
 			}
 		}
-		callback.cancel();
+		return current;
 	}
 
-	@Shadow
-	public abstract LevelHeightAccessor getHeightAccessorForGeneration();
+	@Override
+	public NoiseChunk reterraforged$getNoiseChunk() {
+		return this.noiseChunk;
+	}
 
-	@Shadow
-	public abstract ChunkPos getPos();
-	
-	@Shadow
-	public abstract LevelChunkSection getSection(int i);
+	@Override
+	public synchronized void reterraforged$beginNoiseChunkTileStage() {
+		this.reterraforged$tileStageDepth++;
+		try {
+			this.reterraforged$attachPendingTileStages();
+		} catch (RuntimeException | Error failure) {
+			this.reterraforged$tileStageDepth--;
+			throw failure;
+		}
+	}
+
+	@Override
+	public synchronized void reterraforged$endNoiseChunkTileStage() {
+		if (this.reterraforged$tileStageDepth <= 0) {
+			throw new IllegalStateException("NoiseChunk tile-stage ownership underflow");
+		}
+		this.reterraforged$tileStageDepth--;
+		if (this.reterraforged$attachedTileStageDepth > this.reterraforged$tileStageDepth) {
+			this.reterraforged$attachedTileStageDepth--;
+			if (this.noiseChunk instanceof NoiseChunkTileOwner owner) {
+				owner.reterraforged$endTileStage();
+			} else {
+				throw new IllegalStateException("Attached NoiseChunk does not expose tile ownership");
+			}
+		}
+	}
+
+	@Inject(method = "getOrCreateNoiseChunk", at = @At("RETURN"))
+	private synchronized void reterraforged$attachCreatedNoiseChunk(
+		java.util.function.Function<ChunkAccess, NoiseChunk> factory,
+		CallbackInfoReturnable<NoiseChunk> callback
+	) {
+		this.reterraforged$attachPendingTileStages();
+	}
+
+	@Unique
+	private void reterraforged$attachPendingTileStages() {
+		if (!(this.noiseChunk instanceof NoiseChunkTileOwner owner)) {
+			return;
+		}
+		int initialDepth = this.reterraforged$attachedTileStageDepth;
+		try {
+			while (this.reterraforged$attachedTileStageDepth < this.reterraforged$tileStageDepth) {
+				owner.reterraforged$beginTileStage();
+				this.reterraforged$attachedTileStageDepth++;
+			}
+		} catch (RuntimeException | Error failure) {
+			while (this.reterraforged$attachedTileStageDepth > initialDepth) {
+				this.reterraforged$attachedTileStageDepth--;
+				try {
+					owner.reterraforged$endTileStage();
+				} catch (RuntimeException | Error cleanupFailure) {
+					failure.addSuppressed(cleanupFailure);
+				}
+			}
+			throw failure;
+		}
+	}
+
 }

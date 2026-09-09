@@ -10,9 +10,10 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import raccoonman.reterraforged.data.worldgen.preset.settings.FlowSettings;
 import raccoonman.reterraforged.world.worldgen.ChunkFlowField;
 import raccoonman.reterraforged.world.worldgen.IFlowFieldHolder;
+import raccoonman.reterraforged.world.worldgen.FlowSettingsSnapshot;
+import raccoonman.reterraforged.world.worldgen.IFlowSettingsHolder;
 
 @Mixin(Boat.class)
 public abstract class MixinFloatyBoaty {
@@ -35,12 +36,8 @@ public abstract class MixinFloatyBoaty {
     private void applyRiverPhysics(CallbackInfo ci) {
 
         Boat boat = (Boat) (Object) this;
-        Level level = boat.level();
-
-        boolean allowFlowDynamics = FlowSettings.CurrentPresetState.get().enableBoatFlowDynamics();
-        if (!allowFlowDynamics) {
-            return;
-        }
+		Level level = boat.level();
+		FlowSettingsSnapshot flowSettings = ((IFlowSettingsHolder) level).reterraforged$getFlowSettings();
 
         // Apply physics whenever in liquid, independent of vanilla river biome boundaries
         if (this.status != Boat.Status.IN_AIR && this.status != Boat.Status.ON_LAND) {
@@ -48,7 +45,13 @@ public abstract class MixinFloatyBoaty {
             ChunkAccess chunk = level.getChunk(pos);
 
             if (chunk instanceof IFlowFieldHolder holder) {
-                ChunkFlowField flowField = holder.reterraforged$getFlowField();
+				if (!flowSettings.boatFlowDynamics()) {
+                    return;
+                }
+				ChunkFlowField flowField = holder.reterraforged$getFlowField();
+				if (flowField == null) {
+					return;
+				}
 
                 int localX = pos.getX() & 15;
                 int localZ = pos.getZ() & 15;
@@ -61,7 +64,7 @@ public abstract class MixinFloatyBoaty {
                     double motionZ = currentMotion.z;
 
                     // 1. Buoyancy / Waterfall Logic
-                    boolean allowGoingUpWaterfalls = FlowSettings.CurrentPresetState.get().enableNavigableWaterfalls();
+					boolean allowGoingUpWaterfalls = flowSettings.navigableWaterfalls();
                     if (allowGoingUpWaterfalls && (this.status == Boat.Status.UNDER_WATER || this.status == Boat.Status.UNDER_FLOWING_WATER)) {
                         motionY = (boat.getControllingPassenger() != null) ? 0.3 : 0.2;
                     }

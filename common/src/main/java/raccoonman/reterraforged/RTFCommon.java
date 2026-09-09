@@ -11,7 +11,6 @@ import raccoonman.reterraforged.registries.RTFRegistries;
 import raccoonman.reterraforged.world.worldgen.biome.modifier.BiomeModifiers;
 import raccoonman.reterraforged.world.worldgen.densityfunction.RTFDensityFunctions;
 import raccoonman.reterraforged.world.worldgen.feature.RTFFeatures;
-import raccoonman.reterraforged.world.worldgen.feature.ore.DynamicOreLifecycle;
 import raccoonman.reterraforged.world.worldgen.feature.chance.RTFChanceModifiers;
 import raccoonman.reterraforged.world.worldgen.feature.placement.RTFPlacementModifiers;
 import raccoonman.reterraforged.world.worldgen.feature.template.decorator.TemplateDecorators;
@@ -25,6 +24,8 @@ import raccoonman.reterraforged.world.worldgen.noise.module.Noises;
 import raccoonman.reterraforged.world.worldgen.structure.rule.StructureRule;
 import raccoonman.reterraforged.world.worldgen.structure.rule.StructureRules;
 import raccoonman.reterraforged.world.worldgen.surface.rule.RTFSurfaceRules;
+import raccoonman.reterraforged.world.worldgen.runtime.RTFChunkGenerators;
+import raccoonman.reterraforged.world.worldgen.biome.modifier.BiomeModifier;
 
 public class RTFCommon {
 	public static final String MOD_ID = "reterraforged";
@@ -32,6 +33,7 @@ public class RTFCommon {
 	public static final Logger LOGGER = LogManager.getLogger("ReTerraForged");
 
 	public static void bootstrap() {
+		RTFChunkGenerators.bootstrap();
 		RTFBuiltInRegistries.bootstrap();
 		TemplatePlacements.bootstrap();
 		TemplateDecorators.bootstrap();
@@ -49,6 +51,7 @@ public class RTFCommon {
 		StructureRules.bootstrap();
 
 		RegistryUtil.createDataRegistry(RTFRegistries.NOISE, Noise.DIRECT_CODEC, false);
+		RegistryUtil.createDataRegistry(RTFRegistries.BIOME_MODIFIER, BiomeModifier.DIRECT_CODEC, false);
 		RegistryUtil.createDataRegistry(RTFRegistries.PRESET, Preset.DIRECT_CODEC, false);
 		RegistryUtil.createDataRegistry(RTFRegistries.STRUCTURE_RULE, StructureRule.DIRECT_CODEC, false);
 	}

@@ -15,8 +15,10 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.levelgen.WorldOptions;
 import raccoonman.reterraforged.client.data.RTFTranslationKeys;
 import raccoonman.reterraforged.client.gui.screen.page.BisectedPage;
+import raccoonman.reterraforged.client.gui.screen.page.LinkedPageScreen.SaveResult;
 import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
 import raccoonman.reterraforged.client.gui.widget.Slider;
+import raccoonman.reterraforged.RTFCommon;
 
 public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, AbstractWidget, AbstractWidget> {
 	// Independent control components
@@ -49,6 +51,7 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	}
 
 	protected void regenerate() {
+		this.screen.previewRequestKeys().invalidatePreset();
 
 		if (this.preview3D != null) {
 			this.preview3D.regenerate();
@@ -284,35 +287,57 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 
 		if (this.preview3D != null) {
 			this.screen.removeWidgetFromScreen(this.preview3D);
-			try { this.preview3D.close(); } catch (Exception e) { e.printStackTrace(); }
-			this.preview3D = null;
 		}
 		if (this.preview2D != null) {
 			this.screen.removeWidgetFromScreen(this.preview2D);
-			try { this.preview2D.close(); } catch (Exception e) { e.printStackTrace(); }
-			this.preview2D = null;
 		}
+		this.closePreviews();
 	}
 
 	@Override
 	public void onCancel() {
 		super.onCancel();
-		try {
-			if (this.preview3D != null) this.preview3D.close();
-			if (this.preview2D != null) this.preview2D.close();
-		} catch (Exception e) { e.printStackTrace(); }
+		this.closePreviews();
+	}
+
+	private void closePreviews() {
+		Preview3D closing3D = this.preview3D;
+		Preview2D closing2D = this.preview2D;
 		this.preview3D = null;
 		this.preview2D = null;
+		Throwable failure = null;
+		try {
+			if (closing3D != null) closing3D.close();
+		} catch (RuntimeException | Error closeFailure) {
+			failure = closeFailure;
+		}
+		try {
+			if (closing2D != null) closing2D.close();
+		} catch (RuntimeException | Error closeFailure) {
+			if (failure == null) {
+				failure = closeFailure;
+			} else if (closeFailure instanceof Error && !(failure instanceof Error)) {
+				closeFailure.addSuppressed(failure);
+				failure = closeFailure;
+			} else {
+				failure.addSuppressed(closeFailure);
+			}
+		}
+		if (failure instanceof Error error) {
+			throw error;
+		}
+		if (failure != null) {
+			RTFCommon.LOGGER.error("Failed closing preset preview widgets", failure);
+		}
 	}
 
 	@Override
-	public void onSave() {
-		super.onSave();
+	public SaveResult onSave() {
 		try {
-			this.screen.applyPreset(this.preset);
 			this.preset.save();
+			return this.screen.applyPreset(this.preset);
 		} catch (IOException e) {
-			e.printStackTrace();
+			return this.screen.reportPresetApplyFailure(e);
 		}
 	}
 }

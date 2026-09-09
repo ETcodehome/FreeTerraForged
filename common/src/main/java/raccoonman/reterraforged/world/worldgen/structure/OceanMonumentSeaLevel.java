@@ -14,6 +14,7 @@ public final class OceanMonumentSeaLevel {
 	public static int configured(WorldGenLevel level) {
 		RandomState randomState = level.getLevel().getChunkSource().randomState();
 		if ((Object) randomState instanceof RTFRandomState rtfRandomState
+			&& rtfRandomState.isTerraForged()
 			&& rtfRandomState.generatorContext() != null) {
 			Preset preset = rtfRandomState.preset();
 			if (preset != null) {

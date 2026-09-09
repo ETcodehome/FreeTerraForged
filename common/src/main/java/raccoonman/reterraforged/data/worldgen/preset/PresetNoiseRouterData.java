@@ -23,7 +23,6 @@ import raccoonman.reterraforged.world.worldgen.biome.UndergroundBiomeBanding;
 import raccoonman.reterraforged.world.worldgen.densityfunction.CellSampler;
 import raccoonman.reterraforged.world.worldgen.densityfunction.RTFDensityFunctions;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
-import raccoonman.reterraforged.world.worldgen.terrablender.TBCompat;
 
 public class PresetNoiseRouterData {
 	public static final ResourceKey<DensityFunction> HEIGHT = createKey("height");
