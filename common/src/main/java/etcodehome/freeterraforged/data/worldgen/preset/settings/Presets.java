@@ -17,7 +17,7 @@ import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.Pr
 
 public class Presets {
 
-	public static Preset makeRTFDefault() {
+	public static Preset makeFTFDefault() {
 		return new Preset(
 			new WorldSettings(
 				new Continent(ContinentType.UPLIFT, DistanceFunction.EUCLIDEAN, 3000, 0.7F, 0.25F, 0.25F, 5, 0.26F, 4.33F),

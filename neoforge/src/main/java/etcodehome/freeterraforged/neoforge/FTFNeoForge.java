@@ -29,10 +29,10 @@ public class FTFNeoForge {
 		FTFCommon.bootstrap();
 		NeoForgeBiomePreviewIntegrations.bootstrap();
 
-		// Register RTF's biome modifier codec types into NeoForge's own serialiser
+		// Register FTF's biome modifier codec types into NeoForge's own serialiser
 		// registry so NeoForge can decode neoforge/biome_modifier/*.json at runtime.
-		// RTFBuiltInRegistries.BIOME_MODIFIER_TYPE (forge:biome_modifier_serializers)
-		// is RTF's internal dispatch registry used by BiomeModifier.DIRECT_CODEC for
+		// FTFBuiltInRegistries.BIOME_MODIFIER_TYPE (forge:biome_modifier_serializers)
+		// is FTF's internal dispatch registry used by BiomeModifier.DIRECT_CODEC for
 		// data-gen and Fabric; it is separate and both registries must be populated.
 		DeferredRegister<MapCodec<? extends BiomeModifier>> biomeModifierSerializers =
 				DeferredRegister.create(NeoForgeRegistries.Keys.BIOME_MODIFIER_SERIALIZERS, FTFCommon.MOD_ID);

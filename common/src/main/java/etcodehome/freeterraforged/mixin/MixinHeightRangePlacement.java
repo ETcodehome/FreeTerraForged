@@ -18,7 +18,7 @@ import etcodehome.freeterraforged.world.worldgen.feature.ore.DynamicOrePlacement
 class MixinHeightRangePlacement {
 
 	@Inject(method = "getPositions", at = @At("HEAD"), cancellable = true)
-	private void reterraforged$expandCanonicalTerrainRange(
+	private void freeterraforged$expandCanonicalTerrainRange(
 		PlacementContext context,
 		RandomSource random,
 		BlockPos origin,

@@ -13,12 +13,12 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import etcodehome.freeterraforged.world.worldgen.terrablender.TerraBlenderParameterList;
 
-/** Makes RTF banding the base candidate that Biolith replacements and sub-biomes compose over. */
+/** Makes FTF banding the base candidate that Biolith replacements and sub-biomes compose over. */
 @Pseudo
 @Mixin(targets = "com.terraformersmc.biolith.impl.compat.TerraBlenderCompatFabric", remap = false)
 public abstract class MixinBiolithTerraBlenderCompat {
 	@Inject(method = "getBiome", at = @At("RETURN"), cancellable = true, remap = false, require = 0)
-	private void reterraforged$composeBandingBeforeBiolith(
+	private void freeterraforged$composeBandingBeforeBiolith(
 		int x,
 		int y,
 		int z,
@@ -33,7 +33,7 @@ public abstract class MixinBiolithTerraBlenderCompat {
 
 		@SuppressWarnings("unchecked")
 		Holder<Biome> banded = ((TerraBlenderParameterList<Holder<Biome>>) terraBlenderParameters)
-			.reterraforged$applyUndergroundBanding(target, x, y, z, result.ultimate().value);
+			.freeterraforged$applyUndergroundBanding(target, x, y, z, result.ultimate().value);
 		if (Objects.equals(banded, result.ultimate().value)) {
 			return;
 		}

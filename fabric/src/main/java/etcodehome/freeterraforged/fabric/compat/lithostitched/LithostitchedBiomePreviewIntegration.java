@@ -24,7 +24,7 @@ public final class LithostitchedBiomePreviewIntegration implements BiomePreviewI
 
 	@Override
 	public String id() {
-		return "reterraforged:lithostitched";
+		return "freeterraforged:lithostitched";
 	}
 
 	@Override

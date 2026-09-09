@@ -10,5 +10,5 @@ import net.minecraft.world.level.levelgen.placement.HeightRangePlacement;
 public interface HeightRangePlacementAccessor {
 
 	@Accessor("height")
-	HeightProvider reterraforged$getHeightProvider();
+	HeightProvider freeterraforged$getHeightProvider();
 }

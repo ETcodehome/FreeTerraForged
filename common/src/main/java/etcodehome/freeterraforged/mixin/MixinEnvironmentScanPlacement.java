@@ -17,7 +17,7 @@ import net.minecraft.world.level.levelgen.placement.PlacementContext;
 class MixinEnvironmentScanPlacement {
 
 	@Inject(method = "getPositions", at = @At("RETURN"), cancellable = true)
-	private void reterraforged$rescueFailedSurfaceScan(
+	private void freeterraforged$rescueFailedSurfaceScan(
 		PlacementContext context,
 		RandomSource random,
 		BlockPos origin,

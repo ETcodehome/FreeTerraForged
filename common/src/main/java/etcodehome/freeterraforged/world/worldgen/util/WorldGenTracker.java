@@ -35,7 +35,7 @@ public final class WorldGenTracker {
 
                 LOGGER.info("""
                         =========================================================
-                         ReTerraForged Native World Gen Performance Report
+                         FreeTerraForged Native World Gen Performance Report
                          Total Chunks Generated   : {}
                          Total Thread Time Spent  : {} ms
                          Thread Time Per Chunk    : {} ms
@@ -56,6 +56,6 @@ public final class WorldGenTracker {
                         String.format("%.2f", idealChunksPerSecond),
                         String.format("%.1f", efficiency));
             }
-        }, "RTF-Profiler-Shutdown-Hook"));
+        }, "FTF-Profiler-Shutdown-Hook"));
     }
 }

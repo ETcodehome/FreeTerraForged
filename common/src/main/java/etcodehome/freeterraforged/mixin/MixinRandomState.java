@@ -36,14 +36,14 @@ import net.minecraft.world.level.levelgen.synth.NormalNoise;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 
 @Mixin(RandomState.class)
-@Implements(@Interface(iface = FTFRandomState.class, prefix = "reterraforged$RTFRandomState$"))
+@Implements(@Interface(iface = FTFRandomState.class, prefix = "freeterraforged$FTFRandomState$"))
 class MixinRandomState {
 
 	private DensityFunction.Visitor densityFunctionWrapper;
 	private long seed;
 	private boolean hasContext;
 	@Shadow	@Final private Climate.Sampler sampler;
-	@Unique private boolean reterraforged$isRTFDimension = false; // Tracks if the BASE router belongs to RTF
+	@Unique private boolean freeterraforged$isFTFDimension = false; // Tracks if the BASE router belongs to FTF
 	@Nullable private GeneratorContext generatorContext;
 	@Nullable private Preset preset;
 
@@ -91,15 +91,15 @@ class MixinRandomState {
 			}
 		};
 
-		// Map the base router first. If the current dimension naturally utilizes RTF, hasContext flips to true here.
+		// Map the base router first. If the current dimension naturally utilizes FTF, hasContext flips to true here.
 		NoiseRouter mappedRouter = router.mapAll(this.densityFunctionWrapper);
 		if (this.hasContext && isVanillaOverworld) {
-			this.reterraforged$isRTFDimension = true;
+			this.freeterraforged$isFTFDimension = true;
 		}
 		return mappedRouter;
 	}
 
-	public void reterraforged$RTFRandomState$initialize(RegistryAccess registries) {
+	public void freeterraforged$FTFRandomState$initialize(RegistryAccess registries) {
 		RegistryLookup<Preset> presets = registries.lookupOrThrow(FTFRegistries.PRESET);
 
 		// Always assign the global preset. UI previews and legacy features in other dimensions
@@ -109,8 +109,8 @@ class MixinRandomState {
 		});
 
 		// Only compile global density tags and build a heavy Overworld GeneratorContext
-		// if the base router mapping verified that this instance is actually an RTF worldgen dimension.
-		if (this.reterraforged$isRTFDimension) {
+		// if the base router mapping verified that this instance is actually an FTF worldgen dimension.
+		if (this.freeterraforged$isFTFDimension) {
 			if (this.preset != null && (Object) this.sampler instanceof FTFClimateSampler ftfClimateSampler) {
 				ftfClimateSampler.setUndergroundBiomeBandingPreset(this.preset, this.seed);
 			}
@@ -138,23 +138,23 @@ class MixinRandomState {
 	}
 
 	@Nullable
-	public Preset reterraforged$RTFRandomState$preset() {
+	public Preset freeterraforged$FTFRandomState$preset() {
 		return this.preset;
 	}
 
 	@Nullable
-	public GeneratorContext reterraforged$RTFRandomState$generatorContext() {
+	public GeneratorContext freeterraforged$FTFRandomState$generatorContext() {
 		return this.generatorContext;
 	}
 
-	public Noise reterraforged$RTFRandomState$seed(Noise noise) {
+	public Noise freeterraforged$FTFRandomState$seed(Noise noise) {
 		return Noises.shiftSeed(noise, (int) this.seed);
 	}
 
-	public long reterraforged$RTFRandomState$seed() { return this.seed;	}
+	public long freeterraforged$FTFRandomState$seed() { return this.seed;	}
 
 	@Nullable
-	public DensityFunction reterraforged$RTFRandomState$wrap(DensityFunction function) {
+	public DensityFunction freeterraforged$FTFRandomState$wrap(DensityFunction function) {
 		return this.densityFunctionWrapper != null ? function.mapAll(this.densityFunctionWrapper) : function;
 	}
 }

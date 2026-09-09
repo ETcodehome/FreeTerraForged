@@ -19,7 +19,7 @@ import terrablender.api.RegionType;
 import terrablender.api.Regions;
 
 @Mixin(Climate.Sampler.class)
-@Implements(@Interface(iface = TBClimateSampler.class, prefix = "reterraforged$TBClimateSampler$"))
+@Implements(@Interface(iface = TBClimateSampler.class, prefix = "freeterraforged$TBClimateSampler$"))
 class MixinClimateSampler {
 	@Nullable
 	private DensityFunction uniqueness;
@@ -35,13 +35,13 @@ class MixinClimateSampler {
 		}
 	}
 	
-	public void reterraforged$TBClimateSampler$setUniqueness(DensityFunction uniqueness) {
+	public void freeterraforged$TBClimateSampler$setUniqueness(DensityFunction uniqueness) {
 		this.uniqueness = TerraBlenderRegionSelector.needsUniqueness(Regions.getCount(RegionType.OVERWORLD))
 			? uniqueness
 			: null;
 	}
 	
-	public DensityFunction reterraforged$TBClimateSampler$getUniqueness() {
+	public DensityFunction freeterraforged$TBClimateSampler$getUniqueness() {
 		return this.uniqueness;
 	}
 }

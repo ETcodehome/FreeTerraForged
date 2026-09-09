@@ -15,7 +15,7 @@ import java.util.List;
 public final class RegistryUtil {
 
 //	public static <T> void register(Registry<T> registry, String name, T value) {
-//		getWritable(registry).register(RTFRegistries.createKey(registry.key(), name), value, RegistrationInfo.BUILT_IN);
+//		getWritable(registry).register(FTFRegistries.createKey(registry.key(), name), value, RegistrationInfo.BUILT_IN);
 //	}
 //
 //	@ExpectPlatform

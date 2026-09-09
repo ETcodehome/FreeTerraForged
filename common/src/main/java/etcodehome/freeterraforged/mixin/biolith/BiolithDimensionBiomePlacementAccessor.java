@@ -13,14 +13,14 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(targets = "com.terraformersmc.biolith.impl.biome.DimensionBiomePlacement", remap = false)
 public interface BiolithDimensionBiomePlacementAccessor {
 	@Accessor(value = "replacementNoise", remap = false)
-	OpenSimplexNoise2 reterraforged$getReplacementNoise();
+	OpenSimplexNoise2 freeterraforged$getReplacementNoise();
 
 	@Accessor(value = "seedlets", remap = false)
-	int[] reterraforged$getSeedlets();
+	int[] freeterraforged$getSeedlets();
 
 	@Accessor(value = "replacementRequests", remap = false)
-	HashMap<ResourceKey<Biome>, Object> reterraforged$getReplacementRequests();
+	HashMap<ResourceKey<Biome>, Object> freeterraforged$getReplacementRequests();
 
 	@Accessor(value = "subBiomeRequests", remap = false)
-	HashMap<ResourceKey<Biome>, Object> reterraforged$getSubBiomeRequests();
+	HashMap<ResourceKey<Biome>, Object> freeterraforged$getSubBiomeRequests();
 }

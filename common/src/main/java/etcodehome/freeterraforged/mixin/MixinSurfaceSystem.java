@@ -39,7 +39,7 @@ import net.minecraft.world.level.levelgen.WorldGenerationContext;
 import etcodehome.freeterraforged.FTFCommon;
 
 @Mixin(SurfaceSystem.class)
-@Implements(@Interface(iface = FTFSurfaceSystem.class, prefix = FTFCommon.MOD_ID + "$RTFSurfaceSystem$"))
+@Implements(@Interface(iface = FTFSurfaceSystem.class, prefix = FTFCommon.MOD_ID + "$FTFSurfaceSystem$"))
 class MixinSurfaceSystem {
 	private static final ResourceLocation GEOLOGY_RANDOM = FTFCommon.location("geology");
 	private RandomState randomState;
@@ -63,12 +63,12 @@ class MixinSurfaceSystem {
 		if ((Object) randomState instanceof FTFRandomState ftfRandomState) {
 			GeneratorContext genCtx = ftfRandomState.generatorContext();
 			if (genCtx != null) {
-				this.reterraforged$placeRiverWater(chunk, biomeManager, genCtx);
+				this.freeterraforged$placeRiverWater(chunk, biomeManager, genCtx);
 			}
 		}
 	}
 
-	public List<List<StrataRule.Layer>> reterraforged$RTFSurfaceSystem$getOrCreateStrata(ResourceLocation name, Function<RandomSource, List<List<StrataRule.Layer>>> strata) {
+	public List<List<StrataRule.Layer>> freeterraforged$FTFSurfaceSystem$getOrCreateStrata(ResourceLocation name, Function<RandomSource, List<List<StrataRule.Layer>>> strata) {
 		return this.strata.computeIfAbsent(name, (k) -> {
 			PositionalRandomFactory factory = this.randomState.getOrCreateRandomFactory(GEOLOGY_RANDOM);
 			return strata.apply(factory.fromHashOf(k));
@@ -76,7 +76,7 @@ class MixinSurfaceSystem {
 	}
 
 	@Unique
-	private void reterraforged$placeRiverWater(ChunkAccess chunk, BiomeManager biomeManager, GeneratorContext genCtx) {
+	private void freeterraforged$placeRiverWater(ChunkAccess chunk, BiomeManager biomeManager, GeneratorContext genCtx) {
 		var chunkPos = chunk.getPos();
 		var tile = genCtx.cache.provideAtChunk(chunkPos.x, chunkPos.z);
 		var reader = tile.getChunkReader(chunkPos.x, chunkPos.z);

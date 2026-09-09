@@ -46,37 +46,37 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 	private List<Pair<Climate.ParameterPoint, T>> values;
 
 	@Unique
-	private Preset reterraforged$bandingPreset;
+	private Preset freeterraforged$bandingPreset;
 	@Unique
-	private Preset reterraforged$previewPreset;
+	private Preset freeterraforged$previewPreset;
 	@Unique
-	private long reterraforged$previewSeed;
+	private long freeterraforged$previewSeed;
 	@Unique
-	private long reterraforged$bandingSeed;
+	private long freeterraforged$bandingSeed;
 	@Unique
-	private List<Pair<Climate.ParameterPoint, T>> reterraforged$baseEntries;
+	private List<Pair<Climate.ParameterPoint, T>> freeterraforged$baseEntries;
 	@Unique
-	private List<List<Pair<Climate.ParameterPoint, T>>> reterraforged$pendingRegionalEntries;
+	private List<List<Pair<Climate.ParameterPoint, T>>> freeterraforged$pendingRegionalEntries;
 	@Unique
-	private List<List<Pair<Climate.ParameterPoint, T>>> reterraforged$regionalEntries;
+	private List<List<Pair<Climate.ParameterPoint, T>>> freeterraforged$regionalEntries;
 	@Unique
-	private volatile List<Pair<Climate.ParameterPoint, T>> reterraforged$composedValuesReference;
+	private volatile List<Pair<Climate.ParameterPoint, T>> freeterraforged$composedValuesReference;
 	@Unique
-	private volatile ClimateParameterListComposition.Snapshot<T> reterraforged$compositionSnapshot;
+	private volatile ClimateParameterListComposition.Snapshot<T> freeterraforged$compositionSnapshot;
 	@Unique
-	private volatile List<Climate.ParameterList<T>> reterraforged$regionalSurfaceTrees;
+	private volatile List<Climate.ParameterList<T>> freeterraforged$regionalSurfaceTrees;
 	@Unique
-	private volatile List<UndergroundBiomeBanding.Layout<T>> reterraforged$regionalBanding;
+	private volatile List<UndergroundBiomeBanding.Layout<T>> freeterraforged$regionalBanding;
 	@Unique
-	private volatile List<T> reterraforged$shallowCandidateValues;
+	private volatile List<T> freeterraforged$shallowCandidateValues;
 	@Unique
-	private volatile List<T> reterraforged$deepCandidateValues;
+	private volatile List<T> freeterraforged$deepCandidateValues;
 	@Unique
-	private volatile int reterraforged$replacedCaveSlotCount;
+	private volatile int freeterraforged$replacedCaveSlotCount;
 	@Unique
-	private volatile String reterraforged$compositionFallbackReason;
+	private volatile String freeterraforged$compositionFallbackReason;
 	@Unique
-	private boolean reterraforged$bandingInitialized;
+	private boolean freeterraforged$bandingInitialized;
 
 	@Inject(
 		at = @At("HEAD"),
@@ -85,49 +85,49 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 	)
 	public void initializeForTerraBlender(RegistryAccess registryAccess, RegionType regionType, long seed, CallbackInfo callback) {
 		this.maxIndex = Regions.getCount(regionType) - 1;
-		if (this.reterraforged$bandingInitialized) {
+		if (this.freeterraforged$bandingInitialized) {
 			return;
 		}
-		if (this.reterraforged$pendingRegionalEntries == null) {
-			this.reterraforged$pendingRegionalEntries = new ArrayList<>();
+		if (this.freeterraforged$pendingRegionalEntries == null) {
+			this.freeterraforged$pendingRegionalEntries = new ArrayList<>();
 		}
-		if (this.reterraforged$regionalEntries == null) {
-			this.reterraforged$regionalEntries = new ArrayList<>();
+		if (this.freeterraforged$regionalEntries == null) {
+			this.freeterraforged$regionalEntries = new ArrayList<>();
 		}
-		this.reterraforged$bandingPreset = this.reterraforged$previewPreset;
-		this.reterraforged$bandingSeed = this.reterraforged$previewPreset == null ? seed : this.reterraforged$previewSeed;
-		this.reterraforged$baseEntries = List.copyOf(this.values);
-		this.reterraforged$pendingRegionalEntries.clear();
-		this.reterraforged$regionalEntries.clear();
-		this.reterraforged$composedValuesReference = null;
-		this.reterraforged$compositionSnapshot = null;
-		this.reterraforged$regionalSurfaceTrees = List.of();
-		this.reterraforged$regionalBanding = List.of();
-		this.reterraforged$shallowCandidateValues = List.of();
-		this.reterraforged$deepCandidateValues = List.of();
-		this.reterraforged$replacedCaveSlotCount = 0;
-		this.reterraforged$compositionFallbackReason = null;
-		if (this.reterraforged$bandingPreset == null && regionType == RegionType.OVERWORLD) {
+		this.freeterraforged$bandingPreset = this.freeterraforged$previewPreset;
+		this.freeterraforged$bandingSeed = this.freeterraforged$previewPreset == null ? seed : this.freeterraforged$previewSeed;
+		this.freeterraforged$baseEntries = List.copyOf(this.values);
+		this.freeterraforged$pendingRegionalEntries.clear();
+		this.freeterraforged$regionalEntries.clear();
+		this.freeterraforged$composedValuesReference = null;
+		this.freeterraforged$compositionSnapshot = null;
+		this.freeterraforged$regionalSurfaceTrees = List.of();
+		this.freeterraforged$regionalBanding = List.of();
+		this.freeterraforged$shallowCandidateValues = List.of();
+		this.freeterraforged$deepCandidateValues = List.of();
+		this.freeterraforged$replacedCaveSlotCount = 0;
+		this.freeterraforged$compositionFallbackReason = null;
+		if (this.freeterraforged$bandingPreset == null && regionType == RegionType.OVERWORLD) {
 			registryAccess.lookup(FTFRegistries.PRESET)
 				.flatMap(registry -> registry.get(Preset.KEY))
-				.ifPresent(holder -> this.reterraforged$bandingPreset = holder.value());
+				.ifPresent(holder -> this.freeterraforged$bandingPreset = holder.value());
 		}
 //
-//    	registryAccess.lookup(RTFRegistries.PRESET).flatMap((registry) -> {
+//    	registryAccess.lookup(FTFRegistries.PRESET).flatMap((registry) -> {
 //    		return registry.get(Preset.KEY);
 //    	}).ifPresent((holder) -> {
 //    		Preset preset = holder.value();
 //        	TBCompat.setSurfaceRules(preset, (defaultRules) -> {
-//        		return RTFSurfaceRuleData.overworld(preset, registryAccess.lookupOrThrow(Registries.DENSITY_FUNCTION), registryAccess.lookupOrThrow(RTFRegistries.NOISE), defaultRules);
+//        		return FTFSurfaceRuleData.overworld(preset, registryAccess.lookupOrThrow(Registries.DENSITY_FUNCTION), registryAccess.lookupOrThrow(FTFRegistries.NOISE), defaultRules);
 //            });
 //    	});
 	}
 
 	@Override
-	public void reterraforged$preparePreview(Preset preset, long seed) {
-		if (!this.reterraforged$bandingInitialized) {
-			this.reterraforged$previewPreset = preset;
-			this.reterraforged$previewSeed = seed;
+	public void freeterraforged$preparePreview(Preset preset, long seed) {
+		if (!this.freeterraforged$bandingInitialized) {
+			this.freeterraforged$previewPreset = preset;
+			this.freeterraforged$previewSeed = seed;
 		}
 	}
 
@@ -140,12 +140,12 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 			index = 0,
 			require = 1
 	)
-	private List<Pair<Climate.ParameterPoint, T>> reterraforged$captureRegionalEntries(
+	private List<Pair<Climate.ParameterPoint, T>> freeterraforged$captureRegionalEntries(
 			List<Pair<Climate.ParameterPoint, T>> entries
 	) {
-		List<Pair<Climate.ParameterPoint, T>> deduplicated = reterraforged$deduplicateEntries(entries);
-		if (this.reterraforged$bandingPreset != null) {
-			this.reterraforged$pendingRegionalEntries.add(deduplicated);
+		List<Pair<Climate.ParameterPoint, T>> deduplicated = freeterraforged$deduplicateEntries(entries);
+		if (this.freeterraforged$bandingPreset != null) {
+			this.freeterraforged$pendingRegionalEntries.add(deduplicated);
 		}
 		return deduplicated;
 	}
@@ -155,44 +155,44 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 		at = @At("RETURN"),
 		require = 1
 	)
-	private void reterraforged$indexRegionalEntries(
+	private void freeterraforged$indexRegionalEntries(
 		RegistryAccess registryAccess,
 		RegionType regionType,
 		long seed,
 		CallbackInfo callback
 	) {
-		if (this.reterraforged$bandingInitialized) {
+		if (this.freeterraforged$bandingInitialized) {
 			return;
 		}
-		if (this.reterraforged$bandingPreset == null) {
-			this.reterraforged$compositionFallbackReason = "missing_overworld_preset";
-			this.reterraforged$bandingInitialized = true;
+		if (this.freeterraforged$bandingPreset == null) {
+			this.freeterraforged$compositionFallbackReason = "missing_overworld_preset";
+			this.freeterraforged$bandingInitialized = true;
 			return;
 		}
 
 		try {
 			int treeCount = this.getTreeCount();
-			int capturedCount = this.reterraforged$pendingRegionalEntries.size();
+			int capturedCount = this.freeterraforged$pendingRegionalEntries.size();
 			if (capturedCount != treeCount) {
-				this.reterraforged$regionalEntries.clear();
-				this.reterraforged$compositionFallbackReason = "capture_count_mismatch";
+				this.freeterraforged$regionalEntries.clear();
+				this.freeterraforged$compositionFallbackReason = "capture_count_mismatch";
 				FTFCommon.LOGGER.error(
 					"TerraBlender region tree count ({}) does not match captured regional entry sets ({}); underground banding disabled",
 					treeCount, capturedCount
 				);
 			} else {
-				this.reterraforged$regionalEntries.addAll(this.reterraforged$pendingRegionalEntries);
+				this.freeterraforged$regionalEntries.addAll(this.freeterraforged$pendingRegionalEntries);
 			}
 		} catch (RuntimeException exception) {
-			this.reterraforged$regionalEntries.clear();
-			this.reterraforged$compositionFallbackReason = "capture_exception";
+			this.freeterraforged$regionalEntries.clear();
+			this.freeterraforged$compositionFallbackReason = "capture_exception";
 			FTFCommon.LOGGER.error(
 				"Failed to capture TerraBlender biome entries; underground banding disabled",
 				exception
 			);
 		} finally {
-			this.reterraforged$pendingRegionalEntries.clear();
-			this.reterraforged$bandingInitialized = true;
+			this.freeterraforged$pendingRegionalEntries.clear();
+			this.freeterraforged$bandingInitialized = true;
 		}
 	}
 
@@ -202,27 +202,27 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 		cancellable = true,
 		require = 1
 	)
-	private void reterraforged$selectComposedBiome(
+	private void freeterraforged$selectComposedBiome(
 		Climate.TargetPoint targetPoint,
 		int x,
 		int y,
 		int z,
 		CallbackInfoReturnable<T> callback
 	) {
-		T banded = this.reterraforged$selectBanded(targetPoint, x, y, z, null, false);
+		T banded = this.freeterraforged$selectBanded(targetPoint, x, y, z, null, false);
 		if (banded != null) {
 			callback.setReturnValue(banded);
 		}
 	}
 
 	@Override
-	public T reterraforged$applyUndergroundBanding(Climate.TargetPoint targetPoint, int x, int y, int z, T selected) {
-		T banded = this.reterraforged$selectBanded(targetPoint, x, y, z, selected, true);
+	public T freeterraforged$applyUndergroundBanding(Climate.TargetPoint targetPoint, int x, int y, int z, T selected) {
+		T banded = this.freeterraforged$selectBanded(targetPoint, x, y, z, selected, true);
 		return banded == null ? selected : banded;
 	}
 
 	@Override
-	public T reterraforged$applyUndergroundSurfaceProtection(
+	public T freeterraforged$applyUndergroundSurfaceProtection(
 		Climate.TargetPoint targetPoint,
 		int x,
 		int y,
@@ -231,18 +231,18 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 		float surfaceCoverageFactor
 	) {
 		if (surfaceCoverageFactor >= 1.0F
-			|| this.reterraforged$bandingPreset == null
-			|| !this.reterraforged$ensureComposedTrees()) {
+			|| this.freeterraforged$bandingPreset == null
+			|| !this.freeterraforged$ensureComposedTrees()) {
 			return selected;
 		}
 
 		int treeIndex;
 		try {
-			treeIndex = this.reterraforged$getUniqueness(targetPoint, x, y, z);
+			treeIndex = this.freeterraforged$getUniqueness(targetPoint, x, y, z);
 		} catch (RuntimeException exception) {
 			return selected;
 		}
-		List<UndergroundBiomeBanding.Layout<T>> layouts = this.reterraforged$regionalBanding;
+		List<UndergroundBiomeBanding.Layout<T>> layouts = this.freeterraforged$regionalBanding;
 		if (treeIndex < 0 || treeIndex >= layouts.size()) {
 			return selected;
 		}
@@ -257,7 +257,7 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 	}
 
 	@Unique
-	private T reterraforged$selectBanded(
+	private T freeterraforged$selectBanded(
 		Climate.TargetPoint targetPoint,
 		int x,
 		int y,
@@ -265,18 +265,18 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 		T requiredOriginal,
 		boolean requireOriginalMatch
 	) {
-		if (this.reterraforged$bandingPreset == null || !this.reterraforged$ensureComposedTrees()) {
+		if (this.freeterraforged$bandingPreset == null || !this.freeterraforged$ensureComposedTrees()) {
 			return null;
 		}
 		int treeIndex;
 		try {
-			treeIndex = this.reterraforged$getUniqueness(targetPoint, x, y, z);
+			treeIndex = this.freeterraforged$getUniqueness(targetPoint, x, y, z);
 		} catch (RuntimeException exception) {
 			return null;
 		}
-		ClimateParameterListComposition.Snapshot<T> snapshot = this.reterraforged$compositionSnapshot;
-		List<Climate.ParameterList<T>> surfaceTrees = this.reterraforged$regionalSurfaceTrees;
-		List<UndergroundBiomeBanding.Layout<T>> bandingTrees = this.reterraforged$regionalBanding;
+		ClimateParameterListComposition.Snapshot<T> snapshot = this.freeterraforged$compositionSnapshot;
+		List<Climate.ParameterList<T>> surfaceTrees = this.freeterraforged$regionalSurfaceTrees;
+		List<UndergroundBiomeBanding.Layout<T>> bandingTrees = this.freeterraforged$regionalBanding;
 		if (snapshot == null || !snapshot.usableForRegion(treeIndex)
 			|| treeIndex >= surfaceTrees.size() || treeIndex >= bandingTrees.size()) {
 			return null;
@@ -288,14 +288,14 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 			return null;
 		}
 		T originalValue = original.findValue(targetPoint);
-		if (reterraforged$isDeferredPlaceholder(originalValue)) {
+		if (freeterraforged$isDeferredPlaceholder(originalValue)) {
 			Climate.ParameterList<T> defaultTree = surfaceTrees.getFirst();
 			if (defaultTree == null) {
 				return null;
 			}
 			originalValue = defaultTree.findValue(targetPoint);
 		}
-		if (reterraforged$isDeferredPlaceholder(originalValue)
+		if (freeterraforged$isDeferredPlaceholder(originalValue)
 			|| (requireOriginalMatch && !Objects.equals(requiredOriginal, originalValue))) {
 			return null;
 		}
@@ -305,13 +305,13 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 		if (banding.appliesAt(targetPoint)) {
 			bandedValue = banding.findValue(targetPoint, x, y, z, surfaceCoverageFactor);
 		} else if ((surfaceCoverageFactor <= 0.0F
-			|| this.reterraforged$bandingPreset.climate().biomeShape.undergroundBiomeCoverage() <= 0.0F)
+			|| this.freeterraforged$bandingPreset.climate().biomeShape.undergroundBiomeCoverage() <= 0.0F)
 			&& banding.isCaveCandidate(originalValue)) {
 			bandedValue = backgroundValue;
 		} else {
 			bandedValue = originalValue;
 		}
-		if (reterraforged$isDeferredPlaceholder(bandedValue)) {
+		if (freeterraforged$isDeferredPlaceholder(bandedValue)) {
 			return null;
 		}
 		PreviewBiomeQueryContext.record(x, y, z, originalValue, bandedValue);
@@ -319,30 +319,30 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 	}
 
 	@Override
-	public TerraBlenderParameterList.SelectionDiagnostics<T> reterraforged$inspectSelection(
+	public TerraBlenderParameterList.SelectionDiagnostics<T> freeterraforged$inspectSelection(
 		Climate.TargetPoint targetPoint,
 		int x,
 		int y,
 		int z
 	) {
-		if (this.reterraforged$bandingPreset == null || !this.reterraforged$ensureComposedTrees()) {
+		if (this.freeterraforged$bandingPreset == null || !this.freeterraforged$ensureComposedTrees()) {
 			return new TerraBlenderParameterList.SelectionDiagnostics<>(
-				-1, null, null, this.reterraforged$fallbackReason("composition_unavailable")
+				-1, null, null, this.freeterraforged$fallbackReason("composition_unavailable")
 			);
 		}
 
 		int treeIndex;
 		try {
-			treeIndex = this.reterraforged$getUniqueness(targetPoint, x, y, z);
+			treeIndex = this.freeterraforged$getUniqueness(targetPoint, x, y, z);
 		} catch (RuntimeException exception) {
 			return new TerraBlenderParameterList.SelectionDiagnostics<>(-1, null, null, "region_selection_exception");
 		}
-		ClimateParameterListComposition.Snapshot<T> snapshot = this.reterraforged$compositionSnapshot;
+		ClimateParameterListComposition.Snapshot<T> snapshot = this.freeterraforged$compositionSnapshot;
 		if (snapshot == null || !snapshot.usableForRegion(treeIndex)) {
 			return new TerraBlenderParameterList.SelectionDiagnostics<>(treeIndex, null, null, "invalid_selected_region");
 		}
-		List<Climate.ParameterList<T>> surfaceTrees = this.reterraforged$regionalSurfaceTrees;
-		List<UndergroundBiomeBanding.Layout<T>> bandingTrees = this.reterraforged$regionalBanding;
+		List<Climate.ParameterList<T>> surfaceTrees = this.freeterraforged$regionalSurfaceTrees;
+		List<UndergroundBiomeBanding.Layout<T>> bandingTrees = this.freeterraforged$regionalBanding;
 		if (treeIndex >= surfaceTrees.size() || treeIndex >= bandingTrees.size()) {
 			return new TerraBlenderParameterList.SelectionDiagnostics<>(treeIndex, null, null, "missing_composed_index");
 		}
@@ -353,13 +353,13 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 		}
 
 		T originalValue = original.findValue(targetPoint);
-		if (reterraforged$isDeferredPlaceholder(originalValue)) {
+		if (freeterraforged$isDeferredPlaceholder(originalValue)) {
 			Climate.ParameterList<T> defaultTree = surfaceTrees.getFirst();
 			if (defaultTree == null) {
 				return new TerraBlenderParameterList.SelectionDiagnostics<>(treeIndex, null, null, "missing_default_index");
 			}
 			originalValue = defaultTree.findValue(targetPoint);
-			if (reterraforged$isDeferredPlaceholder(originalValue)) {
+			if (freeterraforged$isDeferredPlaceholder(originalValue)) {
 				return new TerraBlenderParameterList.SelectionDiagnostics<>(treeIndex, null, null, "deferred_surface_winner");
 			}
 		}
@@ -367,26 +367,26 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 		T bandedValue = banding.appliesAt(targetPoint)
 			? banding.findValue(targetPoint, x, y, z)
 			: originalValue;
-		if (reterraforged$isDeferredPlaceholder(bandedValue)) {
+		if (freeterraforged$isDeferredPlaceholder(bandedValue)) {
 			return new TerraBlenderParameterList.SelectionDiagnostics<>(treeIndex, originalValue, null, "deferred_banded_winner");
 		}
 		return new TerraBlenderParameterList.SelectionDiagnostics<>(treeIndex, originalValue, bandedValue, null);
 	}
 
 	@Override
-	public TerraBlenderParameterList.CompositionDiagnostics<T> reterraforged$getCompositionDiagnostics() {
-		if (this.reterraforged$bandingInitialized) {
-			this.reterraforged$ensureComposedTrees();
+	public TerraBlenderParameterList.CompositionDiagnostics<T> freeterraforged$getCompositionDiagnostics() {
+		if (this.freeterraforged$bandingInitialized) {
+			this.freeterraforged$ensureComposedTrees();
 		}
-		ClimateParameterListComposition.Snapshot<T> snapshot = this.reterraforged$compositionSnapshot;
+		ClimateParameterListComposition.Snapshot<T> snapshot = this.freeterraforged$compositionSnapshot;
 		if (snapshot == null) {
 			return new TerraBlenderParameterList.CompositionDiagnostics<>(
-				this.reterraforged$regionalEntries == null ? 0 : this.reterraforged$regionalEntries.size(),
-				this.reterraforged$regionalEntries == null
+				this.freeterraforged$regionalEntries == null ? 0 : this.freeterraforged$regionalEntries.size(),
+				this.freeterraforged$regionalEntries == null
 					? List.of()
-					: this.reterraforged$regionalEntries.stream().map(entries -> entries == null ? -1 : entries.size()).toList(),
+					: this.freeterraforged$regionalEntries.stream().map(entries -> entries == null ? -1 : entries.size()).toList(),
 				0, 0, 0, 0, 0, List.of(), 0, 0, 0, 0, List.of(), List.of(), 0, 0,
-				this.reterraforged$fallbackReason("composition_not_built")
+				this.freeterraforged$fallbackReason("composition_not_built")
 			);
 		}
 		return new TerraBlenderParameterList.CompositionDiagnostics<>(
@@ -399,75 +399,75 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 			snapshot.invalidEntryCount(),
 			snapshot.invalidRegions().stream().sorted().toList(),
 			snapshot.alternativePointCount(),
-			this.reterraforged$replacedCaveSlotCount,
-			this.reterraforged$shallowCandidateValues.size(),
-			this.reterraforged$deepCandidateValues.size(),
-			this.reterraforged$shallowCandidateValues,
-			this.reterraforged$deepCandidateValues,
+			this.freeterraforged$replacedCaveSlotCount,
+			this.freeterraforged$shallowCandidateValues.size(),
+			this.freeterraforged$deepCandidateValues.size(),
+			this.freeterraforged$shallowCandidateValues,
+			this.freeterraforged$deepCandidateValues,
 			0,
 			0,
-			this.reterraforged$compositionFallbackReason
+			this.freeterraforged$compositionFallbackReason
 		);
 	}
 
 	@Unique
-	private String reterraforged$fallbackReason(String defaultReason) {
-		return this.reterraforged$compositionFallbackReason == null
+	private String freeterraforged$fallbackReason(String defaultReason) {
+		return this.freeterraforged$compositionFallbackReason == null
 			? defaultReason
-			: this.reterraforged$compositionFallbackReason;
+			: this.freeterraforged$compositionFallbackReason;
 	}
 
 	@Inject(method = "getTree", at = @At("HEAD"), require = 1)
-	private void reterraforged$composeBeforeTreeLookup(int uniqueness, CallbackInfoReturnable<Climate.RTree<T>> callback) {
-		if (this.reterraforged$bandingInitialized) {
-			this.reterraforged$ensureComposedTrees();
+	private void freeterraforged$composeBeforeTreeLookup(int uniqueness, CallbackInfoReturnable<Climate.RTree<T>> callback) {
+		if (this.freeterraforged$bandingInitialized) {
+			this.freeterraforged$ensureComposedTrees();
 		}
 	}
 
 	@Inject(method = "getUniqueness", at = @At("HEAD"), cancellable = true, require = 1)
-	private void reterraforged$skipRedundantUniqueness(int x, int y, int z, CallbackInfoReturnable<Integer> callback) {
+	private void freeterraforged$skipRedundantUniqueness(int x, int y, int z, CallbackInfoReturnable<Integer> callback) {
 		if (this.maxIndex <= 0) {
 			callback.setReturnValue(0);
 		}
 	}
 
 	@Unique
-	private boolean reterraforged$ensureComposedTrees() {
+	private boolean freeterraforged$ensureComposedTrees() {
 		List<Pair<Climate.ParameterPoint, T>> currentValues = this.values;
-		if (this.reterraforged$composedValuesReference == currentValues) {
-			return this.reterraforged$compositionSnapshot != null
-				&& this.reterraforged$compositionSnapshot.usable()
-				&& !this.reterraforged$regionalSurfaceTrees.isEmpty()
-				&& !this.reterraforged$regionalBanding.isEmpty();
+		if (this.freeterraforged$composedValuesReference == currentValues) {
+			return this.freeterraforged$compositionSnapshot != null
+				&& this.freeterraforged$compositionSnapshot.usable()
+				&& !this.freeterraforged$regionalSurfaceTrees.isEmpty()
+				&& !this.freeterraforged$regionalBanding.isEmpty();
 		}
 
 		synchronized (this) {
 			currentValues = this.values;
-			if (this.reterraforged$composedValuesReference == currentValues) {
-				return this.reterraforged$compositionSnapshot != null
-					&& this.reterraforged$compositionSnapshot.usable()
-					&& !this.reterraforged$regionalSurfaceTrees.isEmpty()
-					&& !this.reterraforged$regionalBanding.isEmpty();
+			if (this.freeterraforged$composedValuesReference == currentValues) {
+				return this.freeterraforged$compositionSnapshot != null
+					&& this.freeterraforged$compositionSnapshot.usable()
+					&& !this.freeterraforged$regionalSurfaceTrees.isEmpty()
+					&& !this.freeterraforged$regionalBanding.isEmpty();
 			}
-			if (this.reterraforged$regionalEntries.isEmpty()) {
-				this.reterraforged$compositionFallbackReason = this.reterraforged$fallbackReason("no_captured_regions");
-				this.reterraforged$composedValuesReference = currentValues;
+			if (this.freeterraforged$regionalEntries.isEmpty()) {
+				this.freeterraforged$compositionFallbackReason = this.freeterraforged$fallbackReason("no_captured_regions");
+				this.freeterraforged$composedValuesReference = currentValues;
 				return false;
 			}
 
 			try {
 				ClimateParameterListComposition.Snapshot<T> snapshot = ClimateParameterListComposition.snapshot(
-					this.reterraforged$baseEntries,
+					this.freeterraforged$baseEntries,
 					currentValues,
-					this.reterraforged$regionalEntries,
-					MixinParameterList::reterraforged$isDeferredPlaceholder
+					this.freeterraforged$regionalEntries,
+					MixinParameterList::freeterraforged$isDeferredPlaceholder
 				);
 				if (!snapshot.usable()) {
-					this.reterraforged$compositionSnapshot = snapshot;
-					this.reterraforged$regionalSurfaceTrees = List.of();
-					this.reterraforged$regionalBanding = List.of();
-					this.reterraforged$compositionFallbackReason = snapshot.fallbackReason();
-					this.reterraforged$composedValuesReference = currentValues;
+					this.freeterraforged$compositionSnapshot = snapshot;
+					this.freeterraforged$regionalSurfaceTrees = List.of();
+					this.freeterraforged$regionalBanding = List.of();
+					this.freeterraforged$compositionFallbackReason = snapshot.fallbackReason();
+					this.freeterraforged$composedValuesReference = currentValues;
 					FTFCommon.LOGGER.error(
 						"TerraBlender composition unavailable ({}); preserving original biome selection",
 						snapshot.fallbackReason()
@@ -475,14 +475,14 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 					return false;
 				}
 
-				List<Climate.ParameterList<T>> surfaceTrees = new ArrayList<>(this.reterraforged$regionalEntries.size());
-				List<UndergroundBiomeBanding.Layout<T>> bandingTrees = new ArrayList<>(this.reterraforged$regionalEntries.size());
+				List<Climate.ParameterList<T>> surfaceTrees = new ArrayList<>(this.freeterraforged$regionalEntries.size());
+				List<UndergroundBiomeBanding.Layout<T>> bandingTrees = new ArrayList<>(this.freeterraforged$regionalEntries.size());
 				Set<T> shallowCandidates = new LinkedHashSet<>();
 				Set<T> deepCandidates = new LinkedHashSet<>();
 				int replacedCaveSlots = 0;
 
-				for (int index = 0; index < this.reterraforged$regionalEntries.size(); index++) {
-					List<Pair<Climate.ParameterPoint, T>> captured = this.reterraforged$regionalEntries.get(index);
+				for (int index = 0; index < this.freeterraforged$regionalEntries.size(); index++) {
+					List<Pair<Climate.ParameterPoint, T>> captured = this.freeterraforged$regionalEntries.get(index);
 					if (captured == null) {
 						surfaceTrees.add(null);
 						bandingTrees.add(null);
@@ -494,7 +494,7 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 							: ClimateParameterListComposition.append(captured, snapshot.globalAdditions());
 
 					// Filter duplicate parameter-to-biome pairs before building search trees
-					List<Pair<Climate.ParameterPoint, T>> effectiveEntries = reterraforged$deduplicateEntries(rawEffectiveEntries);
+					List<Pair<Climate.ParameterPoint, T>> effectiveEntries = freeterraforged$deduplicateEntries(rawEffectiveEntries);
 
 					ClimateParameterListComposition.CandidateOverlay<T> overlay =
 							ClimateParameterListComposition.overlayUndergroundCandidates(
@@ -502,7 +502,7 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 									index == 0 ? List.of() : captured,
 									snapshot.globalAdditions(),
 									(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value)),
-									MixinParameterList::reterraforged$isDeferredPlaceholder
+									MixinParameterList::freeterraforged$isDeferredPlaceholder
 							);
 					if (!overlay.usable()) {
 						surfaceTrees.add(null);
@@ -511,10 +511,10 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 					}
 
 					UndergroundBiomeBanding.Layout<T> layout = UndergroundBiomeBanding.apply(
-							this.reterraforged$bandingPreset,
+							this.freeterraforged$bandingPreset,
 							effectiveEntries,
 							overlay.entries(),
-							this.reterraforged$bandingSeed,
+							this.freeterraforged$bandingSeed,
 							(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value))
 					);
 					surfaceTrees.add(new Climate.ParameterList<>(effectiveEntries));
@@ -524,14 +524,14 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 					replacedCaveSlots += overlay.replacedDefaultSlotCount();
 				}
 
-				this.reterraforged$compositionSnapshot = snapshot;
-				this.reterraforged$regionalSurfaceTrees = Collections.unmodifiableList(surfaceTrees);
-				this.reterraforged$regionalBanding = Collections.unmodifiableList(bandingTrees);
-				this.reterraforged$shallowCandidateValues = List.copyOf(shallowCandidates);
-				this.reterraforged$deepCandidateValues = List.copyOf(deepCandidates);
-				this.reterraforged$replacedCaveSlotCount = replacedCaveSlots;
-				this.reterraforged$compositionFallbackReason = null;
-				this.reterraforged$composedValuesReference = currentValues;
+				this.freeterraforged$compositionSnapshot = snapshot;
+				this.freeterraforged$regionalSurfaceTrees = Collections.unmodifiableList(surfaceTrees);
+				this.freeterraforged$regionalBanding = Collections.unmodifiableList(bandingTrees);
+				this.freeterraforged$shallowCandidateValues = List.copyOf(shallowCandidates);
+				this.freeterraforged$deepCandidateValues = List.copyOf(deepCandidates);
+				this.freeterraforged$replacedCaveSlotCount = replacedCaveSlots;
+				this.freeterraforged$compositionFallbackReason = null;
+				this.freeterraforged$composedValuesReference = currentValues;
 				FTFCommon.LOGGER.info(
 					"Composed TerraBlender biome snapshot: {} weighted regional surface trees ({} invalid), {} diagnostic canonical entries ({} exact duplicates), {} late global entries, {} regional cave-slot replacements, {} shallow / {} deep-stage cave variants",
 					snapshot.effectiveRegions().size(),
@@ -545,14 +545,14 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 				);
 				return true;
 			} catch (RuntimeException exception) {
-				this.reterraforged$compositionSnapshot = null;
-				this.reterraforged$regionalSurfaceTrees = List.of();
-				this.reterraforged$regionalBanding = List.of();
-				this.reterraforged$shallowCandidateValues = List.of();
-				this.reterraforged$deepCandidateValues = List.of();
-				this.reterraforged$replacedCaveSlotCount = 0;
-				this.reterraforged$compositionFallbackReason = "composition_exception";
-				this.reterraforged$composedValuesReference = currentValues;
+				this.freeterraforged$compositionSnapshot = null;
+				this.freeterraforged$regionalSurfaceTrees = List.of();
+				this.freeterraforged$regionalBanding = List.of();
+				this.freeterraforged$shallowCandidateValues = List.of();
+				this.freeterraforged$deepCandidateValues = List.of();
+				this.freeterraforged$replacedCaveSlotCount = 0;
+				this.freeterraforged$compositionFallbackReason = "composition_exception";
+				this.freeterraforged$composedValuesReference = currentValues;
 				FTFCommon.LOGGER.error(
 					"Failed to compose TerraBlender underground biome trees; preserving TerraBlender's original biome trees",
 					exception
@@ -563,7 +563,7 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 	}
 
 	@Unique
-	private static boolean reterraforged$isDeferredPlaceholder(Object value) {
+	private static boolean freeterraforged$isDeferredPlaceholder(Object value) {
 		return value instanceof Holder<?> holder
 			&& holder.unwrapKey().filter(Region.DEFERRED_PLACEHOLDER::equals).isPresent();
 	}
@@ -577,19 +577,19 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 		require = 0
 	)
 	public int getUniqueness(Climate.ParameterList<T> parameterList, int x, int y, int z, Climate.TargetPoint targetPoint) {
-		return this.reterraforged$getUniqueness(targetPoint, x, y, z);
+		return this.freeterraforged$getUniqueness(targetPoint, x, y, z);
 	}
 
 	@Unique
-	private int reterraforged$getUniqueness(Climate.TargetPoint targetPoint, int x, int y, int z) {
+	private int freeterraforged$getUniqueness(Climate.TargetPoint targetPoint, int x, int y, int z) {
 		// TerraBlender's initialized uniqueness area owns coherent region shape and weighting.
 		// FTF climate values select a biome inside that region; they must not replace the region API.
 		return this.getUniqueness(x, y, z);
 	}
 
 	@Override
-	public boolean reterraforged$isTerraBlenderInitialized() {
-		return this.reterraforged$bandingInitialized;
+	public boolean freeterraforged$isTerraBlenderInitialized() {
+		return this.freeterraforged$bandingInitialized;
 	}
 
 	@Shadow
@@ -603,7 +603,7 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 	}
 
 	@Unique
-	private static <T> List<Pair<Climate.ParameterPoint, T>> reterraforged$deduplicateEntries(
+	private static <T> List<Pair<Climate.ParameterPoint, T>> freeterraforged$deduplicateEntries(
 			List<Pair<Climate.ParameterPoint, T>> entries
 	) {
 		if (entries == null || entries.size() <= 1) {

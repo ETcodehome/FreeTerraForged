@@ -17,7 +17,7 @@ import net.minecraft.world.level.biome.Climate;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 
 @Mixin(Climate.Sampler.class)
-@Implements(@Interface(iface = FTFClimateSampler.class, prefix = "reterraforged$RTFClimateSampler$"))
+@Implements(@Interface(iface = FTFClimateSampler.class, prefix = "freeterraforged$FTFClimateSampler$"))
 class MixinClimateSampler {
 	private BlockPos spawnSearchCenter = BlockPos.ZERO;
 	private Preset undergroundBiomeBandingPreset;
@@ -25,7 +25,7 @@ class MixinClimateSampler {
 	private GeneratorContext undergroundBiomeSurfaceContext;
 
 	@Inject(method = "sample", at = @At("HEAD"), cancellable = true)
-	private void reterraforged$reuseClimatePoint(int x, int y, int z, CallbackInfoReturnable<Climate.TargetPoint> callback) {
+	private void freeterraforged$reuseClimatePoint(int x, int y, int z, CallbackInfoReturnable<Climate.TargetPoint> callback) {
 		Climate.TargetPoint target = ClimatePointCache.find(this, x, y, z);
 		if (target != null) {
 			UndergroundBiomeSurfaceQuery.record((Climate.Sampler) (Object) this, target, x, y, z);
@@ -34,7 +34,7 @@ class MixinClimateSampler {
 	}
 
 	@Inject(method = "sample", at = @At("RETURN"), cancellable = true)
-	private void reterraforged$cacheClimatePoint(int x, int y, int z, CallbackInfoReturnable<Climate.TargetPoint> callback) {
+	private void freeterraforged$cacheClimatePoint(int x, int y, int z, CallbackInfoReturnable<Climate.TargetPoint> callback) {
 		Climate.TargetPoint target = UndergroundBiomeClimatePolicy.apply(
 			(Climate.Sampler) (Object) this,
 			callback.getReturnValue(),
@@ -47,32 +47,32 @@ class MixinClimateSampler {
 		UndergroundBiomeSurfaceQuery.record((Climate.Sampler) (Object) this, target, x, y, z);
 	}
 	
-	public void reterraforged$RTFClimateSampler$setSpawnSearchCenter(BlockPos spawnSearchCenter) {
+	public void freeterraforged$FTFClimateSampler$setSpawnSearchCenter(BlockPos spawnSearchCenter) {
 		this.spawnSearchCenter = spawnSearchCenter;
 	}
 	
-	public BlockPos reterraforged$RTFClimateSampler$getSpawnSearchCenter() {
+	public BlockPos freeterraforged$FTFClimateSampler$getSpawnSearchCenter() {
 		return this.spawnSearchCenter;
 	}
 
-	public void reterraforged$RTFClimateSampler$setUndergroundBiomeBandingPreset(Preset preset, long seed) {
+	public void freeterraforged$FTFClimateSampler$setUndergroundBiomeBandingPreset(Preset preset, long seed) {
 		this.undergroundBiomeBandingPreset = preset;
 		this.undergroundBiomeBandingSeed = seed;
 	}
 
-	public Preset reterraforged$RTFClimateSampler$getUndergroundBiomeBandingPreset() {
+	public Preset freeterraforged$FTFClimateSampler$getUndergroundBiomeBandingPreset() {
 		return this.undergroundBiomeBandingPreset;
 	}
 
-	public long reterraforged$RTFClimateSampler$getUndergroundBiomeBandingSeed() {
+	public long freeterraforged$FTFClimateSampler$getUndergroundBiomeBandingSeed() {
 		return this.undergroundBiomeBandingSeed;
 	}
 
-	public void reterraforged$RTFClimateSampler$setUndergroundBiomeSurfaceContext(GeneratorContext context) {
+	public void freeterraforged$FTFClimateSampler$setUndergroundBiomeSurfaceContext(GeneratorContext context) {
 		this.undergroundBiomeSurfaceContext = context;
 	}
 
-	public GeneratorContext reterraforged$RTFClimateSampler$getUndergroundBiomeSurfaceContext() {
+	public GeneratorContext freeterraforged$FTFClimateSampler$getUndergroundBiomeSurfaceContext() {
 		return this.undergroundBiomeSurfaceContext;
 	}
 }

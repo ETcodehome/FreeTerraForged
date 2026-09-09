@@ -14,7 +14,7 @@ class BiomePreviewIntegrationsTest {
 		BiomePreviewIntegration integration = new BiomePreviewIntegration() {
 			@Override
 			public String id() {
-				return "reterraforged:test";
+				return "freeterraforged:test";
 			}
 
 			@Override
@@ -38,7 +38,7 @@ class BiomePreviewIntegrationsTest {
 		BiomePreviewIntegration integration = new BiomePreviewIntegration() {
 			@Override
 			public String id() {
-				return "reterraforged:failing_test";
+				return "freeterraforged:failing_test";
 			}
 
 			@Override

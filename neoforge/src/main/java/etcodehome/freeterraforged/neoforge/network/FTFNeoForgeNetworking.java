@@ -7,7 +7,7 @@ import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import etcodehome.freeterraforged.client.network.FTFClientPayloadHandler;
 
-@EventBusSubscriber(modid = "reterraforged")
+@EventBusSubscriber(modid = "freeterraforged")
 public class FTFNeoForgeNetworking {
 
     @SubscribeEvent

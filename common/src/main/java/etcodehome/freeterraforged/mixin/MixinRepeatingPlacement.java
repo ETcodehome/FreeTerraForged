@@ -20,7 +20,7 @@ import etcodehome.freeterraforged.world.worldgen.feature.ore.DynamicOrePlacement
 class MixinRepeatingPlacement {
 
 	@Inject(method = "getPositions", at = @At("RETURN"), cancellable = true)
-	private void reterraforged$fanOutDynamicOreCount(
+	private void freeterraforged$fanOutDynamicOreCount(
 		PlacementContext context,
 		RandomSource random,
 		BlockPos origin,

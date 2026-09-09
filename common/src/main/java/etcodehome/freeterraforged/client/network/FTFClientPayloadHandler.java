@@ -13,7 +13,7 @@ public class FTFClientPayloadHandler {
         if (player != null && player.level() instanceof ClientLevel clientLevel) {
             ChunkAccess chunk = clientLevel.getChunk(payload.pos().x, payload.pos().z, ChunkStatus.FULL, false);
             if (chunk instanceof IFlowFieldHolder holder) {
-                holder.reterraforged$getFlowField().loadRawGrid(payload.rawGrid());
+                holder.freeterraforged$getFlowField().loadRawGrid(payload.rawGrid());
             }
         }
     }

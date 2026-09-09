@@ -24,7 +24,7 @@ import etcodehome.freeterraforged.server.FTFMinecraftServer;
 import etcodehome.freeterraforged.world.worldgen.feature.ore.DynamicOrePlan;
 import etcodehome.freeterraforged.world.worldgen.feature.template.template.FeatureTemplateManager;
 
-@Implements(@Interface(iface = FTFMinecraftServer.class, prefix = "reterraforged$RTFMinecraftServer$"))
+@Implements(@Interface(iface = FTFMinecraftServer.class, prefix = "freeterraforged$FTFMinecraftServer$"))
 @Mixin(MinecraftServer.class)
 public class MixinMinecraftServer {
 	private FeatureTemplateManager templateManager;
@@ -38,15 +38,15 @@ public class MixinMinecraftServer {
 		this.templateManager = new FeatureTemplateManager(this.getResourceManager());
 	}
 
-	public FeatureTemplateManager reterraforged$RTFMinecraftServer$getFeatureTemplateManager() {
+	public FeatureTemplateManager freeterraforged$FTFMinecraftServer$getFeatureTemplateManager() {
 		return this.templateManager;
 	}
 
-	public DynamicOrePlan reterraforged$RTFMinecraftServer$getDynamicOrePlan() {
+	public DynamicOrePlan freeterraforged$FTFMinecraftServer$getDynamicOrePlan() {
 		return this.dynamicOrePlan;
 	}
 
-	public void reterraforged$RTFMinecraftServer$publishDynamicOrePlan(DynamicOrePlan plan) {
+	public void freeterraforged$FTFMinecraftServer$publishDynamicOrePlan(DynamicOrePlan plan) {
 		this.dynamicOrePlan = plan;
 	}
 

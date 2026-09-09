@@ -10,5 +10,5 @@ import net.minecraft.world.level.levelgen.placement.BlockPredicateFilter;
 public interface BlockPredicateFilterAccessor {
 
 	@Accessor("predicate")
-	BlockPredicate reterraforged$getPredicate();
+	BlockPredicate freeterraforged$getPredicate();
 }

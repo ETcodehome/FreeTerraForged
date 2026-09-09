@@ -14,7 +14,7 @@ import net.minecraft.world.level.levelgen.placement.PlacementContext;
 class MixinPlacedFeature {
 
 	@WrapMethod(method = "placeWithContext")
-	private boolean reterraforged$manageSurfaceFeature(
+	private boolean freeterraforged$manageSurfaceFeature(
 		PlacementContext context,
 		RandomSource random,
 		BlockPos origin,

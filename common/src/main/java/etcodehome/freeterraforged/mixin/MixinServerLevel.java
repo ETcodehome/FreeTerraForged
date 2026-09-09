@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class MixinServerLevel {
 
     @Inject(method = "<init>", at = @At("TAIL"))
-    private void reterraforged$onLevelInit(CallbackInfo ci) {
+    private void freeterraforged$onLevelInit(CallbackInfo ci) {
         DynamicOreLifecycle.onLevelLoad((ServerLevel) (Object) this);
     }
 }

@@ -37,7 +37,7 @@ public final class SurfaceFeatureRescue {
 
 	public static void begin(PlacedFeature feature, PlacementContext context) {
 		Run run = null;
-		if (DynamicHeightRangePlacement.isRtfOverworld(context)) {
+		if (DynamicHeightRangePlacement.isFtfOverworld(context)) {
 			SurfacePlacementClassifier.Classification classification = CLASSIFICATIONS.computeIfAbsent(
 				feature,
 				ignored -> SurfacePlacementClassifier.classify(feature, context.getLevel().registryAccess())
@@ -227,7 +227,7 @@ public final class SurfaceFeatureRescue {
 					}
 				} else if (modifier instanceof BlockPredicateFilter filter
 					&& !((BlockPredicateFilterAccessor)(Object)filter)
-						.reterraforged$getPredicate()
+						.freeterraforged$getPredicate()
 						.test(this.context.getLevel(), placement)) {
 					return false;
 				}

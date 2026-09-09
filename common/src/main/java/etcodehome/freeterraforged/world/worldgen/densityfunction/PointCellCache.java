@@ -7,7 +7,7 @@ import etcodehome.freeterraforged.world.worldgen.cell.heightmap.WorldLookup;
 import java.util.Arrays;
 
 /**
- * A strictly zero-allocation, thread-local cache for ReTerraForged cell math.
+ * A strictly zero-allocation, thread-local cache for FreeTerraForged cell math.
  */
 public final class PointCellCache {
     private static final ThreadLocal<PointCellCache> LOCAL_CACHE = ThreadLocal.withInitial(PointCellCache::new);
@@ -43,7 +43,7 @@ public final class PointCellCache {
 
         // Cache Miss
         if (this.keys[idx] != key) {
-            // Evaluates using exact coordinates, mirroring RTF's native getAndUpdate
+            // Evaluates using exact coordinates, mirroring FTF's native getAndUpdate
             lookup.applyCell(cachedCell.reset(), blockX, blockZ, true);
             this.keys[idx] = key;
         }

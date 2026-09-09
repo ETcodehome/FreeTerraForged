@@ -20,7 +20,7 @@ import etcodehome.freeterraforged.world.worldgen.feature.ore.DynamicOrePlacement
 class MixinPlacementFilter {
 
 	@Inject(method = "getPositions", at = @At("RETURN"), cancellable = true)
-	private void reterraforged$fanOutDynamicOreRarity(
+	private void freeterraforged$fanOutDynamicOreRarity(
 		PlacementContext context,
 		RandomSource random,
 		BlockPos origin,

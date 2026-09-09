@@ -5,5 +5,5 @@ import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Climate;
 
 public interface FTFMultiNoiseBiomeSource {
-    Climate.ParameterList<Holder<Biome>> reterraforged$getParameters();
+    Climate.ParameterList<Holder<Biome>> freeterraforged$getParameters();
 }

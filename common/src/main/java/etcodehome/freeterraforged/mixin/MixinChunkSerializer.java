@@ -22,7 +22,7 @@ public class MixinChunkSerializer {
     private static void injectSaveData(ServerLevel level, ChunkAccess chunk, CallbackInfoReturnable<CompoundTag> cir) {
         CompoundTag resultTag = cir.getReturnValue();
         if (resultTag != null && chunk instanceof IFlowFieldHolder holder) {
-            holder.reterraforged$getFlowField().writeToNbt(resultTag);
+            holder.freeterraforged$getFlowField().writeToNbt(resultTag);
         }
     }
 
@@ -39,7 +39,7 @@ public class MixinChunkSerializer {
 
             // Apply the NBT data to the real underlying chunk
             if (targetChunk instanceof IFlowFieldHolder holder) {
-                holder.reterraforged$getFlowField().readFromNbt(tag);
+                holder.freeterraforged$getFlowField().readFromNbt(tag);
             }
         }
     }

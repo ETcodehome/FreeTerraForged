@@ -48,7 +48,7 @@ class TerrainCeilingTest {
 
 	@Test
 	void givesTallWorldsEnoughRoomToLeaveOrdinaryMountainsUntouched() {
-		WorldSettings.Properties properties = Presets.makeRTFDefault().world().properties;
+		WorldSettings.Properties properties = Presets.makeFTFDefault().world().properties;
 		properties.worldHeight = 1024;
 		TerrainCeiling ceiling = TerrainCeiling.make(properties);
 		float mountainHeight = 486.0F / Math.min(properties.worldHeight, 256);
@@ -58,7 +58,7 @@ class TerrainCeilingTest {
 
 	@Test
 	void handlesAZeroHeightPresetWithoutNonFiniteValues() {
-		WorldSettings.Properties properties = Presets.makeRTFDefault().world().properties;
+		WorldSettings.Properties properties = Presets.makeFTFDefault().world().properties;
 		properties.worldHeight = 0;
 		TerrainCeiling ceiling = TerrainCeiling.make(properties);
 
@@ -76,6 +76,6 @@ class TerrainCeilingTest {
 	}
 
 	private static TerrainCeiling defaultCeiling() {
-		return TerrainCeiling.make(Presets.makeRTFDefault().world().properties);
+		return TerrainCeiling.make(Presets.makeFTFDefault().world().properties);
 	}
 }

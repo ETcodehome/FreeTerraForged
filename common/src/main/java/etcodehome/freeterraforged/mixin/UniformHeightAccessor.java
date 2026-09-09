@@ -10,8 +10,8 @@ import net.minecraft.world.level.levelgen.heightproviders.UniformHeight;
 public interface UniformHeightAccessor {
 
 	@Accessor("minInclusive")
-	VerticalAnchor reterraforged$getMinInclusive();
+	VerticalAnchor freeterraforged$getMinInclusive();
 
 	@Accessor("maxInclusive")
-	VerticalAnchor reterraforged$getMaxInclusive();
+	VerticalAnchor freeterraforged$getMaxInclusive();
 }

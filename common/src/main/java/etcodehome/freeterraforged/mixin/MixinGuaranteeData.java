@@ -26,9 +26,9 @@ public class MixinGuaranteeData {
         CreateWorldScreen screen = (CreateWorldScreen) (Object) this;
         WorldCreationUiState uiState = screen.getUiState();
 
-        // Early exit guard to only validate preset staging if an RTF world type is currently selected
+        // Early exit guard to only validate preset staging if an FTF world type is currently selected
         // We skip the check for Vanilla, Flat, Amplified, or other modded world types
-        if (!isRTFWorld(uiState)) {
+        if (!isFTFWorld(uiState)) {
             return;
         }
 
@@ -44,7 +44,7 @@ public class MixinGuaranteeData {
                 Pair<Path, PackRepository> pair = screen.getDataPackSelectionSettings(settings.dataConfiguration());
                 Path datapacksDir = pair.getFirst();
                 PackRepository repository = pair.getSecond();
-                Path presetZip = datapacksDir.resolve("reterraforged-preset.zip");
+                Path presetZip = datapacksDir.resolve("freeterraforged-preset.zip");
 
                 // Verify the preset file is physically written to disk and non-empty
                 if (Files.exists(presetZip) && Files.size(presetZip) > 0) {
@@ -54,7 +54,7 @@ public class MixinGuaranteeData {
 
                     // Check if repository indexed our pack
                     var targetPack = repository.getAvailablePacks().stream()
-                            .filter(pack -> pack.getId().contains("reterraforged-preset"))
+                            .filter(pack -> pack.getId().contains("freeterraforged-preset"))
                             .findFirst();
 
                     if (targetPack.isPresent()) {
@@ -84,29 +84,29 @@ public class MixinGuaranteeData {
             }
         }
 
-        // Halt world creation explicitly if RTF preset was expected but missing
+        // Halt world creation explicitly if FTF preset was expected but missing
         if (!loadedSuccessfully) {
             ci.cancel(); // Cancel CreateWorldScreen execution completely
 
             throw new IllegalStateException(
-                    "[ReTerraForged] Aborted world load because preset was not staged after 10 seconds.",
+                    "[FreeTerraForged] Aborted world load because preset was not staged after 10 seconds.",
                     lastException
             );
         }
     }
 
     /**
-     * Checks if the active world type preset in the Create World UI belongs to ReTerraForged.
+     * Checks if the active world type preset in the Create World UI belongs to FreeTerraForged.
      */
-    private static boolean isRTFWorld(WorldCreationUiState uiState) {
+    private static boolean isFTFWorld(WorldCreationUiState uiState) {
         if (uiState == null) return false;
 
         var presetEntry = uiState.getWorldType();
         if (presetEntry == null || presetEntry.preset() == null) return false;
 
         return presetEntry.preset().unwrapKey()
-                .map(key -> key.location().getNamespace().equalsIgnoreCase("reterraforged")
-                        || key.location().getPath().contains("reterraforged"))
+                .map(key -> key.location().getNamespace().equalsIgnoreCase("freeterraforged")
+                        || key.location().getPath().contains("freeterraforged"))
                 .orElse(false);
     }
 }

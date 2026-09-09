@@ -1,5 +1,5 @@
 package etcodehome.freeterraforged.world.worldgen;
 
 public interface IFlowFieldHolder {
-    ChunkFlowField reterraforged$getFlowField();
+    ChunkFlowField freeterraforged$getFlowField();
 }

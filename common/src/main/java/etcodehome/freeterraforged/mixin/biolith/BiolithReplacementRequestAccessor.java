@@ -11,20 +11,20 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(targets = "com.terraformersmc.biolith.impl.biome.DimensionBiomePlacement$ReplacementRequest", remap = false)
 public interface BiolithReplacementRequestAccessor {
 	@Accessor(value = "biome", remap = false)
-	ResourceKey<Biome> reterraforged$getBiome();
+	ResourceKey<Biome> freeterraforged$getBiome();
 
 	@Accessor(value = "rate", remap = false)
-	double reterraforged$getRate();
+	double freeterraforged$getRate();
 
 	@Accessor(value = "biomeEntry", remap = false)
-	Holder<Biome> reterraforged$getBiomeEntry();
+	Holder<Biome> freeterraforged$getBiomeEntry();
 
 	@Accessor(value = "start", remap = false)
-	double reterraforged$getStart();
+	double freeterraforged$getStart();
 
 	@Accessor(value = "end", remap = false)
-	double reterraforged$getEnd();
+	double freeterraforged$getEnd();
 
 	@Accessor(value = "fromData", remap = false)
-	boolean reterraforged$isFromData();
+	boolean freeterraforged$isFromData();
 }

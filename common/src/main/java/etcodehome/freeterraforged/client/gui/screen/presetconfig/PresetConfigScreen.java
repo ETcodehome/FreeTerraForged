@@ -99,7 +99,7 @@ public class PresetConfigScreen extends LinkedPageScreen {
 
 	public void applyPreset(PresetListPage.PresetEntry preset) throws IOException {
 		Pair<Path, PackRepository> path = this.parent.getDataPackSelectionSettings(this.parent.getUiState().getSettings().dataConfiguration());
-		Path exportPath = path.getFirst().resolve("reterraforged-preset.zip");
+		Path exportPath = path.getFirst().resolve("freeterraforged-preset.zip");
 		this.exportAsDatapack(exportPath, preset);
 		PackRepository repository = path.getSecond();
 		repository.reload();

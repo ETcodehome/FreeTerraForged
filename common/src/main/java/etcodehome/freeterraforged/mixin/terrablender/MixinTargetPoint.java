@@ -8,15 +8,15 @@ import net.minecraft.world.level.biome.Climate;
 import etcodehome.freeterraforged.world.worldgen.terrablender.TBTargetPoint;
 
 @Mixin(Climate.TargetPoint.class)
-@Implements(@Interface(iface = TBTargetPoint.class, prefix = "reterraforged$TBTargetPoint$"))
+@Implements(@Interface(iface = TBTargetPoint.class, prefix = "freeterraforged$TBTargetPoint$"))
 class MixinTargetPoint {
 	private double uniqueness = Double.NaN;
 
-	public double reterraforged$TBTargetPoint$getUniqueness() {
+	public double freeterraforged$TBTargetPoint$getUniqueness() {
 		return this.uniqueness;
 	}
 	
-	public void reterraforged$TBTargetPoint$setUniqueness(double uniqueness) {
+	public void freeterraforged$TBTargetPoint$setUniqueness(double uniqueness) {
 		this.uniqueness = uniqueness;
 	}
 }

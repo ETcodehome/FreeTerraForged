@@ -26,7 +26,7 @@ import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
 
 final class BiomePreview {
-    private static final ResourceLocation UNREGISTERED = ResourceLocation.fromNamespaceAndPath("reterraforged", "unregistered");
+    private static final ResourceLocation UNREGISTERED = ResourceLocation.fromNamespaceAndPath("freeterraforged", "unregistered");
     private static final ThreadLocal<WorkerBuffer> WORKER_BUFFER = ThreadLocal.withInitial(WorkerBuffer::new);
     private static final ThreadLocal<ThreadQuartCache> THREAD_CACHE = ThreadLocal.withInitial(ThreadQuartCache::new);
 

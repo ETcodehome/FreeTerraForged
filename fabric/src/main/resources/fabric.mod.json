@@ -18,13 +18,13 @@
   "environment": "*",
   "entrypoints": {
     "main": [
-      "etcodehome.freeterraforged.fabric.RTFFabric"
+      "etcodehome.freeterraforged.fabric.FTFFabric"
     ],
     "client": [
-      "etcodehome.freeterraforged.fabric.RTFFabricClient"
+      "etcodehome.freeterraforged.fabric.FTFFabricClient"
     ],
     "fabric-datagen": [
-      "etcodehome.freeterraforged.fabric.RTFFabric"
+      "etcodehome.freeterraforged.fabric.FTFFabric"
     ]
   },
   "depends": {

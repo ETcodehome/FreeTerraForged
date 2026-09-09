@@ -27,7 +27,7 @@ public class MixinRandomOffsetPlacement {
         // Cheap, bounded check on this modifier's own field - not a graph walk,
         // not a check on some other modifier's config. Skip entirely if this
         // instance has no horizontal spread to begin with.
-        IntProvider xzSpread = ((RandomOffsetPlacementAccessor) this).reterraforged$getXzSpread();
+        IntProvider xzSpread = ((RandomOffsetPlacementAccessor) this).freeterraforged$getXzSpread();
         if (xzSpread == null || xzSpread.getMinValue() == xzSpread.getMaxValue()) {
             return;
         }

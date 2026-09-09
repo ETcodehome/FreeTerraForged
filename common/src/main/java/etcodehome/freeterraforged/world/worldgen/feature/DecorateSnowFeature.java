@@ -117,7 +117,7 @@ public class DecorateSnowFeature extends Feature<Config> {
 			}
 	        return true;
 		} else {
-			// Gracefully abort generation if the active dimension context is missing or non-ReTerraForged
+			// Gracefully abort generation if the active dimension context is missing or non-FreeTerraForged
 			return false;
 		}
 	}

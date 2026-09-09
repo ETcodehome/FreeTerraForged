@@ -8,7 +8,7 @@ import net.minecraft.world.level.biome.MultiNoiseBiomeSource;
 public final class BiolithBiomePreviewIntegration implements BiomePreviewIntegration {
 	@Override
 	public String id() {
-		return "reterraforged:biolith";
+		return "freeterraforged:biolith";
 	}
 
 	@Override

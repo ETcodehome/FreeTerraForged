@@ -307,7 +307,7 @@ public enum RenderMode {
 	}
 
 	public String displayName() {
-		return this == BIOME_CELLS ? "BIOME_CELLS (RTF diagnostic)" : this.name();
+		return this == BIOME_CELLS ? "BIOME_CELLS (FTF diagnostic)" : this.name();
 	}
 
 	private static int getWaterColor() {

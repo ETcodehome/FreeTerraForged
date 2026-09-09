@@ -7,7 +7,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
-@EventBusSubscriber(modid = "reterraforged", value = Dist.CLIENT)
+@EventBusSubscriber(modid = "freeterraforged", value = Dist.CLIENT)
 public class NeoForgeFlowFieldDebugRenderer {
 
     @SubscribeEvent

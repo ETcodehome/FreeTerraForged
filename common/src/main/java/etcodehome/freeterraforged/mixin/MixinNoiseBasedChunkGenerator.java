@@ -67,7 +67,7 @@ abstract class MixinNoiseBasedChunkGenerator extends ChunkGenerator {
 		float maxHeight = Float.MIN_VALUE;
 
 		// Cast the chunk to your interface to access the flow field container
-		ChunkFlowField flowField = (chunk instanceof IFlowFieldHolder holder) ? holder.reterraforged$getFlowField() : null;
+		ChunkFlowField flowField = (chunk instanceof IFlowFieldHolder holder) ? holder.freeterraforged$getFlowField() : null;
 
 		for(int x = 0; x < 16; x++) {
 			for(int z = 0; z < 16; z++) {

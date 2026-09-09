@@ -25,7 +25,7 @@ import etcodehome.freeterraforged.world.worldgen.biome.PreviewBiomeQueryContext;
 import etcodehome.freeterraforged.world.worldgen.terrablender.TerraBlenderParameterList;
 
 /**
- * Composes RTF underground banding with the result chosen by the active biome-selection stack.
+ * Composes FTF underground banding with the result chosen by the active biome-selection stack.
  * A third-party replacement remains authoritative; an unchanged base result receives banding.
  */
 @Mixin(MultiNoiseBiomeSource.class)
@@ -45,7 +45,7 @@ public abstract class MixinMultiNoiseBiomeSource implements FTFMultiNoiseBiomeSo
     protected abstract Climate.ParameterList<Holder<Biome>> parameters();
 
     @Override
-    public Climate.ParameterList<Holder<Biome>> reterraforged$getParameters() {
+    public Climate.ParameterList<Holder<Biome>> freeterraforged$getParameters() {
         return this.parameters.map(Function.identity(), holder -> holder.value().parameters());
     }
 
@@ -71,14 +71,14 @@ public abstract class MixinMultiNoiseBiomeSource implements FTFMultiNoiseBiomeSo
         Climate.TargetPoint target = sampler.sample(x, y, z);
         Climate.ParameterList<Holder<Biome>> parameters = this.parameters();
         if ((Object) parameters instanceof TerraBlenderParameterList<?> terraBlenderParameters
-                && terraBlenderParameters.reterraforged$isTerraBlenderInitialized()) {
+                && terraBlenderParameters.freeterraforged$isTerraBlenderInitialized()) {
             @SuppressWarnings("unchecked")
             TerraBlenderParameterList<Holder<Biome>> terraBlender =
                     (TerraBlenderParameterList<Holder<Biome>>) terraBlenderParameters;
-            Holder<Biome> composed = terraBlender.reterraforged$applyUndergroundBanding(
+            Holder<Biome> composed = terraBlender.freeterraforged$applyUndergroundBanding(
                     target, x, y, z, selected
             );
-            composed = terraBlender.reterraforged$applyUndergroundSurfaceProtection(
+            composed = terraBlender.freeterraforged$applyUndergroundSurfaceProtection(
                     target,
                     x,
                     y,
@@ -137,7 +137,7 @@ public abstract class MixinMultiNoiseBiomeSource implements FTFMultiNoiseBiomeSo
         // Runtime worldgen sources (Either.right) are left untouched.
         if (this.parameters != null && this.parameters.left().isPresent()) {
             try {
-                Climate.ParameterList<Holder<Biome>> parameterList = this.reterraforged$getParameters();
+                Climate.ParameterList<Holder<Biome>> parameterList = this.freeterraforged$getParameters();
                 if (parameterList != null) {
                     java.util.Set<Holder<Biome>> dynamicBiomes = parameterList.values().stream()
                             .map(com.mojang.datafixers.util.Pair::getSecond)

@@ -10,5 +10,5 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(targets = "com.terraformersmc.biolith.impl.biome.DimensionBiomePlacement$SubBiomeRequestSet", remap = false)
 public interface BiolithSubBiomeRequestSetAccessor {
 	@Accessor(value = "requests", remap = false)
-	List<Object> reterraforged$getRequests();
+	List<Object> freeterraforged$getRequests();
 }

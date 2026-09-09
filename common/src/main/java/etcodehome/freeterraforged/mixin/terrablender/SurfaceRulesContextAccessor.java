@@ -11,5 +11,5 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(SurfaceRules.Context.class)
 public interface SurfaceRulesContextAccessor {
 	@Accessor("biome")
-	Supplier<Holder<Biome>> reterraforged$getBiome();
+	Supplier<Holder<Biome>> freeterraforged$getBiome();
 }

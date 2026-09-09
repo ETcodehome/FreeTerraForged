@@ -23,7 +23,7 @@ public abstract class MixinLevelChunk implements FTFChunk {
 		FTFChunk ftfChunk = (FTFChunk) protoChunk;
 		ftfChunk.getMaxHeight().ifPresent(this::setMaxHeight);
 		if ((Object) protoChunk instanceof IFlowFieldHolder protoHolder && (Object) this instanceof IFlowFieldHolder levelHolder) {
-			levelHolder.reterraforged$getFlowField().copyFrom(protoHolder.reterraforged$getFlowField());
+			levelHolder.freeterraforged$getFlowField().copyFrom(protoHolder.freeterraforged$getFlowField());
 		}
 
 	}

@@ -114,8 +114,8 @@ public final class BiomePreviewResolver {
 				if (TBCompat.isEnabled()
 						&& biomeSource instanceof MultiNoiseBiomeSource
 						&& (Object) biomeSource instanceof FTFMultiNoiseBiomeSource source
-						&& (Object) source.reterraforged$getParameters() instanceof TerraBlenderParameterList<?> parameters) {
-					parameters.reterraforged$preparePreview(preset, seed);
+						&& (Object) source.freeterraforged$getParameters() instanceof TerraBlenderParameterList<?> parameters) {
+					parameters.freeterraforged$preparePreview(preset, seed);
 				}
 			}
 		}
@@ -152,8 +152,8 @@ public final class BiomePreviewResolver {
 	) {
 		if (biomeSource instanceof MultiNoiseBiomeSource
 				&& (Object) biomeSource instanceof FTFMultiNoiseBiomeSource source
-				&& (Object) source.reterraforged$getParameters() instanceof TerraBlenderParameterList<?> parameters) {
-			parameters.reterraforged$preparePreview(preset, seed);
+				&& (Object) source.freeterraforged$getParameters() instanceof TerraBlenderParameterList<?> parameters) {
+			parameters.freeterraforged$preparePreview(preset, seed);
 		}
 		LevelUtils.initializeBiomes(
 				registries,
@@ -248,7 +248,7 @@ public final class BiomePreviewResolver {
 		Climate.TargetPoint target = sampler.sample(quartX, quartY, quartZ);
 		if (this.terraBlenderParameters != null) {
 			Holder<Biome> selected = this.terraBlenderParameters
-					.reterraforged$inspectSelection(target, quartX, quartY, quartZ)
+					.freeterraforged$inspectSelection(target, quartX, quartY, quartZ)
 					.banded();
 			if (selected != null) {
 				return selected;
@@ -277,7 +277,7 @@ public final class BiomePreviewResolver {
 	@SuppressWarnings("unchecked")
 	private static TerraBlenderParameterList<Holder<Biome>> terraBlenderParameters(BiomeSource biomeSource) {
 		if (biomeSource instanceof MultiNoiseBiomeSource
-				&& (Object) ((FTFMultiNoiseBiomeSource) biomeSource).reterraforged$getParameters()
+				&& (Object) ((FTFMultiNoiseBiomeSource) biomeSource).freeterraforged$getParameters()
 				instanceof TerraBlenderParameterList<?> parameters) {
 			return (TerraBlenderParameterList<Holder<Biome>>) parameters;
 		}
@@ -287,7 +287,7 @@ public final class BiomePreviewResolver {
 	private static Climate.ParameterList<Holder<Biome>> parameters(BiomeSource biomeSource) {
 		if (biomeSource instanceof MultiNoiseBiomeSource
 				&& (Object) biomeSource instanceof FTFMultiNoiseBiomeSource multiNoise) {
-			return multiNoise.reterraforged$getParameters();
+			return multiNoise.freeterraforged$getParameters();
 		}
 		return null;
 	}
@@ -296,7 +296,7 @@ public final class BiomePreviewResolver {
 		if (source instanceof MultiNoiseBiomeSource
 				&& (Object) source instanceof FTFMultiNoiseBiomeSource multiNoise) {
 			List<com.mojang.datafixers.util.Pair<Climate.ParameterPoint, Holder<Biome>>> values =
-					List.copyOf(multiNoise.reterraforged$getParameters().values());
+					List.copyOf(multiNoise.freeterraforged$getParameters().values());
 			return MultiNoiseBiomeSource.createFromList(new Climate.ParameterList<>(values));
 		}
 		return source;

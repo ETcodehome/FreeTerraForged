@@ -24,7 +24,7 @@ import etcodehome.freeterraforged.mixin.UniformHeightAccessor;
 
 /**
  * Extends vanilla's canonical bottom-to-max-terrain placement semantics into
- * the additional vertical volume provided by an RTF preset.
+ * the additional vertical volume provided by an FTF preset.
  *
  * <p>The vanilla reference interval is 321 blocks ({@code -64..256}). One
  * candidate is retained in that interval. Extended vertical space is divided
@@ -43,7 +43,7 @@ public final class DynamicHeightRangePlacement {
 
 	/**
 	 * Returns replacement positions only when the current modifier is the exact
-	 * canonical {@code uniform(bottom, absolute(256))} range in an extended RTF
+	 * canonical {@code uniform(bottom, absolute(256))} range in an extended FTF
 	 * Overworld. Returning empty leaves vanilla and custom placement behavior
 	 * untouched.
 	 */
@@ -53,7 +53,7 @@ public final class DynamicHeightRangePlacement {
 		RandomSource random,
 		BlockPos origin
 	) {
-		if (!isCanonicalRange(placement) || !isRtfOverworld(context)) {
+		if (!isCanonicalRange(placement) || !isFtfOverworld(context)) {
 			return Optional.empty();
 		}
 		Optional<ResourceLocation> featureId = getTopLevelFeatureId(placement, context);
@@ -87,14 +87,14 @@ public final class DynamicHeightRangePlacement {
 	}
 
 	public static boolean isCanonicalRange(HeightRangePlacement placement) {
-		HeightProvider provider = ((HeightRangePlacementAccessor)(Object)placement).reterraforged$getHeightProvider();
+		HeightProvider provider = ((HeightRangePlacementAccessor)(Object)placement).freeterraforged$getHeightProvider();
 		if (!(provider instanceof UniformHeight uniform)) {
 			return false;
 		}
 
 		UniformHeightAccessor accessor = (UniformHeightAccessor)(Object)uniform;
-		VerticalAnchor min = accessor.reterraforged$getMinInclusive();
-		VerticalAnchor max = accessor.reterraforged$getMaxInclusive();
+		VerticalAnchor min = accessor.freeterraforged$getMinInclusive();
+		VerticalAnchor max = accessor.freeterraforged$getMaxInclusive();
 		return min instanceof VerticalAnchor.AboveBottom aboveBottom
 			&& aboveBottom.offset() == 0
 			&& max instanceof VerticalAnchor.Absolute absolute
@@ -159,7 +159,7 @@ public final class DynamicHeightRangePlacement {
 		);
 	}
 
-	static boolean isRtfOverworld(PlacementContext context) {
+	static boolean isFtfOverworld(PlacementContext context) {
 		if (!Level.OVERWORLD.equals(context.getLevel().getLevel().dimension())) {
 			return false;
 		}

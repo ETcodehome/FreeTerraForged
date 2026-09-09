@@ -19,7 +19,7 @@ public abstract class MixinNamespacedSurfaceRuleSource {
 		at = @At("HEAD"),
 		cancellable = true
 	)
-	private void reterraforged$unwrapRedundantNamespacedRule(
+	private void freeterraforged$unwrapRedundantNamespacedRule(
 		SurfaceRules.Context context,
 		CallbackInfoReturnable<SurfaceRules.SurfaceRule> callback
 	) {
@@ -31,7 +31,7 @@ public abstract class MixinNamespacedSurfaceRuleSource {
 				minecraftRule.tryApply(x, y, z),
 				baseRule.tryApply(x, y, z),
 				() -> {
-					Holder<Biome> biome = ((SurfaceRulesContextAccessor) (Object) context).reterraforged$getBiome().get();
+					Holder<Biome> biome = ((SurfaceRulesContextAccessor) (Object) context).freeterraforged$getBiome().get();
 					return biome.unwrapKey()
 						.map(ResourceKey::location)
 						.map(location -> location.getNamespace().equals("minecraft"))

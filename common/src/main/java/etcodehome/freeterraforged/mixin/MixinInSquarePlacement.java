@@ -18,7 +18,7 @@ import etcodehome.freeterraforged.world.worldgen.feature.ore.DynamicOrePlacement
 class MixinInSquarePlacement {
 
 	@Inject(method = "getPositions", at = @At("HEAD"), cancellable = true)
-	private void reterraforged$fanOutDynamicOreHorizontalSamples(
+	private void freeterraforged$fanOutDynamicOreHorizontalSamples(
 		PlacementContext context,
 		RandomSource random,
 		BlockPos origin,

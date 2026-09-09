@@ -13,7 +13,7 @@ import com.mojang.serialization.JsonOps;
 class ClimateSettingsTest {
 	@Test
 	void newDefaultPresetsInitializeBothBiomeSizesToTheHistoricalDefault() {
-		ClimateSettings.BiomeShape shape = Presets.makeRTFDefault().climate().biomeShape;
+		ClimateSettings.BiomeShape shape = Presets.makeFTFDefault().climate().biomeShape;
 
 		assertEquals(225, shape.biomeSize);
 		assertEquals(225, shape.undergroundBiomeSize);

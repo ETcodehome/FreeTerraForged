@@ -14,7 +14,7 @@ import net.minecraft.world.level.levelgen.placement.CountPlacement;
 class MixinCountPlacement {
 
 	@Inject(method = "count", at = @At("RETURN"))
-	private void reterraforged$recordSurfaceFeatureCount(
+	private void freeterraforged$recordSurfaceFeatureCount(
 		RandomSource random,
 		BlockPos origin,
 		CallbackInfoReturnable<Integer> callback

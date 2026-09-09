@@ -17,7 +17,7 @@ public class MixinServerStarted {
                     target = "Lnet/minecraft/server/MinecraftServer;buildServerStatus()Lnet/minecraft/network/protocol/status/ServerStatus;"
             )
     )
-    private void reterraforged$onServerStarted(CallbackInfo ci) {
+    private void freeterraforged$onServerStarted(CallbackInfo ci) {
         DynamicOreLifecycle.onServerStarted((MinecraftServer) (Object) this);
     }
 }

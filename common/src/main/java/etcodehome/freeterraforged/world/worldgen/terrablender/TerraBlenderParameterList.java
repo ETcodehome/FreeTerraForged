@@ -9,13 +9,13 @@ import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
  * Source-local marker used by the ordinary biome-source path without linking it to TerraBlender.
  */
 public interface TerraBlenderParameterList<T> {
-	void reterraforged$preparePreview(Preset preset, long seed);
+	void freeterraforged$preparePreview(Preset preset, long seed);
 
-	boolean reterraforged$isTerraBlenderInitialized();
+	boolean freeterraforged$isTerraBlenderInitialized();
 
-	T reterraforged$applyUndergroundBanding(Climate.TargetPoint target, int x, int y, int z, T selected);
+	T freeterraforged$applyUndergroundBanding(Climate.TargetPoint target, int x, int y, int z, T selected);
 
-	T reterraforged$applyUndergroundSurfaceProtection(
+	T freeterraforged$applyUndergroundSurfaceProtection(
 		Climate.TargetPoint target,
 		int x,
 		int y,
@@ -24,9 +24,9 @@ public interface TerraBlenderParameterList<T> {
 		float surfaceCoverageFactor
 	);
 
-	CompositionDiagnostics<T> reterraforged$getCompositionDiagnostics();
+	CompositionDiagnostics<T> freeterraforged$getCompositionDiagnostics();
 
-	SelectionDiagnostics<T> reterraforged$inspectSelection(Climate.TargetPoint target, int x, int y, int z);
+	SelectionDiagnostics<T> freeterraforged$inspectSelection(Climate.TargetPoint target, int x, int y, int z);
 
 	record CompositionDiagnostics<T>(
 		int regionCount,

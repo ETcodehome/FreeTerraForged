@@ -26,7 +26,7 @@ public abstract class MixinBiolithDimensionBiomePlacement {
 	protected static ThreadLocal<Vec3i> EVALUATING_BIOME_POS;
 
 	@Inject(method = "getReplacement", at = @At("HEAD"), cancellable = true, remap = false)
-	private void reterraforged$getPreviewReplacement(
+	private void freeterraforged$getPreviewReplacement(
 		int x,
 		int y,
 		int z,
@@ -48,7 +48,7 @@ public abstract class MixinBiolithDimensionBiomePlacement {
 	}
 
 	@Inject(method = "getReplacementEntry", at = @At("HEAD"), cancellable = true, remap = false)
-	private void reterraforged$getPreviewReplacementEntry(
+	private void freeterraforged$getPreviewReplacementEntry(
 		int x,
 		int y,
 		int z,
@@ -67,7 +67,7 @@ public abstract class MixinBiolithDimensionBiomePlacement {
 	}
 
 	@Inject(method = "getReplacementPair", at = @At("HEAD"), cancellable = true, remap = false)
-	private void reterraforged$getPreviewReplacementPair(
+	private void freeterraforged$getPreviewReplacementPair(
 		ResourceKey<Biome> biome,
 		float noise,
 		CallbackInfoReturnable<Pair<ResourceKey<Biome>, Holder<Biome>>> callback

@@ -11,8 +11,8 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(targets = "com.terraformersmc.biolith.impl.biome.DimensionBiomePlacement$SubBiomeRequest", remap = false)
 public interface BiolithSubBiomeRequestAccessor {
 	@Accessor(value = "biome", remap = false)
-	ResourceKey<Biome> reterraforged$getBiome();
+	ResourceKey<Biome> freeterraforged$getBiome();
 
 	@Accessor(value = "criterion", remap = false)
-	Criterion reterraforged$getCriterion();
+	Criterion freeterraforged$getCriterion();
 }

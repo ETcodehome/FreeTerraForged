@@ -22,7 +22,7 @@ public class MixinPlayerChunkSender {
     )
     private static void onSendChunk(ServerGamePacketListenerImpl listener, ServerLevel level, LevelChunk chunk, CallbackInfo ci) {
         if (chunk instanceof IFlowFieldHolder holder) {
-            ChunkFlowField flowField = holder.reterraforged$getFlowField();
+            ChunkFlowField flowField = holder.freeterraforged$getFlowField();
 
             if (flowField != null && flowField.hasRivers()) {
                 listener.send(new ClientboundCustomPayloadPacket(

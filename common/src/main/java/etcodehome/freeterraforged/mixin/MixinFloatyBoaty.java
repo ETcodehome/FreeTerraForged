@@ -23,7 +23,7 @@ public abstract class MixinFloatyBoaty {
     private final int tickLerper = 25;
 
     // 25 ticks = 1.25 seconds at 20tps. Initialized fully active by default.
-    private int reterraforged$upstreamReleaseTicks = tickLerper;
+    private int freeterraforged$upstreamReleaseTicks = tickLerper;
 
     @Inject(
             method = "tick",
@@ -48,7 +48,7 @@ public abstract class MixinFloatyBoaty {
             ChunkAccess chunk = level.getChunk(pos);
 
             if (chunk instanceof IFlowFieldHolder holder) {
-                ChunkFlowField flowField = holder.reterraforged$getFlowField();
+                ChunkFlowField flowField = holder.freeterraforged$getFlowField();
 
                 int localX = pos.getX() & 15;
                 int localZ = pos.getZ() & 15;
@@ -120,14 +120,14 @@ public abstract class MixinFloatyBoaty {
                     // 4. Smooth Lerp Timer Logic
                     if (paddlingAgainstCurrent) {
                         // Reset the timer completely while actively fighting the current
-                        this.reterraforged$upstreamReleaseTicks = 0;
-                    } else if (this.reterraforged$upstreamReleaseTicks < this.tickLerper) {
+                        this.freeterraforged$upstreamReleaseTicks = 0;
+                    } else if (this.freeterraforged$upstreamReleaseTicks < this.tickLerper) {
                         // Increment timer back up toward max
-                        this.reterraforged$upstreamReleaseTicks++;
+                        this.freeterraforged$upstreamReleaseTicks++;
                     }
 
                     // Lerp factor calculation
-                    double alpha = (double) this.reterraforged$upstreamReleaseTicks / (double) this.tickLerper;
+                    double alpha = (double) this.freeterraforged$upstreamReleaseTicks / (double) this.tickLerper;
 
                     // Apply Velocity Floor scaled by river magnitude and lerp alpha
                     if (alpha > 0.0) {

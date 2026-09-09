@@ -15,8 +15,8 @@ public final class FTFLanguageProvider {
 
 		@Override
 		protected void addTranslations() {
-			this.add(FTFTranslationKeys.METADATA_DESCRIPTION, "ReTerraForged resources");
-			this.add(FTFTranslationKeys.PRESET_METADATA_DESCRIPTION, "ReTerraForged preset");
+			this.add(FTFTranslationKeys.METADATA_DESCRIPTION, "FreeTerraForged resources");
+			this.add(FTFTranslationKeys.PRESET_METADATA_DESCRIPTION, "FreeTerraForged preset");
 			this.add(FTFTranslationKeys.MUD_SWAMPS_METADATA_DESCRIPTION, "Changes the swamp material to mud");
 			this.add(FTFTranslationKeys.NO_ERROR_MESSAGE, "{No error message}");
 			

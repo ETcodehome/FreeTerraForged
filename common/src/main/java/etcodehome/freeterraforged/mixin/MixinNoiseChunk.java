@@ -60,7 +60,7 @@ class MixinNoiseChunk {
 					shift = At.Shift.BEFORE
 			)
 	)
-	private void reterraforged$initializeBeforeRouterMapping(
+	private void freeterraforged$initializeBeforeRouterMapping(
 			int cellCountXZ,
 			RandomState randomState,
 			int minBlockX,
@@ -177,7 +177,7 @@ class MixinNoiseChunk {
 		at = @At("RETURN"),
 		method = "cachedClimateSampler"
 	)
-	private void reterraforged$configureUndergroundBiomeBanding(
+	private void freeterraforged$configureUndergroundBiomeBanding(
 		NoiseRouter noiseRouter,
 		List<Climate.ParameterPoint> spawnTarget,
 		CallbackInfoReturnable<Climate.Sampler> callback

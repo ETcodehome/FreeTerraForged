@@ -9,7 +9,7 @@ import net.minecraft.world.level.ChunkPos;
 public record FlowFieldSyncPayload(ChunkPos pos, byte[] rawGrid) implements CustomPacketPayload {
 
     public static final Type<FlowFieldSyncPayload> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath("reterraforged", "flow_sync")
+            ResourceLocation.fromNamespaceAndPath("freeterraforged", "flow_sync")
     );
 
     public static final StreamCodec<FriendlyByteBuf, FlowFieldSyncPayload> CODEC = StreamCodec.of(

@@ -65,7 +65,7 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 		return materialize(this.buildPatchedRegistries(registries).full());
 	}
 
-	private static final Set<String> PREVIEW_NAMESPACES = Set.of("minecraft", "reterraforged");
+	private static final Set<String> PREVIEW_NAMESPACES = Set.of("minecraft", "freeterraforged");
 
 	private static HolderLookup.Provider materialize(HolderLookup.Provider provider) {
 		provider.listRegistries()
@@ -103,7 +103,7 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 			// Only arm registries from known safe namespaces to be extra cautious
 			String namespace = key.location().getNamespace();
 
-			if (namespace.equals("minecraft") || namespace.equals("reterraforged")) {
+			if (namespace.equals("minecraft") || namespace.equals("freeterraforged")) {
 				registryData.runWithArguments(factory::addCodec);
 				armedRegistries.add(key);
 			}
@@ -111,7 +111,7 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 
 		armedRegistries.add(Registries.STRUCTURE_SET);
 
-		// 4. Arm Custom RTF Registries
+		// 4. Arm Custom FTF Registries
 		this.addAndTrack(factory, armedRegistries, FTFRegistries.NOISE, Noise.DIRECT_CODEC);
 		this.addAndTrack(factory, armedRegistries, FTFRegistries.BIOME_MODIFIER, BiomeModifier.DIRECT_CODEC);
 		this.addAndTrack(factory, armedRegistries, FTFRegistries.STRUCTURE_RULE, StructureRule.DIRECT_CODEC);

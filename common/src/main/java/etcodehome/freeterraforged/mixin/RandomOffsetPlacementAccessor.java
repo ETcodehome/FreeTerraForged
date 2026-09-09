@@ -10,8 +10,8 @@ import net.minecraft.world.level.levelgen.placement.RandomOffsetPlacement;
 public interface RandomOffsetPlacementAccessor {
 
 	@Accessor("xzSpread")
-	IntProvider reterraforged$getXzSpread();
+	IntProvider freeterraforged$getXzSpread();
 
 	@Accessor("ySpread")
-	IntProvider reterraforged$getYSpread();
+	IntProvider freeterraforged$getYSpread();
 }

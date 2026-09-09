@@ -11,11 +11,11 @@ import net.minecraft.world.level.levelgen.placement.EnvironmentScanPlacement;
 public interface EnvironmentScanPlacementAccessor {
 
 	@Accessor("directionOfSearch")
-	Direction reterraforged$getDirectionOfSearch();
+	Direction freeterraforged$getDirectionOfSearch();
 
 	@Accessor("targetCondition")
-	BlockPredicate reterraforged$getTargetCondition();
+	BlockPredicate freeterraforged$getTargetCondition();
 
 	@Accessor("allowedSearchCondition")
-	BlockPredicate reterraforged$getAllowedSearchCondition();
+	BlockPredicate freeterraforged$getAllowedSearchCondition();
 }

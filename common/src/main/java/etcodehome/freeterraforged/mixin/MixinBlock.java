@@ -35,7 +35,7 @@ public class MixinBlock {
         ChunkAccess chunk = level.getChunk(pos);
         if (!(chunk instanceof IFlowFieldHolder holder)) return;
 
-        ChunkFlowField flowField = holder.reterraforged$getFlowField();
+        ChunkFlowField flowField = holder.freeterraforged$getFlowField();
         int localX = pos.getX() & 15;
         int localZ = pos.getZ() & 15;
 

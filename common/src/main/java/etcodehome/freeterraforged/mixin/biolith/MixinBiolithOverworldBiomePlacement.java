@@ -19,9 +19,9 @@ public abstract class MixinBiolithOverworldBiomePlacement {
 		),
 		remap = false
 	)
-	private OpenSimplexNoise2 reterraforged$previewReplacementNoise(OverworldBiomePlacement placement) {
+	private OpenSimplexNoise2 freeterraforged$previewReplacementNoise(OverworldBiomePlacement placement) {
 		OpenSimplexNoise2 original = ((BiolithDimensionBiomePlacementAccessor) placement)
-			.reterraforged$getReplacementNoise();
+			.freeterraforged$getReplacementNoise();
 		return BiolithPreviewContext.replacementNoise(original);
 	}
 
@@ -33,8 +33,8 @@ public abstract class MixinBiolithOverworldBiomePlacement {
 		),
 		remap = false
 	)
-	private int[] reterraforged$previewSeedlets(OverworldBiomePlacement placement) {
-		int[] original = ((BiolithDimensionBiomePlacementAccessor) placement).reterraforged$getSeedlets();
+	private int[] freeterraforged$previewSeedlets(OverworldBiomePlacement placement) {
+		int[] original = ((BiolithDimensionBiomePlacementAccessor) placement).freeterraforged$getSeedlets();
 		return BiolithPreviewContext.seedlets(original);
 	}
 }

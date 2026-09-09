@@ -82,13 +82,13 @@ public class ChunkFlowField {
 
     public void writeToNbt(CompoundTag tag) {
         if (hasRivers) {
-            tag.putByteArray("RTFFlowField", flowGrid);
+            tag.putByteArray("FTFFlowField", flowGrid);
         }
     }
 
     public void readFromNbt(CompoundTag tag) {
-        if (tag.contains("RTFFlowField")) {
-            byte[] read = tag.getByteArray("RTFFlowField");
+        if (tag.contains("FTFFlowField")) {
+            byte[] read = tag.getByteArray("FTFFlowField");
             System.arraycopy(read, 0, this.flowGrid, 0, Math.min(read.length, 256));
             this.hasRivers = false;
             for (byte b : this.flowGrid) {

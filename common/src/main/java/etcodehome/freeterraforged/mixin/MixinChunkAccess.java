@@ -28,11 +28,11 @@ import net.minecraft.world.level.chunk.PalettedContainer;
 public abstract class MixinChunkAccess implements FTFChunk, LevelHeightAccessor, IFlowFieldHolder {
 
 	@Unique
-	private final ChunkFlowField reterraforged$flowField = new ChunkFlowField();
+	private final ChunkFlowField freeterraforged$flowField = new ChunkFlowField();
 
 	@Override
-	public ChunkFlowField reterraforged$getFlowField() {
-		return this.reterraforged$flowField;
+	public ChunkFlowField freeterraforged$getFlowField() {
+		return this.freeterraforged$flowField;
 	}
 
 	private OptionalInt maxHeight = OptionalInt.empty();

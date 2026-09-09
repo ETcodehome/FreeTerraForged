@@ -71,21 +71,21 @@ final class SurfacePlacementClassifier {
 
 		EnvironmentScanPlacement scan = (EnvironmentScanPlacement)modifiers.get(scanIndex);
 		EnvironmentScanPlacementAccessor scanAccessor = (EnvironmentScanPlacementAccessor)(Object)scan;
-		Direction direction = scanAccessor.reterraforged$getDirectionOfSearch();
+		Direction direction = scanAccessor.freeterraforged$getDirectionOfSearch();
 		if (direction.getAxis() != Direction.Axis.Y) {
 			return Classification.rejected();
 		}
 
 		RandomOffsetPlacementAccessor offsetAccessor = (RandomOffsetPlacementAccessor)(Object)offset;
-		IntProvider xz = offsetAccessor.reterraforged$getXzSpread();
-		IntProvider y = offsetAccessor.reterraforged$getYSpread();
+		IntProvider xz = offsetAccessor.freeterraforged$getXzSpread();
+		IntProvider y = offsetAccessor.freeterraforged$getYSpread();
 		int expectedY = -direction.getStepY();
 		if (!isConstant(xz, 0) || !isConstant(y, expectedY)) {
 			return Classification.rejected();
 		}
 
-		BlockPredicate allowed = scanAccessor.reterraforged$getAllowedSearchCondition();
-		BlockPredicate target = scanAccessor.reterraforged$getTargetCondition();
+		BlockPredicate allowed = scanAccessor.freeterraforged$getAllowedSearchCondition();
+		BlockPredicate target = scanAccessor.freeterraforged$getTargetCondition();
 		JsonElement allowedJson = encode(allowed, registries);
 		JsonElement targetJson = encode(target, registries);
 		if (allowedJson == null

@@ -1,6 +1,5 @@
 # FreeTerraForged
 A community driven fork of the Legendary ReTerraForged project for modern minecraft providing heavily customizable overworld terrain generation.
-Several novel features have been community contributed to the fork so far including 3D rivers, waterfalls and island generation.
 Additional feature contributions are welcomed via forking and raising a merge PR.
 
 ### We stand on the shoulders of giants
@@ -35,9 +34,6 @@ Additional feature contributions are welcomed via forking and raising a merge PR
 - There are many pages of settings accessible via paging through using [<<] and [>>]
 - Click Done to save your edits.
 - Click Cancel to abandon your edits.
-
-Please note that default presets will never be overwritten, but your edits will impact the world you generate.
-To persist your edits between sessions please create or copy a preset to use as your base, then edit it.
 
 ---
 
