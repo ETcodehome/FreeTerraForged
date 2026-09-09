@@ -27,7 +27,6 @@
 		"MixinChunkSerializer",
 		"MixinBlock",
 		"MixinPlayerChunkSender",
-		"MixinC2MECompilerShield",
 		"MixinWorldGenRegionCache",
 		"MixinHeightRangePlacement",
 		"MixinCountPlacement",

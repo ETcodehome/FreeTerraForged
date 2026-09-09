@@ -971,7 +971,8 @@ public final class WorldgenPlans {
 	public enum StructureAdaptation {
 		NONE,
 		SUBTERRANEAN,
-		VILLAGE
+		VILLAGE,
+		TRAIL_RUINS
 	}
 
 	private static Map<ResourceKey<Biome>, Map<GenerationStep.Carving, List<Holder<ConfiguredWorldCarver<?>>>>> indexCarvers(
@@ -1069,6 +1070,8 @@ public final class WorldgenPlans {
 			StructureAdaptation adaptation = holder.is(BuiltinStructures.TRIAL_CHAMBERS)
 				|| holder.is(BuiltinStructures.ANCIENT_CITY)
 				? StructureAdaptation.SUBTERRANEAN
+				: holder.is(BuiltinStructures.TRAIL_RUINS)
+				? StructureAdaptation.TRAIL_RUINS
 				: holder.is(StructureTags.VILLAGE)
 				? StructureAdaptation.VILLAGE
 				: StructureAdaptation.NONE;

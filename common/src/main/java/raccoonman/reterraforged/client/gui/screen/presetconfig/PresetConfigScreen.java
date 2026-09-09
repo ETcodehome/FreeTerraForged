@@ -19,7 +19,6 @@ import org.apache.commons.io.file.PathUtils;
 
 import com.google.common.collect.ImmutableMap;
 import com.mojang.datafixers.util.Pair;
-
 import net.minecraft.client.gui.screens.worldselection.CreateWorldScreen;
 import net.minecraft.client.gui.screens.worldselection.WorldCreationContext;
 import net.minecraft.core.RegistryAccess;
@@ -47,7 +46,7 @@ public class PresetConfigScreen extends LinkedPageScreen {
 		this.parent = parent;
 		this.currentPage = new PresetListPage(this);
 	}
-	
+
 	@Override
 	public void onClose() {
 		try {
@@ -90,7 +89,7 @@ public class PresetConfigScreen extends LinkedPageScreen {
 		}
 		return this.seed;
 	}
-	
+
 	public WorldCreationContext getSettings() {
 		WorldCreationContext settings = this.parent.getUiState().getSettings();
 		if(this.seedInitialized && this.seed != null && !this.seed.trim().isEmpty()) {
@@ -136,7 +135,7 @@ public class PresetConfigScreen extends LinkedPageScreen {
 		Toasts.notify("dataPack.validation.failed", message, SystemToastId.PACK_LOAD_FAILURE);
 		return SaveResult.STAY_OPEN;
 	}
-	
+
 	public void exportAsDatapack(Path outputPath, PresetEntry presetEntry) throws IOException {
 		Path datagenPath = Files.createTempDirectory("datagen-target-");
 		Path datagenOutputPath = datagenPath.resolve("output");

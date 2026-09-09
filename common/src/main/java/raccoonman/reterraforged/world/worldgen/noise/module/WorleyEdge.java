@@ -43,12 +43,13 @@ record WorleyEdge(float frequency, float distance, EdgeFunction edgeFunction, Di
 	public Noise mapAll(Visitor visitor) {
 		return visitor.apply(this);
 	}
-	
-	public static float sample(float x, float y, int seed, float distance, EdgeFunction edgeFunction, DistanceFunction distanceFunc) {
+
+    public static float sample(float x, float y, int seed, float distance, EdgeFunction edgeFunction, DistanceFunction distanceFunc) {
         int xi = NoiseUtil.floor(x);
         int yi = NoiseUtil.floor(y);
         float nearest1 = Float.MAX_VALUE;
         float nearest2 = Float.MAX_VALUE;
+
         for (int dy = -1; dy <= 1; ++dy) {
             for (int dx = -1; dx <= 1; ++dx) {
                 int cx = xi + dx;
@@ -60,12 +61,22 @@ record WorleyEdge(float frequency, float distance, EdgeFunction edgeFunction, Di
                 if (dist < nearest1) {
                     nearest2 = nearest1;
                     nearest1 = dist;
-                }
-                else if (dist < nearest2) {
+                } else if (dist < nearest2) {
                     nearest2 = dist;
                 }
             }
         }
-        return edgeFunction.apply(nearest1, nearest2);
+
+        // Clamp nearest1 to prevent division-by-zero in EdgeFunction implementations
+        nearest1 = Math.max(1.0E-6F, nearest1);
+
+        float result = edgeFunction.apply(nearest1, nearest2);
+
+        // Guard against NaN or Infinity leaking out of edge computations
+        if (Float.isNaN(result) || Float.isInfinite(result)) {
+            return edgeFunction.min();
+        }
+
+        return result;
     }
 }

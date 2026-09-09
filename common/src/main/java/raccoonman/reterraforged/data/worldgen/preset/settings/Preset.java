@@ -124,6 +124,8 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 		this.addAndTrack(factory, armedRegistries, RTFRegistries.PRESET, Preset.DIRECT_CODEC);
 
 		// 5. Wrap registries in a safety shield
+		// This ensures the cloner only sees registries we explicitly gave it a codec for.
+		// Unarmed registries (like mixed_litter) will be ignored safely.
 		HolderLookup.Provider safeSource = this.filterToArmedOnly(registries, armedRegistries);
 
 		return builder.buildPatch(
