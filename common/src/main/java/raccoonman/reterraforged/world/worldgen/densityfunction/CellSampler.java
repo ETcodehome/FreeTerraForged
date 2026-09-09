@@ -4,7 +4,7 @@ import java.util.function.Supplier;
 
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.KeyDispatchCodec;
-import net.minecraft.world.level.levelgen.DensityFunction;
+
 import org.jetbrains.annotations.Nullable;
 
 import com.mojang.serialization.Codec;
@@ -14,6 +14,8 @@ import net.minecraft.core.QuartPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.util.KeyDispatchDataCodec;
 import net.minecraft.util.StringRepresentable;
+import net.minecraft.world.level.levelgen.DensityFunction;
+import net.minecraft.world.level.levelgen.DensityFunctions;
 import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings.ControlPoints;
 import raccoonman.reterraforged.world.worldgen.biome.Continentalness;
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
@@ -26,9 +28,12 @@ import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 import raccoonman.reterraforged.world.worldgen.util.PosUtil;
 
-public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) implements MarkerFunction.Mapped {
+public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) implements MarkerFunction.Mapped, RTFCellFunction {
 	private static final ThreadLocal<Cache2d> CELL = ThreadLocal.withInitial(Cache2d::new);
 	private static final ThreadLocal<Cell> SHARED_FAST_CELL = ThreadLocal.withInitial(Cell::new);
+
+	@Override
+	public CellSampler rtf$unwrap() { return this; }
 
 	@Override
 	public double compute(DensityFunction.FunctionContext ctx) {
@@ -80,13 +85,13 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 			return this.cell;
 		}
 	}
-	
+
 	public class CacheChunk implements MarkerFunction.Mapped {
 		@Nullable
-		private Tile.Chunk chunk;
-		private Cache2d cache2d;
-		private int chunkX, chunkZ;
-		
+		private final Tile.Chunk chunk;
+		private final Cache2d cache2d;
+		private final int chunkX, chunkZ;
+
 		public CacheChunk(@Nullable Tile.Chunk chunk, @Nullable Cache2d cache2d, int chunkX, int chunkZ) {
 			this.chunk = chunk;
 			this.cache2d = cache2d != null ? cache2d : new Cache2d();
@@ -98,12 +103,13 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 		public double compute(FunctionContext ctx) {
 			int blockX = ctx.blockX();
 			int blockZ = ctx.blockZ();
-			int chunkX = SectionPos.blockToSectionCoord(blockX);
-			int chunkZ = SectionPos.blockToSectionCoord(blockZ);
+			int currentChunkX = SectionPos.blockToSectionCoord(blockX);
+			int currentChunkZ = SectionPos.blockToSectionCoord(blockZ);
+
 			WorldLookup worldLookup = CellSampler.this.deferredLookup.get();
-			Cell cell = (this.chunk != null && this.chunkX == chunkX && this.chunkZ == chunkZ) ? 
-				this.chunk.getCell(blockX, blockZ) :
-				this.cache2d.getAndUpdate(worldLookup, blockX, blockZ, false);
+			Cell cell = (this.chunk != null && this.chunkX == currentChunkX && this.chunkZ == currentChunkZ) ?
+					this.chunk.getCell(blockX, blockZ) :
+					this.cache2d.getAndUpdate(worldLookup, blockX, blockZ, true);
 			return CellSampler.this.field.read(cell, worldLookup.getHeightmap());
 		}
 
@@ -271,4 +277,13 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 		
 		public abstract float read(Cell cell, Heightmap heightmap);
 	}
+	@Override
+	public boolean equals(Object o) {
+		return o instanceof CellSampler other && this.field == other.field;
+	}
+	@Override
+	public int hashCode() {
+		return field.hashCode();
+	}
+
 }
