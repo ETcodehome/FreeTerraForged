@@ -8,10 +8,10 @@
   	"MixinPresetEditor"
   ],
   "mixins": [
-    "etcodehome.freeterraforged.fabric.mixin.MixinBiolithTerraBlenderCompat",
-    "etcodehome.freeterraforged.fabric.mixin.MixinChunkStatusTasks",
-    "etcodehome.freeterraforged.fabric.mixin.MixinMinecraftServer",
-    "etcodehome.freeterraforged.fabric.mixin.MixinBiomeModificationImpl"
+    "MixinBiolithTerraBlenderCompat",
+    "MixinChunkStatusTasks",
+    "MixinMinecraftServer",
+    "MixinBiomeModificationImpl"
   ],
   "injectors": {
     "defaultRequire": 1
