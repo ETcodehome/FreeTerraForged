@@ -192,7 +192,14 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 		});
 
 		this.openPresetFolder = PresetWidgets.createThrowingButton(FTFTranslationKeys.GUI_BUTTON_OPEN_PRESET_FOLDER, () -> {
-			Util.getPlatform().openUri(PRESET_PATH.toUri());
+			Path folderToOpen = PRESET_PATH;
+			if (this.left != null && this.left.getSelected() != null && this.left.getSelected().getWidget() instanceof PresetEntry entry && entry.isLegacy()) {
+				Path parent = entry.getPath().getParent();
+				if (parent != null) {
+					folderToOpen = parent;
+				}
+			}
+			Util.getPlatform().openUri(folderToOpen.toUri());
 			this.rebuildPresets();
 		});
 
@@ -436,6 +443,7 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 	}
 
 	private List<PresetEntry> listPresets(Path path) throws IOException {
+		boolean isLegacy = !path.equals(PRESET_PATH);
 		List<PresetEntry> presets = new ArrayList<>();
 		if(Files.exists(path)) {
 			try (var stream = Files.list(path)) {
@@ -450,7 +458,7 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 						Preset preset = result.resultOrPartial(err -> {}).orElse(null);
 						if(preset != null) {
 							Component label = Component.literal(base).withStyle(ChatFormatting.GOLD);
-							presets.add(new PresetEntry(base, label, preset, false, this));
+							presets.add(new PresetEntry(presetPath, base, label, preset, false, isLegacy, this));
 						}
 					} catch (Exception e) {
 						// Silently ignore malformed files or reading hiccups
@@ -559,25 +567,45 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 
 	// Center-aligned preset list entry with subtext tag underneath
 	public static class PresetEntry extends Label {
+		private final Path path;
 		private String rawName;
 		private Component displayName;
 		private Preset preset;
 		private boolean builtin;
+		private boolean legacy;
 
-		public PresetEntry(String rawName, Component displayName, Preset preset, boolean builtin, OnPress onPress) {
+		public PresetEntry(Path path, String rawName, Component displayName, Preset preset, boolean builtin, boolean legacy, OnPress onPress) {
 			super(-1, -1, -1, -1, onPress, displayName);
+			this.path = path;
 			this.rawName = rawName;
 			this.displayName = displayName;
 			this.preset = preset;
 			this.builtin = builtin;
+			this.legacy = legacy;
 		}
 
-		public PresetEntry(String rawName, Component displayName, Preset preset, boolean builtin, PresetListPage page) {
-			this(rawName, displayName, preset, builtin, (b) -> {
+		public PresetEntry(Path path, String rawName, Component displayName, Preset preset, boolean builtin, boolean legacy, PresetListPage page) {
+			this(path, rawName, displayName, preset, builtin, legacy, (b) -> {
 				if(b instanceof PresetEntry entry) {
 					page.selectPreset(entry);
 				}
 			});
+		}
+
+		public PresetEntry(Path path, String rawName, Component displayName, Preset preset, boolean builtin, OnPress onPress) {
+			this(path, rawName, displayName, preset, builtin, false, onPress);
+		}
+
+		public PresetEntry(Path path, String rawName, Component displayName, Preset preset, boolean builtin, PresetListPage page) {
+			this(path, rawName, displayName, preset, builtin, false, page);
+		}
+
+		public PresetEntry(String rawName, Component displayName, Preset preset, boolean builtin, OnPress onPress) {
+			this(PRESET_PATH.resolve(rawName + ".json"), rawName, displayName, preset, builtin, false, onPress);
+		}
+
+		public PresetEntry(String rawName, Component displayName, Preset preset, boolean builtin, PresetListPage page) {
+			this(PRESET_PATH.resolve(rawName + ".json"), rawName, displayName, preset, builtin, false, page);
 		}
 
 		public PresetEntry(Component displayName, Preset preset, boolean builtin, OnPress onPress) {
@@ -604,8 +632,12 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 			return this.builtin;
 		}
 
+		public boolean isLegacy() {
+			return this.legacy;
+		}
+
 		public Path getPath() {
-			return PRESET_PATH.resolve(this.rawName + ".json");
+			return this.path;
 		}
 
 		@Override
@@ -621,9 +653,14 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 			graphics.drawCenteredString(font, this.displayName, x + w / 2, y + 2, textColor);
 
 			// 2. Small subtext tag centered underneath (with last modified timestamp from presentation settings)
-			Component baseSubtext = this.builtin
-					? Component.translatable(FTFTranslationKeys.GUI_LABEL_TEMPLATE_PRESET)
-					: Component.translatable(FTFTranslationKeys.GUI_LABEL_USER_PRESET);
+			Component baseSubtext;
+			if (this.builtin) {
+				baseSubtext = Component.translatable(FTFTranslationKeys.GUI_LABEL_TEMPLATE_PRESET);
+			} else if (this.legacy) {
+				baseSubtext = Component.translatable(FTFTranslationKeys.GUI_LABEL_LEGACY_USER_PRESET);
+			} else {
+				baseSubtext = Component.translatable(FTFTranslationKeys.GUI_LABEL_USER_PRESET);
+			}
 
 			String lastModified = this.preset.presentation().lastModified;
 			Component subtext = (lastModified != null && !lastModified.isEmpty())
