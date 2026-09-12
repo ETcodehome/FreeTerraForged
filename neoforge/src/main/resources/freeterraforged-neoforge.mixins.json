@@ -1,0 +1,17 @@
+{
+  "required": true,
+  "package": "etcodehome.freeterraforged.neoforge.mixin",
+  "minVersion": "0.8",
+  "compatibilityLevel": "JAVA_21",
+  "plugin": "etcodehome.freeterraforged.neoforge.mixin.NeoForgeOptionalMixinPlugin",
+	"mixins": [
+      "MixinBiolithTerraBlenderCompat",
+  	  "MixinTagsProvider",
+      "MixinBiomeGenerationSettingsPlainsBuilder",
+      "MixinChunkStatusTasks",
+      "MixinMinecraftServer"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

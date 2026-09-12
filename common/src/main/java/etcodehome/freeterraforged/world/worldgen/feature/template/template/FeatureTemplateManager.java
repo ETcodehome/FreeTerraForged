@@ -1,0 +1,41 @@
+package etcodehome.freeterraforged.world.worldgen.feature.template.template;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.packs.resources.ResourceManager;
+import etcodehome.freeterraforged.FTFCommon;
+
+public class FeatureTemplateManager {
+	private ResourceManager resourceManager;
+	private Map<ResourceLocation, FeatureTemplate> cache;
+	
+	public FeatureTemplateManager(ResourceManager resourceManager) {
+		this.resourceManager = resourceManager;
+		this.cache = new ConcurrentHashMap<>();
+	}
+	
+	public void onReload(ResourceManager resourceManager) {
+		this.resourceManager = resourceManager;
+		this.cache.clear();
+	}
+	
+	public FeatureTemplate load(ResourceLocation location) {
+		return this.cache.computeIfAbsent(location, this::read);
+	}
+
+	private FeatureTemplate read(ResourceLocation location) {
+		return this.resourceManager.getResource(location).flatMap((resource) -> {
+			try (InputStream stream = resource.open()) {
+				return FeatureTemplate.load(stream);
+			} catch (IOException e) {
+				FTFCommon.LOGGER.error("Failed to load template at " + location, e);
+				return Optional.empty();
+			}
+		}).orElse(null);
+	}
+}

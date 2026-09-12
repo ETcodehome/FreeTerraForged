@@ -1,0 +1,23 @@
+package etcodehome.freeterraforged.world.worldgen.terrablender;
+
+import java.util.List;
+
+import com.google.common.collect.ImmutableList;
+
+import etcodehome.freeterraforged.platform.ModLoaderUtil;
+
+public class TBCompat {
+	public static final List<String> TERRABLENDER_COMPAT_MIXINS = ImmutableList.of(mixinClass("terrablender.MixinClimateSampler"), mixinClass("terrablender.MixinNamespacedSurfaceRuleSource"), mixinClass("terrablender.MixinNoiseChunk"), mixinClass("terrablender.MixinParameterList"), mixinClass("terrablender.MixinTargetPoint"), mixinClass("terrablender.SurfaceRulesContextAccessor"));
+	
+	public static boolean isEnabled() {
+		return ModLoaderUtil.isLoaded("terrablender");
+	}
+	
+	public static boolean isTBMixin(String mixinClassName) {
+		return TERRABLENDER_COMPAT_MIXINS.contains(mixinClassName);
+	}
+	
+	private static String mixinClass(String className) {
+		return "etcodehome.freeterraforged.mixin." + className;
+	}
+}
