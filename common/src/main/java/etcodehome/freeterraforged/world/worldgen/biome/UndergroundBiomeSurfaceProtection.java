@@ -14,7 +14,7 @@ public final class UndergroundBiomeSurfaceProtection {
 
 	private static final float DEPTH_UNITS_PER_BLOCK = 1.0F / 128.0F;
 	private static final float SURFACE_DEPTH = NoiseRouterData.GLOBAL_OFFSET + 0.5F;
-	private static final float EXTRA_SAFETY_MARGIN_BLOCKS = 8.0F;
+	private static final float EXTRA_SAFETY_MARGIN_BLOCKS = 16.0F;
 
 	private UndergroundBiomeSurfaceProtection() {
 	}
