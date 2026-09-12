@@ -15,6 +15,7 @@ public final class FTFTranslationKeys {
 	public static final String GUI_HEADER_INCLUDED_TEMPLATES = resolve("gui.header.included_templates");
 	public static final String GUI_LABEL_TEMPLATE_PRESET = resolve("gui.label.template_preset");
 	public static final String GUI_LABEL_USER_PRESET = resolve("gui.label.user_preset");
+	public static final String GUI_LABEL_LEGACY_USER_PRESET = resolve("gui.label.legacy_user_preset");
 	public static final String METADATA_DESCRIPTION = resolve("metadata.description");
 	public static final String PRESET_METADATA_DESCRIPTION = resolve("preset.metadata.description");
 	public static final String MUD_SWAMPS_METADATA_DESCRIPTION = resolve("mudSwamps.metadata.description");

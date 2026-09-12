@@ -11,6 +11,7 @@
   "freeterraforged.gui.header.included_templates": "Included Templates",
   "freeterraforged.gui.label.template_preset": "Template Preset",
   "freeterraforged.gui.label.user_preset": "User Preset",
+  "freeterraforged.gui.label.legacy_user_preset": "Legacy User Preset",
   "freeterraforged.error.noMessage": "{No error message}",
   "freeterraforged.gui.button.biomeEdgeType": "Type",
   "freeterraforged.gui.button.biomeEdgeType.tooltip": "The noise type",
