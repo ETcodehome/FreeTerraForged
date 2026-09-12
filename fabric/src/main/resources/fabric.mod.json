@@ -3,13 +3,15 @@
   "id": "freeterraforged",
   "version": "${version}",
   "name": "FreeTerraForged",
-  "description": "A continuation of https://github.com/TerraForged/TerraForged",
+  "description": "Heavily customizable and feature rich overworld terrain generation options.",
   "authors": [
 	"dags",
 	"Won-Ton",
-	"etcodehome",
-    "psiber"
+	"racoonman2",
+    "psiber",
+    "squinch"
   ],
+  "credits":"The wider TerraForged community, in all its past and present iterations.",
   "contact": {
     "repo": "https://github.com/etcodehome/freeterraforged/",
     "issues": "https://github.com/etcodehome/freeterraforged/issues"

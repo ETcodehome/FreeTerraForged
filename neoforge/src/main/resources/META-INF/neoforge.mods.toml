@@ -11,13 +11,13 @@ license="MIT"
 [[mods]]
     modId="freeterraforged"
     displayName="FreeTerraForged"
-    version="0.0.6005"
-    authors="dags,Won-Ton,raccoonman,psiber"
-    credits="dags,Won-Ton,raccoonman,psiber"
+    version="0.0.6006"
+    authors="dags, Won-Ton, racoonman, psiber, squinch"
+    credits="The wider TerraForged community, in all its past and present iterations."
     logoFile="logo.png"
     displayURL="https://github.com/etcodehome/freeterraforged/"
     issueTrackerURL="https://github.com/etcodehome/freeterraforged/issues"
-    description="A continuation of https://github.com/TerraForged/TerraForged"
+    description="Heavily customizable and feature rich overworld terrain generation options."
 
 [[dependencies.freeterraforged]]
     modId="neoforge"
