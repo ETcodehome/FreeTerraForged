@@ -67,7 +67,7 @@ public class ArchipelagoPopulator implements CellPopulator {
         this.levels = levels;
         this.controlPoints = controlPoints;
         this.oceanDepth = oceanDepth;
-        int salt = seed.get();
+        int salt = Seed.toInt(seed.get());
 
         int size = Math.round(settings.islandSize);
         float hScale = Math.max(0.1F, settings.islandHorizontalScale);

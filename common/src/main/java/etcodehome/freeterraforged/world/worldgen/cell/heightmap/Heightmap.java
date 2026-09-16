@@ -100,11 +100,11 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
         int regionWarpStrength = 200;
         
         RegionConfig regionConfig = new RegionConfig(
-        	ctx.seed.root() + 789124, 
-        	general.terrainRegionSize, 
-        	Noises.simplex(regionWarp.next(), regionWarpScale, 1),
-        	Noises.simplex(regionWarp.next(), regionWarpScale, 1), 
-        	regionWarpStrength
+            Seed.toInt(ctx.seed.root() + 789124L),
+            general.terrainRegionSize,
+            Noises.simplex(regionWarp.next(), regionWarpScale, 1),
+            Noises.simplex(regionWarp.next(), regionWarpScale, 1),
+            regionWarpStrength
         );
         Levels levels = ctx.levels;
         float terrainFrequency = 1.0F / terrainSettings.general.globalHorizontalScale;
