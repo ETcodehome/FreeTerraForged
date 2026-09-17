@@ -11,6 +11,7 @@ import etcodehome.freeterraforged.world.worldgen.cell.rivermap.wetland.Wetland;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.wetland.WetlandConfig;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.util.PosUtil;
+import etcodehome.freeterraforged.world.worldgen.util.Seed;
 import etcodehome.freeterraforged.world.worldgen.util.Variance;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.RiverGenerator;
@@ -35,7 +36,7 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
         this.levels = context.levels;
         this.continentScale = context.preset.world().continent.continentScale;
         this.minEdgeValue = context.preset.world().controlPoints.inland;
-        this.seed = context.seed.root() + context.preset.rivers().seedOffset;
+        this.seed = Seed.toInt(context.seed.root() + context.preset.rivers().seedOffset);
         this.count = context.preset.rivers().riverCount;
         this.main = RiverConfig.builder(context.levels).bankHeight(context.preset.rivers().mainRivers.minBankHeight, context.preset.rivers().mainRivers.maxBankHeight).bankWidth(context.preset.rivers().mainRivers.bankWidth).bedWidth(context.preset.rivers().mainRivers.bedWidth).bedDepth(context.preset.rivers().mainRivers.bedDepth).fade(context.preset.rivers().mainRivers.fade).length(5000).main(true).order(0).build();
         this.fork = RiverConfig.builder(context.levels).bankHeight(context.preset.rivers().branchRivers.minBankHeight, context.preset.rivers().branchRivers.maxBankHeight).bankWidth(context.preset.rivers().branchRivers.bankWidth).bedWidth(context.preset.rivers().branchRivers.bedWidth).bedDepth(context.preset.rivers().branchRivers.bedDepth).fade(context.preset.rivers().branchRivers.fade).length(4500).order(1).build();

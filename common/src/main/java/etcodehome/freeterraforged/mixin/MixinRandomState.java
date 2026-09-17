@@ -34,6 +34,7 @@ import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.levelgen.DensityFunction.NoiseHolder;
 import net.minecraft.world.level.levelgen.synth.NormalNoise;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
+import etcodehome.freeterraforged.world.worldgen.util.Seed;
 
 @Mixin(RandomState.class)
 @Implements(@Interface(iface = FTFRandomState.class, prefix = "freeterraforged$FTFRandomState$"))
@@ -65,7 +66,7 @@ class MixinRandomState {
 			public DensityFunction apply(DensityFunction function) {
 
 				if(function instanceof NoiseFunction.Marker marker) {
-					return new NoiseFunction(marker.noise(), (int) seed);
+					return new NoiseFunction(marker.noise(), Seed.toInt(seed));
 				}
 
 				if(function instanceof CellSampler.Marker marker) {
@@ -126,7 +127,7 @@ class MixinRandomState {
 				PerformanceConfig config = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
 						.resultOrPartial(FTFCommon.LOGGER::error)
 						.orElseGet(PerformanceConfig::makeDefault);
-				this.generatorContext = GeneratorContext.makeCached(this.preset, noises, (int) this.seed, config.tileSize(), config.batchCount(), ThreadPools.availableProcessors() > 4);
+				this.generatorContext = GeneratorContext.makeCached(this.preset, noises, this.seed, config.tileSize(), config.batchCount(), ThreadPools.availableProcessors() > 4);
 				if ((Object) this.sampler instanceof FTFClimateSampler ftfClimateSampler) {
 					ftfClimateSampler.setUndergroundBiomeSurfaceContext(this.generatorContext);
 				}
@@ -148,7 +149,7 @@ class MixinRandomState {
 	}
 
 	public Noise freeterraforged$FTFRandomState$seed(Noise noise) {
-		return Noises.shiftSeed(noise, (int) this.seed);
+		return Noises.shiftSeed(noise, Seed.toInt(this.seed));
 	}
 
 	public long freeterraforged$FTFRandomState$seed() { return this.seed;	}

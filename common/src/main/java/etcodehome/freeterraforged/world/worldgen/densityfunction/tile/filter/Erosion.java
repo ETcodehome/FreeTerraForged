@@ -7,6 +7,7 @@ import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.util.FastRandom;
+import etcodehome.freeterraforged.world.worldgen.util.Seed;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.FilterSettings;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Size;
 
@@ -191,7 +192,7 @@ public class Erosion implements Filter {
     }
     
     public static IntFunction<Erosion> factory(final GeneratorContext context) {
-        return new Factory(context.seed.root(), context.preset.filters(), context.levels);
+        return new Factory(Seed.toInt(context.seed.root()), context.preset.filters(), context.levels);
     }
     
     private static class TerrainPos

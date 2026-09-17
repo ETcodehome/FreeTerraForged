@@ -213,7 +213,7 @@ public interface IPreviewHandler {
         WorldSettings.Properties properties = presetObj.world().properties;
         Levels levels = new Levels(properties.terrainScaler(), properties.worldHeight, properties.worldDepth, properties.seaLevel);
 
-        int seed = (int) settings.options().seed();
+        long seed = settings.options().seed();
         int zoomLevel = getZoom();
         int localOffsetX = page.previewNavigationX();
         int localOffsetZ = page.previewNavigationZ();
