@@ -13,6 +13,7 @@ import net.minecraft.core.QuartPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.util.KeyDispatchDataCodec;
 import net.minecraft.util.StringRepresentable;
+import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.levelgen.DensityFunction;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.ControlPoints;
 import etcodehome.freeterraforged.world.worldgen.biome.Continentalness;
@@ -27,6 +28,11 @@ import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.util.PosUtil;
 
 public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) implements MarkerFunction.Mapped, FTFCellFunction {
+	// Ocean ranges share an inclusive endpoint. A target on that endpoint ties
+	// both biomes, allowing Climate.RTree's previous result to paint scan-line bands.
+	// Stay one quantized climate unit inside the terrain category on either side.
+	private static final float DEEP_OCEAN_MAX = Climate.unquantizeCoord(Climate.quantizeCoord(Continentalness.DEEP_OCEAN.max()) - 1);
+	private static final float SHALLOW_OCEAN_MIN = Climate.unquantizeCoord(Climate.quantizeCoord(Continentalness.OCEAN.min()) + 1);
 	private static final ThreadLocal<Cache2d> CELL = ThreadLocal.withInitial(Cache2d::new);
 	private static final ThreadLocal<Cell> SHARED_FAST_CELL = ThreadLocal.withInitial(Cell::new);
 
@@ -159,9 +165,12 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 				}
 
 				if(cell.terrain.isDeepOcean()) {
+					if(deepOcean <= 0.0F) {
+						return Continentalness.DEEP_OCEAN.mid();
+					}
 					float alpha = NoiseUtil.clamp(cell.continentEdge, 0.0F, deepOcean);
 					alpha = NoiseUtil.lerp(alpha, 0.0F, deepOcean, 0.0F, 1.0F);
-					return NoiseUtil.lerp(Continentalness.DEEP_OCEAN.min() + 0.05F, Continentalness.DEEP_OCEAN.max(), alpha);					
+					return Math.min(DEEP_OCEAN_MAX, NoiseUtil.lerp(Continentalness.DEEP_OCEAN.min() + 0.05F, Continentalness.DEEP_OCEAN.max(), alpha));
 				}
 				
 				if(cell.terrain.isShallowOcean()) {
@@ -170,7 +179,7 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 					}
 					float alpha = NoiseUtil.clamp(cell.continentEdge, deepOcean, shallowOcean);
 					alpha = NoiseUtil.lerp(alpha, deepOcean, shallowOcean, 0.0F, 0.98F);
-					return NoiseUtil.lerp(Continentalness.OCEAN.min(), Continentalness.OCEAN.max(), alpha);
+					return Math.max(SHALLOW_OCEAN_MIN, NoiseUtil.lerp(Continentalness.OCEAN.min(), Continentalness.OCEAN.max(), alpha));
 				}
 				
 				if(cell.terrain.getDelegate() == TerrainCategory.BEACH && cell.height + cell.beachNoise < levels.water(5)) {
