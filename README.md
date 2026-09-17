@@ -20,16 +20,17 @@ Additional feature contributions are welcomed via forking and raising a merge PR
 ---
 
 ### Select a preset 
-<img width="1186" height="754" alt="image" src="https://github.com/user-attachments/assets/65a8e11e-1d76-42ce-bfd5-9fd34c9adfda" />
+<img width="1579" height="743" alt="image" src="https://github.com/user-attachments/assets/fb9fc15b-dd2c-4970-bc11-b4d873fe6830" />
 
-- Use existing settings directly via [Done]
-- Customize the selected preset via [>>]
-- Copy or create fresh presets using the right hand menu
+- Use template settings directly by clicking [Done]
+- Customize the selected preset settings by clicking [Edit]
+- Manage preset modifications using the right hand menu options.
 
 ---
 
 ### Customize your world
-<img width="3840" height="2100" alt="image" src="https://github.com/user-attachments/assets/0b053a98-c8ec-4b92-b6ad-8dfc41eacf8a" />
+<img width="2345" height="1244" alt="image" src="https://github.com/user-attachments/assets/93e99f98-da19-4718-a283-3c9f5dee8362" />
+<img width="2345" height="1244" alt="image" src="https://github.com/user-attachments/assets/3d033148-aa9c-44c0-bbdb-971aef581267" />
 
 - There are many pages of settings accessible via paging through using [<<] and [>>]
 - Click Done to save your edits.
