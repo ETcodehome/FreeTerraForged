@@ -1,0 +1,220 @@
+package etcodehome.freeterraforged.client.gui.screen.presetconfig;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ForkJoinPool;
+import java.util.function.Supplier;
+
+import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
+
+/**
+ * A screen-scoped cache for immutable preview results.
+ *
+ * Provides zero-allocation LRU eviction, decoupled locking, and async sidecar offloading.
+ */
+final class PreviewComputationCache implements AutoCloseable {
+    private static final int MAX_TILE_ENTRIES = 6;
+    private static final int MAX_SIDECAR_ENTRIES = 8;
+
+    private final Object tileLock = new Object();
+    private final Object sidecarLock = new Object();
+
+    private final LinkedHashMap<TileKey, TileEntry> tiles = new LinkedHashMap<>(16, 0.75F, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<TileKey, TileEntry> eldest) {
+            if (size() > MAX_TILE_ENTRIES && eldest.getValue().references == 0) {
+                eldest.getValue().evict();
+                return true;
+            }
+            return false;
+        }
+    };
+
+    private final LinkedHashMap<SidecarKey, CompletableFuture<BiomePreview.Sidecar>> sidecars = new LinkedHashMap<>(16, 0.75F, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<SidecarKey, CompletableFuture<BiomePreview.Sidecar>> eldest) {
+            return size() > MAX_SIDECAR_ENTRIES && eldest.getValue().isDone();
+        }
+    };
+
+    private boolean closed;
+
+    TileLease acquire(TileKey key) {
+        synchronized (this.tileLock) {
+            if (this.closed) {
+                return null;
+            }
+            TileEntry entry = this.tiles.get(key);
+            return entry == null ? null : entry.retain();
+        }
+    }
+
+    TileLease store(TileKey key, Tile tile) {
+        Objects.requireNonNull(tile, "tile");
+        synchronized (this.tileLock) {
+            if (this.closed) {
+                tile.close();
+                return null;
+            }
+
+            TileEntry existing = this.tiles.get(key);
+            if (existing != null) {
+                tile.close();
+                return existing.retain();
+            }
+
+            TileEntry entry = new TileEntry(tile);
+            this.tiles.put(key, entry);
+            return entry.retain();
+        }
+    }
+
+    CompletableFuture<BiomePreview.Sidecar> sidecar(
+            SidecarKey key,
+            Supplier<BiomePreview.Sidecar> supplier
+    ) {
+        return sidecar(key, supplier, ForkJoinPool.commonPool());
+    }
+
+    CompletableFuture<BiomePreview.Sidecar> sidecar(
+            SidecarKey key,
+            Supplier<BiomePreview.Sidecar> supplier,
+            Executor executor
+    ) {
+        CompletableFuture<BiomePreview.Sidecar> future;
+        boolean owner = false;
+
+        synchronized (this.sidecarLock) {
+            if (this.closed) {
+                return CompletableFuture.failedFuture(new IllegalStateException("Preview cache is closed"));
+            }
+            future = this.sidecars.get(key);
+            if (future == null) {
+                future = new CompletableFuture<>();
+                this.sidecars.put(key, future);
+                owner = true;
+            }
+        }
+
+        if (owner) {
+            final CompletableFuture<BiomePreview.Sidecar> targetFuture = future;
+            CompletableFuture.supplyAsync(supplier, executor)
+                    .whenComplete((result, throwable) -> {
+                        if (throwable != null) {
+                            targetFuture.completeExceptionally(throwable);
+                            synchronized (this.sidecarLock) {
+                                if (this.sidecars.get(key) == targetFuture) {
+                                    this.sidecars.remove(key);
+                                }
+                            }
+                        } else {
+                            targetFuture.complete(result);
+                        }
+                    });
+        }
+        return future;
+    }
+
+    @Override
+    public void close() {
+        synchronized (this.tileLock) {
+            synchronized (this.sidecarLock) {
+                if (this.closed) {
+                    return;
+                }
+                this.closed = true;
+                for (TileEntry entry : this.tiles.values()) {
+                    entry.evict();
+                }
+                this.tiles.clear();
+                this.sidecars.clear();
+            }
+        }
+    }
+
+    record TileKey(BiomePreview.CacheKey revision, int centerX, int centerZ, int zoom, int size, boolean biomePipeline) {
+    }
+
+    record SidecarKey(BiomePreview.CacheKey revision, int centerX, int centerZ, int zoom, int size) {
+    }
+
+    final class TileLease implements AutoCloseable {
+        private TileEntry entry;
+
+        private TileLease(TileEntry entry) {
+            this.entry = entry;
+        }
+
+        Tile tile() {
+            TileEntry current = this.entry;
+            if (current == null) {
+                throw new IllegalStateException("Preview tile lease is closed");
+            }
+            return current.tile;
+        }
+
+        TileLease retain() {
+            TileEntry current = this.entry;
+            if (current == null) {
+                throw new IllegalStateException("Preview tile lease is closed");
+            }
+            synchronized (PreviewComputationCache.this.tileLock) {
+                return current.retain();
+            }
+        }
+
+        @Override
+        public void close() {
+            TileEntry current = this.entry;
+            if (current == null) {
+                return;
+            }
+            this.entry = null;
+            synchronized (PreviewComputationCache.this.tileLock) {
+                current.release();
+            }
+        }
+    }
+
+    private final class TileEntry {
+        private final Tile tile;
+        private int references;
+        private boolean evicted;
+        private boolean recycled;
+
+        private TileEntry(Tile tile) {
+            this.tile = tile;
+        }
+
+        private TileLease retain() {
+            if (this.recycled) {
+                throw new IllegalStateException("Preview tile was recycled");
+            }
+            this.references++;
+            return new TileLease(this);
+        }
+
+        private void release() {
+            if (this.references <= 0) {
+                throw new IllegalStateException("Preview tile lease underflow");
+            }
+            this.references--;
+            this.recycleIfUnused();
+        }
+
+        private void evict() {
+            this.evicted = true;
+            this.recycleIfUnused();
+        }
+
+        private void recycleIfUnused() {
+            if (this.evicted && this.references == 0 && !this.recycled) {
+                this.recycled = true;
+                this.tile.close();
+            }
+        }
+    }
+}

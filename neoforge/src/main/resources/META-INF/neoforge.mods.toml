@@ -3,32 +3,48 @@ loaderVersion="[4,)"
 license="MIT"
 
 [[mixins]]
-    config = "reterraforged-common.mixins.json"
+    config = "freeterraforged-common.mixins.json"
 
 [[mixins]]
-    config = "reterraforged-neoforge.mixins.json"
+    config = "freeterraforged-neoforge.mixins.json"
 
 [[mods]]
-    modId="reterraforged"
-    displayName="ReTerraForged"
-    version="0.0.6005"
-    authors="dags,Won-Ton,raccoonman,psiber"
-    credits="dags,Won-Ton,raccoonman,psiber"
+    modId="freeterraforged"
+    displayName="FreeTerraForged"
+    version="${version}"
+    authors="dags,Won-Ton,racoonman2,psiber,squinch"
+    credits="raccoonman and the wider TerraForged community, in all its past and present iterations."
     logoFile="logo.png"
-    displayURL="https://github.com/racoonman2/reterraforged/"
-    issueTrackerURL="https://github.com/racoonman2/reterraforged/issues"
-    description="A continuation of https://github.com/TerraForged/TerraForged"
+    displayURL="https://github.com/etcodehome/freeterraforged/"
+    issueTrackerURL="https://github.com/etcodehome/freeterraforged/issues"
+    description="FreeTerraForged is a community-driven fork of ReTerraForged for modern Minecraft, providing highly customizable Overworld terrain generation and continuing the TerraForged lineage."
 
-[[dependencies.reterraforged]]
+[[dependencies.freeterraforged]]
     modId="neoforge"
     mandatory=true
     versionRange="[21,)"
     ordering="NONE"
     side="BOTH"
 
-[[dependencies.reterraforged]]
+[[dependencies.freeterraforged]]
 	modId = "minecraft"
 	mandatory = true
 	versionRange = "[1.21.1,)"
 	ordering = "NONE"
 	side = "BOTH"
+
+# We enforce 3.0.14 because otherwise biome previews break in a non-obvious manner
+[[dependencies.freeterraforged]]
+    modId = "biolith"
+    type = "optional"
+    versionRange = "[3.0.14,)"
+    ordering = "AFTER"
+    side = "BOTH"
+
+[[dependencies.your_mod_id]]
+modId = "reterraforged"
+type = "incompatible"
+reason = "RTF is an ancestor of FTF and as such cannot be used in parallel with it."
+versionRange = "*"
+ordering = "NONE"
+side = "BOTH"

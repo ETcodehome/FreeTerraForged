@@ -1,0 +1,154 @@
+package etcodehome.freeterraforged.mixin;
+
+import java.util.Objects;
+import java.util.function.Function;
+
+import com.mojang.datafixers.util.Either;
+import net.minecraft.core.Holder;
+import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.Climate;
+import net.minecraft.world.level.biome.MultiNoiseBiomeSource;
+import net.minecraft.world.level.biome.MultiNoiseBiomeSourceParameterList;
+import org.spongepowered.asm.mixin.Final;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
+import etcodehome.freeterraforged.world.worldgen.biome.FTFClimateSampler;
+import etcodehome.freeterraforged.world.worldgen.biome.FTFMultiNoiseBiomeSource;
+import etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeBanding;
+import etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeSurfaceProtection;
+import etcodehome.freeterraforged.world.worldgen.biome.PreviewBiomeQueryContext;
+import etcodehome.freeterraforged.world.worldgen.terrablender.TerraBlenderParameterList;
+
+/**
+ * Composes FTF underground banding with the result chosen by the active biome-selection stack.
+ * A third-party replacement remains authoritative; an unchanged base result receives banding.
+ */
+@Mixin(MultiNoiseBiomeSource.class)
+public abstract class MixinMultiNoiseBiomeSource implements FTFMultiNoiseBiomeSource {
+    @Shadow
+    @Final
+    private Either<Climate.ParameterList<Holder<Biome>>, Holder<MultiNoiseBiomeSourceParameterList>> parameters;
+
+    @Unique
+    private volatile UndergroundBiomeBanding.Layout<Holder<Biome>> ftf$undergroundBanding;
+    @Unique
+    private Preset ftf$undergroundBandingPreset;
+    @Unique
+    private long ftf$undergroundBandingSeed;
+
+    @Shadow
+    protected abstract Climate.ParameterList<Holder<Biome>> parameters();
+
+    @Override
+    public Climate.ParameterList<Holder<Biome>> freeterraforged$getParameters() {
+        return this.parameters.map(Function.identity(), holder -> holder.value().parameters());
+    }
+
+    @Inject(
+            method = "getNoiseBiome(IIILnet/minecraft/world/level/biome/Climate$Sampler;)Lnet/minecraft/core/Holder;",
+            at = @At("RETURN"),
+            cancellable = true)
+    private void ftf$composeUndergroundBanding(final int x, final int y, final int z,
+                                                final Climate.Sampler sampler,
+                                                final CallbackInfoReturnable<Holder<Biome>> cir) {
+        Holder<Biome> selected = cir.getReturnValue();
+        if (selected == null) {
+            return;
+        }
+
+        // The parameter-list mixin already composed this exact result.  A
+        // replacement biome that changed the return value intentionally falls
+        // through so the replacement remains authoritative.
+        if (PreviewBiomeQueryContext.matches(x, y, z, selected)) {
+            return;
+        }
+
+        Climate.TargetPoint target = sampler.sample(x, y, z);
+        Climate.ParameterList<Holder<Biome>> parameters = this.parameters();
+        if ((Object) parameters instanceof TerraBlenderParameterList<?> terraBlenderParameters
+                && terraBlenderParameters.freeterraforged$isTerraBlenderInitialized()) {
+            @SuppressWarnings("unchecked")
+            TerraBlenderParameterList<Holder<Biome>> terraBlender =
+                    (TerraBlenderParameterList<Holder<Biome>>) terraBlenderParameters;
+            Holder<Biome> composed = terraBlender.freeterraforged$applyUndergroundBanding(
+                    target, x, y, z, selected
+            );
+            composed = terraBlender.freeterraforged$applyUndergroundSurfaceProtection(
+                    target,
+                    x,
+                    y,
+                    z,
+                    composed,
+                    UndergroundBiomeSurfaceProtection.coverageFactor(sampler, target, x, y, z)
+            );
+            cir.setReturnValue(composed);
+            return;
+        }
+
+        if (!((Object) sampler instanceof FTFClimateSampler ftfSampler)) {
+            return;
+        }
+        Preset preset = ftfSampler.getUndergroundBiomeBandingPreset();
+        boolean ownsSelection = Objects.equals(selected, parameters.findValue(target));
+        if (preset == null || !ownsSelection) {
+            return;
+        }
+
+        UndergroundBiomeBanding.Layout<Holder<Biome>> banding = this.ftf$undergroundBanding;
+        long seed = ftfSampler.getUndergroundBiomeBandingSeed();
+        if (banding == null || this.ftf$undergroundBandingPreset != preset || this.ftf$undergroundBandingSeed != seed) {
+            synchronized (this) {
+                banding = this.ftf$undergroundBanding;
+                if (banding == null || this.ftf$undergroundBandingPreset != preset || this.ftf$undergroundBandingSeed != seed) {
+                    banding = UndergroundBiomeBanding.apply(
+						preset, parameters.values(), seed
+					);
+                    this.ftf$undergroundBandingPreset = preset;
+					this.ftf$undergroundBandingSeed = seed;
+                    this.ftf$undergroundBanding = banding;
+                }
+            }
+        }
+        Holder<Biome> composed = selected;
+        float surfaceCoverageFactor = UndergroundBiomeSurfaceProtection.coverageFactor(
+                sampler, target, x, y, z
+        );
+        if (banding.appliesAt(target)) {
+            composed = banding.findValue(target, x, y, z, surfaceCoverageFactor);
+        } else if (surfaceCoverageFactor <= 0.0F && banding.isCaveCandidate(selected)) {
+            composed = banding.backgroundValue(target);
+        }
+        cir.setReturnValue(composed);
+    }
+
+    @Inject(
+            method = "possibleBiomes",
+            at = @At("HEAD"),
+            cancellable = true,
+            require = 0
+    )
+    private void ftf$bypassInlinePossibleBiomesCrash(CallbackInfoReturnable<java.util.Set<Holder<Biome>>> cir) {
+        // Only intercept inline parameter lists (Either.left) used by preset previews.
+        // Runtime worldgen sources (Either.right) are left untouched.
+        if (this.parameters != null && this.parameters.left().isPresent()) {
+            try {
+                Climate.ParameterList<Holder<Biome>> parameterList = this.freeterraforged$getParameters();
+                if (parameterList != null) {
+                    java.util.Set<Holder<Biome>> dynamicBiomes = parameterList.values().stream()
+                            .map(com.mojang.datafixers.util.Pair::getSecond)
+                            .map(holder -> (Holder<Biome>) holder)
+                            .collect(java.util.stream.Collectors.toUnmodifiableSet());
+
+                    cir.setReturnValue(dynamicBiomes);
+                }
+            } catch (Exception ignored) {
+                // Fallback to default execution if uninitialized
+            }
+        }
+    }
+}

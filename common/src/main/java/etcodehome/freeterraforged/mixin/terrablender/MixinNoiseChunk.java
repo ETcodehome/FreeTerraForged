@@ -1,0 +1,54 @@
+package etcodehome.freeterraforged.mixin.terrablender;
+
+import java.util.List;
+
+import etcodehome.freeterraforged.world.worldgen.terrablender.TBClimateSampler;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+
+import net.minecraft.world.level.biome.Climate;
+import net.minecraft.world.level.levelgen.Aquifer;
+import net.minecraft.world.level.levelgen.DensityFunction;
+import net.minecraft.world.level.levelgen.DensityFunctions;
+import net.minecraft.world.level.levelgen.NoiseChunk;
+import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
+import net.minecraft.world.level.levelgen.NoiseRouter;
+import net.minecraft.world.level.levelgen.NoiseSettings;
+import net.minecraft.world.level.levelgen.RandomState;
+import net.minecraft.world.level.levelgen.blending.Blender;
+
+@Mixin(NoiseChunk.class)
+public class MixinNoiseChunk {
+	private RandomState randomState;
+
+	@Inject(
+		at = @At("TAIL"),
+		method = "<init>"
+	)
+	private void NoiseChunk(int cellCount, RandomState randomState, int x, int z, NoiseSettings noiseSettings, DensityFunctions.BeardifierOrMarker beardifierOrMarker, NoiseGeneratorSettings noiseGeneratorSettings, Aquifer.FluidPicker fluidPicker, Blender blender, CallbackInfo callback) {
+		this.randomState = randomState;
+	}
+	
+	@Inject(
+		at = @At("RETURN"),
+		method = "cachedClimateSampler"
+	)
+	private void cachedClimateSampler(NoiseRouter noiseRouter, List<Climate.ParameterPoint> list, CallbackInfoReturnable<Climate.Sampler> callback) {
+    	if((Object) callback.getReturnValue() instanceof TBClimateSampler cachedSampler && (Object) this.randomState.sampler() instanceof TBClimateSampler globalSampler) {
+    		DensityFunction uniqueness = globalSampler.getUniqueness();
+
+    		if(uniqueness != null) {
+    			cachedSampler.setUniqueness(this.wrap(uniqueness));
+    		}
+    	}
+    }
+
+	@Shadow
+    private DensityFunction wrap(DensityFunction densityFunction) {
+		throw new IllegalStateException();
+    }
+}

@@ -1,0 +1,27 @@
+package etcodehome.freeterraforged.world.worldgen.surface.rule;
+
+import java.util.List;
+
+import com.mojang.serialization.MapCodec;
+import etcodehome.freeterraforged.platform.RegistryUtil;
+import net.minecraft.core.Holder;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.levelgen.SurfaceRules;
+import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
+import etcodehome.freeterraforged.world.worldgen.surface.rule.StrataRule.Strata;
+
+public class FTFSurfaceRules {
+
+	public static void bootstrap() {
+		register("strata", StrataRule.CODEC);
+	}
+	
+	public static StrataRule strata(ResourceLocation name, Holder<Noise> selector, List<Strata> strata, int iterations) {
+		return new StrataRule(name, selector, strata, iterations);
+	}
+	
+	public static void register(String name, MapCodec<? extends SurfaceRules.RuleSource> value) {
+		RegistryUtil.register(BuiltInRegistries.MATERIAL_RULE, name, value);
+	}
+}
