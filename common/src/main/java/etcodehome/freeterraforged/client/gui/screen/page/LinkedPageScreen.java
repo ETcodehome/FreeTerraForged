@@ -52,8 +52,9 @@ public abstract class LinkedPageScreen extends Screen {
 		}).bounds(buttonsCenter - buttonWidth - buttonPad, buttonsRow, buttonWidth, buttonHeight).build();
 
 		this.doneButton = Button.builder(CommonComponents.GUI_DONE, (b) -> {
-			this.onDone();
-			this.onClose();
+			if(this.onDone() == SaveResult.CLOSE) {
+				this.onClose();
+			}
 		}).bounds(buttonsCenter + buttonPad, buttonsRow, buttonWidth, buttonHeight).build();
 		
 		this.currentPage.init();
@@ -92,8 +93,14 @@ public abstract class LinkedPageScreen extends Screen {
 		this.currentPage.onCancel();
 	}
 	
-	public void onDone() {
-		this.currentPage.onSave();
+	public SaveResult onDone() {
+		return this.currentPage.onSave();
+	}
+
+	public enum SaveResult {
+		CLOSE,
+		SCREEN_TRANSITION,
+		STAY_OPEN
 	}
 	
 	public interface Page {
@@ -108,7 +115,8 @@ public abstract class LinkedPageScreen extends Screen {
 		default void onCancel() {
 		}
 		
-		default void onSave() {
+		default SaveResult onSave() {
+			return SaveResult.CLOSE;
 		}
 	}
 }

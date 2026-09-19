@@ -54,6 +54,30 @@ class SurfaceBiomeFilterTest {
 		assertEquals("dual_use", filter.resolve(Climate.target(0, 0, 0, 0, 0, 0), "dual_use"));
 	}
 
+	@Test
+	void reportsWhenNoSurfaceCandidateCanBeProven() {
+		SurfaceBiomeFilter<String> filter = filter(
+			List.of(entry(0.2F, "lush_caves"), entry(1.1F, "deep_dark")),
+			Set.of()
+		);
+
+		assertFalse(filter.hasSurfaceCandidate());
+	}
+
+	@Test
+	void exposesTheSameSurfaceTableUsedByResolution() {
+		SurfaceBiomeFilter<String> filter = filter(
+			List.of(entry(-0.5F, "desert"), entry(0.5F, "forest"), entry(0.2F, "lush_caves")),
+			Set.of()
+		);
+		Climate.TargetPoint target = Climate.target(0, 0, 0, 0, 0, 0);
+
+		assertEquals(
+			filter.resolve(target, "lush_caves"),
+			filter.surfaceParameters().orElseThrow().findValue(target)
+		);
+	}
+
 	private static SurfaceBiomeFilter<String> filter(
 		List<Pair<Climate.ParameterPoint, String>> entries,
 		Set<String> tags

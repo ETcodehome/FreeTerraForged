@@ -10,8 +10,8 @@ public final class FTFDensityFunctionTags {
 	// note: this should only include functions not present in the NoiseRouter
 	@Deprecated
 	public static final TagKey<DensityFunction> ADDITIONAL_NOISE_ROUTER_FUNCTIONS = resolve("additional_noise_router_functions");
-	
+
     private static TagKey<DensityFunction> resolve(String path) {
-    	return TagKey.create(Registries.DENSITY_FUNCTION, FTFCommon.location(path));
+	return TagKey.create(Registries.DENSITY_FUNCTION, FTFCommon.location(path));
     }
 }

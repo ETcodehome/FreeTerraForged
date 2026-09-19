@@ -6,7 +6,7 @@ import net.minecraft.data.PackOutput;
 
 // TODO add some more languages
 public final class FTFLanguageProvider {
-	
+
 	public static final class EnglishUS extends LanguageProvider {
 
 		public EnglishUS(PackOutput output) {
@@ -19,9 +19,9 @@ public final class FTFLanguageProvider {
 			this.add(FTFTranslationKeys.PRESET_METADATA_DESCRIPTION, "FreeTerraForged preset");
 			this.add(FTFTranslationKeys.MUD_SWAMPS_METADATA_DESCRIPTION, "Changes the swamp material to mud");
 			this.add(FTFTranslationKeys.NO_ERROR_MESSAGE, "{No error message}");
-			
+
 			this.add(FTFTranslationKeys.GUI_INPUT_PROMPT, "Type preset name");
-			
+
 			this.add(FTFTranslationKeys.GUI_SELECT_PRESET_MISSING_LEGACY_PRESETS, "Couldn't find any legacy presets");
 			this.add(FTFTranslationKeys.GUI_SELECT_PRESET_TITLE, "Presets & Defaults");
 			this.add(FTFTranslationKeys.GUI_DEFAULT_PRESET_NAME, "Default");
@@ -206,7 +206,7 @@ public final class FTFLanguageProvider {
 			this.add(FTFTranslationKeys.GUI_LABEL_WETLANDS, "Wetlands");
 			this.add(FTFTranslationKeys.GUI_LABEL_EROSION, "Erosion");
 			this.add(FTFTranslationKeys.GUI_LABEL_SMOOTHING, "Smoothing");
-			
+
 			this.add(Tooltips.failTranslationKey(FTFTranslationKeys.GUI_BUTTON_CREATE), "Failed to create preset");
 			this.add(Tooltips.failTranslationKey(FTFTranslationKeys.GUI_BUTTON_COPY), "Failed to copy preset");
 			this.add(Tooltips.failTranslationKey(FTFTranslationKeys.GUI_BUTTON_DELETE), "Failed to delete preset");
