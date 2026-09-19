@@ -2,7 +2,9 @@ package etcodehome.freeterraforged.mixin;
 
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.apache.logging.log4j.LogManager;
 import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
@@ -11,9 +13,7 @@ import etcodehome.freeterraforged.platform.ModLoaderUtil;
 
 public final class CompatibilityMixinPlugin implements IMixinConfigPlugin {
 	private static final Set<String> BIOLITH_VERSIONS = Set.of("3.0.11", "3.0.14");
-	private static final Set<String> LITHOSTITCHED_VERSIONS = Set.of(
-		"1.8.0+beta4", "1.8.0+beta5"
-	);
+	private static final AtomicBoolean LITHOSTITCHED_WARNING_LOGGED = new AtomicBoolean();
 
 	@Override
 	public void onLoad(String mixinPackage) {
@@ -31,9 +31,14 @@ public final class CompatibilityMixinPlugin implements IMixinConfigPlugin {
 		}
 		if (mixinClassName.endsWith(".compat.MixinLithostitchedBiomeInjectorManager")
 			|| mixinClassName.endsWith(".compat.MixinLithostitchedEvent")) {
-			return ModLoaderUtil.version("lithostitched")
-				.filter(LITHOSTITCHED_VERSIONS::contains)
-				.isPresent();
+			LithostitchedBridgeContract.Assessment assessment = LithostitchedBridgeContract.current();
+			if (ModLoaderUtil.isLoaded("lithostitched") && !assessment.supported()
+				&& LITHOSTITCHED_WARNING_LOGGED.compareAndSet(false, true)) {
+				LogManager.getLogger("FreeTerraForged").warn(
+					"Lithostitched code-listener bridge is unavailable: {}", assessment.reason()
+				);
+			}
+			return assessment.supported();
 		}
 		return true;
 	}

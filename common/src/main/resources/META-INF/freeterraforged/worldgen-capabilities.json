@@ -76,7 +76,7 @@
       "mechanisms": [
         {
           "mod_id": "lithostitched",
-          "supported_versions": ["1.8.0+beta4", "1.8.0+beta5"],
+          "supported_versions": [],
           "optional": true
         }
       ],

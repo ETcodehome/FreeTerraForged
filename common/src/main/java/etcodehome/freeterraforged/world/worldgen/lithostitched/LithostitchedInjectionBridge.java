@@ -72,13 +72,13 @@ import net.minecraft.world.level.levelgen.synth.NormalNoise;
 import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.platform.ModLoaderUtil;
 import etcodehome.freeterraforged.mixin.BiomeSourceAccessor;
+import etcodehome.freeterraforged.mixin.LithostitchedBridgeContract;
 import etcodehome.freeterraforged.world.worldgen.runtime.BiomeCandidateRoot;
 import etcodehome.freeterraforged.world.worldgen.runtime.MinecraftBiomeSourceGraphs;
 import etcodehome.freeterraforged.world.worldgen.runtime.PreServerWorldgenContext;
 
 public final class LithostitchedInjectionBridge {
 	private static final AtomicLong REVISION = new AtomicLong();
-	public static final Set<String> SUPPORTED_VERSIONS = Set.of("1.8.0+beta4", "1.8.0+beta5");
 	private static final ResourceLocation NO_REGION = FTFCommon.location("no_region");
 	private static final ResourceLocation ADD_POINTS = lithostitched("add_points");
 	private static final ResourceLocation DISPATCH_ALTERNATE_LAYOUT = lithostitched("dispatch_alternate_layout");
@@ -125,8 +125,7 @@ public final class LithostitchedInjectionBridge {
 	}
 
 	public static void finalizePreServer(PreServerWorldgenContext context) {
-		String version = ModLoaderUtil.version("lithostitched").orElse("unknown");
-		if (!SUPPORTED_VERSIONS.contains(version)) {
+		if (!LithostitchedBridgeContract.current().supported()) {
 			return;
 		}
 		synchronized (PRE_SERVER_LOCK) {
@@ -343,35 +342,33 @@ public final class LithostitchedInjectionBridge {
 		RegistryOps<JsonElement> ops = RegistryOps.create(JsonOps.INSTANCE, registries);
 		List<ClonedInjector> clones = new ArrayList<>();
 		List<String> failures = new ArrayList<>();
-		if (SUPPORTED_VERSIONS.contains(version)) {
-			int encounter = 0;
-			for (Map.Entry<ResourceLocation, BiomeInjector> entry : injectors.entrySet()) {
-				try {
-					JsonElement encoded = BiomeInjector.CODEC.encodeStart(ops, entry.getValue())
-						.getOrThrow(message -> new IllegalStateException("encode: " + message));
-					BiomeInjector clone = BiomeInjector.CODEC.parse(ops, encoded)
-						.getOrThrow(message -> new IllegalStateException("decode: " + message));
-					ResourceLocation codec = LithostitchedBuiltInRegistries.BIOME_INJECTOR_TYPE
-						.getKey(clone.codec());
-					if (codec == null) {
-						throw new IllegalStateException("unregistered injector codec");
-					}
-					Optional<ResourceLocation> loadPredicateCodec = clone.predicate().map(predicate -> {
-						ResourceLocation id = LithostitchedBuiltInRegistries.LOAD_PREDICATE_TYPE
-							.getKey(predicate.codec());
-						if (id == null) {
-							throw new IllegalStateException("unregistered load-predicate codec");
-						}
-						return id;
-					});
-					Optional<Boolean> loadPredicateResult = clone.predicate().map(predicate -> true);
-					clones.add(new ClonedInjector(
-						entry.getKey(), codec, encounter++, clone.dimension(), loadPredicateCodec,
-						loadPredicateResult, encoded.deepCopy(), clone
-					));
-				} catch (RuntimeException | LinkageError failure) {
-					failures.add(entry.getKey() + ": " + failure.getMessage());
+		int encounter = 0;
+		for (Map.Entry<ResourceLocation, BiomeInjector> entry : injectors.entrySet()) {
+			try {
+				JsonElement encoded = BiomeInjector.CODEC.encodeStart(ops, entry.getValue())
+					.getOrThrow(message -> new IllegalStateException("encode: " + message));
+				BiomeInjector clone = BiomeInjector.CODEC.parse(ops, encoded)
+					.getOrThrow(message -> new IllegalStateException("decode: " + message));
+				ResourceLocation codec = LithostitchedBuiltInRegistries.BIOME_INJECTOR_TYPE
+					.getKey(clone.codec());
+				if (codec == null) {
+					throw new IllegalStateException("unregistered injector codec");
 				}
+				Optional<ResourceLocation> loadPredicateCodec = clone.predicate().map(predicate -> {
+					ResourceLocation id = LithostitchedBuiltInRegistries.LOAD_PREDICATE_TYPE
+						.getKey(predicate.codec());
+					if (id == null) {
+						throw new IllegalStateException("unregistered load-predicate codec");
+					}
+					return id;
+				});
+				Optional<Boolean> loadPredicateResult = clone.predicate().map(predicate -> true);
+				clones.add(new ClonedInjector(
+					entry.getKey(), codec, encounter++, clone.dimension(), loadPredicateCodec,
+					loadPredicateResult, encoded.deepCopy(), clone
+				));
+			} catch (RuntimeException | LinkageError failure) {
+				failures.add(entry.getKey() + ": " + failure.getMessage());
 			}
 		}
 

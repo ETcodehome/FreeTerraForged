@@ -162,8 +162,7 @@ public final class LithostitchedCapabilityProvider implements WorldgenCapability
 		).isPresent()) {
 			return Optional.empty();
 		}
-		if (!LithostitchedInjectionBridge.SUPPORTED_VERSIONS.contains(captured.mechanismVersion())
-			|| !captured.cloneFailures().isEmpty()
+		if (!captured.cloneFailures().isEmpty()
 			|| captured.injectors().stream().anyMatch(value -> value.kind() == LithostitchedInjectionBridge.Kind.UNKNOWN)) {
 			throw new IllegalStateException("The finalized Lithostitched snapshot cannot create an isolated preview request");
 		}
@@ -209,28 +208,19 @@ public final class LithostitchedCapabilityProvider implements WorldgenCapability
 					facet,
 					"lithostitched_final_snapshot_missing",
 					"The selected creation graph contains a Lithostitched injector source without its "
-						+ "version-qualified finalized snapshot"
+						+ "finalized snapshot"
 				));
 			}
 			if (acquisition.declarativeContribution()) {
 				return Optional.of(unavailable(
 					facet,
-					"lithostitched_version_contract_changed",
-					"The selected creation graph contains declarative Lithostitched injectors outside the proven "
-						+ "bridge versions " + LithostitchedInjectionBridge.SUPPORTED_VERSIONS
+					"lithostitched_final_snapshot_missing",
+					"The selected creation graph contains declarative Lithostitched injectors without a finalized snapshot"
 				));
 			}
 			return Optional.empty();
 		}
 		LithostitchedInjectionBridge.Snapshot snapshot = found.orElseThrow();
-		if (!LithostitchedInjectionBridge.SUPPORTED_VERSIONS.contains(snapshot.mechanismVersion())) {
-			return Optional.of(unavailable(
-				facet,
-				"lithostitched_version_contract_changed",
-				"Captured Lithostitched " + snapshot.mechanismVersion()
-					+ " outside the proven bridge versions " + LithostitchedInjectionBridge.SUPPORTED_VERSIONS
-			));
-		}
 		if (!snapshot.cloneFailures().isEmpty()) {
 			return Optional.of(unavailable(
 				facet,
@@ -296,9 +286,7 @@ public final class LithostitchedCapabilityProvider implements WorldgenCapability
 				boolean declarative = LithostitchedInjectionBridge.hasDeclarativeInjectors(
 					context.owner().lookups(), context.owner().dimension()
 				);
-				if (!declarative || !LithostitchedInjectionBridge.SUPPORTED_VERSIONS.contains(
-					ModLoaderUtil.version("lithostitched").orElse("unknown")
-				)) {
+				if (!declarative) {
 					return new Acquisition(
 						Optional.empty(), mechanismSource, declarative, Optional.empty()
 					);
