@@ -101,6 +101,7 @@ public final class LithostitchedInjectionBridge {
 	private static final Map<BiomeSource, Snapshot> SNAPSHOTS = new WeakHashMap<>();
 	private static final Map<BiomeSource, String> PRE_SERVER_FAILURES = new WeakHashMap<>();
 	private static final Object PRE_SERVER_LOCK = new Object();
+	private static boolean hasCodeListener;
 	private static final ThreadLocal<PreServerCollector> PRE_SERVER_COLLECTOR = new ThreadLocal<>();
 	private static final Map<ChunkGenerator, PreServerResolution> PRE_SERVER_RESOLUTIONS =
 		Collections.synchronizedMap(new WeakHashMap<>());
@@ -129,6 +130,9 @@ public final class LithostitchedInjectionBridge {
 			return;
 		}
 		synchronized (PRE_SERVER_LOCK) {
+			if (!hasCodeListener) {
+				return;
+			}
 			if (resolvedEventGraph(context.dimensions(), context.registries(), context.seed()).isPresent()) {
 				return;
 			}
@@ -197,6 +201,7 @@ public final class LithostitchedInjectionBridge {
 			return;
 		}
 		synchronized (PRE_SERVER_LOCK) {
+			hasCodeListener = true;
 			PRE_SERVER_RESOLUTIONS.clear();
 			synchronized (SNAPSHOTS) {
 				PRE_SERVER_SOURCES.forEach(SNAPSHOTS::remove);
