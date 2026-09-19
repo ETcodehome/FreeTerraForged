@@ -100,10 +100,7 @@ class MixinSurfaceSystem {
 
 				if (isWaterCell) {
 					int waterY = levels.scale(
-							(ContinentalHydrology.getComplexWaterHeight(
-									cell.waterTable,
-									cell.globalContinentScale,
-									cell.continentSizeModifier)
+							(ContinentalHydrology.getWaterOffset(cell)
 							) + oceanLevel
 					);
 
@@ -130,10 +127,7 @@ class MixinSurfaceSystem {
 							boolean nIsWaterCell = (neighborCell.terrain.isRiver() || neighborCell.terrain.isLake() || neighborCell.terrain.isWetland()) && neighborCell.riverWaterLevel > 0;
 							if (nIsWaterCell) {
 								int nWaterY = levels.scale(
-										(ContinentalHydrology.getComplexWaterHeight(
-												neighborCell.waterTable,
-												neighborCell.globalContinentScale,
-												neighborCell.continentSizeModifier)
+										(ContinentalHydrology.getWaterOffset(neighborCell)
 										) + levels.water
 								);
 
@@ -211,11 +205,8 @@ class MixinSurfaceSystem {
 
 							if ((neighborCell.terrain.isRiver() || neighborCell.terrain.isLake())) {
 								int nWaterY = levels.scale(
-									(ContinentalHydrology.getComplexWaterHeight(
-											neighborCell.waterTable,
-											neighborCell.globalContinentScale,
-											neighborCell.continentSizeModifier)
-									) + oceanLevel
+										(ContinentalHydrology.getWaterOffset(neighborCell)
+										) + oceanLevel
 								);
 
 								if (nWaterY > maxNeighborWaterY) {
@@ -226,12 +217,9 @@ class MixinSurfaceSystem {
 
 						// If in river zone and lower than water table, we shouldn't be.
 						int waterTableCeil = levels.scale(
-							(ContinentalHydrology.getComplexWaterHeight(
-									cell.waterTable,
-									cell.globalContinentScale,
-									cell.continentSizeModifier)
+								(ContinentalHydrology.getWaterOffset(cell)
 								) + oceanLevel
-							);
+						);
 
 						boolean isInRiverZone = cell.riverZone == RiverCarverSettings.RiverZone.Banks
 								|| cell.riverZone == RiverCarverSettings.RiverZone.ValleyFloor

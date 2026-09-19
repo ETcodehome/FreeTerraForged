@@ -13,6 +13,13 @@ import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 
 public class UpliftRiverCarver implements FTFRiverCarver {
+    /** A fork sitting this many blocks below the owning river's water level is fully shielded from carving it. */
+    private static final float LEVEL_CONFLICT_BLOCKS = 1.0F;
+    /** Below this protection weight the carving river claims ownership (level, zone, influence) of the cell. */
+    private static final float CLAIM_THRESHOLD = 0.5F;
+    /** Radius around the fork's junction (as a multiple of its zone 3 radius) inside which it may carve the main river freely. */
+    private static final float JUNCTION_FREE_SCALE = 1.0F;
+
     public boolean main;
     private boolean connecting;
     private float fade;
@@ -43,6 +50,12 @@ public class UpliftRiverCarver implements FTFRiverCarver {
     private final float bankHeightOffset;
     private final float baseBedDepthOffset;
     private final float zone2WidthFactor;
+
+    // Fixed target water level (offset above sea level) inherited by forks. NaN = derive per cell (main rivers).
+    private final float fixedWaterOffset;
+    private final boolean hasFixedWaterLevel;
+    private final float junctionFreeRadius;
+    private final float footprintRadius;
 
     public UpliftRiverCarver(River river, RiverWarp warp, RiverConfig config, RiverCarverSettings settings, Levels levels, LakeConfig lakeConfig, boolean isUpliftContinent) {
         this.fade = settings.fadeIn;
@@ -95,6 +108,23 @@ public class UpliftRiverCarver implements FTFRiverCarver {
         this.bankHeightOffset = config.maxBankHeight - config.minBankHeight;
         this.baseBedDepthOffset = levels.water - config.bedHeight;
         this.zone2WidthFactor = this.bankHeightOffset / levels.unit;
+
+        this.fixedWaterOffset = settings.fixedWaterOffset;
+        this.hasFixedWaterLevel = !Float.isNaN(settings.fixedWaterOffset);
+        this.junctionFreeRadius = settings.junctionFreeRadius;
+        // Upper bound of zones 1-3: bed (x width variation), bank step (x biased scale) and valley floor (x width/pinch variation)
+        this.footprintRadius = config.bedWidth * 1.4F + this.zone2WidthFactor * 1.9F + config.bankWidth * 5.0F;
+    }
+
+    private float getTargetWaterLevel(Cell cell) {
+        if (this.hasFixedWaterLevel) {
+            return this.fixedWaterOffset + this.levels.water;
+        }
+        return ContinentalHydrology.getComplexWaterHeight(
+                cell.waterTable,
+                cell.globalContinentScale,
+                cell.continentSizeModifier
+        ) + this.levels.water;
     }
 
     @Override
@@ -106,6 +136,17 @@ public class UpliftRiverCarver implements FTFRiverCarver {
         float flatnessInput = isUpliftContinent ? cell.waterTable : currT;
         float flatnessFactor = NoiseUtil.clamp(ContinentalHydrology.getFlatnessFactor(flatnessInput), 0.0F, 1.0F);
         float scaleFactor = 1.0F;
+
+        // Forks target one fixed water level (taken from their junction) so they can never run uphill.
+        // A tributary cannot exist below the level it drains into: where the terrain is already lower than that
+        // level there is nothing to carve, and tagging it would leave perched water above the ground.
+        float targetWaterLevel = this.getTargetWaterLevel(cell);
+        if (this.hasFixedWaterLevel && cell.height < targetWaterLevel) {
+            return;
+        }
+
+        // How strongly an existing, higher river owns this cell. Must be read before this pass mutates the cell.
+        float protect = this.getOwnerProtection(cell, targetWaterLevel);
 
         // Step 1: Sample ONLY layout-critical noise arrays to determine structural boundaries
         float widthVar = this.widthNoise.compute(currX, currZ, 8241);
@@ -134,18 +175,23 @@ public class UpliftRiverCarver implements FTFRiverCarver {
         float zone3Width = zone3BaseWidth * shrinkFactor;
         float zone3Radius = zone2Radius + zone3Width;
 
-        float targetWaterLevel =
-            (ContinentalHydrology.getComplexWaterHeight(
-                    cell.waterTable,
-                    cell.globalContinentScale,
-                    cell.continentSizeModifier)
-            ) + levels.water;
-
         float discrepancyScale = 1.0F + (levels.scale(cell.height - targetWaterLevel)) / 100.0F;
         float zone4Radius = zone3Radius + (unshrunkZone3BaseWidth * (4.0F + discrepancyScale));
 
         // Step 2: Early Exit Guard. If outside the maximum radius, skip the remaining expensive operations
         if (currentLinearDist >= zone4Radius) return;
+
+        // Around its own junction a fork must be able to cut through the main river's banks to actually join it,
+        // so the shield fades in with distance from the junction (zone 3 radius = free, zone 4 radius = fully shielded).
+        if (protect > 0.0F) {
+            // free radius must cover the PARENT's footprint (its banks/valley), not just this fork's own zones
+            float freeRadius = Math.max(zone3Radius * JUNCTION_FREE_SCALE, this.junctionFreeRadius);
+            float fullRadius = freeRadius + Math.max(1.0F, zone4Radius - zone3Radius);
+            protect *= this.getJunctionShieldFactor(currX, currZ, freeRadius, fullRadius);
+        }
+
+        // Fully inside the footprint of a higher river: nothing to do, and nothing to claim.
+        if (protect >= 1.0F) return;
 
         // Step 3: Defer remaining heavy noise evaluations until we are guaranteed to modify the cell
         float depthVar = this.depthNoise.compute(currX, currZ, 3912);
@@ -181,20 +227,84 @@ public class UpliftRiverCarver implements FTFRiverCarver {
             finalHeight = carveZone4Fadeout(cell.height, currentLinearDist, zone3Radius, zone4Radius, actualValleyFloorHeight, terraceMask, drainageMask);
         }
 
+        // Fade this river's cut back toward the existing terrain wherever a higher river already owns the cell,
+        // so a fork running at a lower level cannot gouge the main river's bed, banks or valley.
+        if (protect > 0.0F) {
+            finalHeight = NoiseUtil.lerp(finalHeight, cell.height, protect);
+        }
+        boolean claim = protect < CLAIM_THRESHOLD;
+
         boolean carvedThisPass = finalHeight < cell.height;
         if (carvedThisPass) {
             cell.height = finalHeight;
-            cell.riverZone = getRiverZoneTag(cell, currentLinearDist, zone1Radius, zone2Radius, zone3Radius, finalHeight, targetWaterLevel);
+            if (claim) {
+                // whichever river last lowered this cell owns its water level (NaN for main rivers = per cell hydrology)
+                cell.riverWaterOffset = this.fixedWaterOffset;
+                cell.riverInfluence = getCarveInfluence(currentLinearDist, zone3Radius, zone4Radius);
+                cell.riverZone = getRiverZoneTag(cell, currentLinearDist, zone1Radius, zone2Radius, zone3Radius, finalHeight, targetWaterLevel);
+            }
+        }
+
+        // River water tagging (moved out of carveZone1Riverbed so protected cells are never repainted as fork water)
+        if (claim && currentLinearDist < zone1Radius) {
+            cell.moisture = 1.0F;
+            this.tag(cell, targetWaterLevel);
         }
 
         // Only this river's own zone1 (riverbed), carved on this exact pass, may claim flow.
-        boolean isSubMerged = currentLinearDist < zone1Radius
+        boolean isSubMerged = claim
+                && currentLinearDist < zone1Radius
                 && carvedThisPass
                 && finalHeight < targetWaterLevel;
 
         if (isSubMerged) {
             storeFlowDirection(cell, currX, currZ, currT, zone1Radius, currentLinearDist, lakeMultiplier);
         }
+    }
+
+    /**
+     * 0..1 weight describing how strongly a higher, already carved river owns this cell relative to this river's fixed
+     * level. Zero for main rivers, for cells no river owns, and wherever the owner's level is not above ours (which
+     * includes the junction itself, so the fork still merges into the main river).
+     */
+    private float getOwnerProtection(Cell cell, float targetWaterLevel) {
+        if (!this.hasFixedWaterLevel || cell.riverInfluence <= 0.0F) {
+            return 0.0F;
+        }
+        float ownerLevel = ContinentalHydrology.getWaterOffset(cell) + this.levels.water;
+        float diffBlocks = (ownerLevel - targetWaterLevel) / this.levels.unit;
+        if (diffBlocks <= 0.0F) {
+            return 0.0F;
+        }
+        float p = cell.riverInfluence * NoiseUtil.clamp(diffBlocks / LEVEL_CONFLICT_BLOCKS, 0.0F, 1.0F);
+        return p * p * (3.0F - 2.0F * p);
+    }
+
+    /**
+     * 0 within freeRadius of this river's downstream end (its junction), 1 beyond fullRadius, smoothstep in between.
+     * The river's downstream end is (x2, z2): forks are constructed running from upstream to the junction.
+     */
+    private float getJunctionShieldFactor(float x, float z, float freeRadius, float fullRadius) {
+        float dx = x - this.river.x2;
+        float dz = z - this.river.z2;
+        float dist = (float) Math.sqrt(dx * dx + dz * dz);
+        if (dist <= freeRadius) {
+            return 0.0F;
+        }
+        if (dist >= fullRadius) {
+            return 1.0F;
+        }
+        float t = (dist - freeRadius) / (fullRadius - freeRadius);
+        return t * t * (3.0F - 2.0F * t);
+    }
+
+    /** Full strength through zones 1-3, smoothstep fade across the zone 4 fadeout. */
+    private static float getCarveInfluence(float dist, float zone3Radius, float zone4Radius) {
+        if (dist < zone3Radius) {
+            return 1.0F;
+        }
+        float t = NoiseUtil.clamp((dist - zone3Radius) / (zone4Radius - zone3Radius), 0.0F, 1.0F);
+        return 1.0F - t * t * (3.0F - 2.0F * t);
     }
 
     private void storeFlowDirection(Cell cell, float currX, float currZ, float currT, float zone1Radius, float currentLinearDist, float lakeMultiplier) {
@@ -340,11 +450,7 @@ public class UpliftRiverCarver implements FTFRiverCarver {
             finalizedDepth = absoluteFloor;
         }
 
-        float bedHeight = targetWaterLevel - (finalizedDepth * bedInfluence);
-
-        cell.moisture = 1.0F;
-        this.tag(cell, targetWaterLevel);
-        return bedHeight;
+        return targetWaterLevel - (finalizedDepth * bedInfluence);
     }
 
     private float carveZone2BankStep(float distance, float zone1Radius, float zone2Radius, float targetWaterLevel, float targetValleyFloor, float terraceMask, float drainageMask) {
@@ -522,4 +628,6 @@ public class UpliftRiverCarver implements FTFRiverCarver {
     @Override public River getRiver() { return this.river; }
     @Override public RiverWarp getWarp() { return this.warp; }
     @Override public RiverConfig getConfig() { return this.config; }
+    @Override public float getFixedWaterOffset() { return this.fixedWaterOffset; }
+    @Override public float getFootprintRadius() { return this.footprintRadius; }
 }

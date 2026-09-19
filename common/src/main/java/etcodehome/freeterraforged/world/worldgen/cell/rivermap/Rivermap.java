@@ -1,62 +1,101 @@
-package etcodehome.freeterraforged.world.worldgen.cell.rivermap;
+package etcodehome.freeterraforged.world.worldgen.cell.rivermap.river;
 
-import etcodehome.freeterraforged.concurrent.cache.ExpiringEntry;
-import etcodehome.freeterraforged.world.worldgen.cell.rivermap.gen.GenWarp;
-import etcodehome.freeterraforged.world.worldgen.cell.rivermap.river.Network;
-import etcodehome.freeterraforged.world.worldgen.noise.domain.Domain;
-import etcodehome.freeterraforged.world.worldgen.cell.Cell;
-import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap;
+import java.util.Random;
 
-public class Rivermap implements ExpiringEntry {
-    private int x;
-    private int z;
-    private Domain lakeWarp;
-    private Domain riverWarp;
-    private Network[] networks;
-    private long timestamp;
-    
-    public Rivermap(int x, int z, Network[] networks, GenWarp warp) {
-        this.timestamp = System.currentTimeMillis();
-        this.x = x;
-        this.z = z;
-        this.networks = networks;
-        this.lakeWarp = warp.lake();
-        this.riverWarp = warp.river();
+import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
+import etcodehome.freeterraforged.world.worldgen.noise.module.Simplex2;
+import etcodehome.freeterraforged.world.worldgen.util.PosUtil;
+
+public class RiverWarp {
+    public static final RiverWarp NONE = new RiverWarp(0, 0.0F, 0.0F, 0.0F, 0.0F);
+    private int seed;
+    private float lower;
+    private float upper;
+    private float lowerRange;
+    private float upperRange;
+    private float frequency;
+    private float scale;
+    /** Forks: fade the wiggle out toward the downstream end (t = 1) so the fork lands exactly on the river it joins. */
+    private boolean fadeAtEnd;
+
+    public RiverWarp(int seed, float lower, float upper, float frequency, float scale) {
+        this.seed = seed;
+        this.frequency = frequency;
+        this.scale = scale;
+        this.lower = lower;
+        this.upper = upper;
+        this.lowerRange = 1.0F / lower;
+        this.upperRange = 1.0F / (1.0F - upper);
     }
-    
-    public void apply(Cell cell, float x, float z) {
-        float rx = this.riverWarp.getX(x, z, 0);
-        float rz = this.riverWarp.getZ(x, z, 0);
-        float lx = this.lakeWarp.getOffsetX(rx, rz, 0);
-        float lz = this.lakeWarp.getOffsetZ(rx, rz, 0);
-        for (Network network : this.networks) {
-            if (network.contains(rx, rz)) {
-                network.carve(cell, rx, rz, lx, lz);
-            }
+
+    public RiverWarp createChild(float lower, float upper, float factor, Random random) {
+        RiverWarp child = new RiverWarp(random.nextInt(), lower, upper, this.frequency * factor, this.scale * factor);
+        child.fadeAtEnd = true;
+        return child;
+    }
+
+    public boolean test(float t) {
+        return this != RiverWarp.NONE && t >= 0.0F && t <= 1.0F;
+    }
+
+    public long getOffset(float x, float z, float t, River river) {
+        float alpha1 = this.getWarpAlpha(t);
+        float px = x * this.frequency;
+        float pz = z * this.frequency;
+        float distance = alpha1 * this.scale;
+        float noise = Simplex2.sample(px, pz, this.seed);
+        float dx = river.normX * noise * distance;
+        float dz = river.normZ * noise * distance;
+        float alpha2 = this.getWiggleAlpha(t);
+        float factor = river.length * 4.0E-4F;
+        float wiggleFreq = 8.0f * factor;
+        float wiggleDist = NoiseUtil.clamp(alpha2 * 25.0F * factor, 2.0F, 45.0F);
+        if (this.fadeAtEnd) {
+            wiggleDist *= this.getEndTaper(t);
         }
+        float rads = noise + t * 6.2831855F * wiggleFreq;
+        dx += NoiseUtil.cos(rads) * river.normX * wiggleDist;
+        dz += NoiseUtil.sin(rads) * river.normZ * wiggleDist;
+        return PosUtil.packf(dx, dz);
     }
-    
-    @Override
-    public long getTimestamp() {
-        return this.timestamp;
-    }
-    
-    public int getX() {
-        return this.x;
-    }
-    
-    public int getZ() {
-        return this.z;
-    }
-    
-    public static Rivermap get(Cell cell, Rivermap instance, Heightmap heightmap) {
-        return get(cell.continentX, cell.continentZ, instance, heightmap);
-    }
-    
-    public static Rivermap get(int x, int z, Rivermap instance, Heightmap heightmap) {
-        if (instance != null && x == instance.getX() && z == instance.getZ()) {
-            return instance;
+
+    private float getWarpAlpha(float t) {
+        if (t < 0.0F || t > 1.0F) {
+            return 0.0F;
         }
-        return heightmap.continent().getRivermap(x, z);
+        if (t < this.lower) {
+            return t * this.lowerRange;
+        }
+        if (t > this.upper) {
+            return (1.0F - t) * this.upperRange;
+        }
+        return 1.0F;
+    }
+
+    /**
+     * 1 until t = 0.75, then a smoothstep down to exactly 0 at t = 1. getWarpAlpha already reaches 0 at t = 1 for the
+     * broad warp; without this the wiggle term did not, leaving a sideways jump in the sample position at the very end
+     * of a fork (t > 1 is not warped at all), which misplaced or cut off the fork where it meets its parent.
+     */
+    private float getEndTaper(float t) {
+        if (t <= 0.75F) {
+            return 1.0F;
+        }
+        float s = NoiseUtil.clamp((t - 0.75F) / 0.25F, 0.0F, 1.0F);
+        return 1.0F - s * s * (3.0F - 2.0F * s);
+    }
+
+    private float getWiggleAlpha(float t) {
+        return NoiseUtil.map(t, 0.0F, 0.075F, 0.075F);
+    }
+
+    public static RiverWarp create(float fade, Random random) {
+        return create(fade, 1.0F - fade, random);
+    }
+
+    public static RiverWarp create(float lower, float upper, Random random) {
+        float scale = 125.0F + random.nextInt(50);
+        float frequency = 5.0E-4F + random.nextFloat() * 5.0E-4F;
+        return new RiverWarp(random.nextInt(), lower, upper, frequency, scale);
     }
 }

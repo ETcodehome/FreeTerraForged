@@ -11,7 +11,7 @@ public class Cell {
     private static final Cell DEFAULTS = new Cell();
     private static final Cell EMPTY = new Cell() {
 
-    	@Override
+        @Override
         public boolean isAbsent() {
             return true;
         }
@@ -44,6 +44,17 @@ public class Cell {
     public float macroBiomeId;
     public float riverMask;
     public float riverWaterLevel = 0.0F;
+    /**
+     * Water surface offset above sea level (same units as ContinentalHydrology.getComplexWaterHeight) imposed on this
+     * cell by the river that last carved it. NaN means "derive from this cell's own waterTable" (main rivers, non river cells).
+     * Forks use a single fixed value inherited from their junction so they never climb with the local uplift steps.
+     */
+    public float riverWaterOffset = Float.NaN;
+    /**
+     * Strength (0..1) of the carve applied by the river that owns this cell: 1.0 through the bed, banks and valley
+     * floor, smoothly fading to 0 across the outer fadeout zone. Used to shield a river from later, lower forks.
+     */
+    public float riverInfluence = 0.0F;
     public int continentX;
     public int continentZ;
     public float globalContinentScale;
@@ -71,7 +82,7 @@ public class Cell {
         this.waterTable = 0.0F;
         this.continentSizeModifier = 1.0F;
     }
-    
+
     public void copyFrom(Cell other) {
         this.height = other.height;
         this.heightErosion = other.heightErosion;
@@ -102,6 +113,8 @@ public class Cell {
         this.beachNoise = other.beachNoise;
         this.continentSizeModifier = other.continentSizeModifier;
         this.riverWaterLevel = other.riverWaterLevel;
+        this.riverWaterOffset = other.riverWaterOffset;
+        this.riverInfluence = other.riverInfluence;
         this.riverZone = other.riverZone;
         this.waterTable = other.waterTable;
         this.flowAngle = other.flowAngle;
@@ -129,7 +142,7 @@ public class Cell {
         }
         return resource;
     }
-    
+
     public interface Visitor {
         void visit(Cell cell, int x, int z);
     }

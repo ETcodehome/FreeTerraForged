@@ -131,10 +131,7 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
             // Reuse any already evaluated cell directly from the cache
             Cell cell = chunkCells[index];
 
-            float targetWaterLevel = (ContinentalHydrology.getComplexWaterHeight(
-                    cell.waterTable,
-                    cell.globalContinentScale,
-                    cell.continentSizeModifier)
+            float targetWaterLevel = (ContinentalHydrology.getWaterOffset(cell)
             ) + oceanHeightOffset;
 
             int localWaterY = levels.scale(targetWaterLevel);
@@ -283,11 +280,7 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
         // Reuse cached cell directly if the coordinate is within the current chunk bounds
         if (relX >= 0 && relX < 16 && relZ >= 0 && relZ < 16) {
             Cell cell = chunkCells[relX + (relZ * 16)];
-            float water = ContinentalHydrology.getComplexWaterHeight(
-                    cell.waterTable,
-                    cell.globalContinentScale,
-                    cell.continentSizeModifier
-            ) + oceanHeightOffset;
+            float water = ContinentalHydrology.getWaterOffset(cell) + oceanHeightOffset;
             return levels.scale(water);
         }
 
@@ -309,11 +302,7 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
                 false
         );
 
-        float water = ContinentalHydrology.getComplexWaterHeight(
-                neighborCell.waterTable,
-                neighborCell.globalContinentScale,
-                neighborCell.continentSizeModifier
-        ) + oceanHeightOffset;
+        float water = ContinentalHydrology.getWaterOffset(neighborCell) + oceanHeightOffset;
 
         int computedY = levels.scale(water);
         cache[cacheIndex] = computedY;

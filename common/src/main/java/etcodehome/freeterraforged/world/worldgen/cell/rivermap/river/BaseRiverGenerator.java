@@ -13,7 +13,10 @@ import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.util.PosUtil;
 import etcodehome.freeterraforged.world.worldgen.util.Seed;
 import etcodehome.freeterraforged.world.worldgen.util.Variance;
+import etcodehome.freeterraforged.concurrent.Resource;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
+import etcodehome.freeterraforged.world.worldgen.cell.Cell;
+import etcodehome.freeterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.RiverGenerator;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.Rivermap;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.gen.GenWarp;
@@ -33,6 +36,8 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
     /** True when the continent can bridge cells together (UPLIFT), so cell borders may be dry land instead of ocean. */
     protected final boolean bridgeAware;
     protected final float shallowOcean;
+    /** Forks share one fixed water level taken from their junction (only meaningful with uplift hydrology). */
+    protected final boolean fixedForkLevels;
 
     public BaseRiverGenerator(T continent, GeneratorContext context) {
         this.continent = continent;
@@ -41,6 +46,7 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
         this.minEdgeValue = context.preset.world().controlPoints.inland;
         this.shallowOcean = context.preset.world().controlPoints.shallowOcean;
         this.bridgeAware = continent instanceof UpliftContinentGenerator;
+        this.fixedForkLevels = continent instanceof UpliftContinentGenerator;
         this.seed = Seed.toInt(context.seed.root() + context.preset.rivers().seedOffset);
         this.count = context.preset.rivers().riverCount;
         this.main = RiverConfig.builder(context.levels).bankHeight(context.preset.rivers().mainRivers.minBankHeight, context.preset.rivers().mainRivers.maxBankHeight).bankWidth(context.preset.rivers().mainRivers.bankWidth).bedWidth(context.preset.rivers().mainRivers.bedWidth).bedDepth(context.preset.rivers().mainRivers.bedDepth).fade(context.preset.rivers().mainRivers.fade).length(5000).main(true).order(0).build();
@@ -111,6 +117,8 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
                             settings.connecting = true;
                             settings.fadeIn = config.fade;
                             settings.valleySize = valleyWidth;
+                            settings.fixedWaterOffset = this.resolveForkWaterOffset(parent, x1, z1);
+                            settings.junctionFreeRadius = parent.carver.getFootprintRadius();
                             RiverWarp forkWarp = parent.carver.getWarp().createChild(0.15f, 0.75f, 0.65f, random);
                             FTFRiverCarver fork = new UpliftRiverCarver(river, forkWarp, forkConfig, settings, this.levels, this.lake, this.continent instanceof UpliftContinentGenerator);
                             Network.Builder builder = Network.builder(fork);
@@ -138,6 +146,29 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
      */
     protected boolean endsInNeighbourCell(float x1, float z1, float x2, float z2) {
         return this.bridgeAware && this.continent.getNearestCenter(x2, z2) != this.continent.getNearestCenter(x1, z1);
+    }
+
+    /**
+     * The first fork off a main river samples the continental hydrology water offset at its junction once;
+     * every descendant fork inherits that same value instead of re-deriving it per cell.
+     */
+    protected float resolveForkWaterOffset(Network.Builder parent, float junctionX, float junctionZ) {
+        if (!this.fixedForkLevels) {
+            return Float.NaN;
+        }
+        float inherited = parent.carver.getFixedWaterOffset();
+        if (!Float.isNaN(inherited)) {
+            return inherited;
+        }
+        return this.sampleWaterOffset(junctionX, junctionZ);
+    }
+
+    protected float sampleWaterOffset(float x, float z) {
+        try (Resource<Cell> resource = Cell.getResource()) {
+            Cell cell = resource.get();
+            this.continent.apply(cell, x, z);
+            return ContinentalHydrology.getComplexWaterHeight(cell.waterTable, this.continentScale, cell.continentSizeModifier);
+        }
     }
 
     public void generateWetlands(Network.Builder builder, Random random) {

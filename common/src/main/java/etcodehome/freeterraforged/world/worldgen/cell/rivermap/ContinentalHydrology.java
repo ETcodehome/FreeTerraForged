@@ -3,6 +3,8 @@ package etcodehome.freeterraforged.world.worldgen.cell.rivermap;
 import java.util.Arrays;
 import java.util.Random;
 
+import etcodehome.freeterraforged.world.worldgen.cell.Cell;
+
 public class ContinentalHydrology {
 
     private static record Step(double x, double y) {}
@@ -133,6 +135,18 @@ public class ContinentalHydrology {
                 * (globalContinentScale / 4000.0F) // scale uplift based on continent width
                 * (thisContinentScale / 1.0F) // obey per continent jitter
                 * 0.50F; // base uplift
+    }
+
+    /**
+     * The water surface offset (above sea level) that applies to a cell. Cells carved by a fork use the fixed level the
+     * fork inherited from its junction; every other cell derives it from its own uplift.
+     */
+    public static float getWaterOffset(Cell cell) {
+        float override = cell.riverWaterOffset;
+        if (!Float.isNaN(override)) {
+            return override;
+        }
+        return getComplexWaterHeight(cell.waterTable, cell.globalContinentScale, cell.continentSizeModifier);
     }
 
     public static float getFlatnessFactor(double x) {

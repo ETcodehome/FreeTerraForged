@@ -36,4 +36,20 @@ public interface FTFRiverCarver {
     void carve(Cell cell, float prevX, float prevZ, float prevT, float currX, float currZ, float currT);
 
     RiverConfig createForkConfig(float t, Levels levels);
+
+    /**
+     * @return the fixed water surface offset above sea level shared by this river and all of its descendants,
+     * or NaN if the water level is derived per cell.
+     */
+    default float getFixedWaterOffset() {
+        return Float.NaN;
+    }
+
+    /**
+     * @return an upper-bound estimate (blocks) of how far from this river's spine its bed, banks and valley floor
+     * extend. Forks use it to know how far into this river they must be free to carve in order to join it.
+     */
+    default float getFootprintRadius() {
+        return 0.0F;
+    }
 }

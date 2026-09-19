@@ -10,6 +10,16 @@ public class RiverCarverSettings {
     public float fadeIn;
     public boolean connecting;
     public CurveFunction valleyCurve;
+    /**
+     * Fixed water surface offset above sea level for this river, or NaN to derive it per cell.
+     * Set for forks (and inherited by their descendants) from the hydrology value at the first fork's junction.
+     */
+    public float fixedWaterOffset = Float.NaN;
+    /**
+     * Footprint radius (blocks) of the parent river this fork joins. Inside this distance of the junction the fork is
+     * never shielded from the parent, so it can cut through the parent's banks and valley to actually connect.
+     */
+    public float junctionFreeRadius = 0.0F;
 
     public RiverCarverSettings(Random random) {
         this.valleySize = 275.0F;
