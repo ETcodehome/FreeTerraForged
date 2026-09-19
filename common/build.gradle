@@ -3,7 +3,7 @@ architectury {
 }
 
 loom {
-    accessWidenerPath = file("src/main/resources/reterraforged.accesswidener")
+    accessWidenerPath = file("src/main/resources/freeterraforged.accesswidener")
 }
 
 dependencies {

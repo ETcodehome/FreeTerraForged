@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "package": "etcodehome.freeterraforged.neoforge.mixin",
+  "minVersion": "0.8",
+  "compatibilityLevel": "JAVA_21",
+	"mixins": [
+		"MixinTagsProvider",
+    "MixinChunkStatusTasks",
+  	"MixinMinecraftServer"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

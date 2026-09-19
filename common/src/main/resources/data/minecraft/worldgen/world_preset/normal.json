@@ -3,7 +3,7 @@
     "minecraft:overworld": {
       "type": "minecraft:overworld",
       "generator": {
-        "type": "reterraforged:noise",
+        "type": "freeterraforged:noise",
         "biome_source": {
           "type": "minecraft:multi_noise",
           "preset": "minecraft:overworld"

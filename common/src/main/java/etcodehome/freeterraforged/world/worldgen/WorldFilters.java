@@ -1,0 +1,65 @@
+package etcodehome.freeterraforged.world.worldgen;
+
+import java.util.function.IntFunction;
+
+import etcodehome.freeterraforged.data.worldgen.preset.settings.FilterSettings;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.filter.BeachDetect;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.filter.Erosion;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.filter.Filterable;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.filter.Smoothing;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.filter.Steepness;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.filter.TerrainCeiling;
+
+public class WorldFilters {
+    private Smoothing smoothing;
+    private Steepness steepness;
+    private TerrainCeiling terrainCeiling;
+    private BeachDetect beach;
+    private FilterSettings settings;
+    private WorldErosion<Erosion> erosion;
+    private int erosionIterations;
+    private int smoothingIterations;
+    
+    public WorldFilters(GeneratorContext context) {
+        IntFunction<Erosion> factory = Erosion.factory(context);
+        this.settings = context.preset.filters();
+        this.beach = BeachDetect.make(context);
+        this.smoothing = Smoothing.make(context.preset.filters().smoothing, context.levels);
+        this.steepness = Steepness.make(1, 10.0F, context.levels);
+        if (context.preset.terrain().general.mountainVariety > 0.0F) {
+            this.terrainCeiling = TerrainCeiling.make(context.preset.world().properties);
+        }
+        this.erosion = new WorldErosion<>(factory, (e, size) -> e.getSize() == size);
+        this.erosionIterations = context.preset.filters().erosion.dropletsPerChunk;
+        this.smoothingIterations = context.preset.filters().smoothing.iterations;
+    }
+    
+    public FilterSettings getSettings() {
+        return this.settings;
+    }
+    
+    public void apply(Tile tile, boolean optionalFilters) {
+        int regionX = tile.getX();
+        int regionZ = tile.getZ();
+        
+        if (optionalFilters) {
+            this.applyOptionalFilters(tile, regionX, regionZ);
+        }
+        this.applyRequiredFilters(tile, regionX, regionZ);
+        if (this.terrainCeiling != null) {
+            this.terrainCeiling.apply(tile, regionX, regionZ, 1);
+        }
+    }
+    
+    private void applyRequiredFilters(Filterable map, int seedX, int seedZ) {
+        this.steepness.apply(map, seedX, seedZ, 1);
+        this.beach.apply(map, seedX, seedZ, 1);
+    }
+    
+    private void applyOptionalFilters(Filterable map, int seedX, int seedZ) {
+        Erosion erosion = this.erosion.get(map.getBlockSize().total());
+        erosion.apply(map, seedX, seedZ, this.erosionIterations);
+        this.smoothing.apply(map, seedX, seedZ, this.smoothingIterations);
+    }
+}
