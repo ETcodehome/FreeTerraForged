@@ -33,18 +33,10 @@ license="MIT"
 	ordering = "NONE"
 	side = "BOTH"
 
-# We enforce 3.0.14 because otherwise biome previews break in a non-obvious manner
 [[dependencies.freeterraforged]]
-    modId = "biolith"
-    type = "optional"
-    versionRange = "[3.0.14,)"
-    ordering = "AFTER"
+    modId = "reterraforged"
+    type = "incompatible"
+    reason = "ReTerraForged and FreeTerraForged cannot run together."
+    versionRange = "*"
+    ordering = "NONE"
     side = "BOTH"
-
-[[dependencies.your_mod_id]]
-modId = "reterraforged"
-type = "incompatible"
-reason = "RTF is an ancestor of FTF and as such cannot be used in parallel with it."
-versionRange = "*"
-ordering = "NONE"
-side = "BOTH"

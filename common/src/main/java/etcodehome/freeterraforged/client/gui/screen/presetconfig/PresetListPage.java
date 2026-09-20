@@ -40,10 +40,14 @@ import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
 import etcodehome.freeterraforged.client.gui.Toasts;
 import etcodehome.freeterraforged.client.gui.screen.page.BisectedPage;
+import etcodehome.freeterraforged.client.gui.screen.page.LinkedPageScreen.SaveResult;
 import etcodehome.freeterraforged.client.gui.screen.page.LinkedPageScreen.Page;
-import etcodehome.freeterraforged.data.worldgen.preset.settings.FlowSettings;
+import etcodehome.freeterraforged.client.gui.widget.Label;
+import etcodehome.freeterraforged.client.gui.widget.WidgetList;
+import etcodehome.freeterraforged.client.gui.widget.WidgetList.Entry;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Presets;
+import etcodehome.freeterraforged.platform.ConfigUtil;
 
 class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, AbstractWidget> {
 	private static final Path PRESET_PATH = ConfigUtil.ftf("presets");
@@ -277,20 +281,16 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 	}
 
 	@Override
-	public void onSave() {
-		super.onSave();
-
-		WidgetList.Entry<AbstractWidget> selected = this.left.getSelected();
+	public SaveResult onSave() {
+		Entry<AbstractWidget> selected = this.left.getSelected();
 		if(selected != null && selected.getWidget() instanceof PresetEntry presetEntry) {
 			try {
-				this.screen.applyPreset(presetEntry);
+				return this.screen.applyPreset(presetEntry);
 			} catch (IOException e) {
-				e.printStackTrace();
+				return this.screen.reportPresetApplyFailure(e);
 			}
-
-			// specifically populate the static fields of flow dynamics that are used when resolving mixin state checks
-			FlowSettings.CurrentPresetState.set(presetEntry.preset.flow());
 		}
+		return SaveResult.STAY_OPEN;
 	}
 
 	private void selectPreset(@Nullable PresetEntry entry) {

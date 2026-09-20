@@ -41,7 +41,6 @@ public class Preview3D extends Button implements IPreviewHandler {
     public Preview3D(PresetEditorPage page, int x, int y, int width, int height) {
         super(x, y, width, height, CommonComponents.EMPTY, IPreviewHandler.onPress(), DEFAULT_NARRATION);
         this.page = page;
-        this.state.cacheKey = BiomePreview.cacheKey(page.getScreen().getSettings(), page.preset.getPreset());
     }
 
     @Override
@@ -307,16 +306,6 @@ public class Preview3D extends Button implements IPreviewHandler {
         }
 
         renderSpawnMarker(guiGraphics);
-        BiomePreview.Sidecar activeBiomes = this.state.biomes;
-        if (activeBiomes != null && activeBiomes.warning() != null) {
-            guiGraphics.drawCenteredString(
-                    Minecraft.getInstance().font,
-                    activeBiomes.warning(),
-                    x + this.width / 2,
-                    y + 4,
-                    0xFFFF5555
-            );
-        }
         updateLegend(mx, my);
         renderLegend(guiGraphics, mx, my, this.state.legendLabels, this.state.legendValues, x, y + this.width + 30, 10, 0xFFFFFF);
     }

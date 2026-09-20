@@ -14,6 +14,8 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import etcodehome.freeterraforged.world.worldgen.IFlowFieldHolder;
+import etcodehome.freeterraforged.world.worldgen.ChunkFlowField;
 
 @Mixin(ChunkSerializer.class)
 public class MixinChunkSerializer {
@@ -22,7 +24,10 @@ public class MixinChunkSerializer {
     private static void injectSaveData(ServerLevel level, ChunkAccess chunk, CallbackInfoReturnable<CompoundTag> cir) {
         CompoundTag resultTag = cir.getReturnValue();
         if (resultTag != null && chunk instanceof IFlowFieldHolder holder) {
-            holder.freeterraforged$getFlowField().writeToNbt(resultTag);
+            ChunkFlowField flowField = holder.freeterraforged$getFlowField();
+            if (flowField != null) {
+                flowField.writeToNbt(resultTag);
+            }
         }
     }
 
@@ -38,8 +43,8 @@ public class MixinChunkSerializer {
             }
 
             // Apply the NBT data to the real underlying chunk
-            if (targetChunk instanceof IFlowFieldHolder holder) {
-                holder.freeterraforged$getFlowField().readFromNbt(tag);
+            if (ChunkFlowField.hasData(tag) && targetChunk instanceof IFlowFieldHolder holder) {
+                holder.freeterraforged$getOrCreateFlowField().readFromNbt(tag);
             }
         }
     }

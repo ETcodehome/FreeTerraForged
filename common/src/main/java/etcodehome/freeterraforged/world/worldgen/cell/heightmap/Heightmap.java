@@ -1,5 +1,7 @@
 package etcodehome.freeterraforged.world.worldgen.cell.heightmap;
 
+import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.ControlPoints;
+
 import etcodehome.freeterraforged.data.worldgen.preset.PresetNoiseData;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetTerrainTypeNoise;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
@@ -36,7 +38,7 @@ import etcodehome.freeterraforged.world.worldgen.util.Seed;
 import net.minecraft.core.HolderGetter;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 
-public record Heightmap(CellPopulator terrain, CellPopulator region, Continent continent, Climate climate, Levels levels, WorldSettings.ControlPoints controlPoints, float terrainFrequency, Noise beachNoise) {
+public record Heightmap(CellPopulator terrain, CellPopulator region, Continent continent, Climate climate, Levels levels, ControlPoints controlPoints, float terrainFrequency, Noise beachNoise) implements AutoCloseable {
 	
 	public void apply(Cell cell, float x, float z, boolean applyClimate) {
 		this.applyTerrain(cell, x, z);
@@ -82,6 +84,17 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
         if(cell.riverMask >= riverValleyThreshold && cell.macroBiomeId > 0.5F) { 
         	cell.weirdness = -cell.weirdness;
         }
+	}
+
+	public void applyBiomeRegion(Cell cell, float x, float z) {
+		if (!this.climate.applyInitialRegion(cell, x, z)) {
+			return;
+		}
+		this.applyTerrain(cell, x, z);
+		this.applyRivers(cell, x, z, this.continent.getRivermap(cell));
+		if (cell.height > this.levels.water) {
+			this.climate.applyEdgeRegion(cell, x, z);
+		}
 	}
 	
 	public static Heightmap make(GeneratorContext ctx) {
@@ -161,7 +174,13 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
         	mountains = Populators.makeMountainChain(mountainSeed, ground, terrainSettings.mountains, terrainSettings.general.legacyMountainScaling ? 1.0F : terrainSettings.mountains.horizontalScale * 2.25F, terrainSettings.general.legacyMountainScaling ? globalVerticalScale : globalVerticalScale * terrainSettings.mountains.verticalScale, general.fancyMountains, general.legacyMountainScaling);
         }
         Continent continent = world.continent.continentType.create(ctx.seed, ctx);
-        Climate climate = Climate.make(continent, ctx);
+        Climate climate;
+		try {
+			climate = Climate.make(continent, ctx);
+		} catch (RuntimeException | Error failure) {
+			continent.close();
+			throw failure;
+		}
         CellPopulator land = new Blender(mountainShape, terrainBlend, mountains, 0.3F, 0.8F, 0.575F);
         
         CellPopulator deepOcean = Populators.makeDeepOcean(ctx.seed.next(), ctx.levels, world.properties.oceanDepth);
@@ -188,5 +207,10 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
         Noise beachNoise = Noises.perlin2(ctx.seed.next(), 20, 1);
         beachNoise = Noises.mul(beachNoise, ctx.levels.scale(5));
         return new Heightmap(terrain, region, continent, climate, levels, controlPoints, terrainFrequency, beachNoise);
+	}
+
+	@Override
+	public void close() {
+		this.continent.close();
 	}
 }

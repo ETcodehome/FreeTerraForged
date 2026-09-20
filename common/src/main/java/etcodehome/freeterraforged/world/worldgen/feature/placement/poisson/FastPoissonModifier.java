@@ -19,8 +19,13 @@ import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.placement.PlacementContext;
 import net.minecraft.world.level.levelgen.placement.PlacementModifier;
 import net.minecraft.world.level.levelgen.placement.PlacementModifierType;
+import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
+import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.TileCache;
 import etcodehome.freeterraforged.world.worldgen.feature.placement.FTFPlacementModifiers;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
+import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
 
 public class FastPoissonModifier extends PlacementModifier {
 	public static final MapCodec<FastPoissonModifier> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
@@ -62,34 +67,47 @@ public class FastPoissonModifier extends PlacementModifier {
 		long levelSeed = level.getSeed();
 		int seed = (int) levelSeed + 234523;
 		ChunkPos chunkPos = chunk.getPos();
-        int chunkX = chunkPos.x;
-        int chunkZ = chunkPos.z;
-        FastPoisson poisson = FastPoisson.LOCAL_POISSON.get();
-        DensityNoise density = this.getDensityNoise(seed, chunkPos, level.getLevel().getChunkSource().randomState());
-        FastPoissonContext poissonConfig = new FastPoissonContext(this.radius, this.jitter, this.scale, density);
-        Stream.Builder<BlockPos> builder = Stream.builder();
-        poisson.visit(seed, chunkX, chunkZ, new Random(levelSeed), poissonConfig, builder, (x, z, b) -> {
-        	b.accept(new BlockPos(x, 0, z));
-        });
-        return builder.build();
-    }
+		int chunkX = chunkPos.x;
+		int chunkZ = chunkPos.z;
+		RandomState randomState = level.getLevel().getChunkSource().randomState();
+		if (this.biomeFade > BiomeVariance.MIN_FADE
+			&& (Object) randomState instanceof FTFRandomState rtfRandomState) {
+			GeneratorContext generatorContext = rtfRandomState.generatorContext();
+			if (generatorContext != null) {
+				try (TileCache.Lease tileLease = generatorContext.cache.acquireAtChunk(chunkX, chunkZ)) {
+					return this.getPositions(
+						seed,
+						levelSeed,
+						chunkX,
+						chunkZ,
+						tileLease.tile().getChunkReader(chunkX, chunkZ)
+					);
+				}
+			}
+		}
+		return this.getPositions(seed, levelSeed, chunkX, chunkZ, null);
+	}
 
 	@Override
 	public PlacementModifierType<FastPoissonModifier> type() {
 		return FTFPlacementModifiers.FAST_POISSON;
 	}
 
-	private DensityNoise getDensityNoise(int seed, ChunkPos chunkPos, RandomState randomState) {
-		BiomeVariance biomeVariance = BiomeVariance.NONE;
-		
-		if (this.biomeFade > BiomeVariance.MIN_FADE) {
-			if((Object) randomState instanceof FTFRandomState ftfRandomState) {
-				Tile.Chunk reader = ftfRandomState.generatorContext().cache.provideAtChunk(chunkPos.x, chunkPos.z).getChunkReader(chunkPos.x, chunkPos.z);
-				if (reader != null) {
-					biomeVariance = new BiomeVariance(reader, this.biomeFade);
-				}
-			}
-		}
+	private Stream<BlockPos> getPositions(int seed, long levelSeed, int chunkX, int chunkZ, Tile.Chunk tileChunk) {
+		FastPoisson poisson = FastPoisson.LOCAL_POISSON.get();
+		DensityNoise density = this.getDensityNoise(seed, tileChunk);
+		FastPoissonContext poissonConfig = new FastPoissonContext(this.radius, this.jitter, this.scale, density);
+		Stream.Builder<BlockPos> builder = Stream.builder();
+		poisson.visit(seed, chunkX, chunkZ, new Random(levelSeed), poissonConfig, builder, (x, z, b) -> {
+			b.accept(new BlockPos(x, 0, z));
+		});
+		return builder.build();
+	}
+
+	private DensityNoise getDensityNoise(int seed, Tile.Chunk tileChunk) {
+		BiomeVariance biomeVariance = tileChunk == null
+			? BiomeVariance.NONE
+			: new BiomeVariance(tileChunk, this.biomeFade);
 
 		Noise densityVariance = Noises.one();
 		if (this.densityVariation > 0) {

@@ -103,4 +103,9 @@ public abstract class AbstractContinent implements SimpleContinent {
     protected static float getCellValue(int seed, int cellX, int cellY) {
         return 0.5F + NoiseUtil.valCoord2D(seed, cellX, cellY) * 0.5F;
     }
+
+	@Override
+	public void close() {
+		this.riverCache.close();
+	}
 }
