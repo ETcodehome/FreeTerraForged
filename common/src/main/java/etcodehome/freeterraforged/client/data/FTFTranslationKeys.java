@@ -40,7 +40,6 @@ public final class FTFTranslationKeys {
 	public static final String GUI_TERRAIN_SETTINGS_TITLE = resolve("gui.terrainSettings.title");
 	public static final String GUI_RIVER_SETTINGS_TITLE = resolve("gui.riverSettings.title");
 	public static final String GUI_FILTER_SETTINGS_TITLE = resolve("gui.filterSettings.title");
-	public static final String GUI_STRUCTURE_SETTINGS_TITLE = resolve("gui.structureSettings.title");
 	public static final String GUI_MISCELLANEOUS_SETTINGS_TITLE = resolve("gui.miscellaneousSettings.title");
 	public static final String GUI_ISLAND_SETTINGS_TITLE = resolve("gui.islandSettings.title");
 

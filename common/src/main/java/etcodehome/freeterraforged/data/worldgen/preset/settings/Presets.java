@@ -56,8 +56,7 @@ public class Presets {
 			new FilterSettings(
 				new Erosion(135, 12, 0.7F, 0.7F, 0.5F, 0.5F),
 				new Smoothing(1, 1.8F, 0.9F)
-			), 
-			new StructureSettings(),
+			),
 			new MiscellaneousSettings(true, 600, true, true, true, false, true, true, false, true, false, 0.4F, 0.4F),
 			PresentationSettings.makeDefault()
 		); 
@@ -102,8 +101,7 @@ public class Presets {
 			new FilterSettings(
 				new Erosion(135, 12, 0.7F, 0.7F, 0.5F, 0.5F),
 				new Smoothing(1, 1.8F, 0.9F)
-			), 
-			new StructureSettings(),
+			),
 			new MiscellaneousSettings(true, 600, true, true, true, false, true, true, true, true, true, 0.4F, 0.4F),
 			PresentationSettings.makeDefault()
 		);
@@ -148,8 +146,7 @@ public class Presets {
 			new FilterSettings(
 				new Erosion(100, 12, 0.699F, 0.699F, 0.5F, 0.5F),
 				new Smoothing(2, 1.8F, 0.75F)
-			), 
-			new StructureSettings(),
+			),
 			new MiscellaneousSettings(false, 600, false, true, false, false, false, false, true, true, true, 1.0F, 0.75F),
 			PresentationSettings.makeDefault()
 		);
@@ -194,8 +191,7 @@ public class Presets {
 			new FilterSettings(
 				new Erosion(175, 12, 0.648F, 0.657F, 0.5F, 0.5F),
 				new Smoothing(1, 1.855F, 0.916F)
-			), 
-			new StructureSettings(),
+			),
 			new MiscellaneousSettings(true, 684, true, true, true, false, true, true, true, true, false, 0.853F, 0.855F),
 			PresentationSettings.makeDefault()
 		); 
@@ -240,8 +236,7 @@ public class Presets {
 			new FilterSettings(
 				new Erosion(100, 12, 0.699F, 0.699F, 0.5F, 0.5F),
 				new Smoothing(2, 1.799F, 0.75F)
-			), 
-			new StructureSettings(),
+			),
 			new MiscellaneousSettings(true, 600, false, true, true, false, true, true, true, true, true, 1.0F, 0.75F),
 			PresentationSettings.makeDefault()
 		);
@@ -286,8 +281,7 @@ public class Presets {
 			new FilterSettings(
 				new Erosion(165, 15, 0.612F, 0.652F, 0.5F, 0.5F),
 				new Smoothing(1, 1.799F, 0.898F)
-			), 
-			new StructureSettings(),
+			),
 			new MiscellaneousSettings(true, 721, true, true, true, false, true, true, true, true, false, 0.902F, 0.945F),
 			PresentationSettings.makeDefault()
 		);
@@ -503,7 +497,6 @@ public class Presets {
 
 						new Smoothing(0, 0.0F, 0.0F)
 				),
-				new StructureSettings(),
 				new MiscellaneousSettings(true,
 						1000,
 						true,
@@ -713,7 +706,6 @@ public class Presets {
 
 						new Smoothing(1, 1.8F, 0.9F)
 				),
-				new StructureSettings(),
 				new MiscellaneousSettings(true,
 						889,
 						true,

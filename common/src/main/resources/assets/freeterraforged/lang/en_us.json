@@ -371,7 +371,6 @@
   "freeterraforged.gui.slider.worldHeight.tooltip": "Controls the world height",
   "freeterraforged.gui.slider.zoom": "Zoom",
   "freeterraforged.gui.slider.zoom.tooltip": "Controls the zoom level of the preview map",
-  "freeterraforged.gui.structureSettings.title": "Structure Settings",
   "freeterraforged.gui.surfaceSettings.title": "Surface Settings",
   "freeterraforged.gui.terrainSettings.title": "Terrain Settings",
   "freeterraforged.gui.worldSettings.title": "World Settings",
