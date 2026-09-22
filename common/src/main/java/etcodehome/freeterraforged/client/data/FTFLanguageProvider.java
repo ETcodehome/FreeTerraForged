@@ -38,7 +38,6 @@ public final class FTFLanguageProvider {
 			this.add(FTFTranslationKeys.GUI_TERRAIN_SETTINGS_TITLE, "Terrain Settings");
 			this.add(FTFTranslationKeys.GUI_RIVER_SETTINGS_TITLE, "River Settings");
 			this.add(FTFTranslationKeys.GUI_FILTER_SETTINGS_TITLE, "Filter Settings");
-			this.add(FTFTranslationKeys.GUI_STRUCTURE_SETTINGS_TITLE, "Structure Settings");
 			this.add(FTFTranslationKeys.GUI_MISCELLANEOUS_SETTINGS_TITLE, "Miscellaneous Settings");
 
 			this.add(FTFTranslationKeys.GUI_BUTTON_TRUE, "true");
