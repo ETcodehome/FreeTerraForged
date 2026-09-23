@@ -58,9 +58,6 @@ public class PresetConfiguredFeatures {
 	public static final ResourceKey<ConfiguredFeature<?, ?>> OAK_SMALL = createKey("oak/small");
 	public static final ResourceKey<ConfiguredFeature<?, ?>> OAK_FOREST = createKey("oak/forest");
 	public static final ResourceKey<ConfiguredFeature<?, ?>> OAK_LARGE = createKey("oak/large");
-	public static final ResourceKey<ConfiguredFeature<?, ?>> BIRCH_SMALL = createKey("birch/small");
-	public static final ResourceKey<ConfiguredFeature<?, ?>> BIRCH_FOREST = createKey("birch/forest");
-	public static final ResourceKey<ConfiguredFeature<?, ?>> BIRCH_LARGE = createKey("birch/large");
 	public static final ResourceKey<ConfiguredFeature<?, ?>> ACACIA_BUSH = createKey("acacia/bush");
 	public static final ResourceKey<ConfiguredFeature<?, ?>> ACACIA_SMALL = createKey("acacia/small");
 	public static final ResourceKey<ConfiguredFeature<?, ?>> ACACIA_LARGE = createKey("acacia/large");
@@ -163,9 +160,6 @@ public class PresetConfiguredFeatures {
 			FeatureUtils.register(ctx, OAK_SMALL, FTFFeatures.TEMPLATE, makeTree(PresetTemplatePaths.OAK_SMALL));
 			FeatureUtils.register(ctx, OAK_FOREST, FTFFeatures.TEMPLATE, makeTree(PresetTemplatePaths.OAK_FOREST));
 			FeatureUtils.register(ctx, OAK_LARGE, FTFFeatures.TEMPLATE, makeTree(PresetTemplatePaths.OAK_LARGE));
-			FeatureUtils.register(ctx, BIRCH_SMALL, FTFFeatures.TEMPLATE, makeTree(PresetTemplatePaths.BIRCH_SMALL));
-			FeatureUtils.register(ctx, BIRCH_FOREST, FTFFeatures.TEMPLATE, makeTree(PresetTemplatePaths.BIRCH_FOREST));
-			FeatureUtils.register(ctx, BIRCH_LARGE, FTFFeatures.TEMPLATE, makeTree(PresetTemplatePaths.BIRCH_LARGE));
 			FeatureUtils.register(ctx, ACACIA_BUSH, FTFFeatures.TEMPLATE, makeTree(PresetTemplatePaths.ACACIA_BUSH, 2));
 			FeatureUtils.register(ctx, ACACIA_SMALL, FTFFeatures.TEMPLATE, makeTree(PresetTemplatePaths.ACACIA_SMALL));
 			FeatureUtils.register(ctx, ACACIA_LARGE, FTFFeatures.TEMPLATE, makeTree(PresetTemplatePaths.ACACIA_LARGE));
@@ -204,12 +198,6 @@ public class PresetConfiguredFeatures {
 				makeWeighted(0.2F, oakForest), 
 				makeWeighted(0.2F, oakLarge)
 			)));
-			FeatureUtils.register(ctx, BIRCH_TREES, FTFFeatures.CHANCE, makeChance(
-				makeChanceEntry(birchLarge, 0.2F, FTFChanceModifiers.elevation(0.25F, 0.0F), FTFChanceModifiers.biomeEdge(0.1F, 0.3F)),
-				makeChanceEntry(birchForest, 0.2F, FTFChanceModifiers.elevation(0.3F, 0.0F), FTFChanceModifiers.biomeEdge(0.05F, 0.2F)),
-				makeChanceEntry(birchSmall, 0.1F, FTFChanceModifiers.biomeEdge(0.25F, 0.0F)),
-				makeChanceEntry(birchSmall, 0.1F, FTFChanceModifiers.elevation(0.25F, 0.65F))
-			));
 			FeatureUtils.register(ctx, DARK_FOREST_TREES, Feature.RANDOM_SELECTOR, makeRandom(darkOakLarge, List.of(
 				makeWeighted(0.025F, hugeBrownMushroom),
 				makeWeighted(0.05F, hugeRedMushroom),
