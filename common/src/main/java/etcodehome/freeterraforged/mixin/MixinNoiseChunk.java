@@ -51,7 +51,6 @@ class MixinNoiseChunk {
 	@Shadow
     @Final
     private int cellHeight;
-
 	@Inject(
 			method = "<init>",
 			at = @At(
@@ -76,11 +75,27 @@ class MixinNoiseChunk {
 		this.chunkX = SectionPos.blockToSectionCoord(minBlockX);
 		this.chunkZ = SectionPos.blockToSectionCoord(minBlockZ);
 		GeneratorContext generatorContext;
-		if((Object) randomState instanceof FTFRandomState ftfRandomState && cellCountXZ > 1 && (generatorContext = ftfRandomState.generatorContext()) != null) {
+		if ((Object) randomState instanceof FTFRandomState ftfRandomState && cellCountXZ > 1 && (generatorContext = ftfRandomState.generatorContext()) != null) {
 			this.chunk = generatorContext.cache.provideAtChunk(this.chunkX, this.chunkZ).getChunkReader(this.chunkX, this.chunkZ);
 
 			FTFChunk ftfChunk = (FTFChunk) ActiveChunk.get();
-			int maxHeight = Math.min(noiseSettings.height(), MaxHeightUtil.getMaxHeight(this.chunkX, this.chunkZ, ftfChunk.getMaxHeight().orElseGet(noiseSettings::height), generatorSettings, noiseSettings, beardifierOrMarker));
+
+			// Safely fall back to noiseSettings::height if ftfChunk is null or getMaxHeight() is empty
+			int defaultHeight = ftfChunk != null
+					? ftfChunk.getMaxHeight().orElseGet(noiseSettings::height)
+					: noiseSettings.height();
+
+			int maxHeight = Math.min(
+					noiseSettings.height(),
+					MaxHeightUtil.getMaxHeight(
+							this.chunkX,
+							this.chunkZ,
+							defaultHeight,
+							generatorSettings,
+							noiseSettings,
+							beardifierOrMarker
+					)
+			);
 			this.cellCountY = Math.min(this.cellCountY, maxHeight / this.cellHeight);
 		}
 		this.cache2d = new CellSampler.Cache2d();
