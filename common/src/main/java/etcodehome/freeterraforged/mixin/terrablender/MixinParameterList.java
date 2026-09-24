@@ -37,7 +37,7 @@ import terrablender.api.Regions;
 
 @Mixin(
 	value = Climate.ParameterList.class,
-	priority = 1001
+	priority = 1600
 )
 class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 	private int maxIndex;
