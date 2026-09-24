@@ -13,7 +13,6 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.data.event.GatherDataEvent;
 import net.neoforged.neoforge.event.TagsUpdatedEvent;
 import etcodehome.freeterraforged.FTFCommon;
-import etcodehome.freeterraforged.client.data.FTFLanguageProvider;
 import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
 import etcodehome.freeterraforged.platform.neoforge.RegistryUtilImpl;
 import etcodehome.freeterraforged.server.FTFMinecraftServer;
@@ -55,8 +54,6 @@ public class FTFNeoForge {
 		boolean includeClient = true;
 		DataGenerator generator = event.getGenerator();
 		PackOutput output = generator.getPackOutput();
-
-		generator.addProvider(includeClient, new FTFLanguageProvider.EnglishUS(output));
 		generator.addProvider(includeClient, PackMetadataGenerator.forFeaturePack(
 				output, Component.translatable(FTFTranslationKeys.METADATA_DESCRIPTION)));
 	}
