@@ -274,9 +274,9 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 				} catch (IOException e) {
 					FTFCommon.LOGGER.error("Failed to auto-create preset from template", e);
 				}
-				return new WorldSettingsPage(this.screen, customEntry);
+				return new BiomeSummaryPage(this.screen, customEntry);
 			}
-			return new WorldSettingsPage(this.screen, entry);
+			return new BiomeSummaryPage(this.screen, entry);
 		});
 	}
 
