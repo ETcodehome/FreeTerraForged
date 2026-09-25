@@ -53,7 +53,7 @@ class MixinNoiseChunk implements NoiseChunkTileOwner {
 	private volatile Tile.Chunk chunk;
 	private int tileStageDepth;
 	private CellSampler.Cache2d cache2d;
-	
+
 	@Inject(
 		method = "<init>",
 		at = @At(
