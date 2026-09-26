@@ -12,6 +12,7 @@
       "biolith.BiolithSubBiomeRequestSetAccessor",
       "biolith.MixinBiolithDimensionBiomePlacement",
       "biolith.MixinBiolithOverworldBiomePlacement",
+	  "MixinAccelerationLifecycle",
 	  "MixinNoiseChunk",
 	  "MixinRandomState",
       "MixinChunkMap",
@@ -65,6 +66,7 @@
       "terrablender.MixinNoiseChunk"
 		],
 		"client": [
+          "MixinPauseScreen",
           "MixinCreateWorldScreenWorldTab",
           "MixinGuaranteeData",
           "ScreenInvoker"
