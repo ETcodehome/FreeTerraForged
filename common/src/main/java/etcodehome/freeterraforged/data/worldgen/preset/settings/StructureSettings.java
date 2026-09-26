@@ -26,6 +26,10 @@ public class StructureSettings {
 	public StructureSettings() {
 		this(ImmutableMap.of());
 	}
+
+	public static StructureSettings makeDefault() {
+		return new StructureSettings();
+	}
 	
 	public StructureSettings copy() {
 		Map<ResourceKey<StructureSet>, StructureSetEntry> entries = new HashMap<>();
