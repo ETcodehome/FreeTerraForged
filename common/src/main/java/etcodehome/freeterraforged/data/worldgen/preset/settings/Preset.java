@@ -45,7 +45,7 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 			FlowSettings.CODEC.optionalFieldOf("flow").xmap(optional -> optional.orElseGet(FlowSettings::makeDefault),Optional::of).forGetter(Preset::flow),
 			IslandSettings.CODEC.optionalFieldOf("island").xmap(optional -> optional.orElseGet(IslandSettings::makeDefault),Optional::of).forGetter(Preset::island),
 			FilterSettings.CODEC.fieldOf("filters").forGetter(Preset::filters),
-			StructureSettings.CODEC.fieldOf("structures").forGetter(Preset::structures),
+			StructureSettings.CODEC.optionalFieldOf("structures").xmap(optional -> optional.orElseGet(StructureSettings::makeDefault),Optional::of).forGetter(Preset::structures),
 			MiscellaneousSettings.CODEC.fieldOf("miscellaneous").forGetter(Preset::miscellaneous),
 			PresentationSettings.CODEC.optionalFieldOf("presentation").xmap(optional -> optional.orElseGet(PresentationSettings::makeDefault),Optional::of).forGetter(Preset::presentation)
 	).apply(instance, Preset::new));

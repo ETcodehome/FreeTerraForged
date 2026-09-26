@@ -119,7 +119,7 @@ class ClimateSettingsPage extends PresetEditorPage {
 
 		ClimateSettings.BiomeShape biomeShape = climate.biomeShape;
 
-		this.biomeSize = PresetWidgets.createIntSlider(biomeShape.biomeSize, ClimateSettings.BiomeShape.MIN_BIOME_SIZE, ClimateSettings.BiomeShape.MAX_BIOME_SIZE, FTFTranslationKeys.GUI_SLIDER_BIOME_SIZE, (slider, value) -> {
+		this.biomeSize = PresetWidgets.createIntSlider(biomeShape.biomeSize, 50, 2000, FTFTranslationKeys.GUI_SLIDER_BIOME_SIZE, (slider, value) -> {
 			biomeShape.biomeSize = (int) slider.scaleValue(value);
 			this.regenerate();
 			return value;
