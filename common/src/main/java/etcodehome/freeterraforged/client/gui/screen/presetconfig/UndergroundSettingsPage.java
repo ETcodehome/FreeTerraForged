@@ -83,11 +83,11 @@ public class UndergroundSettingsPage extends PresetEditorPage {
 			caves.largeOreVeins = value;
 		});
 
-		this.undergroundBiomeSize = PresetWidgets.createIntSlider(biomeShape.undergroundBiomeSize, ClimateSettings.BiomeShape.MIN_BIOME_SIZE, ClimateSettings.BiomeShape.MAX_BIOME_SIZE, FTFTranslationKeys.GUI_SLIDER_UNDERGROUND_BIOME_SIZE, (slider, value) -> {
+		this.undergroundBiomeSize = PresetWidgets.createIntSlider(biomeShape.undergroundBiomeSize, 50, 2000, FTFTranslationKeys.GUI_SLIDER_UNDERGROUND_BIOME_SIZE, (slider, value) -> {
 			biomeShape.undergroundBiomeSize = (int) slider.scaleValue(value);
 			return value;
 		});
-		this.undergroundBiomeVerticalSize = PresetWidgets.createIntSlider(biomeShape.undergroundBiomeVerticalSize, ClimateSettings.BiomeShape.MIN_UNDERGROUND_VERTICAL_SIZE, maximumUndergroundVerticalSize, FTFTranslationKeys.GUI_SLIDER_UNDERGROUND_BIOME_VERTICAL_SIZE, (slider, value) -> {
+		this.undergroundBiomeVerticalSize = PresetWidgets.createIntSlider(biomeShape.undergroundBiomeVerticalSize, 16, maximumUndergroundVerticalSize, FTFTranslationKeys.GUI_SLIDER_UNDERGROUND_BIOME_VERTICAL_SIZE, (slider, value) -> {
 			biomeShape.undergroundBiomeVerticalSize = (int) slider.scaleValue(value);
 			return value;
 		});
