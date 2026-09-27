@@ -74,8 +74,8 @@ public class ArchipelagoPopulator implements CellPopulator {
         this.oceanDepth = oceanDepth;
         int salt = Seed.toInt(seed.get());
 
-        int size = Math.round(settings.islandSize);
-        float hScale = Math.max(0.1F, settings.islandHorizontalScale);
+        int size = Math.round(settings.size);
+        float hScale = Math.max(0.1F, settings.horizontalScale);
         float mountainHScale = Math.max(0.1F, settings.mountainHorizontalScale);
         float volcanismHScale = Math.max(0.1F, settings.volcanismHorizontalScale);
 
@@ -143,7 +143,7 @@ public class ArchipelagoPopulator implements CellPopulator {
         float regionThreshold = NoiseUtil.lerp(1.05F, -0.25F, this.macroDensityPercentage);
         float regionAlpha = smoothStep(regionThreshold, regionThreshold + 0.25F, regionValue);
 
-        float densityThreshold = NoiseUtil.clamp(1.0F - this.settings.islandDensity * 0.8F, 0.05F, 0.98F);
+        float densityThreshold = NoiseUtil.clamp(1.0F - this.settings.density * 0.8F, 0.05F, 0.98F);
         // Expanded density fade range to make macro-region transitions wider and smoother
         float densityFade = NoiseUtil.clamp((1.0F - densityThreshold) * 0.5F, 0.12F, 0.30F);
         float densityAlpha = smoothStep(densityThreshold, densityThreshold + densityFade, densityValue);
@@ -274,17 +274,17 @@ public class ArchipelagoPopulator implements CellPopulator {
         float landTransitionEnd = NoiseUtil.clamp(NoiseUtil.lerp(1.0F, dynamicBeachEnd + 0.32F, cliffFactor), dynamicBeachEnd + 0.05F, 1.0F);
         float landAlpha = smoothStep(dynamicBeachEnd, landTransitionEnd, perturbedAlpha);
 
-        float inlandBase = landAlpha * this.settings.islandHeight * (0.035F + this.settings.islandBaseScale * 0.10F);
+        float inlandBase = landAlpha * this.settings.height * (0.035F + this.settings.baseScale * 0.10F);
 
         float macroDome = shape;
         float linearDome = macroDome;
         float exponentialDome = (float) Math.pow(macroDome, this.domeExponent);
         float domeShape = NoiseUtil.lerp(linearDome * 0.40F, exponentialDome, macroDome);
-        float domeContribution = domeShape * this.settings.islandHeight * this.settings.islandVerticalScale * DOME_HEIGHT_SCALE;
+        float domeContribution = domeShape * this.settings.height * this.settings.verticalScale * DOME_HEIGHT_SCALE;
 
         float summitInfluence = smoothStep(0.6F, 0.95F, macroDome);
         float summitPerturbValue = this.summitPerturb.compute(x, z, 0) * summitInfluence * this.summitPerturbStrength;
-        domeContribution += summitPerturbValue * this.settings.islandHeight * this.settings.islandVerticalScale;
+        domeContribution += summitPerturbValue * this.settings.height * this.settings.verticalScale;
 
         // Volcanism System: Sharp volcanic spire subnoise across interior terrain
         float vScale = NoiseUtil.clamp(this.settings.volcanismScale, 0.0F, 1.0F);
@@ -297,7 +297,7 @@ public class ArchipelagoPopulator implements CellPopulator {
         float spirePresence = smoothStep(1.0F - vChance, 1.0F, spireMaskNoise);
         float spireLocationMask = smoothStep(0.25F, 0.80F, macroDome) * landAlpha;
 
-        float volcanicSpireRelief = spireSharpened * spirePresence * spireLocationMask * vScale * this.settings.islandHeight * this.settings.islandVerticalScale * 0.50F;
+        float volcanicSpireRelief = spireSharpened * spirePresence * spireLocationMask * vScale * this.settings.height * this.settings.verticalScale * 0.50F;
 
         float reliefHeight = Math.max(0.0F, domeContribution) + volcanicSpireRelief;
 

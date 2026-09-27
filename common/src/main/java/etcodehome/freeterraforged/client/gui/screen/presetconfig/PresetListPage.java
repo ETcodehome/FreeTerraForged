@@ -10,19 +10,16 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
-
 import etcodehome.freeterraforged.client.gui.widget.Label;
 import etcodehome.freeterraforged.client.gui.widget.WidgetList;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetManager.PM;
 import etcodehome.freeterraforged.platform.ConfigUtil;
 import org.apache.commons.compress.utils.FileNameUtils;
 import org.jetbrains.annotations.Nullable;
-
 import com.google.gson.JsonParser;
 import com.google.gson.stream.JsonWriter;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.JsonOps;
-
 import io.netty.util.internal.StringUtil;
 import net.minecraft.ChatFormatting;
 import net.minecraft.Util;
@@ -43,12 +40,9 @@ import etcodehome.freeterraforged.client.gui.Toasts;
 import etcodehome.freeterraforged.client.gui.screen.page.BisectedPage;
 import etcodehome.freeterraforged.client.gui.screen.page.LinkedPageScreen.SaveResult;
 import etcodehome.freeterraforged.client.gui.screen.page.LinkedPageScreen.Page;
-import etcodehome.freeterraforged.client.gui.widget.Label;
-import etcodehome.freeterraforged.client.gui.widget.WidgetList;
 import etcodehome.freeterraforged.client.gui.widget.WidgetList.Entry;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Presets;
-import etcodehome.freeterraforged.platform.ConfigUtil;
 
 public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, AbstractWidget> {
 	private static final Path PRESET_PATH = ConfigUtil.ftf("presets");

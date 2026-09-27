@@ -14,6 +14,8 @@ import etcodehome.freeterraforged.client.gui.Tooltips;
 import etcodehome.freeterraforged.client.gui.widget.Label;
 import etcodehome.freeterraforged.client.gui.widget.Slider;
 import etcodehome.freeterraforged.client.gui.widget.ValueButton;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.GenericBooleanSetting;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.GenericFloatSetting;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.CycleButton;
@@ -21,7 +23,6 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 
-@Deprecated
 final class PresetWidgets {
 	
 	public static EditBox createEditBox(Font font, Consumer<String> responder, Component prompt) {
@@ -47,6 +48,29 @@ final class PresetWidgets {
 
 	public static Slider createFloatSlider(float initial, float min, float max, String text, Slider.Callback callback) {
 		return createSlider(initial, min, max, text, Slider.Format.FLOAT, callback);
+	}
+
+	public static Slider createFloatSlider(
+			float currentValue,
+			GenericFloatSetting setting,
+			Consumer<Float> setter,
+			Runnable onChange
+	) {
+		return createSlider(
+				currentValue,
+				setting.softMin,
+				setting.softMax,
+				setting.nameToken,
+				Slider.Format.FLOAT,
+				(slider, value) -> {
+					float scaled = (float) slider.scaleValue(value);
+					setter.accept(scaled);
+					if (onChange != null) {
+						onChange.run();
+					}
+					return value;
+				}
+		);
 	}
 	
 	public static Slider createIntSlider(int initial, int min, int max, String text, Slider.Callback callback) {
@@ -78,6 +102,32 @@ final class PresetWidgets {
 	public static CycleButton<Boolean> createToggle(boolean initial, String text, CycleButton.OnValueChange<Boolean> callback) {
 		CycleButton<Boolean> button = CycleButton.booleanBuilder(Component.translatable(FTFTranslationKeys.GUI_BUTTON_TRUE), Component.translatable(FTFTranslationKeys.GUI_BUTTON_FALSE)).withInitialValue(initial).create(-1, -1, -1, -1, Component.translatable(text), callback);
 		button.setTooltip(Tooltips.create(Tooltips.translationKey(text)));
+		return button;
+	}
+
+	public static CycleButton<Boolean> createToggle(
+			boolean initial,
+			GenericBooleanSetting setting,
+			Consumer<Boolean> setter,
+			Runnable onChange
+	) {
+		CycleButton<Boolean> button = CycleButton.booleanBuilder(
+						Component.translatable(FTFTranslationKeys.GUI_BUTTON_TRUE),
+						Component.translatable(FTFTranslationKeys.GUI_BUTTON_FALSE)
+				)
+				.withInitialValue(initial)
+				.create(
+						-1, -1, -1, -1,
+						Component.translatable(setting.nameToken),
+						(cycleButton, value) -> {
+							setter.accept(value);
+							if (onChange != null) {
+								onChange.run();
+							}
+						}
+				);
+
+		button.setTooltip(Tooltips.create(Tooltips.translationKey(setting.nameToken)));
 		return button;
 	}
 	

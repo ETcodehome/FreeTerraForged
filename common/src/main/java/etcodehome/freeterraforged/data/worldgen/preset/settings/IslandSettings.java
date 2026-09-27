@@ -6,7 +6,178 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 public class IslandSettings {
 
+	public boolean spawnIslands;
+	public static final GenericBooleanSetting spawnIslandsSetting = new GenericBooleanSetting(
+			"islands.spawn",
+			"gui.button.enableArchipelago",
+			true
+	);
+
+	public float density;
+	public static final GenericFloatSetting densitySetting = new GenericFloatSetting(
+			"islands.density",
+			"gui.slider.islandDensity",
+			0.0F,
+			1.0F,
+			0.4F
+	);
+
+	public float size;
+	public static final GenericFloatSetting sizeSetting = new GenericFloatSetting(
+			"islands.size",
+			"gui.slider.islandSize",
+			50.0F,
+			500.0F,
+			150.0F
+	);
+
+	public float height;
+	public static final GenericFloatSetting heightSetting = new GenericFloatSetting(
+			"islands.height",
+			"gui.slider.islandHeight",
+			0.1F,
+			3.0F,
+			0.1F
+	);
+
+	public float baseScale;
+	public static final GenericFloatSetting baseScaleSetting = new GenericFloatSetting(
+			"islands.baseScale",
+			"gui.slider.islandBaseScale",
+			0.1F,
+			2.0F,
+			0.1F
+	);
+
+	public float verticalScale;
+	public static final GenericFloatSetting verticalScaleSetting = new GenericFloatSetting(
+			"islands.verticalScale",
+			"gui.slider.islandVerticalScale",
+			0.1F,
+			3.0F,
+			1.5F
+	);
+
+	public float horizontalScale;
+	public static final GenericFloatSetting horizontalScaleSetting = new GenericFloatSetting(
+			"islands.horizontalScale",
+			"gui.slider.islandHorizontalScale",
+			0.1F,
+			10.0F,
+			5.0F
+	);
+	public float mountainChance;
+	public static final GenericFloatSetting mountainChanceSetting = new GenericFloatSetting(
+			"islands.mountainChance",
+			"gui.slider.islandMountainChance",
+			0.0F,
+			1.0F,
+			0.5F
+	);
+
+	public float mountainScale;
+	public static final GenericFloatSetting mountainScaleSetting = new GenericFloatSetting(
+			"islands.mountainScale",
+			"gui.slider.islandMountainScale",
+			0.0F,
+			1.0F,
+			0.4F
+	);
+
+	public float volcanoChance;
+	public static final GenericFloatSetting volcanoChanceSetting = new GenericFloatSetting(
+			"islands.VolcanoChance",
+			"gui.slider.islandMountainChance",
+			0.0F,
+			1.0F,
+			0.5F
+	);
+
+	public float volcanismScale;
+	public static final GenericFloatSetting volcanismScaleSetting = new GenericFloatSetting(
+			"islands.volcanismScale",
+			"gui.slider.islandVolcanismScale",
+			0.0F,
+			1.0F,
+			0.85F
+	);
+
+	public float volcanismHorizontalScale;
+	public static final GenericFloatSetting volcanismHorizontalScaleSetting = new GenericFloatSetting(
+			"islands.volcanismHorizontalScale",
+			"gui.slider.islandVolcanismHorizontalScale",
+			0.1F,
+			3.0F,
+			0.7F
+	);
+
+	public float mountainHorizontalScale;
+	public static final GenericFloatSetting mountainHorizontalScaleSetting = new GenericFloatSetting(
+			"islands.mountainHorizontalScale",
+			"gui.slider.islandMountainHorizontalScale",
+			0.1F,
+			3.0F,
+			0.7F
+	);
+
+	public float offshoreDepth;
+	public static final GenericFloatSetting offshoreDepthSetting = new GenericFloatSetting(
+			"islands.offshoreDepth",
+			"gui.slider.islandOffshoreDepth",
+			0.1F,
+			1.0F,
+			0.275F
+	);
+
+	public float beachWidth;
+	public static final GenericFloatSetting beachWidthSetting = new GenericFloatSetting(
+			"islands.beachWidth",
+			"gui.slider.islandBeachWidth",
+			0.05F,
+			0.5F,
+			0.225F
+	);
+
+	public float beachCoverage;
+	public static final GenericFloatSetting beachCoverageSetting = new GenericFloatSetting(
+			"islands.beachCoverage",
+			"gui.slider.islandBeachCoverage",
+			0.0F,
+			1.0F,
+			0.6F
+	);
+
+	public float macroDensityPercentage;
+	public static final GenericFloatSetting macroDensityPercentageSetting = new GenericFloatSetting(
+			"islands.macroDensityPercentage",
+			"gui.slider.islandMacroDensityPercentage",
+			0.0F,
+			1.0F,
+			1.0F
+	);
+
 	// Single source of truth for default values
+	public static IslandSettings makeDefault() {
+		return new IslandSettings(
+				spawnIslandsSetting.defaultValue,
+				densitySetting.defaultValue,
+				sizeSetting.defaultValue,
+				heightSetting.defaultValue,
+				baseScaleSetting.defaultValue,
+				verticalScaleSetting.defaultValue,
+				horizontalScaleSetting.defaultValue,
+				mountainChanceSetting.defaultValue,
+				volcanoChanceSetting.defaultValue,
+				offshoreDepthSetting.defaultValue,
+				beachWidthSetting.defaultValue,
+				beachCoverageSetting.defaultValue,
+				mountainScaleSetting.defaultValue,
+				volcanismScaleSetting.defaultValue,
+				mountainHorizontalScaleSetting.defaultValue,
+				volcanismHorizontalScaleSetting.defaultValue,
+				macroDensityPercentageSetting.defaultValue
+		);
+	}
 	public static final IslandSettings DEFAULT = makeDefault();
 	private static final PartA DEFAULT_A = DEFAULT.toPartA();
 	private static final PartB DEFAULT_B = DEFAULT.toPartB();
@@ -47,7 +218,7 @@ public class IslandSettings {
 	private record PartB(float mountainChance, float volcanoChance, float beachWidth, float beachCoverage, float volcanismScale, float mountainScale, float volcanismHorizontalScale, float mountainHorizontalScale) {}
 
 	private PartA toPartA() {
-		return new PartA(this.enableArchipelago, this.islandDensity, this.islandSize, this.islandHeight, this.islandBaseScale, this.islandVerticalScale, this.islandHorizontalScale, this.offshoreDepth, this.macroDensityPercentage);
+		return new PartA(this.spawnIslands, this.density, this.size, this.height, this.baseScale, this.verticalScale, this.horizontalScale, this.offshoreDepth, this.macroDensityPercentage);
 	}
 
 	private PartB toPartB() {
@@ -63,32 +234,14 @@ public class IslandSettings {
 		);
 	}
 
-	public boolean enableArchipelago;
-	public float islandDensity;
-	public float islandSize;
-	public float islandHeight;
-	public float islandBaseScale;
-	public float islandVerticalScale;
-	public float islandHorizontalScale;
-	public float mountainChance;
-	public float mountainScale;
-	public float volcanoChance;
-	public float volcanismScale;
-	public float volcanismHorizontalScale;
-	public float mountainHorizontalScale;
-	public float offshoreDepth;
-	public float beachWidth;
-	public float beachCoverage;
-	public float macroDensityPercentage;
-
 	public IslandSettings(boolean enableArchipelago, float islandDensity, float islandSize, float islandHeight, float islandBaseScale, float islandVerticalScale, float islandHorizontalScale, float mountainChance, float volcanoChance, float offshoreDepth, float beachWidth, float beachCoverage, float mountainScale, float volcanismScale, float mountainHorizontalScale, float volcanismHorizontalScale, float macroDensityPercentage) {
-		this.enableArchipelago = enableArchipelago;
-		this.islandDensity = islandDensity;
-		this.islandSize = islandSize;
-		this.islandHeight = islandHeight;
-		this.islandBaseScale = islandBaseScale;
-		this.islandVerticalScale = islandVerticalScale;
-		this.islandHorizontalScale = islandHorizontalScale;
+		this.spawnIslands = enableArchipelago;
+		this.density = islandDensity;
+		this.size = islandSize;
+		this.height = islandHeight;
+		this.baseScale = islandBaseScale;
+		this.verticalScale = islandVerticalScale;
+		this.horizontalScale = islandHorizontalScale;
 		this.mountainChance = mountainChance;
 		this.volcanoChance = volcanoChance;
 		this.offshoreDepth = offshoreDepth;
@@ -103,13 +256,13 @@ public class IslandSettings {
 
 	public IslandSettings copy() {
 		return new IslandSettings(
-				this.enableArchipelago,
-				this.islandDensity,
-				this.islandSize,
-				this.islandHeight,
-				this.islandBaseScale,
-				this.islandVerticalScale,
-				this.islandHorizontalScale,
+				this.spawnIslands,
+				this.density,
+				this.size,
+				this.height,
+				this.baseScale,
+				this.verticalScale,
+				this.horizontalScale,
 				this.mountainChance,
 				this.volcanoChance,
 				this.offshoreDepth,
@@ -123,24 +276,4 @@ public class IslandSettings {
 		);
 	}
 
-	public static IslandSettings makeDefault() {
-		return new IslandSettings(true,
-				0.4F,
-				150.0F,
-				0.1F,
-				0.1F,
-				1.5F,
-				5.0F,
-				0.5F,
-				0.5F,
-				0.275F,
-				0.225F,
-				0.6F,
-				0.4F,
-				0.85F,
-				0.7F,
-				0.7F,
-				1.0F
-		);
-	}
 }
