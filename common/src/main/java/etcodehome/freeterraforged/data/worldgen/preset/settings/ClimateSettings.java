@@ -6,6 +6,7 @@ import java.util.function.BiFunction;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
+import etcodehome.freeterraforged.world.worldgen.cell.climate.Climate;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
 import net.minecraft.util.StringRepresentable;
@@ -293,5 +294,46 @@ public class ClimateSettings {
 				return this.factory.apply(seed, settings);
 			}
 		}
+	}
+
+	public static ClimateSettings makeDefault(){
+		return new ClimateSettings(
+
+				// temperature
+				new RangeValue(
+						0,
+						2,
+						5,
+						0.1124F,
+						1.0F,
+						0.002F
+				),
+
+				// moisture
+				new RangeValue(
+						0,
+						4,
+						1,
+						0.0F,
+						1.0F,
+						0.006F
+				),
+
+				new BiomeShape(
+						586,
+						4,
+						38,
+						332
+				),
+
+				new BiomeNoise(
+						ClimateSettings.BiomeNoise.EdgeType.SIMPLEX,
+						137,
+						5,
+						1.601F,
+						10.5F,
+						300
+				)
+		);
 	}
 }

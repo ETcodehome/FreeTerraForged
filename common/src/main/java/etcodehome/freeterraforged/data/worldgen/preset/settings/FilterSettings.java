@@ -73,4 +73,22 @@ public class FilterSettings {
         	return new Smoothing(this.iterations, this.smoothingRadius, this.smoothingRate);
         }
     }
+
+	public static FilterSettings makeDefault(){
+		return new FilterSettings(
+			new Erosion(
+				38,
+				2,
+				0.3F,
+				0.3F,
+				0.2F,
+				0.279F
+			),
+			new Smoothing(
+				1,
+				1.8F,
+				0.9F
+			)
+		);
+	}
 }
