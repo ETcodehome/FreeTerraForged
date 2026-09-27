@@ -27,6 +27,7 @@ public class Preview3D extends Button implements IPreviewHandler {
 
     private final PresetEditorPage page;
     private final PreviewState state = new PreviewState();
+    private final Levels levels = new Levels();
 
     private RenderMode currentMode = RenderMode.BIOME;
 
@@ -434,10 +435,9 @@ public class Preview3D extends Button implements IPreviewHandler {
                     Cell cell = activeTile.lookup(ix, iz);
                     this.state.legendValues[1] = IPreviewHandler.getTerrainName(cell);
                     String biomeId = activeBiomes == null ? null : activeBiomes.id(ix, iz);
-                    WorldSettings.Properties properties = this.page.preset.getPreset().world().properties;
                     PreviewDetails.Detail detail = PreviewDetails.forCell(
                             getRenderMode(), cell,
-                            new Levels(properties.terrainScaler(), properties.worldHeight, properties.worldDepth, properties.seaLevel),
+                            levels,
                             biomeId
                     );
                     this.state.legendLabels[2] = detail.label();

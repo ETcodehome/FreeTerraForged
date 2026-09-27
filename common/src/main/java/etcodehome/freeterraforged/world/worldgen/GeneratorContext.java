@@ -15,7 +15,7 @@ import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 
 public class GeneratorContext implements AutoCloseable {
     public Seed seed;
-    public Levels levels;
+    public Levels levels = new Levels();
     public Preset preset;
     public HolderGetter<Noise> noiseLookup;
     public TileGenerator generator;
@@ -27,7 +27,6 @@ public class GeneratorContext implements AutoCloseable {
         this.preset = preset;
         this.noiseLookup = noiseLookup;
         this.seed = new Seed(seed);
-        this.levels = new Levels(preset.world().properties.terrainScaler(), preset.world().properties.worldHeight, preset.world().properties.worldDepth, preset.world().properties.seaLevel);
 		Heightmap heightmap = Heightmap.make(this);
 		try {
 			this.generator = new TileGenerator(heightmap, new WorldFilters(this), tileSize, tileBorder, batchCount);

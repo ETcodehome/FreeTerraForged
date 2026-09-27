@@ -28,6 +28,7 @@ public class Preview2D extends Button implements IPreviewHandler {
 
     private final PresetEditorPage page;
     private final PreviewState state = new PreviewState();
+    private final Levels levels = new Levels();
 
     public Preview2D(PresetEditorPage parent, int x, int y, int width, int height) {
         super(x, y, width, height, CommonComponents.EMPTY, IPreviewHandler.onPress(), DEFAULT_NARRATION);
@@ -266,9 +267,8 @@ public class Preview2D extends Button implements IPreviewHandler {
                 Cell cell = this.state.tile.lookup(ix, iz);
                 this.state.legendValues[1] = IPreviewHandler.getTerrainName(cell);
                 String biomeId = this.state.biomes == null ? null : this.state.biomes.id(ix, iz);
-                WorldSettings.Properties properties = this.page.preset.getPreset().world().properties;
                 PreviewDetails.Detail detail = PreviewDetails.forCell(
-                        getRenderMode(), cell, new Levels(properties.terrainScaler(), properties.worldHeight, properties.worldDepth, properties.seaLevel), biomeId
+                        getRenderMode(), cell, levels, biomeId
                 );
                 this.state.legendLabels[2] = detail.label();
                 this.state.legendValues[2] = detail.value();
