@@ -25,8 +25,8 @@ public class MiscellaneousPage extends PresetEditorPage {
 	private Slider mountainBiomeUsage;
 	private Slider volcanoBiomeUsage;
 	
-	public MiscellaneousPage(PresetConfigScreen screen, PresetEntry preset) {
-		super(screen, preset);
+	public MiscellaneousPage(PresetConfigScreen screen) {
+		super(screen);
 	}
 
 	@Override
@@ -97,7 +97,7 @@ public class MiscellaneousPage extends PresetEditorPage {
 	
 	@Override
 	public Optional<Page> previous() {
-		return Optional.of(new FilterSettingsPage(this.screen, this.preset));
+		return Optional.of(new FilterSettingsPage(this.screen));
 	}
 
 	@Override

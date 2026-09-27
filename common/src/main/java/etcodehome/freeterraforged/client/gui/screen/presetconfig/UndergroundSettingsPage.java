@@ -27,8 +27,8 @@ public class UndergroundSettingsPage extends PresetEditorPage {
 	private Slider undergroundBiomeClimateInfluence;
 	private CycleButton<Boolean> undergroundBiomeBanding;
 	
-	public UndergroundSettingsPage(PresetConfigScreen screen, PresetEntry preset) {
-		super(screen, preset);
+	public UndergroundSettingsPage(PresetConfigScreen screen) {
+		super(screen);
 	}
 
 	@Override
@@ -124,11 +124,11 @@ public class UndergroundSettingsPage extends PresetEditorPage {
 	
 	@Override
 	public Optional<Page> previous() {
-		return Optional.of(new SurfaceSettingsPage(this.screen, this.preset));
+		return Optional.of(new SurfaceSettingsPage(this.screen));
 	}
 
 	@Override
 	public Optional<Page> next() {
-		return Optional.of(new ClimateSettingsPage(this.screen, this.preset));
+		return Optional.of(new ClimateSettingsPage(this.screen));
 	}
 }

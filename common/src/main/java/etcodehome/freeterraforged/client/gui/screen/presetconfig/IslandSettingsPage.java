@@ -30,8 +30,8 @@ public class IslandSettingsPage extends PresetEditorPage {
 	private Slider beachCoverage;
 	private Slider macroDensityPercentage;
 
-	public IslandSettingsPage(PresetConfigScreen screen, PresetEntry preset) {
-		super(screen, preset);
+	public IslandSettingsPage(PresetConfigScreen screen) {
+		super(screen);
 	}
 
 	@Override
@@ -162,11 +162,11 @@ public class IslandSettingsPage extends PresetEditorPage {
 
 	@Override
 	public Optional<Page> previous() {
-		return Optional.of(new RiverSettingsPage(this.screen, this.preset));
+		return Optional.of(new RiverSettingsPage(this.screen));
 	}
 
 	@Override
 	public Optional<Page> next() {
-		return Optional.of(new FilterSettingsPage(this.screen, this.preset));
+		return Optional.of(new FilterSettingsPage(this.screen));
 	}
 }
