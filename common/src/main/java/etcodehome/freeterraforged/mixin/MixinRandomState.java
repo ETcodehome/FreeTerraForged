@@ -3,6 +3,7 @@ package etcodehome.freeterraforged.mixin;
 import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.concurrent.ThreadPools;
 import etcodehome.freeterraforged.config.PerformanceConfig;
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.FlowSettings;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.registries.FTFRegistries;
@@ -125,12 +126,15 @@ class MixinRandomState {
 		Preset initializedPreset = presets.get(Preset.KEY)
 			.map((presetHolder) -> presetHolder.value())
 			.orElse(null);
+
 		GeneratorContext initializedContext = null;
 		try {
 			if (this.freeterraforged$isFTFDimension) {
 				if (initializedPreset == null) {
-				throw new IllegalStateException("RTF density graph is active but the selected preset is unavailable");
+					throw new IllegalStateException("RTF density graph is active but the selected preset is unavailable");
 				}
+				PresetManager.PM.ingestFromPreset(initializedPreset);
+				PresetManager.PM.loadCheck();
 				RegistryLookup<Noise> noises = registries.lookupOrThrow(FTFRegistries.NOISE);
 				RegistryLookup<DensityFunction> functions = registries.lookupOrThrow(Registries.DENSITY_FUNCTION);
 

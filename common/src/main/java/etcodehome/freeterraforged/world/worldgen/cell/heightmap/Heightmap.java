@@ -200,8 +200,8 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
         }, controlPoints.shallowOcean, controlPoints.inland);
         
         // Wrap with archipelago layer if enabled
-        if (ctx.preset.island().enableArchipelago) {
-            terrain = new IslandBlender(terrain, new ArchipelagoPopulator(ctx.preset.island(), ctx.levels, controlPoints, ctx.seed, world.properties.oceanDepth), ctx.levels);
+        if (ctx.preset.island().spawnIslands) {
+            terrain = new IslandBlender(terrain, new ArchipelagoPopulator(ctx.levels, controlPoints, ctx.seed, world.properties.oceanDepth), ctx.levels);
         }
 
         Noise beachNoise = Noises.perlin2(ctx.seed.next(), 20, 1);

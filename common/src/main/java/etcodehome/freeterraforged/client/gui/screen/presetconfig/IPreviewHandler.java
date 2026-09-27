@@ -48,6 +48,8 @@ public interface IPreviewHandler {
     float[] LEGEND_SCALES = { 1, 0.9F, 0.75F, 0.6F };
     long REFRESH_DEBOUNCE_MILLIS = 75L;
 
+    Levels levels = new Levels();
+
     PreviewState state();
 
     PresetEditorPage page();
@@ -262,9 +264,6 @@ public interface IPreviewHandler {
                 GeneratorContext generatorContext = prepared.context;
                 Preset preparedPreset = prepared.preset;
                 WorldSettings.Properties properties = preparedPreset.world().properties.copy();
-                Levels levels = new Levels(
-                        properties.terrainScaler(), properties.worldHeight, properties.worldDepth, properties.seaLevel
-                );
                 if (properties.spawnType == SpawnType.CONTINENT_CENTER) {
                     long baseContinentCenter = generatorContext.lookup.getHeightmap().continent().getNearestCenter(0, 0);
                     properties.spawnX = PosUtil.unpackLeft(baseContinentCenter);

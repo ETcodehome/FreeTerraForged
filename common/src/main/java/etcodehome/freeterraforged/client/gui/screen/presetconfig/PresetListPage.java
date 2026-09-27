@@ -10,18 +10,16 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
-
 import etcodehome.freeterraforged.client.gui.widget.Label;
 import etcodehome.freeterraforged.client.gui.widget.WidgetList;
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager.PM;
 import etcodehome.freeterraforged.platform.ConfigUtil;
 import org.apache.commons.compress.utils.FileNameUtils;
 import org.jetbrains.annotations.Nullable;
-
 import com.google.gson.JsonParser;
 import com.google.gson.stream.JsonWriter;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.JsonOps;
-
 import io.netty.util.internal.StringUtil;
 import net.minecraft.ChatFormatting;
 import net.minecraft.Util;
@@ -42,14 +40,11 @@ import etcodehome.freeterraforged.client.gui.Toasts;
 import etcodehome.freeterraforged.client.gui.screen.page.BisectedPage;
 import etcodehome.freeterraforged.client.gui.screen.page.LinkedPageScreen.SaveResult;
 import etcodehome.freeterraforged.client.gui.screen.page.LinkedPageScreen.Page;
-import etcodehome.freeterraforged.client.gui.widget.Label;
-import etcodehome.freeterraforged.client.gui.widget.WidgetList;
 import etcodehome.freeterraforged.client.gui.widget.WidgetList.Entry;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Presets;
-import etcodehome.freeterraforged.platform.ConfigUtil;
 
-class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, AbstractWidget> {
+public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, AbstractWidget> {
 	private static final Path PRESET_PATH = ConfigUtil.ftf("presets");
 	private static final Path EXPORT_PATH = ConfigUtil.ftf("exports");
 	private static final Path LEGACY_TF_PRESET_PATH = ConfigUtil.legacy_tf("presets");
@@ -252,6 +247,7 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 	@Override
 	public Optional<Page> next() {
 		return Optional.ofNullable(this.left).map(WidgetList::getSelected).map(WidgetList.Entry::getWidget).filter(w -> w instanceof PresetEntry).map(w -> (PresetEntry) w).map((entry) -> {
+			PM.ingestFromPreset(entry);
 			if(entry.isBuiltin()) {
 				String presetName = this.findUniqueName(entry.getRawName());
 				Preset newPreset = entry.getPreset().copy();
@@ -274,9 +270,9 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 				} catch (IOException e) {
 					FTFCommon.LOGGER.error("Failed to auto-create preset from template", e);
 				}
-				return new WorldSettingsPage(this.screen, customEntry);
+				return new WorldSettingsPage(this.screen);
 			}
-			return new WorldSettingsPage(this.screen, entry);
+			return new WorldSettingsPage(this.screen);
 		});
 	}
 
@@ -294,6 +290,7 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 	}
 
 	private void selectPreset(@Nullable PresetEntry entry) {
+
 		// Clear 2D and 3D preview buffers to black on selection change
 		Preview2D.resetToBlack();
 		Preview3D.resetToBlack();
@@ -684,20 +681,20 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 				Path tempPath = path.resolveSibling(path.getFileName().toString() + ".tmp");
 
 				Preset.DIRECT_CODEC.encodeStart(JsonOps.INSTANCE, this.preset)
-						.resultOrPartial(error -> FTFCommon.LOGGER.error("Failed to encode preset: {}", error))
-						.ifPresent(element -> {
-							try (Writer writer = Files.newBufferedWriter(tempPath);
-								 JsonWriter jsonWriter = new JsonWriter(writer)) {
-								jsonWriter.setSerializeNulls(false);
-								jsonWriter.setIndent("  ");
-								GsonHelper.writeValue(jsonWriter, element, null);
+					.resultOrPartial(error -> FTFCommon.LOGGER.error("Failed to encode preset: {}", error))
+					.ifPresent(element -> {
+						try (Writer writer = Files.newBufferedWriter(tempPath);
+							 JsonWriter jsonWriter = new JsonWriter(writer)) {
+							jsonWriter.setSerializeNulls(false);
+							jsonWriter.setIndent("  ");
+							GsonHelper.writeValue(jsonWriter, element, null);
 
-								// Atomic move (if save succeeds, overwrite original)
-								Files.move(tempPath, path, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-							} catch (IOException e) {
-								FTFCommon.LOGGER.error("Failed to write preset to disk", e);
-							}
-						});
+							// Atomic move (if save succeeds, overwrite original)
+							Files.move(tempPath, path, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+						} catch (IOException e) {
+							FTFCommon.LOGGER.error("Failed to write preset to disk", e);
+						}
+					});
 			}
 		}
 	}

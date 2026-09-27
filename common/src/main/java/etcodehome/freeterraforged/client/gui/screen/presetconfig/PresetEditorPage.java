@@ -6,6 +6,7 @@ import java.util.Optional;
 import com.google.common.collect.ImmutableList;
 
 import etcodehome.freeterraforged.client.gui.widget.Slider;
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
@@ -45,10 +46,10 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	private Preview3D preview3D;
 	private Preview2D preview2D;
 
-	public PresetEditorPage(PresetConfigScreen screen, PresetEntry preset) {
+	public PresetEditorPage(PresetConfigScreen screen) {
 		super(screen);
 
-		this.preset = preset;
+		this.preset = PresetManager.PM.cachedPreset;
 	}
 
 	protected void regenerate() {

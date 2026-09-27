@@ -30,7 +30,6 @@ public record SurfaceSettings(Erosion erosion) {
     	public float rockSteepness;
     	public float dirtSteepness;
     	public float screeSteepness;
-    	public float screeValue; //TODO
     	
         public Erosion(int rockVariance, int rockMin, int dirtVariance, int dirtMin, float rockSteepness, float dirtSteepness, float screeSteepness) {
         	this.rockVariance = rockVariance;
@@ -46,4 +45,17 @@ public record SurfaceSettings(Erosion erosion) {
         	return new Erosion(this.rockVariance, this.rockMin, this.dirtVariance, this.dirtMin, this.rockSteepness, this.dirtSteepness, this.screeSteepness);
         }
     }
+
+	public static SurfaceSettings makeDefault(){
+		return new SurfaceSettings(
+			new SurfaceSettings.Erosion(30,
+				400,
+				40,
+				95,
+				0.8F,
+				0.4F,
+				0.6F
+			)
+		);
+	}
 }

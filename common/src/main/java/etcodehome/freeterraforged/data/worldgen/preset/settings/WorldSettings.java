@@ -149,4 +149,39 @@ public class WorldSettings {
         	return Math.min(this.worldHeight, 256);
         }
     }
+
+    public static WorldSettings makeDefault(){
+        return new WorldSettings(
+            new Continent(
+                ContinentType.UPLIFT,
+                DistanceFunction.EUCLIDEAN,
+                4000,
+                0.8F,
+                0.2F,
+                0.6161F,
+                5,
+                0.2516F,
+                5.7262F
+            ),
+            new ControlPoints(
+                0.0F,
+                0.074F,
+                0.102F,
+                0.13144F,
+                0.2210F,
+                0.3576F,
+                0.4717F
+            ),
+            new Properties(
+                SpawnType.CONTINENT_CENTER,
+                512,
+                256,
+                63,
+                -236,
+                256,
+                0,
+                0
+            )
+        );
+    }
 }

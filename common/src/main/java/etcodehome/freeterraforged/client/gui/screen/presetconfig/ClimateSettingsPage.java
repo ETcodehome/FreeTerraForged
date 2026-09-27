@@ -39,8 +39,8 @@ class ClimateSettingsPage extends PresetEditorPage {
 	private Slider biomeEdgeLacunarity;
 	private Slider biomeEdgeStrength;
 
-	public ClimateSettingsPage(PresetConfigScreen screen, PresetEntry preset) {
-		super(screen, preset);
+	public ClimateSettingsPage(PresetConfigScreen screen) {
+		super(screen);
 	}
 
 	@Override
@@ -204,11 +204,11 @@ class ClimateSettingsPage extends PresetEditorPage {
 
 	@Override
 	public Optional<Page> previous() {
-		return Optional.of(new UndergroundSettingsPage(this.screen, this.preset));
+		return Optional.of(new UndergroundSettingsPage(this.screen));
 	}
 
 	@Override
 	public Optional<Page> next() {
-		return Optional.of(new TerrainSettingsPage(this.screen, this.preset));
+		return Optional.of(new TerrainSettingsPage(this.screen));
 	}
 }

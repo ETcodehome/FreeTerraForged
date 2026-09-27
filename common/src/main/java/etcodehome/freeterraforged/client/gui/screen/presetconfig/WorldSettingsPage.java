@@ -44,8 +44,8 @@ public class WorldSettingsPage extends PresetEditorPage {
 	private Slider seaLevel;
 	private Slider lavaLevel;
 	
-	public WorldSettingsPage(PresetConfigScreen screen, PresetEntry preset) {
-		super(screen, preset);
+	public WorldSettingsPage(PresetConfigScreen screen) {
+		super(screen);
 	}
 	
 	@Override
@@ -232,7 +232,7 @@ public class WorldSettingsPage extends PresetEditorPage {
 
 	@Override
 	public Optional<Page> next() {
-		return Optional.of(new SurfaceSettingsPage(this.screen, this.preset));
+		return Optional.of(new SurfaceSettingsPage(this.screen));
 	}
 	
 	private void applyContinentType(ContinentType type) {
