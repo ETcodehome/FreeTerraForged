@@ -298,7 +298,6 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 		// Sync list widget selection first so input callbacks recognize the selected entry
 		if (this.left != null) {
 			if (entry != null) {
-				PM.ingestFromPreset(entry);
 				for (WidgetList.Entry<AbstractWidget> e : this.left.children()) {
 					if (e.getWidget() == entry) {
 						this.left.setSelected(e);

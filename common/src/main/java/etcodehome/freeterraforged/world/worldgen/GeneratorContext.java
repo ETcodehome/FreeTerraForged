@@ -25,8 +25,6 @@ public class GeneratorContext implements AutoCloseable {
     
     public GeneratorContext(Preset preset, HolderGetter<Noise> noiseLookup, long seed, int tileSize, int tileBorder, int batchCount, @Nullable TileCache cache) {
         this.preset = preset;
-		PresetManager.PM.ingestFromPreset(preset);
-		PresetManager.PM.loadCheck();
         this.noiseLookup = noiseLookup;
         this.seed = new Seed(seed);
         this.levels = new Levels(preset.world().properties.terrainScaler(), preset.world().properties.worldHeight, preset.world().properties.worldDepth, preset.world().properties.seaLevel);
