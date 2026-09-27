@@ -70,6 +70,7 @@ public class ArchipelagoPopulator implements CellPopulator {
 
     public ArchipelagoPopulator(Levels levels, ControlPoints controlPoints, Seed seed, int oceanDepth) {
 
+        PresetManager.PM.loadCheck();
         this.settings = PresetManager.PM.islandSettings;
 
         this.levels = levels;

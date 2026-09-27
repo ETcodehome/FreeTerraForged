@@ -1,15 +1,15 @@
 package etcodehome.freeterraforged.data.worldgen.preset.settings;
 
-import etcodehome.freeterraforged.FTFCommon;
+import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
 
 public class GenericBooleanSetting {
     public String settingsToken;
-    public String nameToken;
+    public String resolvedToken;
     public boolean defaultValue;
 
-    public GenericBooleanSetting(String settingsToken, String nameToken, boolean defaultValue){
+    public GenericBooleanSetting(String settingsToken, String rawToken, boolean defaultValue){
         this.settingsToken = settingsToken;
-        this.nameToken = FTFCommon.MOD_ID + "." + nameToken;
+        this.resolvedToken = FTFTranslationKeys.resolve(rawToken);
         this.defaultValue = defaultValue;
     }
 

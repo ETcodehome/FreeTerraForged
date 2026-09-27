@@ -290,6 +290,7 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 	}
 
 	private void selectPreset(@Nullable PresetEntry entry) {
+
 		// Clear 2D and 3D preview buffers to black on selection change
 		Preview2D.resetToBlack();
 		Preview3D.resetToBlack();
@@ -297,6 +298,7 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 		// Sync list widget selection first so input callbacks recognize the selected entry
 		if (this.left != null) {
 			if (entry != null) {
+				PM.ingestFromPreset(entry);
 				for (WidgetList.Entry<AbstractWidget> e : this.left.children()) {
 					if (e.getWidget() == entry) {
 						this.left.setSelected(e);

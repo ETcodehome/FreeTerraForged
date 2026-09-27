@@ -60,7 +60,7 @@ final class PresetWidgets {
 				currentValue,
 				setting.softMin,
 				setting.softMax,
-				setting.nameToken,
+				setting.resolvedToken,
 				Slider.Format.FLOAT,
 				(slider, value) -> {
 					float scaled = (float) slider.scaleValue(value);
@@ -118,7 +118,7 @@ final class PresetWidgets {
 				.withInitialValue(initial)
 				.create(
 						-1, -1, -1, -1,
-						Component.translatable(setting.nameToken),
+						Component.translatable(setting.resolvedToken),
 						(cycleButton, value) -> {
 							setter.accept(value);
 							if (onChange != null) {
@@ -127,7 +127,7 @@ final class PresetWidgets {
 						}
 				);
 
-		button.setTooltip(Tooltips.create(Tooltips.translationKey(setting.nameToken)));
+		button.setTooltip(Tooltips.create(Tooltips.translationKey(setting.resolvedToken)));
 		return button;
 	}
 	
