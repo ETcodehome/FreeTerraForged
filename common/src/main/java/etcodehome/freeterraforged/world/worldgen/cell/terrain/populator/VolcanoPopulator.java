@@ -4,6 +4,7 @@ import etcodehome.freeterraforged.world.worldgen.biome.Erosion;
 import etcodehome.freeterraforged.world.worldgen.biome.Weirdness;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.RegionConfig;
+import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.noise.function.CellFunction;
 import etcodehome.freeterraforged.world.worldgen.noise.function.DistanceFunction;
 import etcodehome.freeterraforged.world.worldgen.noise.function.EdgeFunction;
@@ -26,10 +27,13 @@ public class VolcanoPopulator implements CellPopulator, WeightedPopulator {
     private float bias;
     private Terrain inner;
     private Terrain outer;
-    
     private float weight;
+    private final Noise baseErosion;
+    private final Noise baseWeirdness;
     
-    public VolcanoPopulator(Seed seed, RegionConfig region, Levels levels, float weight) {
+    public VolcanoPopulator(Seed seed, RegionConfig region, Levels levels, Noise baseErosion, Noise baseWeirdness, float weight) {
+        this.baseErosion = baseErosion;
+        this.baseWeirdness = baseWeirdness;
         float midpoint = 0.3F;
         float range = 0.3F;
         Noise heightLookup = Noises.perlin(seed.next(), 2, 1);
@@ -76,8 +80,13 @@ public class VolcanoPopulator implements CellPopulator, WeightedPopulator {
         float value = this.cone.compute(x, z, 0);
         float limit = this.height.compute(x, z, 0);
         float maxHeight = limit * this.inversionPoint;
-        cell.weirdness = Weirdness.LOW_SLICE_NORMAL_DESCENDING.mid();
-        cell.erosion = Erosion.LEVEL_4.mid();
+        // 0 on the lowlands, 1 on the cone: the same ramp the height code uses for the lowlands term
+        float influence = value > maxHeight
+                ? 1.0F
+                : NoiseUtil.interpHermite(NoiseUtil.clamp((value - this.blendLower) / this.blendRange, 0.0F, 1.0F));
+        cell.erosion = NoiseUtil.lerp(this.baseErosion.compute(x, z, 0), Erosion.LEVEL_4.mid(), influence);
+        cell.weirdness = NoiseUtil.lerp(this.baseWeirdness.compute(x, z, 0), Weirdness.LOW_SLICE_NORMAL_DESCENDING.mid(), influence);
+
         if (value > maxHeight) {
             float steepnessModifier = 1.0F;
             float delta = (value - maxHeight) * steepnessModifier;

@@ -32,6 +32,15 @@ public class ClimateModule {
 	private Continent continent;
 	private ControlPoints controlPoints;
 	private Levels levels;
+
+	// Must match Climate.EDGE_BLEND: below this biomeRegionEdge the edge offset is active,
+	// so region-center overrides must be fully faded out by then.
+	private static final float REGION_FADE = 0.4F;
+	// Cell.height range over which the highland override fades in above ground level.
+	private static final float HIGHLAND_RISE = 0.10F;
+	// Blocks above the waterline over which the island override fades in (keeps beaches smooth).
+	private static final float ISLAND_RISE_BLOCKS = 6.0F;
+	private static final float MUSHROOM_THRESHOLD = 0.95F;
 	
 	public ClimateModule(Seed seed, Continent continent, WorldSettings.ControlPoints controlPoints, ClimateSettings climateSettings, Levels levels) {
 		int biomeSize = climateSettings.biomeShape.biomeSize();
@@ -129,41 +138,81 @@ public class ClimateModule {
 		cell.macroBiomeId = this.macroBiomeNoise.compute(centerX, centerZ, 0);
 		int posX = NoiseUtil.floor(centerX / this.biomeFreq);
 		int posZ = NoiseUtil.floor(centerZ / this.biomeFreq);
-		float continentEdge = this.continent.getLandValue(posX, posZ);
+
+		// Constant per biome cell: only for things meant to be uniform across a region.
+		float regionEdge = this.continent.getLandValue(posX, posZ);
 		if (mask) {
-			this.modifyTerrain(cell, continentEdge);
+			this.modifyTerrain(cell, regionEdge);
 		}
 
-		float queryTemp = this.temperature.compute(x, z, 0);
-		float queryMoist = this.moisture.compute(x, z, 0);
-		queryMoist = this.modifyMoisture(queryMoist, continentEdge);
-		queryTemp = this.modifyTemp(cell.height, queryTemp, originalX, originalZ);
-		cell.temperature = queryTemp * 2.0F - 1.0F;
-		cell.moisture = queryMoist * 2.0F - 1.0F;
+		// Smooth per-pixel climate (values in [0, 1]).
+		float temp = this.temperature.compute(x, z, 0);
+		//float temp = this.modifyTemp(cell.height, this.temperature.compute(x, z, 0), originalX, originalZ);
+		float moist = this.moisture.compute(x, z, 0);
+		//float moist = this.modifyMoisture(this.moisture.compute(x, z, 0), cell.continentEdge);
 
-		if (cell.terrain != null && cell.terrain.getCategory() == TerrainCategory.HIGHLAND) {
-			float mtnFreqX = cell.terrainRegionCenterX * this.biomeFreq;
-			float mtnFreqZ = cell.terrainRegionCenterZ * this.biomeFreq;
+		/*
 
-			float mtnTemp = this.temperature.compute(mtnFreqX, mtnFreqZ, 0);
-			float mtnMoist = this.moisture.compute(mtnFreqX, mtnFreqZ, 0);
-			mtnMoist = this.modifyMoisture(mtnMoist, continentEdge);
-			mtnTemp = this.modifyTemp(cell.height, mtnTemp, originalX, originalZ);
-			cell.temperature = mtnTemp * 2.0F - 1.0F;
-			cell.moisture = mtnMoist * 2.0F - 1.0F;
+		// Highlands: fade toward the terrain region's center climate instead of switching to it.
+		float hw = this.highlandWeight(cell);
+		if (hw > 0.0F) {
+			float hx = cell.terrainRegionCenterX * this.biomeFreq;
+			float hz = cell.terrainRegionCenterZ * this.biomeFreq;
+			float ht = this.modifyTemp(cell.height, this.temperature.compute(hx, hz, 0), originalX, originalZ);
+			float hm = this.modifyMoisture(this.moisture.compute(hx, hz, 0), regionEdge);
+			//temp = NoiseUtil.lerp(temp, ht, hw);
+			//moist = NoiseUtil.lerp(moist, hm, hw);
 		}
 
-		if (cell.terrain == TerrainType.ISLAND_BEACH || cell.terrain == TerrainType.ISLAND || cell.terrain == TerrainType.ISLAND_MOUNTAINS) {
-
-			if (madeMushroomIslands(cell)){ return; }
-
-			float islTemp = this.temperature.compute(centerX, centerZ, 0);
-			float islMoist = this.moisture.compute(centerX, centerZ, 0);
-			islMoist = this.modifyMoisture(islMoist, continentEdge);
-			islTemp = this.modifyTemp(cell.height, islTemp, originalX, originalZ);
-			cell.temperature = islTemp * 2.0F - 1.0F;
-			cell.moisture = islMoist * 2.0F - 1.0F;
+		// Islands: fade toward the biome region's center climate (or mushroom climate).
+		float iw = this.islandWeight(cell);
+		if (iw > 0.0F) {
+			// The terrain flag carries the mushroom decision into the edge-offset second pass,
+			// where macroBiomeId belongs to the offset region and can no longer be trusted.
+			boolean mushroom = cell.terrain == TerrainType.MUSHROOM_FIELDS;
+			if (!mushroom && mask && cell.macroBiomeId > MUSHROOM_THRESHOLD) {
+				cell.terrain = TerrainType.MUSHROOM_FIELDS;
+				mushroom = true;
+			}
+			float it;
+			float im;
+			if (mushroom) {
+				it = (Temperature.LEVEL_2.mid() + 1.0F) * 0.5F; // Moderate
+				im = (Humidity.LEVEL_4.mid() + 1.0F) * 0.5F;    // Wet
+			} else {
+				it = this.modifyTemp(cell.height, this.temperature.compute(centerX, centerZ, 0), originalX, originalZ);
+				im = this.modifyMoisture(this.moisture.compute(centerX, centerZ, 0), regionEdge);
+			}
+			//temp = NoiseUtil.lerp(temp, it, iw);
+			//moist = NoiseUtil.lerp(moist, im, iw);
 		}
+
+		 */
+
+		// convert from normalised 0-1 range to -1 to 1 range
+		cell.temperature = temp * 2.0F - 1.0F;
+		cell.moisture = moist * 2.0F - 1.0F;
+	}
+
+	/** 0 at terrain-region borders and near ground level, 1 in the interior of a raised highland region. */
+	private float highlandWeight(Cell cell) {
+		if (cell.terrain == null || cell.terrain.getCategory() != TerrainCategory.HIGHLAND) {
+			return 0.0F;
+		}
+		float region = NoiseUtil.interpHermite(NoiseUtil.clamp(cell.terrainRegionEdge, 0.0F, 1.0F));
+		float rise = NoiseUtil.interpHermite(NoiseUtil.clamp((cell.height - this.levels.ground) / HIGHLAND_RISE, 0.0F, 1.0F));
+		return region * rise;
+	}
+
+	/** 0 at biome-region borders and at the shoreline, 1 in the island interior. */
+	private float islandWeight(Cell cell) {
+		if (cell.terrain.getCategory() != TerrainCategory.ISLAND) {
+			return 0.0F;
+		}
+		float region = NoiseUtil.interpHermite(NoiseUtil.clamp(cell.biomeRegionEdge / REGION_FADE, 0.0F, 1.0F));
+		float rise = NoiseUtil.interpHermite(NoiseUtil.clamp(
+				(cell.height - this.levels.water) / (ISLAND_RISE_BLOCKS * this.levels.unit), 0.0F, 1.0F));
+		return region * rise;
 	}
 
 	public void applyRegion(Cell cell, float x, float z, boolean mask) {
@@ -210,50 +259,6 @@ public class ClimateModule {
 		cell.biomeRegionZ = cellZ;
 		if (mask) {
 			cell.biomeRegionEdge = this.edgeValue(edgeDistance, edgeDistance2);
-		}
-	}
-
-	private boolean madeMushroomIslands(Cell cell)
-	{
-		// Check for a rare noise threshold (e.g., top 5% of macroBiomeId)
-		if (cell.macroBiomeId > 0.95F) {
-			cell.terrain = TerrainType.MUSHROOM_FIELDS;
-
-			// Set appropriate temperature and moisture for mushrooms/mycelium
-			cell.temperature = Temperature.LEVEL_2.mid(); // Moderate
-			cell.moisture = Humidity.LEVEL_4.mid();       // Wet
-			return true;
-		}
-		return false;
-	}
-
-	private float modifyTemp(float height, float temp, float x, float z) {
-		if (height > 0.75F) {
-			return Math.max(0.0F, temp - 0.05F);
-		}
-		if (height > 0.45F) {
-			float delta = (height - 0.45F) / 0.3F;
-			return Math.max(0.0F, temp - delta * 0.05F);
-		}
-		height = Math.max(this.levels.ground, height);
-		if (height >= this.levels.ground) {
-			float delta = 1.0F - (height - this.levels.ground) / (0.45F - this.levels.ground);
-			return Math.min(1.0F, temp + delta * 0.05F);
-		}
-		return temp;
-	}
-
-	private float modifyMoisture(float moisture, float continentEdge) {
-		float limit = 0.75F;
-		float range = 1.0F - limit;
-		if (continentEdge < limit) {
-			float alpha = (limit - continentEdge) / range;
-			float multiplier = 1.0F + alpha * range;
-			return NoiseUtil.clamp(moisture * multiplier, 0.0F, 1.0F);
-		} else {
-			float alpha = (continentEdge - limit) / range;
-			float multiplier = 1.0F - alpha * range;
-			return moisture *= multiplier;
 		}
 	}
 

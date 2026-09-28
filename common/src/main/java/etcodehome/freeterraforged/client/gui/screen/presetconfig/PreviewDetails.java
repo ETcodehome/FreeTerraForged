@@ -22,6 +22,7 @@ final class PreviewDetails {
             case MOISTURE -> value("Moisture", cell.moisture);
             case EROSION -> value("Erosion", cell.erosion);
             case WEIRDNESS -> value("Weirdness", cell.weirdness);
+            case BIOME_REGION_EDGE -> value("Mask", cell.biomeRegionEdge);
             case BIOME_CELLS -> value("Biome Cell", cell.biomeRegionId);
             case MACRO_NOISE -> value("Macro Noise", cell.macroBiomeId);
             case TERRAIN_REGION -> new Detail(Component.literal("Terrain Type"), cell.terrain.getName());
