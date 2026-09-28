@@ -5,6 +5,7 @@
   "minVersion": "0.8",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "MixinBeehiveDecorator",
     "BiomeSourceAccessor",
     "MixinNoiseChunk",
     "MixinRandomState",
