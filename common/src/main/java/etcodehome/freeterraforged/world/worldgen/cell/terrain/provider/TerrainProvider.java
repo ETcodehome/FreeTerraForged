@@ -59,7 +59,7 @@ public class TerrainProvider {
         	unmixable.add(Populators.makeMountains3(terrainSeed, ground, settings.mountains, verticalScale, fancyMountains, legacyMountainScaling));
         }
 
-        TerrainPopulator surroundingFlats = Populators.makePlains(terrainSeed.split(), ground, settings.plains, verticalScale);
+        TerrainPopulator surroundingFlats = Populators.makeSteppe(terrainSeed.split(), ground, settings.steppe);
         unmixable.add(new VolcanoPopulator(terrainSeed, config, levels, surroundingFlats.erosion(), surroundingFlats.weirdness(), settings.volcano.weight));
 
         List<TerrainPopulator> mixed = combine(mixable, (t1, t2) -> {
