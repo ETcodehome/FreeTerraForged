@@ -126,8 +126,6 @@ public class ClimateModule {
 		int cellX = (int) cell.biomeRegionX;
 		int cellZ = (int) cell.biomeRegionZ;
 		cell.biomeRegionId = this.cellValue(this.seed, cellX, cellZ);
-		cell.regionMoisture = this.moisture.compute(centerX, centerZ, 0);
-		cell.regionTemperature = this.temperature.compute(centerX, centerZ, 0);
 		cell.macroBiomeId = this.macroBiomeNoise.compute(centerX, centerZ, 0);
 		int posX = NoiseUtil.floor(centerX / this.biomeFreq);
 		int posZ = NoiseUtil.floor(centerZ / this.biomeFreq);
@@ -135,9 +133,6 @@ public class ClimateModule {
 		if (mask) {
 			this.modifyTerrain(cell, continentEdge);
 		}
-		cell.regionMoisture = this.modifyMoisture(cell.regionMoisture, continentEdge);
-
-		cell.regionTemperature = this.modifyTemp(cell.height, cell.regionTemperature, originalX, originalZ);
 
 		float queryTemp = this.temperature.compute(x, z, 0);
 		float queryMoist = this.moisture.compute(x, z, 0);

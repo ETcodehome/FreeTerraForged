@@ -28,8 +28,6 @@ public class Cell {
     public float heightErosion;
     public float sediment;
     public float gradient;
-    public float regionMoisture;
-    public float regionTemperature;
     public float continentId;
     public float continentSizeModifier;
     public float continentEdge;
@@ -66,8 +64,6 @@ public class Cell {
     public boolean hasFlow;
 
     public Cell() {
-        this.regionMoisture = 0.5F;
-        this.regionTemperature = 0.5F;
         this.biomeRegionEdge = 1.0F;
         this.riverMask = 1.0F;
         this.erosionMask = false;
@@ -81,8 +77,6 @@ public class Cell {
         this.heightErosion = other.heightErosion;
         this.sediment = other.sediment;
         this.gradient = other.gradient;
-        this.regionMoisture = other.regionMoisture;
-        this.regionTemperature = other.regionTemperature;
         this.continentId = other.continentId;
         this.continentEdge = other.continentEdge;
         this.continentDistance = other.continentDistance;
