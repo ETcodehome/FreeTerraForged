@@ -1,6 +1,6 @@
 package etcodehome.freeterraforged.world.worldgen.cell.heightmap;
 
-import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 
 
@@ -19,11 +19,11 @@ public class Levels {
     public float water;
     private float elevationRange;
 
-    public Levels(){
-        int terrainScaleFactor  = PresetManager.PM.worldSettings.properties.terrainScaler();
-        int height              = PresetManager.PM.worldSettings.properties.worldHeight;
-        int depth               = PresetManager.PM.worldSettings.properties.worldDepth;
-        int seaLevel            = PresetManager.PM.worldSettings.properties.seaLevel;
+    public Levels(WorldSettings.Properties properties) {
+        int terrainScaleFactor  = properties.terrainScaler();
+        int height              = properties.worldHeight;
+        int depth               = properties.worldDepth;
+        int seaLevel            = properties.seaLevel;
         this.terrainScaleFactor = Math.max(1, terrainScaleFactor);
         this.worldHeight = Math.max(1, height);
         this.worldDepth = Math.max(0, depth);

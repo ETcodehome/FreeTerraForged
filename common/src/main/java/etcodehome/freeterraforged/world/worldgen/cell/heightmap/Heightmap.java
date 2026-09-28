@@ -19,6 +19,7 @@ import etcodehome.freeterraforged.world.worldgen.cell.continent.ContinentLerper3
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.Rivermap;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.Blender;
+import etcodehome.freeterraforged.world.worldgen.cell.terrain.ClimateParameterSampler;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.IslandBlender;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.Populators;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
@@ -183,9 +184,14 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
 		}
         CellPopulator land = new Blender(mountainShape, terrainBlend, mountains, 0.3F, 0.8F, 0.575F);
         
-        CellPopulator deepOcean = Populators.makeDeepOcean(ctx.seed.next(), ctx.levels, world.properties.oceanDepth);
-        CellPopulator shallowOcean = Populators.makeShallowOcean(ctx.levels, world.properties.oceanDepth);
-        CellPopulator coast = Populators.makeCoast(ctx.levels);
+        // A separate seed stream preserves existing terrain/noise draw order. All ocean/coast
+        // populators share the same fields so continental blending cannot introduce climate seams.
+        ClimateParameterSampler oceanClimate = ClimateParameterSampler.make(
+            ctx.seed.offset(89031), preset.climate().biomeShape.biomeSize, general.globalHorizontalScale
+        );
+        CellPopulator deepOcean = Populators.makeDeepOcean(ctx.seed.next(), ctx.levels, world.properties.oceanDepth, oceanClimate);
+        CellPopulator shallowOcean = Populators.makeShallowOcean(ctx.levels, world.properties.oceanDepth, oceanClimate);
+        CellPopulator coast = Populators.makeCoast(ctx.levels, oceanClimate);
 
         CellPopulator oceans = new ContinentLerper3(deepOcean, shallowOcean, coast, controlPoints.deepOcean, controlPoints.shallowOcean, controlPoints.coast);
 
@@ -201,7 +207,7 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
         
         // Wrap with archipelago layer if enabled
         if (ctx.preset.island().spawnIslands) {
-            terrain = new IslandBlender(terrain, new ArchipelagoPopulator(ctx.levels, controlPoints, ctx.seed, world.properties.oceanDepth), ctx.levels);
+            terrain = new IslandBlender(terrain, new ArchipelagoPopulator(ctx.preset.island(), ctx.levels, controlPoints, ctx.seed, world.properties.oceanDepth), ctx.levels);
         }
 
         Noise beachNoise = Noises.perlin2(ctx.seed.next(), 20, 1);

@@ -1,5 +1,7 @@
 package etcodehome.freeterraforged.mixin;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.concurrent.ThreadPools;
 import etcodehome.freeterraforged.config.PerformanceConfig;
@@ -81,6 +83,10 @@ class MixinRandomState {
 		this.seed = seed;
 
 		this.densityFunctionWrapper = new DensityFunction.Visitor() {
+			// Repeated declarations must map to the same owner-local leaf. A fresh memoized
+			// supplier per visit makes otherwise equal cache_once graphs unequal, breaking
+			// NoiseChunk's cache sharing between a range selector and its selected branch.
+			private final Map<CellSampler.Field, CellSampler> cells = new ConcurrentHashMap<>();
 
 			@Override
 			public DensityFunction apply(DensityFunction function) {
@@ -91,7 +97,9 @@ class MixinRandomState {
 
 				if(function instanceof CellSampler.Marker marker) {
 					MixinRandomState.this.hasContext = true;
-					return new CellSampler(Suppliers.memoize(() -> MixinRandomState.this.generatorContext.lookup), marker.field());
+					return this.cells.computeIfAbsent(marker.field(), field -> new CellSampler(
+						Suppliers.memoize(() -> MixinRandomState.this.generatorContext.lookup), field
+					));
 				}
 
 				return visitor.apply(function);

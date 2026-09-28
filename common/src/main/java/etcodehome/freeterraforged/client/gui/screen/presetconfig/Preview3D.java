@@ -27,7 +27,6 @@ public class Preview3D extends Button implements IPreviewHandler {
 
     private final PresetEditorPage page;
     private final PreviewState state = new PreviewState();
-    private final Levels levels = new Levels();
 
     private RenderMode currentMode = RenderMode.BIOME;
 
@@ -391,9 +390,10 @@ public class Preview3D extends Button implements IPreviewHandler {
 
     @Override
     public boolean updateLegend(int mx, int my) {
+        Levels levels = this.state.frameLevels;
         Tile activeTile = this.state.tile;
         BiomePreview.Sidecar activeBiomes = this.state.biomes;
-        if (activeTile != null) {
+        if (activeTile != null && levels != null) {
             int left = this.getX();
             int top = this.getY();
 

@@ -9,6 +9,8 @@
     "MixinNoiseChunk",
     "MixinRandomState",
     "MixinChunkMap",
+    "MixinWorldDimensions",
+    "MixinRegistryDataLoader",
     "MixinUtil",
     "MixinSurfaceSystem",
     "MixinStructure",
@@ -46,6 +48,7 @@
     "compat.MixinLithostitchedEvent"
   ],
   "client": [
+    "MixinCreateWorldScreen",
     "MixinCreateWorldScreenWorldTab",
     "MixinWorldCreationUiState",
     "ScreenInvoker"

@@ -3,6 +3,7 @@ package etcodehome.freeterraforged.world.worldgen.biome;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap;
+import etcodehome.freeterraforged.world.worldgen.cell.heightmap.WorldLookup;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.MarkerFunction;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
 
@@ -10,17 +11,6 @@ final class PreviewTileClimateSampler implements MarkerFunction.Mapped {
 	private final TileLookup tileLookup;
 	private final Heightmap heightmap;
 	private final CellSampler.Field field;
-
-	PreviewTileClimateSampler(
-		Tile tile,
-		Heightmap heightmap,
-		float originX,
-		float originZ,
-		int zoom,
-		CellSampler.Field field
-	) {
-		this(new TileLookup(tile, originX, originZ, zoom), heightmap, field);
-	}
 
 	PreviewTileClimateSampler(TileLookup tileLookup, Heightmap heightmap, CellSampler.Field field) {
 		this.tileLookup = tileLookup;
@@ -30,21 +20,23 @@ final class PreviewTileClimateSampler implements MarkerFunction.Mapped {
 
 	@Override
 	public double compute(FunctionContext context) {
-		return this.field.read(this.tileLookup.lookup(context), this.heightmap);
+		return this.field.readFinite(this.tileLookup.lookup(context), this.heightmap);
 	}
 
 	@Override
 	public double minValue() {
-		return 0.0D;
+		return -Float.MAX_VALUE;
 	}
 
 	@Override
 	public double maxValue() {
-		return 1.0D;
+		return Float.MAX_VALUE;
 	}
 
 	static final class TileLookup {
 		private final Tile tile;
+		private final WorldLookup worldLookup;
+		private final Cell sampledCell = new Cell();
 		private final float translateX;
 		private final float translateZ;
 		private final float zoom;
@@ -52,11 +44,12 @@ final class PreviewTileClimateSampler implements MarkerFunction.Mapped {
 		private int lastZ = Integer.MIN_VALUE;
 		private Cell lastCell;
 
-		TileLookup(Tile tile, float originX, float originZ, int zoom) {
+		TileLookup(Tile tile, WorldLookup worldLookup, float originX, float originZ, int zoom) {
 			if (zoom <= 0) {
 				throw new IllegalArgumentException("Preview zoom must be positive");
 			}
 			this.tile = tile;
+			this.worldLookup = worldLookup;
 			this.translateX = originX;
 			this.translateZ = originZ;
 			this.zoom = zoom;
@@ -67,19 +60,25 @@ final class PreviewTileClimateSampler implements MarkerFunction.Mapped {
 		}
 
 		Cell lookupBlock(int blockX, int blockZ) {
-			int size = this.tile.getBlockSize().size();
-			int x = clamp(Math.round((blockX - this.translateX) / this.zoom), 0, size - 1);
-			int z = clamp(Math.round((blockZ - this.translateZ) / this.zoom), 0, size - 1);
-			if (this.lastCell == null || x != this.lastX || z != this.lastZ) {
-				this.lastCell = this.tile.lookup(x, z);
-				this.lastX = x;
-				this.lastZ = z;
+			if (this.lastCell == null || blockX != this.lastX || blockZ != this.lastZ) {
+				this.lastCell = null;
+				int size = this.tile.getBlockSize().size();
+				int x = (int) Math.round((blockX - (double) this.translateX) / this.zoom);
+				int z = (int) Math.round((blockZ - (double) this.translateZ) / this.zoom);
+				// A raster pixel is reusable only at its exact world position. Rounding a
+				// quart query to a nearby pixel changes climate and provider-region identity.
+				if (x >= 0 && x < size && z >= 0 && z < size
+					&& this.translateX + x * (double) this.zoom == blockX
+					&& this.translateZ + z * (double) this.zoom == blockZ) {
+					this.lastCell = this.tile.lookup(x, z);
+				} else {
+					this.worldLookup.applyCell(this.sampledCell.reset(), blockX, blockZ, false, true);
+					this.lastCell = this.sampledCell;
+				}
+				this.lastX = blockX;
+				this.lastZ = blockZ;
 			}
 			return this.lastCell;
-		}
-
-		private static int clamp(int value, int min, int max) {
-			return Math.max(min, Math.min(max, value));
 		}
 	}
 }

@@ -303,10 +303,15 @@ public final class MinecraftWorldgenPlanCompiler {
 				notMaterialized(WorldgenFacet.SURFACE, purpose), Optional.empty()
 			);
 		} else if (generator instanceof NoiseBasedChunkGenerator noiseGenerator) {
-			surfacePlan = new WorldgenPlans.Surface(
-				descriptor(WorldgenFacet.SURFACE, CapabilityState.NORMALIZED,
-					"Active surface-rule graph is retained from the selected noise settings"),
-				Optional.of(noiseGenerator.generatorSettings().value().surfaceRule())
+			surfacePlan = compileFacet(WorldgenFacet.SURFACE, () -> {
+				var root = noiseGenerator.generatorSettings().value().surfaceRule();
+				WorldgenSurfaceInputs.requireSupported(root, owner.registries());
+				return new WorldgenPlans.Surface(
+					descriptor(WorldgenFacet.SURFACE, CapabilityState.NORMALIZED,
+						"Acquired surface graph and provenance are validated against the owner's frozen registries"),
+					Optional.of(root)
+				);
+			}, failure -> new WorldgenPlans.Surface(failure, Optional.empty())
 			);
 		} else {
 			surfacePlan = new WorldgenPlans.Surface(

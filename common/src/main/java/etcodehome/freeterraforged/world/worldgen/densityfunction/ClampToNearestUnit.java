@@ -10,8 +10,14 @@ import net.minecraft.world.level.levelgen.DensityFunction;
 public record ClampToNearestUnit(DensityFunction function, int resolution) implements DensityFunction {
 	public static final MapCodec<ClampToNearestUnit> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		DensityFunction.HOLDER_HELPER_CODEC.fieldOf("function").forGetter(ClampToNearestUnit::function),
-		Codec.INT.fieldOf("resolution").forGetter(ClampToNearestUnit::resolution)
+		Codec.intRange(1, Integer.MAX_VALUE).fieldOf("resolution").forGetter(ClampToNearestUnit::resolution)
 	).apply(instance, ClampToNearestUnit::new));
+
+	public ClampToNearestUnit {
+		if (resolution <= 0) {
+			throw new IllegalArgumentException("Density quantization resolution must be positive");
+		}
+	}
 	
 	@Override
 	public double compute(FunctionContext ctx) {
@@ -47,7 +53,14 @@ public record ClampToNearestUnit(DensityFunction function, int resolution) imple
 	}
 	
 	private double computeClamped(double value) {
-		float scaled = (int) (value * this.resolution) + 1;
-		return (scaled / this.resolution);
+		double scaled = value * this.resolution;
+		if (!Double.isFinite(scaled)) {
+			// Preserve infinite bounds. For finite values whose product overflows, one
+			// quantization unit is already far smaller than their representable spacing.
+			return value;
+		}
+		// Retain truncation toward zero plus one unit, without integer overflow.
+		double truncated = scaled < 0.0D ? Math.ceil(scaled) : Math.floor(scaled);
+		return (truncated + 1.0D) / this.resolution;
 	}
 }

@@ -1,6 +1,5 @@
 package etcodehome.freeterraforged.world.worldgen;
 
-import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.TileCache;
 import etcodehome.freeterraforged.world.worldgen.util.Seed;
@@ -14,8 +13,10 @@ import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.generation
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 
 public class GeneratorContext implements AutoCloseable {
+    public final etcodehome.freeterraforged.world.worldgen.biome.BiomeSurfaceEnvelope biomeSurfaceEnvelope =
+        new etcodehome.freeterraforged.world.worldgen.biome.BiomeSurfaceEnvelope();
     public Seed seed;
-    public Levels levels = new Levels();
+    public final Levels levels;
     public Preset preset;
     public HolderGetter<Noise> noiseLookup;
     public TileGenerator generator;
@@ -25,6 +26,7 @@ public class GeneratorContext implements AutoCloseable {
     
     public GeneratorContext(Preset preset, HolderGetter<Noise> noiseLookup, long seed, int tileSize, int tileBorder, int batchCount, @Nullable TileCache cache) {
         this.preset = preset;
+        this.levels = new Levels(preset.world().properties);
         this.noiseLookup = noiseLookup;
         this.seed = new Seed(seed);
 		Heightmap heightmap = Heightmap.make(this);
@@ -64,6 +66,7 @@ public class GeneratorContext implements AutoCloseable {
 
 	@Override
 	public void close() {
+		this.biomeSurfaceEnvelope.clear();
 		TileCache owned = this.cache;
 		this.cache = null;
 		Throwable failure = null;

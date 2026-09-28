@@ -1,5 +1,6 @@
 package etcodehome.freeterraforged.world.worldgen.densityfunction;
 
+import java.lang.ref.WeakReference;
 import java.util.function.Supplier;
 
 import com.mojang.serialization.MapCodec;
@@ -39,21 +40,28 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 			throw new IllegalStateException("FTF cell sampler used before its world lookup was initialized");
 		}
 		Cell cell = CELL.get().getAndUpdate(worldLookup, ctx.blockX(), ctx.blockZ(), true);
-		return this.field.read(cell, worldLookup.getHeightmap());
+		return this.field.readFinite(cell, worldLookup.getHeightmap());
 	}
 
 	@Override
 	public double minValue() {
-		return 0.0F;
+		// Terrain fields are not unit noise: oceans can be negative, mountains and
+		// gradients can exceed one, and climate axes span negative values. Every read
+		// is a checked finite float, giving a sound range without infinity * zero NaNs
+		// in vanilla's arithmetic-bound propagation.
+		return -Float.MAX_VALUE;
 	}
 
 	@Override
 	public double maxValue() {
-		return 1.0F;
+		return Float.MAX_VALUE;
 	}
 
 	public static class Cache2d {
 		private long lastPos = Long.MAX_VALUE;
+		private WeakReference<WorldLookup> lastLookup = new WeakReference<>(null);
+		private boolean lastSampleClimate;
+		private boolean valid;
 		private Cell cell = new Cell();
 		
 		public Cell getAndUpdate(WorldLookup lookup, int blockX, int blockZ, boolean sampleClimate) {
@@ -61,9 +69,17 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 			blockZ = QuartPos.toBlock(QuartPos.fromBlock(blockZ));
 			
 			long packedPos = PosUtil.pack(blockX, blockZ);
-			if(this.lastPos != packedPos) {
+			boolean sameOwner = this.lastLookup.get() == lookup;
+			if(!this.valid || !sameOwner || this.lastPos != packedPos || this.lastSampleClimate != sampleClimate) {
+				this.valid = false;
 				lookup.applyCell(this.cell.reset(), blockX, blockZ, false, sampleClimate);
 				this.lastPos = packedPos;
+				// The thread-local fallback must not pin a closed world's lookup/tile cache.
+				if (!sameOwner) {
+					this.lastLookup = new WeakReference<>(lookup);
+				}
+				this.lastSampleClimate = sampleClimate;
+				this.valid = true;
 			}
 			return this.cell;
 		}
@@ -92,7 +108,7 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 			Cell cell = (current != null && this.chunkX == chunkX && this.chunkZ == chunkZ) ?
 				current.getCell(blockX, blockZ) :
 				this.cache2d.getAndUpdate(worldLookup, blockX, blockZ, false);
-			return CellSampler.this.field.read(cell, worldLookup.getHeightmap());
+			return CellSampler.this.field.readFinite(cell, worldLookup.getHeightmap());
 		}
 
 		@Override
@@ -261,5 +277,13 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 		}
 		
 		public abstract float read(Cell cell, Heightmap heightmap);
+
+		public float readFinite(Cell cell, Heightmap heightmap) {
+			float value = this.read(cell, heightmap);
+			if (!Float.isFinite(value)) {
+				throw new IllegalStateException("Non-finite FTF cell density field " + this.name + ": " + value);
+			}
+			return value;
+		}
 	}
 }
