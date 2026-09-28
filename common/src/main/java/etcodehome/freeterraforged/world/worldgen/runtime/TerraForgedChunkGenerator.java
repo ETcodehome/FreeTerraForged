@@ -119,7 +119,6 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 		return this.acquisitionBiomeSource;
 	}
 
-	/** Immutable declaration replacement; never retains an old generator or runtime binding. */
 	TerraForgedChunkGenerator withDimensionBiomeSource(BiomeSource source) {
 		Objects.requireNonNull(source, "source");
 		if (this.acquisitionBiomeSource == source) {
@@ -131,7 +130,6 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 		return fromDimensionInputs(this.selectedBiomeSource, this.generatorSettings(), Optional.of(source));
 	}
 
-	/** Removes only the acquired declaration, preserving the selected preset's public inputs. */
 	TerraForgedChunkGenerator withoutDimensionBiomeSource() {
 		return this.dimensionBiomeSource.isEmpty() ? this
 			: new TerraForgedChunkGenerator(this.selectedBiomeSource, this.generatorSettings());

@@ -6,7 +6,6 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.util.KeyDispatchDataCodec;
 import net.minecraft.world.level.levelgen.SurfaceRules;
 
-/** Acquisition marker: inherit the next resource layer's complete surface root, or explicit fallback. */
 public record InheritedSurfaceRule(SurfaceRules.RuleSource fallback, String policy) implements SurfaceRules.RuleSource {
 	public static final String TYPE = "freeterraforged:inherited_surface";
 	public static final String REPLACE = "replace";

@@ -14,7 +14,6 @@ import net.minecraft.world.level.dimension.LevelStem;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import net.minecraft.world.level.levelgen.WorldDimensions;
 
-/** Resolves dimension declarations before preview or server ownership is established. */
 public final class WorldgenDimensionInputs {
 	private WorldgenDimensionInputs() {
 	}
@@ -29,9 +28,7 @@ public final class WorldgenDimensionInputs {
 		return new WorldDimensions(Map.copyOf(dimensions));
 	}
 
-	/** Encode only selected inputs into the new registry context when the creation UI reloads packs.
-	 * Imported biome holders may no longer exist there. Server/world-save codecs retain both inputs.
-	 */
+	// Imported biome holders may not exist after pack removal; strip them only for UI reload.
 	public static WorldDimensions forReload(WorldDimensions selected) {
 		Map<ResourceKey<LevelStem>, LevelStem> dimensions = new LinkedHashMap<>(selected.dimensions());
 		boolean changed = false;
@@ -55,7 +52,6 @@ public final class WorldgenDimensionInputs {
 		return stem;
 	}
 
-	/** Leaves vanilla's bake implementation and non-FTF dimension precedence intact. */
 	public static Registry<LevelStem> forBake(WorldDimensions selected, Registry<LevelStem> declarations) {
 		Map<ResourceKey<LevelStem>, LevelStem> replacements = new LinkedHashMap<>();
 		selected.dimensions().forEach((key, stem) -> {
@@ -117,8 +113,6 @@ public final class WorldgenDimensionInputs {
 		if (owner.acquisitionBiomeSource() == source) {
 			return selected;
 		}
-		// The selected preset owns density, height and settings. The declaration contributes its
-		// public biome graph, which is normalized by the ordinary owner-scoped plan compiler.
 		return new LevelStem(selected.type(), owner.withDimensionBiomeSource(source));
 	}
 }

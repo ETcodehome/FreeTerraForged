@@ -184,8 +184,7 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
 		}
         CellPopulator land = new Blender(mountainShape, terrainBlend, mountains, 0.3F, 0.8F, 0.575F);
         
-        // A separate seed stream preserves existing terrain/noise draw order. All ocean/coast
-        // populators share the same fields so continental blending cannot introduce climate seams.
+        // Keep existing terrain/noise seed draws unchanged.
         ClimateParameterSampler oceanClimate = ClimateParameterSampler.make(
             ctx.seed.offset(89031), preset.climate().biomeShape.biomeSize, general.globalHorizontalScale
         );

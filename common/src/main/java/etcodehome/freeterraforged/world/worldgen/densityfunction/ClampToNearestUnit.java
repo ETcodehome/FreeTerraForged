@@ -59,7 +59,6 @@ public record ClampToNearestUnit(DensityFunction function, int resolution) imple
 			// quantization unit is already far smaller than their representable spacing.
 			return value;
 		}
-		// Retain truncation toward zero plus one unit, without integer overflow.
 		double truncated = scaled < 0.0D ? Math.ceil(scaled) : Math.floor(scaled);
 		return (truncated + 1.0D) / this.resolution;
 	}

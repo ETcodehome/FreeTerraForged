@@ -29,12 +29,6 @@ import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.world.level.levelgen.SurfaceRules;
 
-/**
- * Resolves explicit surface markers against Minecraft's filtered resource stack before codec loading.
- * Bundled origins may contribute disjoint biome domains; user or unknown origins are replacement
- * barriers. Companion density settings and ordinary reference-registry winners are never replaced.
- * Published rules retain immutable provenance, not a resource manager, pack, or loader callback.
- */
 public final class WorldgenSurfaceInputs {
 	private WorldgenSurfaceInputs() {}
 
@@ -70,15 +64,12 @@ public final class WorldgenSurfaceInputs {
 		return new Resource(selected.source(), () -> new ByteArrayInputStream(bytes), selected::metadata);
 	}
 
-	/** Immutable captured input. Resource and loader objects do not enter normalization or execution. */
 	public record Layer(String resource, String pack, int priority, boolean bundled, String rule) {}
 
-	/** Descending indices preserve precedence and make inheritance acyclic. Inputs are unchanged. */
 	public static JsonElement normalizeLayers(JsonElement rule, IntFunction<Layer> lowerRule, int lowerIndex) {
 		return normalizeLayers(rule, lowerRule, index -> lowerRule.apply(index).bundled(), lowerIndex);
 	}
 
-	/** Origin may be inspected without opening a shadowed replacement resource's payload. */
 	public static JsonElement normalizeLayers(JsonElement rule, IntFunction<Layer> lowerRule, IntPredicate bundled, int lowerIndex) {
 		if (isMarker(rule)) {
 			JsonElement fallback = rule.getAsJsonObject().get("fallback");
@@ -104,7 +95,6 @@ public final class WorldgenSurfaceInputs {
 				Layer layer = lowerRule.apply(i);
 				JsonElement authored = JsonParser.parseString(layer.rule());
 				boolean explicitInheritance = containsMarker(authored);
-				// A lower replacement resource is a barrier, not an extra contribution.
 				if (!inputs.isEmpty() && (!layer.bundled() || explicitInheritance)) break;
 				JsonElement normalized = normalizeLayers(authored, lowerRule, bundled, i - 1);
 				validate(normalized);
@@ -150,7 +140,6 @@ public final class WorldgenSurfaceInputs {
 		return result;
 	}
 
-	/** Codec traversal also reaches snapshots beneath public loader wrappers, without inspecting private fields. */
 	public static void requireSupported(SurfaceRules.RuleSource root, RegistryAccess registries) {
 		// AcquiredSurfaceRule's encoder rejects actual failed snapshots. Opaque codec payloads
 		// resembling our JSON are data, not executable rules, and must not be interpreted here.
@@ -181,7 +170,6 @@ public final class WorldgenSurfaceInputs {
 		return false;
 	}
 
-	/** Only known RuleSource slots are traversable; arbitrary rule/condition payloads are opaque. */
 	private static JsonElement mapChildren(JsonElement value, UnaryOperator<JsonElement> mapper) {
 		if (!value.isJsonObject()) return value.deepCopy();
 		String slot = childSlot(value);

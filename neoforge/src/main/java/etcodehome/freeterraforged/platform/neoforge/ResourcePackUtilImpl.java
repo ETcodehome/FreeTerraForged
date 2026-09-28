@@ -14,7 +14,6 @@ public final class ResourcePackUtilImpl {
 			|| !known.get().id().equals(pack.packId()) || pack.location().source() == PackSource.WORLD
 			|| pack.location().source() == PackSource.SERVER) return false;
 		var mods = ModList.get();
-		// Match the public loader registration identity, including multi-mod archives. No mod allowlist.
 		// Pack.withChildren replaces DEFAULT with its private child source, retaining KnownPack identity.
 		return mods != null && mods.getModFiles().stream().anyMatch(file -> pack.packId().equals("mod/"
 			+ file.getMods().stream().map(mod -> mod.getModId()).collect(Collectors.joining(","))));

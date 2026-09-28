@@ -10,7 +10,6 @@ import etcodehome.freeterraforged.world.worldgen.cell.heightmap.WorldLookup;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.TileCache;
 import etcodehome.freeterraforged.world.worldgen.runtime.OwnerThreadCache;
 
-/** Conservative terrain envelope for one stored biome cell, independent of its Y coordinate. */
 public final class BiomeSurfaceEnvelope {
 	// BiomeManager subtracts two blocks, then chooses either corner of a quart cube.
 	// A cell at 4*q can therefore affect blocks [4*q-2, 4*q+5]. Include the adjacent

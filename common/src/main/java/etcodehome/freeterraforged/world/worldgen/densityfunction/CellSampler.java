@@ -45,10 +45,7 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 
 	@Override
 	public double minValue() {
-		// Terrain fields are not unit noise: oceans can be negative, mountains and
-		// gradients can exceed one, and climate axes span negative values. Every read
-		// is a checked finite float, giving a sound range without infinity * zero NaNs
-		// in vanilla's arithmetic-bound propagation.
+		// Fields exceed unit-noise bounds; finite float bounds avoid infinity * zero in vanilla.
 		return -Float.MAX_VALUE;
 	}
 
@@ -74,7 +71,6 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 				this.valid = false;
 				lookup.applyCell(this.cell.reset(), blockX, blockZ, false, sampleClimate);
 				this.lastPos = packedPos;
-				// The thread-local fallback must not pin a closed world's lookup/tile cache.
 				if (!sameOwner) {
 					this.lastLookup = new WeakReference<>(lookup);
 				}

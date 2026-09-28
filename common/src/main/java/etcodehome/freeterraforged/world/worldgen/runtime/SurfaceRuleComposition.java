@@ -11,7 +11,6 @@ import com.google.gson.JsonParser;
 import net.minecraft.resources.ResourceLocation;
 import etcodehome.freeterraforged.world.worldgen.surface.rule.AcquiredSurfaceRule;
 
-/** Pure acquisition algebra. Graphs execute unchanged; only disjoint dispatch is synthesized. */
 public final class SurfaceRuleComposition {
 	private SurfaceRuleComposition() {}
 
@@ -53,7 +52,6 @@ public final class SurfaceRuleComposition {
 		}
 	}
 
-	/** Explicit finite biome discriminators, excluding literals in provably unreachable branches. */
 	public static Set<String> domain(JsonElement root) {
 		var mentioned = new TreeSet<String>();
 		inspectRule(root, false, mentioned, "$surface");
@@ -99,7 +97,6 @@ public final class SurfaceRuleComposition {
 		};
 	}
 
-	/** Symbolic analysis only: never substitutes this simplified graph for the authored executable. */
 	private static JsonElement specialize(JsonElement rule, String biome) {
 		var object = rule.getAsJsonObject();
 		switch (type(object, "$surface")) {
@@ -117,8 +114,7 @@ public final class SurfaceRuleComposition {
 				if (Boolean.FALSE.equals(truth)) return sequence(new JsonArray());
 				var child = specialize(object.get("then_run"), biome);
 				if (isEmpty(child)) return child;
-				// Preserve the explicit domain declaration even when its material equals the generic fallback.
-				// This witness exists only in symbolic analysis, never in the published rule graph.
+				// Analysis-only witness preserves domains whose material equals the generic fallback.
 				if (Boolean.TRUE.equals(truth)) {
 					var witness = new JsonObject();
 					witness.addProperty("type", "freeterraforged:analysis_biome_witness");

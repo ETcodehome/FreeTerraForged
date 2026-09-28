@@ -31,9 +31,6 @@ public final class UndergroundBiomeSurfaceProtection {
 				Climate.unquantizeCoord(target.depth()) - SURFACE_DEPTH
 		) / DEPTH_UNITS_PER_BLOCK;
 
-		// A local depth alone cannot protect a biome cell on a steep wall: both its
-		// stored volume and vanilla's smoothed lookup reach lower neighboring columns.
-		// Avoid the envelope query entirely when the local point is already excluded.
 		if (localClearance <= EXTRA_SAFETY_MARGIN_BLOCKS + REQUIRED_CLEARANCE_BLOCKS) {
 			return 0.0F;
 		}
@@ -47,7 +44,6 @@ public final class UndergroundBiomeSurfaceProtection {
 			}
 		}
 
-		// Retain the depth guard's vertical safety allowance as well as the footprint.
 		float paddedClearance = localClearance - EXTRA_SAFETY_MARGIN_BLOCKS;
 
 		return coverageFactor(paddedClearance);

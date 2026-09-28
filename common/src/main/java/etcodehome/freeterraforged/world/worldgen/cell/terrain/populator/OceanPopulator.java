@@ -18,8 +18,6 @@ public record OceanPopulator(Terrain terrainType, Noise height, float minHeight,
 	public void apply(Cell cell, float x, float z) {
 		cell.terrain = this.terrainType;
 		cell.height = Math.max(this.height.compute(x, z, 0), this.minHeight);
-		// Oceans are a continentalness family, not a single point on the other axes.
-		// Preserve coherent climate coverage without changing the ocean-floor height model.
 		cell.erosion = this.erosion.compute(x, z, 0);
 		cell.weirdness = this.weirdness.compute(x, z, 0);
 	}

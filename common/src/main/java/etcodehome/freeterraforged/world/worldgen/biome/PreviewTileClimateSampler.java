@@ -65,8 +65,6 @@ final class PreviewTileClimateSampler implements MarkerFunction.Mapped {
 				int size = this.tile.getBlockSize().size();
 				int x = (int) Math.round((blockX - (double) this.translateX) / this.zoom);
 				int z = (int) Math.round((blockZ - (double) this.translateZ) / this.zoom);
-				// A raster pixel is reusable only at its exact world position. Rounding a
-				// quart query to a nearby pixel changes climate and provider-region identity.
 				if (x >= 0 && x < size && z >= 0 && z < size
 					&& this.translateX + x * (double) this.zoom == blockX
 					&& this.translateZ + z * (double) this.zoom == blockZ) {

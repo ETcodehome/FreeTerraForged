@@ -123,8 +123,7 @@ public class PresetConfigScreen extends LinkedPageScreen {
 		if(!repository.addPack("file/" + exportPath.getFileName())) {
 			throw new IOException("The generated ReTerraForged datapack was not discovered by Minecraft");
 		}
-		// The reload can capture WorldOptions before onDone returns. Publish the editor seed
-		// before starting it, so the prepared world and its preview use the same semantic inputs.
+		// Publish the seed before reload captures WorldOptions.
 		this.applySeedToParent();
 		this.parent.tryApplyNewDataPacks(repository, false, (data) -> {
 		});

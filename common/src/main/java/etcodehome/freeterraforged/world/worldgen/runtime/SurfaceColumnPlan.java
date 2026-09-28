@@ -23,7 +23,6 @@ import net.minecraft.world.level.levelgen.WorldgenRandom;
 import net.minecraft.world.level.levelgen.XoroshiroRandomSource;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 
-/** Lower known chunk-local surface processing out of the cross-chunk decoration schedule. */
 public record SurfaceColumnPlan(
 	List<Root> roots,
 	Map<ResourceKey<Biome>, Set<PlacedFeature>> byBiome,
@@ -46,9 +45,7 @@ public record SurfaceColumnPlan(
 		Set<PlacedFeature> eligible = identitySet();
 		if (steps.size() > RAW) {
 			for (PlacedFeature feature : steps.get(RAW).features()) {
-				// This implementation has no random/placement input and mutates only its
-				// origin chunk. Do not silently reinterpret custom subclasses, selectors,
-				// placement modifiers, or explicitly authored later-stage occurrences.
+				// Only this exact implementation is known to be chunk-local and placement-independent.
 				if (feature.feature().value().feature().getClass() == ErodeFeature.class
 					&& feature.placement().isEmpty()) eligible.add(feature);
 			}
@@ -93,8 +90,7 @@ public record SurfaceColumnPlan(
 	public void apply(WorldGenRegion region, ChunkGenerator generator, ChunkAccess chunk, Set<Holder<Biome>> possibleBiomes) {
 		if (this.roots.isEmpty() || SharedConstants.debugVoidTerrain(chunk.getPos())) return;
 		Set<Holder<Biome>> biomes = new java.util.HashSet<>();
-		// Vanilla SURFACE requires BIOMES at radius one. This is exactly decoration's
-		// eligibility neighborhood, available without requesting or generating chunks.
+		// SURFACE already requires BIOMES at radius one, matching decoration's eligibility neighborhood.
 		ChunkPos.rangeClosed(chunk.getPos(), 1).forEach(pos -> {
 			for (var section : region.getChunk(pos.x, pos.z).getSections()) section.getBiomes().getAll(biomes::add);
 		});

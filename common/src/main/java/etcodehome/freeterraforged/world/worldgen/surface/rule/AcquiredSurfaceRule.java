@@ -8,7 +8,6 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.util.KeyDispatchDataCodec;
 import net.minecraft.world.level.levelgen.SurfaceRules;
 
-/** Materialized acquisition result. Only immutable provenance and the public executable graph survive. */
 public record AcquiredSurfaceRule(SurfaceRules.RuleSource root, List<Source> sources, List<String> failures)
 	implements SurfaceRules.RuleSource {
 	public static final String TYPE = "freeterraforged:acquired_surface";

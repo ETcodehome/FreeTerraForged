@@ -9,8 +9,7 @@ import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenDimensionInputs
 
 @Mixin(CreateWorldScreen.class)
 public abstract class MixinCreateWorldScreen {
-	// The encode call lives in applyNewPackConfig's synthetic reload lambda. Anchor its exact
-	// public signature rather than a compiler-generated lambda ordinal. This call is unique.
+	// The unique encode call is in a reload lambda whose compiler-generated name is unstable.
 	@ModifyArg(method = "*", at = @At(value = "INVOKE", target =
 		"Lnet/minecraft/world/level/levelgen/WorldGenSettings;encode(Lcom/mojang/serialization/DynamicOps;Lnet/minecraft/world/level/levelgen/WorldOptions;Lnet/minecraft/world/level/levelgen/WorldDimensions;)Lcom/mojang/serialization/DataResult;"),
 		index = 2, require = 1, allow = 1)
