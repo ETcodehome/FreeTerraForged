@@ -4,6 +4,7 @@ import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
 
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
@@ -218,7 +219,7 @@ public class Preview2D extends Button implements IPreviewHandler {
     }
 
     private void renderSpawnMarker(GuiGraphics guiGraphics) {
-        WorldSettings.Properties props = this.page.preset.getPreset().world().properties;
+        WorldSettings.Properties props = PresetManager.PM.worldSettings.properties;
 
         if (props.spawnType == SpawnType.USER_SELECTED || props.spawnType == SpawnType.CONTINENT_CENTER) {
             int currentZoom = this.getZoom();

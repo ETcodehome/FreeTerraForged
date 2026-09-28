@@ -3,14 +3,14 @@ package etcodehome.freeterraforged.client.gui.screen.presetconfig;
 import java.util.Optional;
 
 import etcodehome.freeterraforged.client.gui.widget.Slider;
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
 import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.network.chat.Component;
 import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
 import etcodehome.freeterraforged.client.gui.screen.page.LinkedPageScreen.Page;
-import etcodehome.freeterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.CaveSettings;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.ClimateSettings;
-import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 
 public class UndergroundSettingsPage extends PresetEditorPage {
 	private Slider entranceCaveProbability;
@@ -40,14 +40,14 @@ public class UndergroundSettingsPage extends PresetEditorPage {
 	public void init() {
 		super.init();
 
-		Preset preset = this.preset.getPreset();
-		CaveSettings caves = preset.caves();
-		ClimateSettings climate = preset.climate();
+		CaveSettings caves = PresetManager.PM.caveSettings;
+		ClimateSettings climate = PresetManager.PM.climateSettings;
 		ClimateSettings.BiomeShape biomeShape = climate.biomeShape;
+		WorldSettings.Properties props = PresetManager.PM.worldSettings.properties;
 
 		int maximumUndergroundVerticalSize = PresetSettingsBounds.maximumUndergroundBiomeVerticalSize(
-				preset.world().properties.worldHeight,
-				preset.world().properties.worldDepth
+				props.worldHeight,
+				props.worldDepth
 		);
 
 		biomeShape.undergroundBiomeVerticalSize = Math.min(

@@ -7,6 +7,7 @@ import java.util.concurrent.TimeUnit;
 import com.mojang.blaze3d.vertex.PoseStack;
 
 import etcodehome.freeterraforged.config.PerformanceConfig;
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
 import etcodehome.freeterraforged.registries.FTFRegistries;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
@@ -180,7 +181,7 @@ public interface IPreviewHandler {
         try {
             settings = page.getScreen().getSettings();
             requestedInput = page.getScreen().previewRequestKeys().capture(
-                    settings, page.preset.getPreset()
+                    settings, PresetManager.PM.cachedPreset.getPreset()
             );
             mode = getRenderMode();
             biomePipeline = mode == RenderMode.BIOME;
@@ -648,7 +649,7 @@ public interface IPreviewHandler {
     }
 
     default String getSpawnCoords(int cx, int cz) {
-        WorldSettings.Properties props = page().preset.getPreset().world().properties;
+        WorldSettings.Properties props = PresetManager.PM.worldSettings.properties;
         if (props.spawnType == SpawnType.USER_SELECTED) {
             return "x" + props.spawnX + " z" + props.spawnZ;
         }
@@ -675,7 +676,7 @@ public interface IPreviewHandler {
         if (button == 1) {
             if (updateLegend((int) mouseX, (int) mouseY) && !state.hoveredCoords.isEmpty()) {
                 playClickSound();
-                WorldSettings.Properties props = page().preset.getPreset().world().properties;
+                WorldSettings.Properties props = PresetManager.PM.worldSettings.properties;
                 if (props.spawnType == SpawnType.CONTINENT_CENTER) {
                     props.spawnType = SpawnType.USER_SELECTED;
                     if (page() instanceof WorldSettingsPage worldPage) {
@@ -731,7 +732,7 @@ public interface IPreviewHandler {
                 PreviewState state = self.state();
                 if (self.updateLegend((int) guiX, (int) guiY) && !state.hoveredCoords.isEmpty()) {
                     self.playClickSound();
-                    WorldSettings.Properties props = self.page().preset.getPreset().world().properties;
+                    WorldSettings.Properties props = PresetManager.PM.worldSettings.properties;
                     props.spawnType = SpawnType.USER_SELECTED;
                     props.spawnX = state.hoveredCoordX;
                     props.spawnZ = state.hoveredCoordZ;

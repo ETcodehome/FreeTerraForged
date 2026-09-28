@@ -4,6 +4,7 @@ import java.util.Optional;
 
 import etcodehome.freeterraforged.client.gui.widget.Slider;
 import etcodehome.freeterraforged.client.gui.widget.ValueButton;
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
 import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.network.chat.Component;
 import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
@@ -82,10 +83,9 @@ public class TerrainSettingsPage extends PresetEditorPage {
 	public void init() {
 		super.init();
 
-		Preset preset = this.preset.getPreset();
-		TerrainSettings terrain = preset.terrain();
+		TerrainSettings terrain = PresetManager.PM.terrainSettings;
 		General general = terrain.general;
-		boolean isUpliftContinent = preset.world().continent.continentType == ContinentType.UPLIFT;
+		boolean isUpliftContinent = PresetManager.PM.worldSettings.continent.continentType == ContinentType.UPLIFT;
 		float flooredLowRange = isUpliftContinent ? 1.0F : 0.01F;
 		
 		this.terrainSeedOffset = PresetWidgets.createRandomButton(FTFTranslationKeys.GUI_BUTTON_TERRAIN_SEED_OFFSET, general.terrainSeedOffset, (value) -> {

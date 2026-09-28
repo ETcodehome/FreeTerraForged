@@ -3,6 +3,7 @@ package etcodehome.freeterraforged.client.gui.screen.presetconfig;
 import java.util.Optional;
 
 import etcodehome.freeterraforged.client.gui.widget.Slider;
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
 import net.minecraft.network.chat.Component;
 import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
 import etcodehome.freeterraforged.client.gui.screen.page.LinkedPageScreen.Page;
@@ -31,9 +32,8 @@ class FilterSettingsPage extends PresetEditorPage {
 	@Override
 	public void init() {
 		super.init();
-		
-		Preset preset = this.preset.getPreset();
-		FilterSettings filters = preset.filters();
+
+		FilterSettings filters = PresetManager.PM.filterSettings;
 		
 		Erosion erosion = filters.erosion;
 		this.erosionDropletsPerChunk = PresetWidgets.createIntSlider(erosion.dropletsPerChunk, 10, 250, FTFTranslationKeys.GUI_SLIDER_EROSION_DROPLETS_PER_CHUNK, (slider, value) -> {

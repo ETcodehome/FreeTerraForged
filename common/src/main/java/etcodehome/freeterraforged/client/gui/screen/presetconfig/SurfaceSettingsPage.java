@@ -3,6 +3,7 @@ package etcodehome.freeterraforged.client.gui.screen.presetconfig;
 import java.util.Optional;
 
 import etcodehome.freeterraforged.client.gui.widget.Slider;
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
 import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.network.chat.Component;
 import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
@@ -34,11 +35,10 @@ public class SurfaceSettingsPage extends PresetEditorPage {
 	@Override
 	public void init() {
 		super.init();
-		
-		Preset preset = this.preset.getPreset();
-		SurfaceSettings surface = preset.surface();
+
+		SurfaceSettings surface = PresetManager.PM.surfaceSettings;
 		SurfaceSettings.Erosion erosion = surface.erosion();
-		MiscellaneousSettings miscellaneous = preset.miscellaneous();
+		MiscellaneousSettings miscellaneous = PresetManager.PM.miscellaneousSettings;
 
 		// Erosion Decorator
 

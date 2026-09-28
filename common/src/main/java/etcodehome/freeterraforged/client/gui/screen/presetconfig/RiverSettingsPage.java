@@ -4,6 +4,7 @@ import java.util.Optional;
 
 import etcodehome.freeterraforged.client.gui.widget.Slider;
 import etcodehome.freeterraforged.client.gui.widget.ValueButton;
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
 import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.network.chat.Component;
 import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
@@ -62,10 +63,8 @@ class RiverSettingsPage extends PresetEditorPage {
 	@Override
 	public void init() {
 		super.init();
-		
-		Preset preset = this.preset.getPreset();
 
-		FlowSettings flow = preset.flow();
+		FlowSettings flow = PresetManager.PM.flowSettings;
 
 		this.toggleFlowParticles = PresetWidgets.createToggle(flow.flowParticles, FTFTranslationKeys.GUI_BUTTON_FLOW_PARTICLES, (button, value) -> {
 			flow.flowParticles = value;
@@ -79,7 +78,7 @@ class RiverSettingsPage extends PresetEditorPage {
 			flow.navigableWaterfalls = value;
 		});
 
-		RiverSettings river = preset.rivers();
+		RiverSettings river = PresetManager.PM.riverSettings;
 		
 		this.seedOffset = PresetWidgets.createRandomButton(FTFTranslationKeys.GUI_BUTTON_RIVER_SEED_OFFSET, river.seedOffset, (value) -> {
 			river.seedOffset = value;

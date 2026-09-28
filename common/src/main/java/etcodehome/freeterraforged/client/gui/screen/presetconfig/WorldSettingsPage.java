@@ -5,6 +5,8 @@ import java.util.Optional;
 import com.google.common.collect.ImmutableList;
 
 import etcodehome.freeterraforged.client.gui.widget.Slider;
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.*;
 import etcodehome.freeterraforged.world.worldgen.noise.function.DistanceFunction;
 import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.network.chat.Component;
@@ -12,11 +14,6 @@ import net.minecraft.util.Mth;
 import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
 import etcodehome.freeterraforged.client.gui.screen.page.LinkedPageScreen.Page;
 import etcodehome.freeterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
-import etcodehome.freeterraforged.data.worldgen.preset.settings.ClimateSettings;
-import etcodehome.freeterraforged.data.worldgen.preset.settings.ContinentType;
-import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
-import etcodehome.freeterraforged.data.worldgen.preset.settings.SpawnType;
-import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
 
 public class WorldSettingsPage extends PresetEditorPage {
 	private CycleButton<ContinentType> continentType;
@@ -56,9 +53,8 @@ public class WorldSettingsPage extends PresetEditorPage {
 	@Override
 	public void init() {
 		super.init();
-		
-		Preset preset = this.preset.getPreset();
-		WorldSettings world = preset.world();
+
+		WorldSettings world = PresetManager.PM.worldSettings;
 		WorldSettings.Continent continent = world.continent;
 		WorldSettings.ControlPoints controlPoints = world.controlPoints;
 		WorldSettings.Properties properties = world.properties;
@@ -247,16 +243,17 @@ public class WorldSettingsPage extends PresetEditorPage {
 
 		// ensures that terrains never drop below continental uplift resulting in floating rivers
 		boolean isUpliftContinent = type == ContinentType.UPLIFT;
+		TerrainSettings t = PresetManager.PM.terrainSettings;
 		if(isUpliftContinent){
-			this.preset.getPreset().terrain().general.globalVerticalScale = Math.max(this.preset.getPreset().terrain().general.globalVerticalScale, 1.0F);
-			this.preset.getPreset().terrain().steppe.baseScale = Math.max(this.preset.getPreset().terrain().steppe.baseScale, 2.0F);
-			this.preset.getPreset().terrain().plains.baseScale = Math.max(this.preset.getPreset().terrain().plains.baseScale, 2.0F);
-			this.preset.getPreset().terrain().hills.baseScale = Math.max(this.preset.getPreset().terrain().hills.baseScale, 1.0F);
-			this.preset.getPreset().terrain().dales.baseScale = Math.max(this.preset.getPreset().terrain().dales.baseScale, 1.0F);
-			this.preset.getPreset().terrain().badlands.baseScale = Math.max(this.preset.getPreset().terrain().badlands.baseScale, 1.0F);
-			this.preset.getPreset().terrain().mountains.baseScale = Math.max(this.preset.getPreset().terrain().mountains.baseScale, 1.0F);
-			this.preset.getPreset().terrain().plateau.baseScale = Math.max(this.preset.getPreset().terrain().plateau.baseScale, 1.0F);
-			this.preset.getPreset().terrain().volcano.baseScale = Math.max(this.preset.getPreset().terrain().volcano.baseScale, 1.0F);
+			t.general.globalVerticalScale = Math.max(t.general.globalVerticalScale, 1.0F);
+			t.steppe.baseScale = Math.max(t.steppe.baseScale, 2.0F);
+			t.plains.baseScale = Math.max(t.plains.baseScale, 2.0F);
+			t.hills.baseScale = Math.max(t.hills.baseScale, 1.0F);
+			t.dales.baseScale = Math.max(t.dales.baseScale, 1.0F);
+			t.badlands.baseScale = Math.max(t.badlands.baseScale, 1.0F);
+			t.mountains.baseScale = Math.max(t.mountains.baseScale, 1.0F);
+			t.plateau.baseScale = Math.max(t.plateau.baseScale, 1.0F);
+			t.volcano.baseScale = Math.max(t.volcano.baseScale, 1.0F);
 		}
 	}
 	
@@ -266,7 +263,7 @@ public class WorldSettingsPage extends PresetEditorPage {
 	}
 
 	private void updateUndergroundBiomeVerticalSize(WorldSettings.Properties properties) {
-		ClimateSettings.BiomeShape biomeShape = this.preset.getPreset().climate().biomeShape;
+		ClimateSettings.BiomeShape biomeShape = PresetManager.PM.climateSettings.biomeShape;
 		biomeShape.undergroundBiomeVerticalSize = Math.min(
 			biomeShape.undergroundBiomeVerticalSize,
 			PresetSettingsBounds.maximumUndergroundBiomeVerticalSize(properties.worldHeight, properties.worldDepth)

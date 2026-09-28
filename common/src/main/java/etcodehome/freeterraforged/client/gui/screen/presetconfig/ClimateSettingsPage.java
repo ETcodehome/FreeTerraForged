@@ -4,6 +4,7 @@ import java.util.Optional;
 
 import etcodehome.freeterraforged.client.gui.widget.Slider;
 import etcodehome.freeterraforged.client.gui.widget.ValueButton;
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
 import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.network.chat.Component;
 import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
@@ -51,9 +52,8 @@ class ClimateSettingsPage extends PresetEditorPage {
 	@Override
 	public void init() {
 		super.init();
-		
-		Preset preset = this.preset.getPreset();
-		ClimateSettings climate = preset.climate();
+
+		ClimateSettings climate = PresetManager.PM.climateSettings;
 		ClimateSettings.RangeValue temperature = climate.temperature;
 		
 		this.temperatureSeedOffset = PresetWidgets.createRandomButton(FTFTranslationKeys.GUI_BUTTON_CLIMATE_SEED_OFFSET, temperature.seedOffset, (value) -> {

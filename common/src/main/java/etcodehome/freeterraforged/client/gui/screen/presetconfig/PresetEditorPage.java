@@ -31,7 +31,6 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	private int previewNavigationX;
 	private int previewNavigationZ;
 	private boolean previewNavigated;
-	protected PresetEntry preset;
 
 	// Static persistent state containers
 	public static int minZoom = 1;
@@ -48,8 +47,6 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 
 	public PresetEditorPage(PresetConfigScreen screen) {
 		super(screen);
-
-		this.preset = PresetManager.PM.cachedPreset;
 	}
 
 	protected void regenerate() {
@@ -336,8 +333,8 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	@Override
 	public SaveResult onSave() {
 		try {
-			this.preset.save();
-			return this.screen.applyPreset(this.preset);
+			PresetManager.PM.cachedPreset.save();
+			return this.screen.applyPreset(PresetManager.PM.cachedPreset);
 		} catch (IOException e) {
 			return this.screen.reportPresetApplyFailure(e);
 		}
