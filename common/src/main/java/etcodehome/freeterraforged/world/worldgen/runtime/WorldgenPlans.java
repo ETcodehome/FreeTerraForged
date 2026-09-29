@@ -285,6 +285,24 @@ public final class WorldgenPlans {
 			return this.resolveProvider(provider, target);
 		}
 
+		public Climate.TargetPoint projectTarget(
+			ResourceLocation domain,
+			boolean fallback,
+			Climate.TargetPoint target
+		) {
+			if (fallback) {
+				if (this.fallbackOceanProjection == null) {
+					throw new IllegalArgumentException("Provider plan has no fallback target projection");
+				}
+				return this.fallbackOceanProjection.apply(target);
+			}
+			OceanClimateProjection projection = this.oceanProjections.get(domain);
+			if (projection == null) {
+				throw new IllegalArgumentException("Unknown provider domain " + domain);
+			}
+			return projection.apply(target);
+		}
+
 		public ResourceLocation selectDomain(long cellX, long cellZ) {
 			if (this.selector == null) {
 				throw new IllegalStateException("Cannot assign a provider from an empty plan");

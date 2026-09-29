@@ -153,8 +153,10 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 				if(cell.terrain == TerrainType.MUSHROOM_FIELDS) {
 					return Continentalness.MUSHROOM_FIELDS.mid();
 				}
+				boolean submergedOffshore = cell.height <= levels.water && cell.continentEdge < beach
+					&& !cell.terrain.isRiver() && !cell.terrain.isLake() && !cell.terrain.isWetland();
 
-				if(cell.terrain.isDeepOcean()) {
+				if(cell.terrain.isDeepOcean() || submergedOffshore && cell.continentEdge <= deepOcean) {
 					if(deepOcean <= 0.0F) {
 						return Continentalness.DEEP_OCEAN.mid();
 					}
@@ -170,6 +172,18 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 					float alpha = NoiseUtil.clamp(cell.continentEdge, deepOcean, shallowOcean);
 					alpha = NoiseUtil.lerp(alpha, deepOcean, shallowOcean, 0.0F, 0.98F);
 					return Math.max(SHALLOW_OCEAN_MIN, NoiseUtil.lerp(Continentalness.OCEAN.min(), Continentalness.OCEAN.max(), alpha));
+				}
+
+				if (submergedOffshore) {
+					if (beach <= deepOcean) {
+						return Continentalness.OCEAN.mid();
+					}
+					float alpha = NoiseUtil.lerp(
+						NoiseUtil.clamp(cell.continentEdge, deepOcean, beach),
+						deepOcean, beach, 0.0F, 0.98F
+					);
+					return Math.max(SHALLOW_OCEAN_MIN,
+						NoiseUtil.lerp(Continentalness.OCEAN.min(), Continentalness.OCEAN.max(), alpha));
 				}
 				
 				if(cell.terrain.getDelegate() == TerrainCategory.BEACH && cell.height + cell.beachNoise < levels.water(5)) {
