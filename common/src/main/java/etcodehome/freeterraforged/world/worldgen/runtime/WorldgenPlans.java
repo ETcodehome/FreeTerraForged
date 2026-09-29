@@ -152,6 +152,8 @@ public final class WorldgenPlans {
 		private final Optional<Holder<Biome>> deferredPlaceholder;
 		private final Optional<BiomeSourcePlanInput> directInput;
 		private final Map<ResourceLocation, ProviderDomain> providersById;
+		private final Map<ResourceLocation, OceanClimateProjection> oceanProjections;
+		private final OceanClimateProjection fallbackOceanProjection;
 		private final WeightedRendezvous.Selector selector;
 
 		public ProviderSelection(
@@ -194,6 +196,13 @@ public final class WorldgenPlans {
 				}
 			}
 			this.providersById = Collections.unmodifiableMap(byId);
+			LinkedHashMap<ResourceLocation, OceanClimateProjection> projections = new LinkedHashMap<>();
+			for (ProviderDomain provider : this.providers) {
+				projections.put(provider.id(), OceanClimateProjection.from(provider.candidates()));
+			}
+			this.oceanProjections = Collections.unmodifiableMap(projections);
+			this.fallbackOceanProjection = this.fallback
+				.map(OceanClimateProjection::from).orElse(null);
 			Set<Integer> orders = new HashSet<>();
 			if (this.providers.stream().anyMatch(provider -> !orders.add(provider.registrationOrder()))) {
 				throw new IllegalArgumentException("Provider registration orders must be unique");
@@ -285,14 +294,16 @@ public final class WorldgenPlans {
 
 		private ProviderResult resolveProvider(ProviderDomain provider, Climate.TargetPoint target) {
 			Climate.ParameterList<Holder<Biome>> candidates = provider.candidates();
-			Holder<Biome> selected = candidates.findValue(target);
+			Climate.TargetPoint selectionTarget = this.oceanProjections.get(provider.id()).apply(target);
+			Holder<Biome> selected = candidates.findValue(selectionTarget);
 			boolean deferred = this.deferredPlaceholder.isPresent()
 				&& this.deferredPlaceholder.get().equals(selected);
 			if (deferred) {
 				candidates = this.fallback.orElseThrow();
-				selected = candidates.findValue(target);
+				selectionTarget = this.fallbackOceanProjection.apply(target);
+				selected = candidates.findValue(selectionTarget);
 			}
-			return new ProviderResult(provider.id(), selected, selected, deferred, candidates, target);
+			return new ProviderResult(provider.id(), selected, selected, deferred, candidates, selectionTarget);
 		}
 
 		@Override
@@ -317,14 +328,17 @@ public final class WorldgenPlans {
 				&& this.rootCompositionDomain.equals(other.rootCompositionDomain)
 				&& this.fallback.equals(other.fallback)
 				&& this.deferredPlaceholder.equals(other.deferredPlaceholder)
-				&& this.directInput.equals(other.directInput);
+				&& this.directInput.equals(other.directInput)
+				&& this.oceanProjections.equals(other.oceanProjections)
+				&& Objects.equals(this.fallbackOceanProjection, other.fallbackOceanProjection);
 		}
 
 		@Override
 		public int hashCode() {
 			return Objects.hash(
 				this.descriptor, this.salt, this.providers, this.rootCompositionDomain,
-				this.fallback, this.deferredPlaceholder, this.directInput
+				this.fallback, this.deferredPlaceholder, this.directInput,
+				this.oceanProjections, this.fallbackOceanProjection
 			);
 		}
 	}
