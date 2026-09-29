@@ -31,11 +31,12 @@ public final class SurfaceFeatureRescue {
 	private static final int UNSCALED_RESCUE_THRESHOLD = 8;
 	private static final ConcurrentHashMap<PlacedFeature, SurfacePlacementClassifier.Classification> CLASSIFICATIONS = new ConcurrentHashMap<>();
 	private static final ThreadLocal<Deque<Frame>> ACTIVE_FEATURES = ThreadLocal.withInitial(ArrayDeque::new);
+	private static final Frame INACTIVE_FRAME = new Frame(null);
 
 	private SurfaceFeatureRescue() {
 	}
 
-	public static void begin(PlacedFeature feature, PlacementContext context) {
+	public static boolean begin(PlacedFeature feature, PlacementContext context) {
 		Run run = null;
 		if (DynamicHeightRangePlacement.isFtfOverworld(context)) {
 			SurfacePlacementClassifier.Classification classification = CLASSIFICATIONS.computeIfAbsent(
@@ -49,7 +50,12 @@ public final class SurfaceFeatureRescue {
 				}
 			}
 		}
-		ACTIVE_FEATURES.get().push(new Frame(run));
+		Deque<Frame> stack = ACTIVE_FEATURES.get();
+		if (run == null && stack.isEmpty()) {
+			return false;
+		}
+		stack.push(run == null ? INACTIVE_FRAME : new Frame(run));
+		return true;
 	}
 
 	public static void finish() {
@@ -58,9 +64,6 @@ public final class SurfaceFeatureRescue {
 			return;
 		}
 		stack.pop();
-		if (stack.isEmpty()) {
-			ACTIVE_FEATURES.remove();
-		}
 	}
 
 	public static void recordCount(CountPlacement placement, int count) {

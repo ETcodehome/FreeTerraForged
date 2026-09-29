@@ -168,6 +168,11 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         float x = rawX * this.frequency;
         float y = rawY * this.frequency;
 
+        return smoothVoronoiGradient(this.seed, this.jitter, x, y);
+    }
+
+    static float smoothVoronoiGradient(int seed, float jitter, float x, float y) {
+
         int xi = NoiseUtil.floor(x);
         int yi = NoiseUtil.floor(y);
 
@@ -180,10 +185,10 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         // Find the closest Voronoi cell seed
         for (int cy = yi - 1; cy <= yi + 1; ++cy) {
             for (int cx = xi - 1; cx <= xi + 1; ++cx) {
-                NoiseUtil.Vec2f vec = NoiseUtil.cell(this.seed, cx, cy);
-                float px = cx + vec.x() * this.jitter;
-                float py = cy + vec.y() * this.jitter;
-                float dist2 = Line.distSq(x, y, px, py);
+                NoiseUtil.Vec2f vec = NoiseUtil.cell(seed, cx, cy);
+                float px = cx + vec.x() * jitter;
+                float py = cy + vec.y() * jitter;
+                float dist2 = distanceSquared(x, y, px, py);
 
                 if (dist2 < nearestSq) {
                     nearestSq = dist2;
@@ -195,47 +200,42 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
             }
         }
 
-        // Collect the 8 immediate neighboring seeds
-        float[] neighborX = new float[8];
-        float[] neighborY = new float[8];
-        int nIndex = 0;
+        float s0Sq = cellPointX * cellPointX + cellPointY * cellPointY;
+        float minGradient = 1.0F;
+        // Process the same neighbors in the same order without allocating two arrays per sample.
         for (int cy2 = cellY - 1; cy2 <= cellY + 1; ++cy2) {
             for (int cx2 = cellX - 1; cx2 <= cellX + 1; ++cx2) {
                 if (cx2 != cellX || cy2 != cellY) {
-                    NoiseUtil.Vec2f vec2 = NoiseUtil.cell(this.seed, cx2, cy2);
-                    neighborX[nIndex] = cx2 + vec2.x() * this.jitter;
-                    neighborY[nIndex] = cy2 + vec2.y() * this.jitter;
-                    nIndex++;
-                }
-            }
-        }
+                    NoiseUtil.Vec2f vec2 = NoiseUtil.cell(seed, cx2, cy2);
+                    float px2 = cx2 + vec2.x() * jitter;
+                    float py2 = cy2 + vec2.y() * jitter;
+                    float dx = px2 - cellPointX;
+                    float dy = py2 - cellPointY;
+                    float lenSq = dx * dx + dy * dy;
 
-        float s0Sq = cellPointX * cellPointX + cellPointY * cellPointY;
+                    if (lenSq > 0.00001F) {
+                        float siSq = px2 * px2 + py2 * py2;
+                        float baseHalfDiff = 0.5F * (siSq - s0Sq);
+                        float h_x = baseHalfDiff - (x * dx + y * dy);
 
-        float minGradient = 1.0F;
-        for (int i = 0; i < 8; i++) {
-            float px2 = neighborX[i];
-            float py2 = neighborY[i];
-            float dx = px2 - cellPointX;
-            float dy = py2 - cellPointY;
-            float lenSq = dx * dx + dy * dy;
+                        // always evaluate to exactly 0.0 at the Voronoi border edge.
+                        float h_c = baseHalfDiff - (cellPointX * dx + cellPointY * dy);
 
-            if (lenSq > 0.00001F) {
-                float siSq = px2 * px2 + py2 * py2;
-                float baseHalfDiff = 0.5F * (siSq - s0Sq);
-                float h_x = baseHalfDiff - (x * dx + y * dy);
-
-                // Using the true centroid ensures the intersecting planes
-                // always evaluate to exactly 0.0 at the Voronoi border edge.
-                float h_c = baseHalfDiff - (cellPointX * dx + cellPointY * dy);
-
-                if (h_c > 0.00001F) {
-                    float planeValue = h_x / h_c;
-                    if (planeValue < minGradient) minGradient = planeValue;
+                        if (h_c > 0.00001F) {
+                            float planeValue = h_x / h_c;
+                            if (planeValue < minGradient) minGradient = planeValue;
+                        }
+                    }
                 }
             }
         }
         return NoiseUtil.clamp(minGradient, 0.0F, 1.0F);
+    }
+
+    private static float distanceSquared(float x1, float y1, float x2, float y2) {
+        float dx = x2 - x1;
+        float dy = y2 - y1;
+        return dx * dx + dy * dy;
     }
 
     @Override
