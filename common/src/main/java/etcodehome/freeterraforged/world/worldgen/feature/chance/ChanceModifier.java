@@ -9,7 +9,7 @@ import etcodehome.freeterraforged.registries.FTFBuiltInRegistries;
 import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
 
 public interface ChanceModifier {
-	public static final Codec<ChanceModifier> CODEC = FTFBuiltInRegistries.CHANCE_MODIFIER_TYPE.byNameCodec().dispatch(ChanceModifier::codec, Function.identity());
+	public static final Codec<ChanceModifier> CODEC = FTFBuiltInRegistries.CHANCE_MODIFIER_TYPE.byNameCodec().dispatch(ChanceModifier::codec, MapCodec::codec);
 	
 	float getChance(ChanceContext chanceCtx, FeaturePlaceContext<?> placeCtx);
 	

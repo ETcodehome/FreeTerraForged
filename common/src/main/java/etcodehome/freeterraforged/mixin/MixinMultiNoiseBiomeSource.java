@@ -127,24 +127,19 @@ public abstract class MixinMultiNoiseBiomeSource implements FTFMultiNoiseBiomeSo
     }
 
     @Inject(
-            method = "possibleBiomes",
+            method = "collectPossibleBiomes",
             at = @At("HEAD"),
             cancellable = true,
             require = 0
     )
-    private void ftf$bypassInlinePossibleBiomesCrash(CallbackInfoReturnable<java.util.Set<Holder<Biome>>> cir) {
+    private void ftf$bypassInlinePossibleBiomesCrash(CallbackInfoReturnable<java.util.stream.Stream<Holder<Biome>>> cir) {
         // Only intercept inline parameter lists (Either.left) used by preset previews.
         // Runtime worldgen sources (Either.right) are left untouched.
         if (this.parameters != null && this.parameters.left().isPresent()) {
             try {
                 Climate.ParameterList<Holder<Biome>> parameterList = this.freeterraforged$getParameters();
                 if (parameterList != null) {
-                    java.util.Set<Holder<Biome>> dynamicBiomes = parameterList.values().stream()
-                            .map(com.mojang.datafixers.util.Pair::getSecond)
-                            .map(holder -> (Holder<Biome>) holder)
-                            .collect(java.util.stream.Collectors.toUnmodifiableSet());
-
-                    cir.setReturnValue(dynamicBiomes);
+                    cir.setReturnValue(parameterList.values().stream().map(com.mojang.datafixers.util.Pair::getSecond));
                 }
             } catch (Exception ignored) {
                 // Fallback to default execution if uninitialized

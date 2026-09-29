@@ -5,7 +5,7 @@ import etcodehome.freeterraforged.world.worldgen.IFlowFieldHolder;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.chunk.ChunkAccess;
-import net.minecraft.world.level.chunk.status.ChunkStatus;
+import net.minecraft.world.level.chunk.ChunkStatus;
 
 public class FTFClientPayloadHandler {
 

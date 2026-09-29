@@ -13,7 +13,7 @@ public class FTFFloatProviderTypes {
 	}
 	
 	private static <T extends FloatProvider> FloatProviderType<T> register(String name, MapCodec<T> codec) {
-		FloatProviderType<T> type = () -> codec;
+		FloatProviderType<T> type = () -> codec.codec();
 		RegistryUtil.register(BuiltInRegistries.FLOAT_PROVIDER_TYPE, name, type);
 		return type;
 	}

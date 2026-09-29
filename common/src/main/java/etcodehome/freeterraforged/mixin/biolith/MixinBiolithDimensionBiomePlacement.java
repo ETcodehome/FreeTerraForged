@@ -1,7 +1,7 @@
 package etcodehome.freeterraforged.mixin.biolith;
 
 import com.mojang.datafixers.util.Pair;
-import com.terraformersmc.biolith.api.biome.BiolithFittestNodes;
+import com.terraformersmc.biolith.impl.biome.BiolithFittestNodes;
 import com.terraformersmc.biolith.impl.biome.DimensionBiomePlacement;
 import etcodehome.freeterraforged.compat.biolith.BiolithPreviewContext;
 import net.minecraft.core.BlockPos;

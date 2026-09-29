@@ -9,7 +9,7 @@ import etcodehome.freeterraforged.world.worldgen.structure.rule.StructureRule;
 import net.minecraft.core.*;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.data.worldgen.BootstrapContext;
+import net.minecraft.data.worldgen.BootstapContext;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.RegistryDataLoader;
 
@@ -58,25 +58,25 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 	}
 
 	public HolderLookup.Provider buildPatch(HolderLookup.Provider registries) {
-		return this.buildPatchedRegistries(registries).patches();
+		return this.buildPatchedRegistries(registries);
 	}
 
 	public HolderLookup.Provider buildFullPatch(RegistryAccess registries) {
-		return materialize(this.buildPatchedRegistries(registries).full());
+		return materialize(this.buildPatchedRegistries(registries));
 	}
 
 	private static final Set<String> PREVIEW_NAMESPACES = Set.of("minecraft", "freeterraforged");
 
 	private static HolderLookup.Provider materialize(HolderLookup.Provider provider) {
-		provider.listRegistries()
-			.filter(PREVIEW_REGISTRIES::contains)
-			.forEach(key -> provider.lookupOrThrow(key).listElements()
+		PREVIEW_REGISTRIES.forEach(key -> provider.lookup(key).ifPresent(lookup ->
+			lookup.listElements()
 				.filter(holder -> PREVIEW_NAMESPACES.contains(holder.key().location().getNamespace()))
-				.forEach(holder -> holder.value()));
+				.forEach(holder -> holder.value())
+		));
 		return provider;
 	}
 
-	private RegistrySetBuilder.PatchedRegistries buildPatchedRegistries(HolderLookup.Provider registries) {
+	private HolderLookup.Provider buildPatchedRegistries(HolderLookup.Provider registries) {
 		RegistrySetBuilder builder = new RegistrySetBuilder();
 
 		// 1. Setup Patches
@@ -93,62 +93,10 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 		});
 		this.addPatch(builder, Registries.NOISE_SETTINGS, PresetNoiseGeneratorSettings::bootstrap);
 
-		// 2. Initialize Cloner and Gatekeeper tracking
-		Cloner.Factory factory = new Cloner.Factory();
-		Set<ResourceKey<? extends Registry<?>>> armedRegistries = new HashSet<>();
-
-		// 3. Process Vanilla Worldgen Registries
-		RegistryDataLoader.WORLDGEN_REGISTRIES.forEach(registryData -> {
-			ResourceKey<? extends Registry<?>> key = registryData.key();
-			// Only arm registries from known safe namespaces to be extra cautious
-			String namespace = key.location().getNamespace();
-
-			if (namespace.equals("minecraft") || namespace.equals("freeterraforged")) {
-				registryData.runWithArguments(factory::addCodec);
-				armedRegistries.add(key);
-			}
-		});
-
-		armedRegistries.add(Registries.STRUCTURE_SET);
-
-		// 4. Arm Custom FTF Registries
-		this.addAndTrack(factory, armedRegistries, FTFRegistries.NOISE, Noise.DIRECT_CODEC);
-		this.addAndTrack(factory, armedRegistries, FTFRegistries.BIOME_MODIFIER, BiomeModifier.DIRECT_CODEC);
-		this.addAndTrack(factory, armedRegistries, FTFRegistries.STRUCTURE_RULE, StructureRule.DIRECT_CODEC);
-		this.addAndTrack(factory, armedRegistries, FTFRegistries.PRESET, Preset.DIRECT_CODEC);
-
-		// 5. Wrap registries in a safety shield
-		// This ensures the cloner only sees registries we explicitly gave it a codec for.
-		// Unarmed registries (like mixed_litter) will be ignored safely.
-		HolderLookup.Provider safeSource = this.filterToArmedOnly(registries, armedRegistries);
-
 		return builder.buildPatch(
 				RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY),
-				safeSource,
-				factory
+				registries
 		);
-	}
-
-	/**
-	 * Adds a codec to the factory and records the registry key so the filter knows it's safe to process.
-	 */
-	private <T> void addAndTrack(Cloner.Factory factory, Set<ResourceKey<? extends Registry<?>>> set, ResourceKey<? extends Registry<T>> key, Codec<T> codec) {
-		factory.addCodec(key, codec);
-		set.add(key);
-	}
-
-	private HolderLookup.Provider filterToArmedOnly(HolderLookup.Provider original, Set<ResourceKey<? extends Registry<?>>> armed) {
-		return new HolderLookup.Provider() {
-			@Override
-			public <T> Optional<HolderLookup.RegistryLookup<T>> lookup(ResourceKey<? extends Registry<? extends T>> key) {
-				return armed.contains(key) ? original.lookup(key) : Optional.empty();
-			}
-
-			@Override
-			public Stream<ResourceKey<? extends Registry<?>>> listRegistries() {
-				return original.listRegistries().filter(armed::contains);
-			}
-		};
 	}
 
 	private <T> void addPatch(RegistrySetBuilder builder, ResourceKey<? extends Registry<T>> key, Patch<T> patch) {
@@ -156,6 +104,6 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 	}
 
 	private interface Patch<T> {
-		void apply(Preset preset, BootstrapContext<T> ctx);
+		void apply(Preset preset, net.minecraft.data.worldgen.BootstapContext<T> ctx);
 	}
 }

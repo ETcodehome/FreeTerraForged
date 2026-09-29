@@ -13,7 +13,7 @@ public class FTFHeightProviderTypes {
 	}
 	
 	private static <T extends HeightProvider> HeightProviderType<T> register(String name, MapCodec<T> codec) {
-		HeightProviderType<T> type = () -> codec;
+		HeightProviderType<T> type = () -> codec.codec();
 		RegistryUtil.register(BuiltInRegistries.HEIGHT_PROVIDER_TYPE, name, type);
 		return type;
 	}

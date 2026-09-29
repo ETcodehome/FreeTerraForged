@@ -81,7 +81,8 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 	@Inject(
 		at = @At("HEAD"),
 		method = "initializeForTerraBlender",
-		require = 1
+		require = 1,
+		remap = false
 	)
 	public void initializeForTerraBlender(RegistryAccess registryAccess, RegionType regionType, long seed, CallbackInfo callback) {
 		this.maxIndex = Regions.getCount(regionType) - 1;
@@ -135,10 +136,12 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 			method = "initializeForTerraBlender",
 			at = @At(
 					value = "INVOKE",
-					target = "Lnet/minecraft/world/level/biome/Climate$RTree;create(Ljava/util/List;)Lnet/minecraft/world/level/biome/Climate$RTree;"
+					target = "Lnet/minecraft/world/level/biome/Climate$RTree;create(Ljava/util/List;)Lnet/minecraft/world/level/biome/Climate$RTree;",
+					remap = true
 			),
 			index = 0,
-			require = 1
+			require = 1,
+			remap = false
 	)
 	private List<Pair<Climate.ParameterPoint, T>> freeterraforged$captureRegionalEntries(
 			List<Pair<Climate.ParameterPoint, T>> entries
@@ -153,7 +156,8 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 	@Inject(
 		method = "initializeForTerraBlender",
 		at = @At("RETURN"),
-		require = 1
+		require = 1,
+		remap = false
 	)
 	private void freeterraforged$indexRegionalEntries(
 		RegistryAccess registryAccess,
@@ -200,7 +204,8 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 		method = "findValuePositional",
 		at = @At("HEAD"),
 		cancellable = true,
-		require = 1
+		require = 1,
+		remap = false
 	)
 	private void freeterraforged$selectComposedBiome(
 		Climate.TargetPoint targetPoint,
@@ -289,7 +294,7 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 		}
 		T originalValue = original.findValue(targetPoint);
 		if (freeterraforged$isDeferredPlaceholder(originalValue)) {
-			Climate.ParameterList<T> defaultTree = surfaceTrees.getFirst();
+			Climate.ParameterList<T> defaultTree = surfaceTrees.get(0);
 			if (defaultTree == null) {
 				return null;
 			}
@@ -354,7 +359,7 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 
 		T originalValue = original.findValue(targetPoint);
 		if (freeterraforged$isDeferredPlaceholder(originalValue)) {
-			Climate.ParameterList<T> defaultTree = surfaceTrees.getFirst();
+			Climate.ParameterList<T> defaultTree = surfaceTrees.get(0);
 			if (defaultTree == null) {
 				return new TerraBlenderParameterList.SelectionDiagnostics<>(treeIndex, null, null, "missing_default_index");
 			}
@@ -417,14 +422,14 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 			: this.freeterraforged$compositionFallbackReason;
 	}
 
-	@Inject(method = "getTree", at = @At("HEAD"), require = 1)
+	@Inject(method = "getTree", at = @At("HEAD"), require = 1, remap = false)
 	private void freeterraforged$composeBeforeTreeLookup(int uniqueness, CallbackInfoReturnable<Climate.RTree<T>> callback) {
 		if (this.freeterraforged$bandingInitialized) {
 			this.freeterraforged$ensureComposedTrees();
 		}
 	}
 
-	@Inject(method = "getUniqueness", at = @At("HEAD"), cancellable = true, require = 1)
+	@Inject(method = "getUniqueness", at = @At("HEAD"), cancellable = true, require = 1, remap = false)
 	private void freeterraforged$skipRedundantUniqueness(int x, int y, int z, CallbackInfoReturnable<Integer> callback) {
 		if (this.maxIndex <= 0) {
 			callback.setReturnValue(0);
@@ -572,9 +577,11 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 		method = "findValuePositional",
 		at = @At(
 			value = "INVOKE",
-			target = "Lnet/minecraft/world/level/biome/Climate$ParameterList;getUniqueness(III)I"
+			target = "Lnet/minecraft/world/level/biome/Climate$ParameterList;getUniqueness(III)I",
+			remap = false
 		),
-		require = 0
+		require = 0,
+		remap = false
 	)
 	public int getUniqueness(Climate.ParameterList<T> parameterList, int x, int y, int z, Climate.TargetPoint targetPoint) {
 		return this.freeterraforged$getUniqueness(targetPoint, x, y, z);
@@ -592,12 +599,12 @@ class MixinParameterList<T> implements TerraBlenderParameterList<T> {
 		return this.freeterraforged$bandingInitialized;
 	}
 
-	@Shadow
+	@Shadow(remap = false)
 	public int getTreeCount() {
 		throw new UnsupportedOperationException();
 	}
 
-	@Shadow
+	@Shadow(remap = false)
 	public int getUniqueness(int x, int y, int z) {
 		throw new UnsupportedOperationException();
 	}

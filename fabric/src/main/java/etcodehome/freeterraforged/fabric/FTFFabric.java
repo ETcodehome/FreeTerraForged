@@ -12,7 +12,6 @@ import net.minecraft.network.chat.Component;
 import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.client.data.FTFLanguageProvider;
 import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
-import etcodehome.freeterraforged.fabric.network.FTFFabricNetworking;
 import etcodehome.freeterraforged.fabric.compat.FabricBiomePreviewIntegrations;
 import etcodehome.freeterraforged.platform.RegistryUtil;
 
@@ -22,9 +21,6 @@ public class FTFFabric implements ModInitializer, DataGeneratorEntrypoint {
 	public void onInitialize() {
 		FTFCommon.bootstrap();
 		FabricBiomePreviewIntegrations.bootstrap();
-		FTFFabricNetworking.init();
-
-		RegistryUtil.createDataRegistry(FTFRegistries.BIOME_MODIFIER, BiomeModifier.DIRECT_CODEC, false);
 	}
 
 	@Override

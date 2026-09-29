@@ -39,13 +39,9 @@ import net.minecraft.world.level.levelgen.structure.BuiltinStructures;
 import net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.pieces.StructurePiecesBuilder;
-import net.minecraft.world.level.levelgen.structure.pools.DimensionPadding;
 import net.minecraft.world.level.levelgen.structure.pools.JigsawPlacement;
 import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
-import net.minecraft.world.level.levelgen.structure.pools.alias.PoolAliasBinding;
-import net.minecraft.world.level.levelgen.structure.pools.alias.PoolAliasLookup;
 import net.minecraft.world.level.levelgen.structure.structures.JigsawStructure;
-import net.minecraft.world.level.levelgen.structure.templatesystem.LiquidSettings;
 
 @Mixin(JigsawStructure.class)
 public class MixinJigsawStructure {
@@ -94,22 +90,12 @@ public class MixinJigsawStructure {
 	@Shadow
 	@Final
 	private int maxDistanceFromCenter;
-	@Shadow
-	@Final
-	private List<PoolAliasBinding> poolAliases;
-	@Shadow
-	@Final
-	private DimensionPadding dimensionPadding;
-	@Shadow
-	@Final
-	private LiquidSettings liquidSettings;
 
 	@Inject(method = "findGenerationPoint", at = @At("HEAD"), cancellable = true)
 	private void ftf$correctOrSkip(Structure.GenerationContext generationContext, CallbackInfoReturnable<Optional<Structure.GenerationStub>> cir) {
 		if (this.ftf$targetStatus == ftf$TARGET_UNCHECKED) {
 			Structure self = (Structure) (Object) this;
 			var registry = generationContext.registryAccess().registryOrThrow(Registries.STRUCTURE);
-			Structure trialChambers = registry.get(BuiltinStructures.TRIAL_CHAMBERS);
 			Structure ancientCity = registry.get(BuiltinStructures.ANCIENT_CITY);
 			Structure trailRuins = registry.get(BuiltinStructures.TRAIL_RUINS);
 
@@ -118,7 +104,7 @@ public class MixinJigsawStructure {
 					.map(holder -> holder.is(StructureTags.VILLAGE))
 					.orElse(false);
 
-			if (self == trialChambers || self == ancientCity) {
+			if (self == ancientCity) {
 				this.ftf$targetStatus = ftf$TARGET_SUBTERRANEAN;
 			} else if (isVillage) {
 				this.ftf$targetStatus = ftf$TARGET_VILLAGE;
@@ -171,9 +157,7 @@ public class MixinJigsawStructure {
 
 			Optional<Structure.GenerationStub> result = JigsawPlacement.addPieces(
 				generationContext, this.startPool, this.startJigsawName, this.maxDepth, placementPos,
-				this.useExpansionHack, this.projectStartToHeightmap, this.maxDistanceFromCenter,
-				PoolAliasLookup.create(this.poolAliases, placementPos, generationContext.seed()),
-				this.dimensionPadding, this.liquidSettings
+				this.useExpansionHack, this.projectStartToHeightmap, this.maxDistanceFromCenter
 			);
 			if (result.isEmpty()) {
 				continue;
@@ -312,9 +296,7 @@ public class MixinJigsawStructure {
 
 			Optional<Structure.GenerationStub> result = JigsawPlacement.addPieces(
 					generationContext, this.startPool, this.startJigsawName, this.maxDepth, placementPos, this.useExpansionHack,
-					this.projectStartToHeightmap, this.maxDistanceFromCenter,
-					PoolAliasLookup.create(this.poolAliases, placementPos, generationContext.seed()),
-					this.dimensionPadding, this.liquidSettings
+					this.projectStartToHeightmap, this.maxDistanceFromCenter
 			);
 
 			if (result.isEmpty()) {
@@ -351,7 +333,7 @@ public class MixinJigsawStructure {
 		FloorRange floorRange = ftf$sampleFloorRange(generationContext, originX, originZ);
 
 		int naiveTarget = Math.min(sampledY, floorRange.worst() - ftf$MARGIN);
-		int minWorldY = generationContext.heightAccessor().getMinBuildHeight() + this.dimensionPadding.bottom() + ftf$BOUNDARY_TOLERANCE;
+		int minWorldY = generationContext.heightAccessor().getMinBuildHeight() + ftf$BOUNDARY_TOLERANCE;
 		int maxLocalY = floorRange.best() - ftf$MARGIN;
 
 		int target = naiveTarget;
@@ -376,9 +358,7 @@ public class MixinJigsawStructure {
 
 		Optional<Structure.GenerationStub> result = JigsawPlacement.addPieces(
 				generationContext, this.startPool, this.startJigsawName, this.maxDepth, blockPos, this.useExpansionHack,
-				this.projectStartToHeightmap, this.maxDistanceFromCenter,
-				PoolAliasLookup.create(this.poolAliases, blockPos, generationContext.seed()),
-				this.dimensionPadding, this.liquidSettings
+				this.projectStartToHeightmap, this.maxDistanceFromCenter
 		);
 		if (result.isEmpty()) {
 			cir.setReturnValue(result);

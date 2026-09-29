@@ -65,13 +65,13 @@ public class DataGenUtilImpl {
 							if (l instanceof MixinRegistrySetBuilder$EmptyTagLookup<?> e) {
 								return new RegistryOps.RegistryInfo(e.getOwner(), l, l.registryLifecycle());
 							} else {
-								return RegistryOps.RegistryInfo.fromRegistryLookup(l);
+								return new RegistryOps.RegistryInfo(l, l, l.registryLifecycle());
 							}
 						});
 					}
 				}
 	            RegistryOps<JsonElement> ops = RegistryOps.create(JsonOps.INSTANCE, new HolderLookupAdapterButWithCursedPatchForOwnerJuggling(provider));
-	            return CompletableFuture.allOf(DynamicRegistries.getDynamicRegistries().stream().flatMap(arg3 -> this.dumpRegistryCap(arg, provider, ops, arg3).stream()).toArray(CompletableFuture[]::new));
+	            return CompletableFuture.allOf(etcodehome.freeterraforged.platform.RegistryUtil.getDynamicRegistriesWithDimensions().stream().flatMap(arg3 -> this.dumpRegistryCap(arg, provider, ops, arg3).stream()).toArray(CompletableFuture[]::new));
 	        });
 	    }
 

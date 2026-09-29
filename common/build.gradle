@@ -1,5 +1,5 @@
 architectury {
-    common("fabric", "neoforge")
+    common("fabric", "forge")
 }
 
 loom {
@@ -8,11 +8,13 @@ loom {
 
 dependencies {
     modImplementation "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}"
-    modImplementation "com.github.glitchfiend:TerraBlender-neoforge:${rootProject.minecraft_version}-${rootProject.terrablender_version}"
-	compileOnly "com.electronwill.night-config:toml:3.6.7"
-	modCompileOnly "maven.modrinth:biolith:3.0.14-neoforge"
+    compileOnly "com.github.glitchfiend:TerraBlender-forge:${rootProject.minecraft_version}-${rootProject.terrablender_version}"
+    compileOnly "com.electronwill.night-config:toml:3.6.7"
+    modCompileOnly "maven.modrinth:biolith:1.0.1-beta.1-forge"
+    compileOnly "io.github.llamalad7:mixinextras-common:0.4.1"
+    annotationProcessor "io.github.llamalad7:mixinextras-common:0.4.1"
     modApi "dev.architectury:architectury:${rootProject.architectury_version}"
-	testImplementation "org.junit.jupiter:junit-jupiter:5.11.4"
+    testImplementation "org.junit.jupiter:junit-jupiter:5.11.4"
 }
 
 repositories {
@@ -20,7 +22,7 @@ repositories {
 }
 
 test {
-	useJUnitPlatform()
+    useJUnitPlatform()
 }
 
 remapJar {

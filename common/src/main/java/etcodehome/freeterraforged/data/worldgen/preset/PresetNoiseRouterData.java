@@ -9,7 +9,7 @@ import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.FTFDensityFunctions;
 import net.minecraft.core.HolderGetter;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.data.worldgen.BootstrapContext;
+import net.minecraft.data.worldgen.BootstapContext;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.dimension.DimensionType;
@@ -37,7 +37,7 @@ public class PresetNoiseRouterData {
 	private static final double UNDERGROUND_CLIMATE_DEPTH = 0.125D;
 	private static final double UNDERGROUND_EROSION_VARIATION = 0.25D;
 	
-    public static void bootstrap(Preset preset, BootstrapContext<DensityFunction> ctx) {
+    public static void bootstrap(Preset preset, BootstapContext<DensityFunction> ctx) {
         HolderGetter<DensityFunction> densityFunctions = ctx.lookup(Registries.DENSITY_FUNCTION);
         HolderGetter<NormalNoise.NoiseParameters> noiseParams = ctx.lookup(Registries.NOISE);
         
@@ -240,6 +240,6 @@ public class PresetNoiseRouterData {
     }
 
     private static ResourceKey<DensityFunction> createMinecraftKey(String string) {
-        return ResourceKey.create(Registries.DENSITY_FUNCTION, ResourceLocation.withDefaultNamespace(string));
+        return ResourceKey.create(Registries.DENSITY_FUNCTION, new ResourceLocation(string));
     }
 }

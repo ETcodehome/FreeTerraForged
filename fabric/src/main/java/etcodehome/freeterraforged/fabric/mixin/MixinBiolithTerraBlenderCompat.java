@@ -2,7 +2,7 @@ package etcodehome.freeterraforged.fabric.mixin;
 
 import java.util.Objects;
 
-import com.terraformersmc.biolith.api.biome.BiolithFittestNodes;
+import com.terraformersmc.biolith.impl.biome.BiolithFittestNodes;
 import net.minecraft.core.Holder;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Climate;

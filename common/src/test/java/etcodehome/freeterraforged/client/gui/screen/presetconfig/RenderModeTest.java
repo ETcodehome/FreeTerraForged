@@ -13,7 +13,7 @@ class RenderModeTest {
     void deepOceanShadingDarkensBlueWithoutColorUnderflow() {
         Levels levels = new Levels(256, 256, 64, 63);
         Cell cell = new Cell();
-        int base = BiomePreviewColors.color(ResourceLocation.withDefaultNamespace("deep_ocean"));
+        int base = BiomePreviewColors.color(new ResourceLocation("deep_ocean"));
 
         cell.height = levels.water;
         int surfaceColor = RenderMode.BIOME.getColor(cell, levels, base);

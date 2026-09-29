@@ -31,7 +31,6 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.gui.components.toasts.SystemToast.SystemToastId;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
@@ -39,6 +38,7 @@ import net.minecraft.util.GsonHelper;
 import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
 import etcodehome.freeterraforged.client.gui.Toasts;
+import net.minecraft.client.gui.components.toasts.SystemToast.SystemToastIds;
 import etcodehome.freeterraforged.client.gui.screen.page.BisectedPage;
 import etcodehome.freeterraforged.client.gui.screen.page.LinkedPageScreen.Page;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.FlowSettings;
@@ -147,7 +147,7 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 					Toasts.notify(
 							FTFTranslationKeys.GUI_SELECT_PRESET_TITLE,
 							Component.translatable(FTFTranslationKeys.GUI_TOAST_PRESET_RENAMED, newName),
-							SystemToastId.WORLD_BACKUP
+							SystemToastIds.WORLD_BACKUP
 					);
 				}
 			}
@@ -213,7 +213,7 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 				Path path = EXPORT_PATH.resolve(preset.getRawName() + ".zip");
 				this.screen.exportAsDatapack(path, preset);
 				this.rebuildPresets();
-				Toasts.notify(FTFTranslationKeys.GUI_BUTTON_EXPORT_SUCCESS, Component.literal(path.toString()), SystemToastId.WORLD_BACKUP);
+				Toasts.notify(FTFTranslationKeys.GUI_BUTTON_EXPORT_SUCCESS, Component.literal(path.toString()), SystemToastIds.WORLD_BACKUP);
 			}
 		});
 
@@ -265,7 +265,7 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 					Toasts.notify(
 							FTFTranslationKeys.GUI_SELECT_PRESET_TITLE,
 							Component.translatable(FTFTranslationKeys.GUI_TOAST_PRESET_CREATED, presetName),
-							SystemToastId.WORLD_BACKUP
+							SystemToastIds.WORLD_BACKUP
 					);
 				} catch (IOException e) {
 					FTFCommon.LOGGER.error("Failed to auto-create preset from template", e);
@@ -547,7 +547,7 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWidget, Ab
 			this.text = text;
 			int wrapWidth = Math.max(10, this.getWidth() - 8);
 			List<FormattedCharSequence> lines = this.font.split(this.text, wrapWidth);
-			this.setHeight(Math.max(24, lines.size() * 10 + 6));
+			this.height = Math.max(24, lines.size() * 10 + 6);
 		}
 
 		@Override

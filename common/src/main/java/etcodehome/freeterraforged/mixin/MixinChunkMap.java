@@ -24,18 +24,31 @@ import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 import net.minecraft.world.level.storage.DimensionDataStorage;
 import net.minecraft.world.level.storage.LevelStorageSource;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
+import org.apache.commons.lang3.mutable.MutableObject;
+import etcodehome.freeterraforged.network.FlowFieldSync;
+import etcodehome.freeterraforged.world.worldgen.ChunkFlowField;
+import etcodehome.freeterraforged.world.worldgen.IFlowFieldHolder;
+
+import org.spongepowered.asm.mixin.injection.Redirect;
 
 @Mixin(ChunkMap.class)
 public class MixinChunkMap {
 	@Shadow
     private RandomState randomState;
 
-	@Inject(
-			at = @At("HEAD"),
-			method = "<init>"
+	@Redirect(
+			method = "<init>",
+			at = @At(
+					value = "INVOKE",
+					target = "Lnet/minecraft/server/level/ServerLevel;getSeed()J"
 			)
-	private static void beforeChunkMapInit(ServerLevel serverLevel, LevelStorageSource.LevelStorageAccess storageAccess, DataFixer dataFixer, StructureTemplateManager templateLoader, Executor executor, BlockableEventLoop<Runnable> eventLoop, LightChunkGetter lightChunkGetter, ChunkGenerator chunkGenerator, ChunkProgressListener chunkProgressListener, ChunkStatusUpdateListener chunkStatusListener, Supplier<DimensionDataStorage> dimensionStorage, int viewDistance, boolean syncChunkWrites, CallbackInfo callback) {
+	)
+	private long beforeChunkMapInit(ServerLevel serverLevel) {
 		FTFWorldGenContext.IS_VANILLA_OVERWORLD.set(serverLevel.dimension() == Level.OVERWORLD);
+		return serverLevel.getSeed();
 	}
 
 	@Inject(
@@ -47,5 +60,18 @@ public class MixinChunkMap {
 			ftfRandomState.initialize(serverLevel.registryAccess());
 		}
 		FTFWorldGenContext.IS_VANILLA_OVERWORLD.remove();
+	}
+
+	@Inject(
+		at = @At("TAIL"),
+		method = "playerLoadedChunk"
+	)
+	private void onPlayerLoadedChunk(ServerPlayer player, MutableObject<ClientboundLevelChunkWithLightPacket> packetCache, LevelChunk chunk, CallbackInfo ci) {
+		if (chunk instanceof IFlowFieldHolder holder) {
+			ChunkFlowField flowField = holder.freeterraforged$getFlowField();
+			if (flowField != null && flowField.hasRivers()) {
+				FlowFieldSync.sendToPlayer(player, chunk.getPos(), flowField.getRawGrid());
+			}
+		}
 	}
 }

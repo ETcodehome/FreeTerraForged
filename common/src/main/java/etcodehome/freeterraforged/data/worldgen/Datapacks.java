@@ -12,7 +12,6 @@ import etcodehome.freeterraforged.registries.FTFRegistries;
 import etcodehome.freeterraforged.world.worldgen.biome.modifier.BiomeModifier;
 import etcodehome.freeterraforged.world.worldgen.feature.FTFFeatures;
 import etcodehome.freeterraforged.world.worldgen.structure.rule.StructureRule;
-import net.minecraft.core.Cloner;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.RegistryAccess;
@@ -41,13 +40,7 @@ public class Datapacks {
 			builder.add(Registries.CONFIGURED_FEATURE, (ctx) -> {
 				FeatureUtils.register(ctx, PresetConfiguredFeatures.SWAMP_SURFACE, FTFFeatures.SWAMP_SURFACE, new SwampSurfaceFeature.Config(Blocks.CLAY.defaultBlockState(), Blocks.GRAVEL.defaultBlockState(), Blocks.MUD.defaultBlockState()));
 			});
-			Cloner.Factory factory = new Cloner.Factory();
-			RegistryDataLoader.WORLDGEN_REGISTRIES.forEach(registryData -> registryData.runWithArguments(factory::addCodec));
-			factory.addCodec(FTFRegistries.NOISE, Noise.DIRECT_CODEC);
-			factory.addCodec(FTFRegistries.BIOME_MODIFIER, BiomeModifier.DIRECT_CODEC);
-			factory.addCodec(FTFRegistries.STRUCTURE_RULE, StructureRule.DIRECT_CODEC);
-			factory.addCodec(FTFRegistries.PRESET, Preset.DIRECT_CODEC);
-			return builder.buildPatch(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), registryAccess,factory).patches();
+			return builder.buildPatch(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), registryAccess);
 		});
 		packGenerator.addProvider((output) -> {
 			return DataGenUtil.createRegistryProvider(output, lookup);

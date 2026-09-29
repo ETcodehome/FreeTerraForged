@@ -1,5 +1,6 @@
 package etcodehome.freeterraforged.mixin;
 
+import java.util.concurrent.Executor;
 import java.util.function.Function;
 
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
@@ -89,13 +90,13 @@ abstract class MixinNoiseBasedChunkGenerator extends ChunkGenerator {
 	}
 
 	@Redirect(
-			method = { "fillFromNoise", "populateNoise" },
+			method = "fillFromNoise",
 			at = @At(
 					value = "INVOKE",
 					target = "Lnet/minecraft/world/level/levelgen/NoiseSettings;height()I"
 			)
 	)
-    public int fillFromNoise(NoiseSettings settings, Blender blender, RandomState randomState, StructureManager structureManager, ChunkAccess chunk) {
+    public int fillFromNoise(NoiseSettings settings, Executor executor, Blender blender, RandomState randomState, StructureManager structureManager, ChunkAccess chunk) {
 
 		FTFRandomState ftfRandomState = (FTFRandomState) (Object) randomState;
 		if (ftfRandomState.generatorContext() == null) {

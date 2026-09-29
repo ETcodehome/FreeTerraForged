@@ -17,7 +17,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderGetter;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.data.worldgen.BootstrapContext;
+import net.minecraft.data.worldgen.BootstapContext;
 import net.minecraft.data.worldgen.features.FeatureUtils;
 import net.minecraft.data.worldgen.features.MiscOverworldFeatures;
 import net.minecraft.data.worldgen.placement.PlacementUtils;
@@ -105,7 +105,7 @@ public class PresetConfiguredFeatures {
 	public static final ResourceKey<ConfiguredFeature<?, ?>> JUNGLE_EDGE_TREES = createKey("jungle_edge_trees");
 	public static final ResourceKey<ConfiguredFeature<?, ?>> RIVER_GASKET = createKey("river_gasket");
 	
-	public static void bootstrap(Preset preset, BootstrapContext<ConfiguredFeature<?, ?>> ctx) {
+	public static void bootstrap(Preset preset, BootstapContext<ConfiguredFeature<?, ?>> ctx) {
 		MiscellaneousSettings miscellaneous = preset.miscellaneous();
 		SurfaceSettings surface = preset.surface();
 		SurfaceSettings.Erosion erosion = surface.erosion();
@@ -256,9 +256,9 @@ public class PresetConfiguredFeatures {
 				makeWeighted(0.4F, jungleBush)
 			)));
 			FeatureUtils.register(ctx, FOREST_GRASS, Feature.RANDOM_SELECTOR, makeRandom(
-				makeInlined(Feature.RANDOM_PATCH, makePatch(Blocks.SHORT_GRASS, 48)),
+				makeInlined(Feature.RANDOM_PATCH, makePatch(Blocks.GRASS, 48)),
 				List.of(
-					makeWeighted(0.5F, makeInlined(Feature.RANDOM_PATCH, makePatch(Blocks.SHORT_GRASS, 56))),
+					makeWeighted(0.5F, makeInlined(Feature.RANDOM_PATCH, makePatch(Blocks.GRASS, 56))),
 					makeWeighted(0.4F, makeInlined(Feature.RANDOM_PATCH, makePatch(Blocks.TALL_GRASS, 56))),
 					makeWeighted(0.2F, makeInlined(Feature.RANDOM_PATCH, makePatch(Blocks.LARGE_FERN, 48))),
 					makeWeighted(0.2F, makeInlined(Feature.RANDOM_PATCH, makePatch(Blocks.FERN, 24)))

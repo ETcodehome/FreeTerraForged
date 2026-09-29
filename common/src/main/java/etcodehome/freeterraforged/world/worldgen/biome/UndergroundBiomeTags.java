@@ -25,6 +25,6 @@ public final class UndergroundBiomeTags {
 	}
 
 	private static TagKey<Biome> common(String path) {
-		return TagKey.create(Registries.BIOME, ResourceLocation.fromNamespaceAndPath("c", path));
+		return TagKey.create(Registries.BIOME, new ResourceLocation("c", path));
 	}
 }

@@ -35,7 +35,7 @@ public class MixinOceanMonumentStructure {
 			return;
 		}
 
-		StructurePiece piece = pieces.getLast();
+		StructurePiece piece = pieces.get(pieces.size() - 1);
 		if (piece instanceof OceanMonumentBuildingFix monumentBuilding && !monumentBuilding.ftf$isOceanDepthAdjusted()) {
 			BoundingBox box = piece.getBoundingBox();
 			int targetMinY = ftf$sampleHighestOceanFloor(context, box);
@@ -63,8 +63,8 @@ public class MixinOceanMonumentStructure {
 			return;
 		}
 
-		StructurePiece originalPiece = originalPieces.pieces().getFirst();
-		StructurePiece regeneratedPiece = regeneratedPieces.pieces().getFirst();
+		StructurePiece originalPiece = originalPieces.pieces().get(0);
+		StructurePiece regeneratedPiece = regeneratedPieces.pieces().get(0);
 		int dy = originalPiece.getBoundingBox().minY() - regeneratedPiece.getBoundingBox().minY();
 		if (dy != 0 && regeneratedPiece instanceof OceanMonumentBuildingFix monumentBuilding) {
 			monumentBuilding.ftf$moveBuilding(dy);

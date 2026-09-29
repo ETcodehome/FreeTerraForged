@@ -157,11 +157,13 @@ public class FlowFieldDebugRenderer {
         float len = (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
         if (len > 0) { nx /= len; ny /= len; nz /= len; }
 
-        buffer.addVertex(pose, x1, y1, z1)
-                .setColor(r, g, b, a)
-                .setNormal(pose, nx, ny, nz);
-        buffer.addVertex(pose, x2, y1, z2)
-                .setColor(r, g, b, a)
-                .setNormal(pose, nx, ny, nz);
+        buffer.vertex(pose.pose(), x1, y1, z1)
+                .color(r, g, b, a)
+                .normal(pose.normal(), nx, ny, nz)
+                .endVertex();
+        buffer.vertex(pose.pose(), x2, y1, z2)
+                .color(r, g, b, a)
+                .normal(pose.normal(), nx, ny, nz)
+                .endVertex();
     }
 }

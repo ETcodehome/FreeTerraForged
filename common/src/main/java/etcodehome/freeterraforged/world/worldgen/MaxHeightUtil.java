@@ -31,7 +31,7 @@ public class MaxHeightUtil {
 	
 	public static int getMaxHeight(ChunkPos chunkPos, int maxHeight, NoiseGeneratorSettings generatorSettings, NoiseSettings noiseSettings, StructureManager structureManager) {
 		int dynamicHeight = getMaxHeight(chunkPos.x, chunkPos.z, maxHeight, generatorSettings, noiseSettings);
-		dynamicHeight = Math.clamp(getHighestStructureY(chunkPos, noiseSettings, structureManager), dynamicHeight, noiseSettings.height());
+		dynamicHeight = net.minecraft.util.Mth.clamp(getHighestStructureY(chunkPos, noiseSettings, structureManager), dynamicHeight, noiseSettings.height());
 		return dynamicHeight;
 	}
 	
@@ -40,7 +40,7 @@ public class MaxHeightUtil {
 		if(beardifierOrMarker instanceof BeardifierAccessor accessor) {
 			ObjectListIterator<Beardifier.Rigid> pieceIterator = accessor.getPieceIterator();
 			ObjectListIterator<JigsawJunction> junctionIterator = accessor.getJunctionIterator();
-			dynamicHeight = Math.clamp(getHighestStructureY(noiseSettings, pieceIterator, junctionIterator), dynamicHeight, noiseSettings.height());
+			dynamicHeight = net.minecraft.util.Mth.clamp(getHighestStructureY(noiseSettings, pieceIterator, junctionIterator), dynamicHeight, noiseSettings.height());
 		}
 		return dynamicHeight;
 	}

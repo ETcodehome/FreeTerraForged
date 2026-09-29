@@ -29,18 +29,23 @@
       "etcodehome.freeterraforged.fabric.FTFFabric"
     ]
   },
+  "accessWidener": "freeterraforged.accesswidener",
   "depends": {
     "fabricloader": ">=0.14.14",
-    "fabric": ">=0.86.1",
-    "minecraft": ">=1.21.1"
+    "fabric": "*",
+    "minecraft": "~1.20.1",
+    "architectury": "*"
+  },
+  "suggests": {
+    "terrablender": "*",
+    "biolith": "*"
   },
   "breaks": {
-    "biolith": "<3.0.14",
     "reterraforged": "*"
   },
   "mixins": [
     "freeterraforged-common.mixins.json",
     "freeterraforged-fabric.mixins.json"
   ],
-  "icon": "assets/freeterraforged/icon.png"
+  "icon": "logo.png"
 }

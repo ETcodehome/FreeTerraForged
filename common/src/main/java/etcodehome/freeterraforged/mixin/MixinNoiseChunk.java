@@ -12,6 +12,9 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.llamalad7.mixinextras.sugar.Local;
 
 import net.minecraft.core.SectionPos;
 import net.minecraft.util.Mth;
@@ -52,25 +55,24 @@ class MixinNoiseChunk {
     @Final
     private int cellHeight;
 
-	@Inject(
+	@WrapOperation(
 			method = "<init>",
 			at = @At(
 					value = "INVOKE",
-					target = "Lnet/minecraft/world/level/levelgen/NoiseRouter;mapAll(Lnet/minecraft/world/level/levelgen/DensityFunction$Visitor;)Lnet/minecraft/world/level/levelgen/NoiseRouter;",
-					shift = At.Shift.BEFORE
+					target = "Lnet/minecraft/world/level/levelgen/NoiseRouter;mapAll(Lnet/minecraft/world/level/levelgen/DensityFunction$Visitor;)Lnet/minecraft/world/level/levelgen/NoiseRouter;"
 			)
 	)
-	private void freeterraforged$initializeBeforeRouterMapping(
-			int cellCountXZ,
-			RandomState randomState,
-			int minBlockX,
-			int minBlockZ,
-			NoiseSettings noiseSettings,
-			DensityFunctions.BeardifierOrMarker beardifierOrMarker,
-			NoiseGeneratorSettings generatorSettings,
-			Aquifer.FluidPicker fluidPicker,
-			Blender blender,
-			CallbackInfo callback
+	private NoiseRouter freeterraforged$initializeBeforeRouterMapping(
+			NoiseRouter router,
+			DensityFunction.Visitor visitor,
+			Operation<NoiseRouter> original,
+			@Local(argsOnly = true, ordinal = 0) int cellCountXZ,
+			@Local(argsOnly = true) RandomState randomState,
+			@Local(argsOnly = true, ordinal = 1) int minBlockX,
+			@Local(argsOnly = true, ordinal = 2) int minBlockZ,
+			@Local(argsOnly = true) NoiseSettings noiseSettings,
+			@Local(argsOnly = true) DensityFunctions.BeardifierOrMarker beardifierOrMarker,
+			@Local(argsOnly = true) NoiseGeneratorSettings generatorSettings
 	) {
 		this.randomState = randomState;
 		this.chunkX = SectionPos.blockToSectionCoord(minBlockX);
@@ -84,6 +86,7 @@ class MixinNoiseChunk {
 			this.cellCountY = Math.min(this.cellCountY, maxHeight / this.cellHeight);
 		}
 		this.cache2d = new CellSampler.Cache2d();
+		return original.call(router, visitor);
 	}
 
 	@ModifyVariable(

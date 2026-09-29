@@ -13,7 +13,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.HolderGetter;
 import net.minecraft.core.HolderSet;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.data.worldgen.BootstrapContext;
+import net.minecraft.data.worldgen.BootstapContext;
 import net.minecraft.data.worldgen.placement.VegetationPlacements;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.biome.Biome;
@@ -57,7 +57,7 @@ public class PresetBiomeModifierData {
 	public static final ResourceKey<BiomeModifier> ADD_BIRCH_FOREST_GRASS = createKey("add_birch_forest_grass");
 	public static final ResourceKey<BiomeModifier> ADD_RIVER_GASKET = createKey("add_river_gasket");
 
-	public static void bootstrap(Preset preset, BootstrapContext<BiomeModifier> ctx) {
+	public static void bootstrap(Preset preset, BootstapContext<BiomeModifier> ctx) {
 		MiscellaneousSettings miscellaneous = preset.miscellaneous();
 		HolderGetter<PlacedFeature> placedFeatures = ctx.lookup(Registries.PLACED_FEATURE);
 		HolderGetter<Biome> biomes = ctx.lookup(Registries.BIOME);

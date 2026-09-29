@@ -11,6 +11,7 @@ import java.util.function.BiFunction;
 import com.mojang.datafixers.util.Pair;
 
 import net.minecraft.core.QuartPos;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.levelgen.NoiseRouterData;
 import etcodehome.freeterraforged.FTFCommon;
@@ -354,7 +355,7 @@ public final class UndergroundBiomeBanding {
 		);
 		float effectiveDensity = settings.undergroundBiomeCoverage() * Math.min(
 			surfaceFactor(target.depth(), selectionStart, fullDensityStart),
-			Math.clamp(surfaceCoverageFactor, 0.0F, 1.0F)
+			Mth.clamp(surfaceCoverageFactor, 0.0F, 1.0F)
 		);
 		if (effectiveDensity <= 0.0F) {
 			return false;
@@ -389,7 +390,7 @@ public final class UndergroundBiomeBanding {
 		if (depth >= fullDensityStart) {
 			return 1.0F;
 		}
-		return Math.clamp(
+		return Mth.clamp(
 			(float) (depth - hardShellEnd) / (float) (fullDensityStart - hardShellEnd),
 			0.0F,
 			1.0F
@@ -453,7 +454,7 @@ public final class UndergroundBiomeBanding {
 
 		private T findValue(Climate.TargetPoint target, long regionKey, float climateInfluence) {
 			if (this.candidates.size() == 1) {
-				return this.candidates.getFirst().value();
+				return this.candidates.get(0).value();
 			}
 
 			double minimumDistance = Double.POSITIVE_INFINITY;
@@ -494,7 +495,7 @@ public final class UndergroundBiomeBanding {
 					return this.candidates.get(index).value();
 				}
 			}
-			return this.candidates.getLast().value();
+			return this.candidates.get(this.candidates.size() - 1).value();
 		}
 	}
 
@@ -674,7 +675,7 @@ public final class UndergroundBiomeBanding {
 			T backgroundValue = this.background.findValue(target);
 			float surfaceFactor = Math.min(
 				this.surfaceFactor(target.depth()),
-				Math.clamp(surfaceCoverageFactor, 0.0F, 1.0F)
+				Mth.clamp(surfaceCoverageFactor, 0.0F, 1.0F)
 			);
 			float effectiveDensity = this.density * surfaceFactor;
 			if (effectiveDensity <= 0.0F) {

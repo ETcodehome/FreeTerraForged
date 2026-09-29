@@ -198,7 +198,7 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		this.seedRandomize = Button.builder(Component.literal("🎲"), (button) -> {
 					String newSeed = String.valueOf(WorldOptions.randomSeed());
 					this.seedEdit.setValue(newSeed);
-					this.seedEdit.moveCursorToStart(false);
+					this.seedEdit.moveCursorToStart();
 				})
 				.tooltip(Tooltip.create(Component.translatable(FTFTranslationKeys.GUI_BUTTON_RANDOMIZE_SEED)))
 				.bounds(0, 0, 20, 20)
@@ -221,13 +221,13 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		this.zoom2D.setX(x);
 		this.zoom2D.setY(yBase);
 		this.zoom2D.setWidth(width);
-		this.zoom2D.setHeight(20);
+		this.zoom2D.height = 20;
 		this.screen.addWidgetToScreen(this.zoom2D);
 
 		this.renderMode2D.setX(x);
 		this.renderMode2D.setY(yBase + 24);
 		this.renderMode2D.setWidth(width);
-		this.renderMode2D.setHeight(20);
+		this.renderMode2D.height = 20;
 		this.screen.addWidgetToScreen(this.renderMode2D);
 	}
 
@@ -248,29 +248,29 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		this.seedEdit.setX(x);
 		this.seedEdit.setY(yBase);
 		this.seedEdit.setWidth(editWidth);
-		this.seedEdit.setHeight(20);
+		this.seedEdit.height = 20;
 
 		// Resets cursor & clears selection highlight without selecting text
-		this.seedEdit.moveCursorToStart(false);
+		this.seedEdit.moveCursorToStart();
 		this.screen.addWidgetToScreen(this.seedEdit);
 
 		this.seedRandomize.setX(x + editWidth + gap);
 		this.seedRandomize.setY(yBase);
 		this.seedRandomize.setWidth(buttonWidth);
-		this.seedRandomize.setHeight(20);
+		this.seedRandomize.height = 20;
 		this.screen.addWidgetToScreen(this.seedRandomize);
 
 		// Controls
 		this.zoom3D.setX(x);
 		this.zoom3D.setY(yBase + 24);
 		this.zoom3D.setWidth(width);
-		this.zoom3D.setHeight(20);
+		this.zoom3D.height = 20;
 		this.screen.addWidgetToScreen(this.zoom3D);
 
 		this.renderMode3D.setX(x);
 		this.renderMode3D.setY(yBase + 48);
 		this.renderMode3D.setWidth(width);
-		this.renderMode3D.setHeight(20);
+		this.renderMode3D.height = 20;
 		this.screen.addWidgetToScreen(this.renderMode3D);
 	}
 

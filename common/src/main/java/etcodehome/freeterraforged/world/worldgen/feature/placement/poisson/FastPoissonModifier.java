@@ -8,6 +8,7 @@ import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
+import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
 import net.minecraft.core.BlockPos;
@@ -84,9 +85,15 @@ public class FastPoissonModifier extends PlacementModifier {
 		
 		if (this.biomeFade > BiomeVariance.MIN_FADE) {
 			if((Object) randomState instanceof FTFRandomState ftfRandomState) {
-				Tile.Chunk reader = ftfRandomState.generatorContext().cache.provideAtChunk(chunkPos.x, chunkPos.z).getChunkReader(chunkPos.x, chunkPos.z);
-				if (reader != null) {
-					biomeVariance = new BiomeVariance(reader, this.biomeFade);
+				GeneratorContext generatorContext = ftfRandomState.generatorContext();
+				if (generatorContext != null && generatorContext.cache != null) {
+					Tile tile = generatorContext.cache.provideAtChunk(chunkPos.x, chunkPos.z);
+					if (tile != null) {
+						Tile.Chunk reader = tile.getChunkReader(chunkPos.x, chunkPos.z);
+						if (reader != null) {
+							biomeVariance = new BiomeVariance(reader, this.biomeFade);
+						}
+					}
 				}
 			}
 		}

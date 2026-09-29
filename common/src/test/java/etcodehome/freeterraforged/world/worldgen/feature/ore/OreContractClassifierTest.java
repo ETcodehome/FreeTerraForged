@@ -9,7 +9,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import com.mojang.serialization.MapCodec;
+import com.mojang.serialization.Codec;
 
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
@@ -193,7 +193,7 @@ class OreContractClassifierTest {
 
 	private static final class TestPlacementFilter extends PlacementFilter {
 		private static final TestPlacementFilter INSTANCE = new TestPlacementFilter();
-		private static final PlacementModifierType<TestPlacementFilter> TYPE = () -> MapCodec.unit(() -> INSTANCE);
+		private static final PlacementModifierType<TestPlacementFilter> TYPE = () -> Codec.unit(INSTANCE);
 
 		@Override
 		protected boolean shouldPlace(PlacementContext context, RandomSource random, BlockPos position) {
@@ -208,7 +208,7 @@ class OreContractClassifierTest {
 
 	private static final class FilterNamedPositionTransformer extends PlacementModifier {
 		private static final FilterNamedPositionTransformer INSTANCE = new FilterNamedPositionTransformer();
-		private static final PlacementModifierType<FilterNamedPositionTransformer> TYPE = () -> MapCodec.unit(() -> INSTANCE);
+		private static final PlacementModifierType<FilterNamedPositionTransformer> TYPE = () -> Codec.unit(INSTANCE);
 
 		@Override
 		public Stream<BlockPos> getPositions(PlacementContext context, RandomSource random, BlockPos position) {
