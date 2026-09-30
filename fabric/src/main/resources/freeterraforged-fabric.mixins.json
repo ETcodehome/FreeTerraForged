@@ -3,13 +3,12 @@
   "required": true,
   "package": "etcodehome.freeterraforged.fabric.mixin",
   "minVersion": "0.8",
-  "compatibilityLevel": "JAVA_21",
+  "compatibilityLevel": "JAVA_17",
   "client": [
   	"MixinPresetEditor"
   ],
   "mixins": [
     "MixinBiolithTerraBlenderCompat",
-    "MixinChunkStatusTasks",
     "MixinMinecraftServer",
     "MixinBiomeModificationImpl"
   ],

@@ -9,7 +9,7 @@ import etcodehome.freeterraforged.registries.FTFBuiltInRegistries;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 
 public interface Domain {
-    public static final Codec<Domain> CODEC = FTFBuiltInRegistries.DOMAIN_TYPE.byNameCodec().dispatch(Domain::codec, Function.identity());
+    public static final Codec<Domain> CODEC = FTFBuiltInRegistries.DOMAIN_TYPE.byNameCodec().dispatch(Domain::codec, MapCodec::codec);
 	
     float getOffsetX(float x, float z, int seed);
     

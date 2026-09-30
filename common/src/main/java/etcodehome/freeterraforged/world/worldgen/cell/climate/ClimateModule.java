@@ -1,5 +1,6 @@
 package etcodehome.freeterraforged.world.worldgen.cell.climate;
 
+import it.unimi.dsi.fastutil.HashCommon;
 import etcodehome.freeterraforged.world.worldgen.biome.Humidity;
 import etcodehome.freeterraforged.world.worldgen.biome.Temperature;
 import etcodehome.freeterraforged.world.worldgen.cell.continent.Continent;
@@ -20,6 +21,8 @@ import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 
 public class ClimateModule {
+	private static final int CENTER_CACHE_MASK = 255;
+	private final ThreadLocal<CenterSample[]> centerSamples = ThreadLocal.withInitial(() -> new CenterSample[CENTER_CACHE_MASK + 1]);
 	private int seed;
 	private float biomeFreq;
 	private float warpStrength;
@@ -125,12 +128,11 @@ public class ClimateModule {
 			}
 		}
 		cell.biomeRegionId = this.cellValue(this.seed , cellX, cellZ);
-		cell.regionMoisture = this.moisture.compute(centerX, centerZ, 0);
-		cell.regionTemperature = this.temperature.compute(centerX, centerZ, 0);
-		cell.macroBiomeId = this.macroBiomeNoise.compute(centerX, centerZ, 0);
-		int posX = NoiseUtil.floor(centerX / this.biomeFreq);
-		int posZ = NoiseUtil.floor(centerZ / this.biomeFreq);
-		float continentEdge = this.continent.getLandValue(posX, posZ);
+		CenterSample center = this.sampleCenter(cellX, cellZ, centerX, centerZ);
+		cell.regionMoisture = center.moisture;
+		cell.regionTemperature = center.temperature;
+		cell.macroBiomeId = center.macroBiome;
+		float continentEdge = center.continentEdge;
 		if (mask) {
 			cell.biomeRegionEdge = this.edgeValue(edgeDistance, edgeDistance2);
 			this.modifyTerrain(cell, continentEdge);
@@ -162,14 +164,34 @@ public class ClimateModule {
 
 			if (madeMushroomIslands(cell)){ return; }
 
-			float islTemp = this.temperature.compute(centerX, centerZ, 0);
-			float islMoist = this.moisture.compute(centerX, centerZ, 0);
+			float islTemp = center.temperature;
+			float islMoist = center.moisture;
 			islMoist = this.modifyMoisture(islMoist, continentEdge);
 			islTemp = this.modifyTemp(cell.height, islTemp, originalX, originalZ);
 			cell.temperature = islTemp * 2.0F - 1.0F;
 			cell.moisture = islMoist * 2.0F - 1.0F;
 		}
 	}
+
+	private CenterSample sampleCenter(int cellX, int cellZ, float centerX, float centerZ) {
+		// A Voronoi cell has one fixed center. Reuse only values sampled at that center;
+		long key = ((long) cellX << 32) | (cellZ & 0xFFFFFFFFL);
+		CenterSample[] samples = this.centerSamples.get();
+		int index = (int) HashCommon.mix(key) & CENTER_CACHE_MASK;
+		CenterSample sample = samples[index];
+		if (sample == null || sample.key != key) {
+			float regionMoisture = this.moisture.compute(centerX, centerZ, 0);
+			float regionTemperature = this.temperature.compute(centerX, centerZ, 0);
+			float macroBiome = this.macroBiomeNoise.compute(centerX, centerZ, 0);
+			int posX = NoiseUtil.floor(centerX / this.biomeFreq);
+			int posZ = NoiseUtil.floor(centerZ / this.biomeFreq);
+			float continentEdge = this.continent.getLandValue(posX, posZ);
+			samples[index] = sample = new CenterSample(key, regionMoisture, regionTemperature, macroBiome, continentEdge);
+		}
+		return sample;
+	}
+
+	private record CenterSample(long key, float moisture, float temperature, float macroBiome, float continentEdge) { }
 
 	private boolean madeMushroomIslands(Cell cell)
 	{

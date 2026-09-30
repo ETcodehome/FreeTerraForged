@@ -35,6 +35,7 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
 			Strata.CODEC.listOf().fieldOf("strata").forGetter(StrataRule::strata),
 			Codec.INT.fieldOf("iterations").forGetter(StrataRule::iterations)
 	).apply(instance, StrataRule::new));
+	public static final KeyDispatchDataCodec<StrataRule> KEY_CODEC = KeyDispatchDataCodec.of(CODEC);
 
 	public StrataRule {
 		strata = ImmutableList.copyOf(strata);
@@ -51,7 +52,7 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
 
 	@Override
 	public KeyDispatchDataCodec<StrataRule> codec() {
-		return new KeyDispatchDataCodec<>(CODEC);
+		return KEY_CODEC;
 	}
 
 	private List<List<Layer>> generateStrata(RandomSource random) {

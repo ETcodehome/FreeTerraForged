@@ -5,13 +5,13 @@ import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.registries.FTFRegistries;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
 import net.minecraft.core.HolderGetter;
-import net.minecraft.data.worldgen.BootstrapContext;
+import net.minecraft.data.worldgen.BootstapContext;
 import net.minecraft.resources.ResourceKey;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 
 public class PresetNoiseData {
 
-	public static void bootstrap(Preset preset, BootstrapContext<Noise> ctx) {
+	public static void bootstrap(Preset preset, BootstapContext<Noise> ctx) {
 		PresetTerrainNoise.bootstrap(preset, ctx);
 		PresetClimateNoise.bootstrap(preset, ctx);
 		PresetSurfaceNoise.bootstrap(preset, ctx);
@@ -22,7 +22,7 @@ public class PresetNoiseData {
 		return new Noises.HolderHolder(noiseLookup.getOrThrow(key));
 	}
 	
-	public static Noise registerAndWrap(BootstrapContext<Noise> ctx, ResourceKey<Noise> key, Noise noise) {
+	public static Noise registerAndWrap(BootstapContext<Noise> ctx, ResourceKey<Noise> key, Noise noise) {
 		return new Noises.HolderHolder(ctx.register(key, noise));
 	}
 	

@@ -42,10 +42,8 @@ record CellTest(float cutoff, Set<Terrain> terrainTypeBlacklist) implements Stru
 					return false;
 				}
 			}
-			return true;
-		} else {
-			throw new IllegalStateException();
 		}
+		return true;
 	}
 
 	@Override

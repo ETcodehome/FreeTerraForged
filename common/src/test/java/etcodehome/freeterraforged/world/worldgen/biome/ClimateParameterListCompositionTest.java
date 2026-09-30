@@ -67,7 +67,7 @@ class ClimateParameterListCompositionTest {
 		assertEquals(2, snapshot.duplicateEntryCount());
 		assertEquals(
 			List.of(0, 1),
-			snapshot.registrations().getFirst().sourceRegions().stream().sorted().toList()
+			snapshot.registrations().get(0).sourceRegions().stream().sorted().toList()
 		);
 		assertTrue(snapshot.registrations().get(1).lateGlobal());
 	}

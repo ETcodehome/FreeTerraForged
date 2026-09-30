@@ -12,6 +12,7 @@ public record ClampToNearestUnit(DensityFunction function, int resolution) imple
 		DensityFunction.HOLDER_HELPER_CODEC.fieldOf("function").forGetter(ClampToNearestUnit::function),
 		Codec.INT.fieldOf("resolution").forGetter(ClampToNearestUnit::resolution)
 	).apply(instance, ClampToNearestUnit::new));
+	public static final KeyDispatchDataCodec<ClampToNearestUnit> KEY_CODEC = KeyDispatchDataCodec.of(CODEC);
 	
 	@Override
 	public double compute(FunctionContext ctx) {
@@ -43,7 +44,7 @@ public record ClampToNearestUnit(DensityFunction function, int resolution) imple
 
 	@Override
 	public KeyDispatchDataCodec<ClampToNearestUnit> codec() {
-		return new KeyDispatchDataCodec<>(CODEC);
+		return KEY_CODEC;
 	}
 	
 	private double computeClamped(double value) {

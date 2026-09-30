@@ -11,7 +11,7 @@ import net.minecraft.world.level.LevelAccessor;
 import etcodehome.freeterraforged.world.worldgen.feature.template.template.TemplateContext;
 
 public interface TemplateDecorator<T extends TemplateContext> {
-    public static final Codec<TemplateDecorator<?>> CODEC = FTFBuiltInRegistries.TEMPLATE_DECORATOR_TYPE.byNameCodec().dispatch(TemplateDecorator::codec, Function.identity());
+    public static final Codec<TemplateDecorator<?>> CODEC = FTFBuiltInRegistries.TEMPLATE_DECORATOR_TYPE.byNameCodec().dispatch(TemplateDecorator::codec, MapCodec::codec);
     
     void apply(LevelAccessor level, T buffer, RandomSource random, boolean modified);
     

@@ -39,7 +39,7 @@ public class FTFPlacementModifiers {
     }
     
     private static <P extends PlacementModifier> PlacementModifierType<P> register(String name, MapCodec<P> codec) {
-    	PlacementModifierType<P> type = () -> codec;
+    	PlacementModifierType<P> type = () -> codec.codec();
 		RegistryUtil.register(BuiltInRegistries.PLACEMENT_MODIFIER_TYPE, name, type);
 		return type;
     }

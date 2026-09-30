@@ -1,6 +1,6 @@
 package etcodehome.freeterraforged.mixin.biolith;
 
-import com.terraformersmc.biolith.api.biome.sub.Criterion;
+import com.terraformersmc.biolith.api.biome.SubBiomeMatcher;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.biome.Biome;
 import org.spongepowered.asm.mixin.Mixin;
@@ -13,6 +13,6 @@ public interface BiolithSubBiomeRequestAccessor {
 	@Accessor(value = "biome", remap = false)
 	ResourceKey<Biome> freeterraforged$getBiome();
 
-	@Accessor(value = "criterion", remap = false)
-	Criterion freeterraforged$getCriterion();
+	@Accessor(value = "matcher", remap = false)
+	SubBiomeMatcher freeterraforged$getMatcher();
 }

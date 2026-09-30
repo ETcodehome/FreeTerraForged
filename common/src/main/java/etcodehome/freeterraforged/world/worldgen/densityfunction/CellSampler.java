@@ -126,10 +126,11 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 		public static final MapCodec<Marker> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 			Field.CODEC.fieldOf("field").forGetter(Marker::field)
 		).apply(instance, Marker::new));
+		public static final KeyDispatchDataCodec<Marker> KEY_CODEC = KeyDispatchDataCodec.of(CODEC);
 		
 		@Override
 		public KeyDispatchDataCodec<Marker> codec() {
-			return new KeyDispatchDataCodec<>(CODEC);
+			return KEY_CODEC;
 		}
 	}
 	

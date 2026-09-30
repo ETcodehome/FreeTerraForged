@@ -4,7 +4,13 @@ import java.util.Optional;
 import java.util.function.BiFunction;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.DataResult;
+import com.mojang.serialization.DynamicOps;
+import com.mojang.serialization.MapCodec;
+import com.mojang.serialization.MapLike;
+import com.mojang.serialization.RecordBuilder;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import java.util.stream.Stream;
 
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
@@ -95,16 +101,54 @@ public class ClimateSettings {
 		public static final int DEFAULT_UNDERGROUND_VERTICAL_SIZE = 64;
 		public static final float DEFAULT_UNDERGROUND_BIOME_COVERAGE = 0.25F;
 		public static final float DEFAULT_UNDERGROUND_BIOME_CLIMATE_INFLUENCE = 0.75F;
-		private static final Codec<Integer> BIOME_SIZE_CODEC = Codec.intRange(MIN_BIOME_SIZE, MAX_BIOME_SIZE);
-		private static final Codec<Integer> UNDERGROUND_VERTICAL_SIZE_CODEC = Codec.intRange(
-			MIN_UNDERGROUND_VERTICAL_SIZE,
-			MAX_UNDERGROUND_VERTICAL_SIZE
+		private static final Codec<Integer> BIOME_SIZE_CODEC = Codec.INT.flatXmap(
+			v -> v >= MIN_BIOME_SIZE && v <= MAX_BIOME_SIZE
+				? DataResult.success(v)
+				: DataResult.error(() -> "Biome size must be between " + MIN_BIOME_SIZE + " and " + MAX_BIOME_SIZE + ": " + v),
+			DataResult::success
 		);
-		private static final Codec<Float> UNIT_FLOAT_CODEC = Codec.floatRange(0.0F, 1.0F);
+		private static final Codec<Integer> UNDERGROUND_VERTICAL_SIZE_CODEC = Codec.INT.flatXmap(
+			v -> v >= MIN_UNDERGROUND_VERTICAL_SIZE && v <= MAX_UNDERGROUND_VERTICAL_SIZE
+				? DataResult.success(v)
+				: DataResult.error(() -> "Underground biome vertical size must be between " + MIN_UNDERGROUND_VERTICAL_SIZE + " and " + MAX_UNDERGROUND_VERTICAL_SIZE + ": " + v),
+			DataResult::success
+		);
+		private static final Codec<Float> UNIT_FLOAT_CODEC = Codec.FLOAT.flatXmap(
+			v -> Float.isFinite(v) && v >= 0.0F && v <= 1.0F
+				? DataResult.success(v)
+				: DataResult.error(() -> "Value must be between 0 and 1: " + v),
+			DataResult::success
+		);
+
+		private static <A> MapCodec<Optional<A>> strictOptionalField(Codec<A> codec, String name) {
+			return new MapCodec<>() {
+				@Override
+				public <T> Stream<T> keys(DynamicOps<T> ops) {
+					return Stream.of(ops.createString(name));
+				}
+
+				@Override
+				public <T> DataResult<Optional<A>> decode(DynamicOps<T> ops, MapLike<T> input) {
+					T value = input.get(name);
+					if (value == null) {
+						return DataResult.success(Optional.empty());
+					}
+					return codec.parse(ops, value).map(Optional::of);
+				}
+
+				@Override
+				public <T> RecordBuilder<T> encode(Optional<A> input, DynamicOps<T> ops, RecordBuilder<T> prefix) {
+					if (input != null && input.isPresent()) {
+						return prefix.add(name, codec.encodeStart(ops, input.get()));
+					}
+					return prefix;
+				}
+			};
+		}
 
     	public static final Codec<BiomeShape> CODEC = RecordCodecBuilder.create(instance -> instance.group(
 			BIOME_SIZE_CODEC.fieldOf("biomeSize").forGetter((o) -> o.biomeSize),
-			BIOME_SIZE_CODEC.optionalFieldOf("undergroundBiomeSize").forGetter((o) -> Optional.of(o.undergroundBiomeSize)),
+			strictOptionalField(BIOME_SIZE_CODEC, "undergroundBiomeSize").forGetter((o) -> Optional.of(o.undergroundBiomeSize)),
 			UNDERGROUND_VERTICAL_SIZE_CODEC.optionalFieldOf("undergroundBiomeVerticalSize", DEFAULT_UNDERGROUND_VERTICAL_SIZE).forGetter((o) -> o.undergroundBiomeVerticalSize),
 			UNIT_FLOAT_CODEC.optionalFieldOf("undergroundBiomeCoverage", DEFAULT_UNDERGROUND_BIOME_COVERAGE).forGetter((o) -> o.undergroundBiomeCoverage),
 			UNIT_FLOAT_CODEC.optionalFieldOf("undergroundBiomeClimateInfluence", DEFAULT_UNDERGROUND_BIOME_CLIMATE_INFLUENCE).forGetter((o) -> o.undergroundBiomeClimateInfluence),

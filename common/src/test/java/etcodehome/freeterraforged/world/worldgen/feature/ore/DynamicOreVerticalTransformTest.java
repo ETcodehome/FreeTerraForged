@@ -30,11 +30,11 @@ class DynamicOreVerticalTransformTest {
 		).transform().orElseThrow();
 
 		assertEquals(9.545953360768173, transform.expectedOutputsPerInput(), 1.0E-12);
-		assertEquals(-1404, transform.cumulativeIntensity().getFirst().y());
-		assertEquals(16, transform.cumulativeIntensity().getLast().y());
+		assertEquals(-1404, transform.cumulativeIntensity().get(0).y());
+		assertEquals(16, transform.cumulativeIntensity().get(transform.cumulativeIntensity().size() - 1).y());
 		assertEquals(
 			transform.expectedOutputsPerInput(),
-			transform.cumulativeIntensity().getLast().cumulativeIntensity(),
+			transform.cumulativeIntensity().get(transform.cumulativeIntensity().size() - 1).cumulativeIntensity(),
 			1.0E-12
 		);
 		for (int index = 1; index < transform.cumulativeIntensity().size(); index++) {
@@ -101,8 +101,8 @@ class DynamicOreVerticalTransformTest {
 		).transform().orElseThrow();
 
 		assertEquals(0.2529182879377432, transform.expectedOutputsPerInput(), 1.0E-12);
-		assertEquals(67, transform.cumulativeIntensity().getFirst().y());
-		assertEquals(144, transform.cumulativeIntensity().getLast().y());
+		assertEquals(67, transform.cumulativeIntensity().get(0).y());
+		assertEquals(144, transform.cumulativeIntensity().get(transform.cumulativeIntensity().size() - 1).y());
 		assertTrue(transform.cumulativeIntensity().stream().anyMatch(value -> value.y() > 127));
 	}
 

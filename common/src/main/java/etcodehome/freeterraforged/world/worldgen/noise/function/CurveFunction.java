@@ -8,7 +8,7 @@ import com.mojang.serialization.MapCodec;
 import etcodehome.freeterraforged.registries.FTFBuiltInRegistries;
 
 public interface CurveFunction {
-    public static final Codec<CurveFunction> CODEC = FTFBuiltInRegistries.CURVE_FUNCTION_TYPE.byNameCodec().dispatch(CurveFunction::codec, Function.identity());
+    public static final Codec<CurveFunction> CODEC = FTFBuiltInRegistries.CURVE_FUNCTION_TYPE.byNameCodec().dispatch(CurveFunction::codec, MapCodec::codec);
 	
 	float apply(float f);
 	

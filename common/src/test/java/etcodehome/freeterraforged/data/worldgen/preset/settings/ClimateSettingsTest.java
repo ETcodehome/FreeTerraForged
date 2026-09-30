@@ -4,13 +4,23 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
 
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
+
 class ClimateSettingsTest {
+	@BeforeAll
+	static void bootstrapMinecraft() {
+		SharedConstants.tryDetectVersion();
+		Bootstrap.bootStrap();
+	}
+
 	@Test
 	void newDefaultPresetsInitializeBothBiomeSizesToTheHistoricalDefault() {
 		ClimateSettings.BiomeShape shape = Presets.makeFTFDefault().climate().biomeShape;
@@ -63,7 +73,7 @@ class ClimateSettingsTest {
 
 	private static ClimateSettings.BiomeShape decode(JsonObject json) {
 		return ClimateSettings.BiomeShape.CODEC.parse(JsonOps.INSTANCE, json)
-			.getOrThrow(message -> new AssertionError("Biome shape failed to decode: " + message));
+			.getOrThrow(false, message -> { throw new AssertionError("Biome shape failed to decode: " + message); });
 	}
 
 	private static void assertRejected(JsonObject json) {

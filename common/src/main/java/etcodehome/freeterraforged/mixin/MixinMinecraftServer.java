@@ -2,6 +2,7 @@ package etcodehome.freeterraforged.mixin;
 
 import etcodehome.freeterraforged.registries.FTFRegistries;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
+import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.biome.FTFClimateSampler;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -33,10 +34,11 @@ class MixinMinecraftServer {
 			return registry.get(Preset.KEY);
 		}).ifPresent((preset) -> {
 			if((Object) randomState instanceof FTFRandomState ftfRandomState && (Object) sampler instanceof FTFClimateSampler ftfClimateSampler) {
-				BlockPos searchCenter = preset.value().world().properties.spawnType.getSearchCenter(ftfRandomState.generatorContext(), preset.value().world().properties);
-				ftfClimateSampler.setSpawnSearchCenter(searchCenter);
-			} else {
-				throw new IllegalStateException();
+				GeneratorContext genCtx = ftfRandomState.generatorContext();
+				if (genCtx != null) {
+					BlockPos searchCenter = preset.value().world().properties.spawnType.getSearchCenter(genCtx, preset.value().world().properties);
+					ftfClimateSampler.setSpawnSearchCenter(searchCenter);
+				}
 			}
 		});
     }

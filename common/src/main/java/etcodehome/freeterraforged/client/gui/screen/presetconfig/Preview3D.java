@@ -279,11 +279,11 @@ public class Preview3D extends Button implements IPreviewHandler {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        if (handleScroll(mouseX, mouseY, scrollY)) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        if (handleScroll(mouseX, mouseY, delta)) {
             return true;
         }
-        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+        return super.mouseScrolled(mouseX, mouseY, delta);
     }
 
     @Override

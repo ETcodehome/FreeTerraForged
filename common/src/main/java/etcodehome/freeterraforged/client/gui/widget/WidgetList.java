@@ -13,8 +13,36 @@ import net.minecraft.client.gui.components.events.GuiEventListener;
 public class WidgetList<T extends AbstractWidget> extends ContainerObjectSelectionList<WidgetList.Entry<T>> {
 	private boolean renderSelected;
 	
-    public WidgetList(Minecraft minecraft, int i, int j, int k, int l) {
-        super(minecraft, i, j, k, l);
+    public WidgetList(Minecraft minecraft, int width, int height, int y0, int y1, int itemHeight) {
+        super(minecraft, width, height, y0, y1, itemHeight);
+    }
+
+    public WidgetList(Minecraft minecraft, int width, int height, int y0, int itemHeight) {
+        super(minecraft, width, height, y0, y0 + height, itemHeight);
+    }
+
+    public void setX(int x) {
+        this.setLeftPos(x);
+    }
+
+    public int getX() {
+        return this.getRowLeft();
+    }
+
+    public int getWidth() {
+        return this.width;
+    }
+
+    public int getY() {
+        return this.y0;
+    }
+
+    public void setWidth(int width) {
+        this.width = width;
+    }
+
+    public void setHeight(int height) {
+        this.y1 = this.y0 + height;
     }
 
     public void select(T widget) {
@@ -74,7 +102,7 @@ public class WidgetList<T extends AbstractWidget> extends ContainerObjectSelecti
             widget.setY(top);
             widget.visible = true;
             widget.setWidth(optionWidth);
-            widget.setHeight(height - 1);
+            widget.height = height - 1;
             widget.render(guiGraphics, mouseX, mouseY, partialTicks);
         }
 

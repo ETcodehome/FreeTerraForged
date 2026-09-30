@@ -29,10 +29,11 @@ public record NoiseFunction(Holder<Noise> noise, int seed) implements MarkerFunc
 		public static final MapCodec<Marker> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 			Noise.CODEC.fieldOf("noise").forGetter(NoiseFunction.Marker::noise)
 		).apply(instance, NoiseFunction.Marker::new));
+		public static final KeyDispatchDataCodec<NoiseFunction.Marker> KEY_CODEC = KeyDispatchDataCodec.of(CODEC);
 
 		@Override
 		public KeyDispatchDataCodec<NoiseFunction.Marker> codec() {
-			return new KeyDispatchDataCodec<>(CODEC);
+			return KEY_CODEC;
 		}
 
 		@Override

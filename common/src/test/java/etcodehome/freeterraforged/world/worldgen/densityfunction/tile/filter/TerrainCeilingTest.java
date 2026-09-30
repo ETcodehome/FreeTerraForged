@@ -3,12 +3,21 @@ package etcodehome.freeterraforged.world.worldgen.densityfunction.tile.filter;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Presets;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
 
 class TerrainCeilingTest {
+	@BeforeAll
+	static void bootstrapMinecraft() {
+		SharedConstants.tryDetectVersion();
+		Bootstrap.bootStrap();
+	}
+
 	@Test
 	void leavesTerrainBelowTheCompressionBandUnchanged() {
 		TerrainCeiling ceiling = defaultCeiling();

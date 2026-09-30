@@ -116,7 +116,7 @@ final class BiomePreviewColors {
     }
 
     private static Map.Entry<ResourceLocation, Integer> entry(String path, int rgb) {
-        return Map.entry(ResourceLocation.withDefaultNamespace(path), rgb);
+        return Map.entry(new ResourceLocation(path), rgb);
     }
 
     private static int mix(int value) {

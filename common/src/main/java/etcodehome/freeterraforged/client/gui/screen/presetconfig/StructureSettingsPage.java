@@ -103,7 +103,7 @@ public class StructureSettingsPage extends PresetEditorPage {
 			return false;
 		}
 
-		if (holder.is(TagKey.create(Registries.STRUCTURE_SET, ResourceLocation.withDefaultNamespace("sets_overworld")))) {
+		if (holder.is(TagKey.create(Registries.STRUCTURE_SET, new ResourceLocation("sets_overworld")))) {
 			return true;
 		}
 
@@ -111,10 +111,10 @@ public class StructureSettingsPage extends PresetEditorPage {
 			Holder<Structure> structure = entry.structure();
 			if (!structure.isBound()) continue;
 
-			// In 1.21.1, we can check the structure's settings safely.
+			// In 1.20.1, we can check the structure's settings safely.
 			// We look for structures that are NOT explicitly tagged as Nether or End.
-			boolean isNether = structure.is(TagKey.create(Registries.STRUCTURE, ResourceLocation.withDefaultNamespace("is_nether")));
-			boolean isEnd = structure.is(TagKey.create(Registries.STRUCTURE, ResourceLocation.withDefaultNamespace("is_end")));
+			boolean isNether = structure.is(TagKey.create(Registries.STRUCTURE, new ResourceLocation("is_nether")));
+			boolean isEnd = structure.is(TagKey.create(Registries.STRUCTURE, new ResourceLocation("is_end")));
 
 			// If it's not Nether or End, we treat it as an Overworld candidate (includes modded dims/overworld)
 			if (!isNether && !isEnd) {

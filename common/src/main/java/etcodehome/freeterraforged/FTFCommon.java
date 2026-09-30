@@ -4,6 +4,7 @@ import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.platform.RegistryUtil;
 import etcodehome.freeterraforged.registries.FTFBuiltInRegistries;
 import etcodehome.freeterraforged.registries.FTFRegistries;
+import etcodehome.freeterraforged.world.worldgen.biome.modifier.BiomeModifier;
 import etcodehome.freeterraforged.world.worldgen.biome.modifier.BiomeModifiers;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.FTFDensityFunctions;
 import etcodehome.freeterraforged.world.worldgen.feature.FTFFeatures;
@@ -51,10 +52,11 @@ public class FTFCommon {
 		RegistryUtil.createDataRegistry(FTFRegistries.NOISE, Noise.DIRECT_CODEC, false);
 		RegistryUtil.createDataRegistry(FTFRegistries.PRESET, Preset.DIRECT_CODEC, false);
 		RegistryUtil.createDataRegistry(FTFRegistries.STRUCTURE_RULE, StructureRule.DIRECT_CODEC, false);
+		RegistryUtil.createDataRegistry(FTFRegistries.BIOME_MODIFIER, BiomeModifier.DIRECT_CODEC, false);
 	}
 
 	public static ResourceLocation location(String name) {
-		if (name.contains(":")) return ResourceLocation.parse(name);
-		return ResourceLocation.fromNamespaceAndPath(FTFCommon.MOD_ID, name);
+		if (name.contains(":")) return new ResourceLocation(name);
+		return new ResourceLocation(FTFCommon.MOD_ID, name);
 	}
 }

@@ -9,11 +9,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
-import com.google.gson.JsonElement;
 import com.mojang.datafixers.util.Pair;
-import com.mojang.serialization.JsonOps;
-import com.terraformersmc.biolith.api.biome.BiolithFittestNodes;
-import com.terraformersmc.biolith.api.biome.sub.Criterion;
+import com.terraformersmc.biolith.impl.biome.BiolithFittestNodes;
+import com.terraformersmc.biolith.api.biome.SubBiomeMatcher;
 import com.terraformersmc.biolith.impl.biome.BiomeCoordinator;
 import com.terraformersmc.biolith.impl.biome.DimensionBiomePlacement;
 import com.terraformersmc.biolith.impl.noise.OpenSimplexNoise2;
@@ -23,9 +21,9 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.RegistryOps;
 import net.minecraft.util.Mth;
-import net.minecraft.util.InclusiveRange;
+import org.joml.Vector2f;
+import org.joml.Vector2fc;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Climate;
 import etcodehome.freeterraforged.mixin.biolith.BiolithDimensionBiomePlacementAccessor;
@@ -61,7 +59,7 @@ public final class BiolithPreviewContext {
 	}
 
 	public static void preInitializeBiomeLookup(RegistryAccess registries) {
-		BiomeCoordinator.setEarlyBiomeLookup(registries.lookupOrThrow(Registries.BIOME));
+		// Handled via Biolith server/world start events in Biolith 1.0.1
 	}
 
 	public static BiomePreviewIntegration.Session open(
@@ -136,7 +134,6 @@ public final class BiolithPreviewContext {
 		private final OpenSimplexNoise2 replacementNoise;
 		private final int[] seedlets;
 		private final HolderLookup.RegistryLookup<Biome> biomes;
-		private final RegistryOps<JsonElement> registryOps;
 		private final Map<DimensionBiomePlacement, Snapshot> snapshots = new IdentityHashMap<>();
 
 		private State(long seed, RegistryAccess registries, HolderLookup.Provider provider) {
@@ -147,13 +144,12 @@ public final class BiolithPreviewContext {
 				this.seedlets[i] = (int) ((seed >> (i * 8)) & 255L);
 			}
 			this.biomes = registries.lookupOrThrow(Registries.BIOME);
-			this.registryOps = RegistryOps.create(JsonOps.INSTANCE, provider);
 		}
 
 		private Snapshot snapshot(DimensionBiomePlacement placement) {
 			return this.snapshots.computeIfAbsent(
 				placement,
-				key -> new Snapshot(key, this.seed, this.biomes, this.registryOps)
+				key -> new Snapshot(key, this.seed, this.biomes)
 			);
 		}
 	}
@@ -166,12 +162,11 @@ public final class BiolithPreviewContext {
 		private Snapshot(
 			DimensionBiomePlacement placement,
 			long seed,
-			HolderLookup.RegistryLookup<Biome> biomes,
-			RegistryOps<JsonElement> registryOps
+			HolderLookup.RegistryLookup<Biome> biomes
 		) {
 			this.placement = placement;
 			this.replacements = snapshotReplacements(placement, seed, biomes);
-			this.subBiomes = snapshotSubBiomes(placement, biomes, registryOps);
+			this.subBiomes = snapshotSubBiomes(placement, biomes);
 		}
 
 		private Holder<Biome> getReplacement(
@@ -184,7 +179,7 @@ public final class BiolithPreviewContext {
 			Holder<Biome> selected = nodes.ultimate().value;
 			ResourceKey<Biome> selectedKey = selected.unwrapKey().orElseThrow();
 			double noise = -1.0D;
-			InclusiveRange<Float> replacementRange = null;
+			Vector2fc replacementRange = null;
 
 			List<Replacement> requests = this.replacements.get(selectedKey);
 			if (requests != null) {
@@ -205,7 +200,7 @@ public final class BiolithPreviewContext {
 					noise = this.placement.getLocalNoise(x, y, z);
 				}
 				for (SubRequest request : subRequests) {
-					if (request.criterion.matches(nodes, this.placement, target, replacementRange, (float) noise)) {
+					if (request.matcher.matches(nodes, this.placement, target, replacementRange, (float) noise)) {
 						return request.biomeEntry;
 					}
 				}
@@ -315,8 +310,7 @@ public final class BiolithPreviewContext {
 
 	private static Map<ResourceKey<Biome>, List<SubRequest>> snapshotSubBiomes(
 		DimensionBiomePlacement placement,
-		HolderLookup.RegistryLookup<Biome> biomes,
-		RegistryOps<JsonElement> registryOps
+		HolderLookup.RegistryLookup<Biome> biomes
 	) {
 		Map<ResourceKey<Biome>, List<SubRequest>> result = new HashMap<>();
 		Map<ResourceKey<Biome>, Object> source =
@@ -328,10 +322,10 @@ public final class BiolithPreviewContext {
 				.map(rawRequest -> {
 					BiolithSubBiomeRequestAccessor request = (BiolithSubBiomeRequestAccessor) rawRequest;
 					ResourceKey<Biome> biome = request.freeterraforged$getBiome();
-					Criterion criterion = copyCriterion(request.freeterraforged$getCriterion(), biomes, registryOps);
+					SubBiomeMatcher matcher = request.freeterraforged$getMatcher();
 					return new SubRequest(
 						biome,
-						criterion,
+						matcher,
 						biomes.getOrThrow(biome)
 					);
 				})
@@ -340,21 +334,6 @@ public final class BiolithPreviewContext {
 			result.put(entry.getKey(), requests);
 		}
 		return Map.copyOf(result);
-	}
-
-	private static Criterion copyCriterion(
-		Criterion criterion,
-		HolderLookup.RegistryLookup<Biome> biomes,
-		RegistryOps<JsonElement> registryOps
-	) {
-		JsonElement encoded = Criterion.CODEC.encodeStart(registryOps, criterion)
-			.result()
-			.orElseThrow(() -> new IllegalStateException("Could not encode Biolith sub-biome criterion"));
-		Criterion copy = Criterion.CODEC.parse(registryOps, encoded)
-			.result()
-			.orElseThrow(() -> new IllegalStateException("Could not decode Biolith sub-biome criterion"));
-		copy.complete(biomes);
-		return copy;
 	}
 
 	private static Replacement select(
@@ -377,11 +356,11 @@ public final class BiolithPreviewContext {
 		double end,
 		boolean fromData
 	) {
-		private InclusiveRange<Float> range() {
-			return new InclusiveRange<>((float) this.start, this.end > 0.9999D ? 1.0F : (float) this.end);
+		private Vector2fc range() {
+			return new Vector2f((float) this.start, this.end > 0.9999D ? 1.0F : (float) this.end);
 		}
 	}
 
-	private record SubRequest(ResourceKey<Biome> biome, Criterion criterion, Holder<Biome> biomeEntry) {
+	private record SubRequest(ResourceKey<Biome> biome, SubBiomeMatcher matcher, Holder<Biome> biomeEntry) {
 	}
 }

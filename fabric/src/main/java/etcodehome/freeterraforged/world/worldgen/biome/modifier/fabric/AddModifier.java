@@ -3,7 +3,7 @@ package etcodehome.freeterraforged.world.worldgen.biome.modifier.fabric;
 import java.util.List;
 import java.util.Optional;
 
-import com.mojang.serialization.MapCodec;
+import com.mojang.serialization.Codec;
 import etcodehome.freeterraforged.world.worldgen.biome.modifier.Filter;
 import etcodehome.freeterraforged.world.worldgen.biome.modifier.Order;
 import org.jetbrains.annotations.Nullable;
@@ -18,7 +18,7 @@ import net.minecraft.world.level.levelgen.GenerationStep;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 
 record AddModifier(Order order, GenerationStep.Decoration step, Optional<Filter> biomes, HolderSet<PlacedFeature> features) implements FabricBiomeModifier {
-	public static final MapCodec<AddModifier> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
+	public static final Codec<AddModifier> CODEC = RecordCodecBuilder.create(instance -> instance.group(
 		Order.CODEC.fieldOf("order").forGetter(AddModifier::order),
 		GenerationStep.Decoration.CODEC.fieldOf("step").forGetter(AddModifier::step),
 		Filter.CODEC.optionalFieldOf("biomes").forGetter(AddModifier::biomes),
@@ -26,7 +26,7 @@ record AddModifier(Order order, GenerationStep.Decoration step, Optional<Filter>
 	).apply(instance, AddModifier::new));
 
 	@Override
-	public MapCodec<AddModifier> codec() {
+	public Codec<AddModifier> codec() {
 		return CODEC;
 	}
 

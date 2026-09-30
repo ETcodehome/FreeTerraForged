@@ -12,7 +12,7 @@ import etcodehome.freeterraforged.world.worldgen.feature.template.template.Dimen
 import etcodehome.freeterraforged.world.worldgen.feature.template.template.TemplateContext;
 
 public interface TemplatePlacement<T extends TemplateContext> {
-    public static final Codec<TemplatePlacement<?>> CODEC = FTFBuiltInRegistries.TEMPLATE_PLACEMENT_TYPE.byNameCodec().dispatch(TemplatePlacement::codec, Function.identity());
+    public static final Codec<TemplatePlacement<?>> CODEC = FTFBuiltInRegistries.TEMPLATE_PLACEMENT_TYPE.byNameCodec().dispatch(TemplatePlacement::codec, MapCodec::codec);
     
     boolean canPlaceAt(LevelAccessor world, BlockPos pos, Dimensions dimensions);
 

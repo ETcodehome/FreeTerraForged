@@ -38,7 +38,7 @@ public final class UndergroundBiomeSurfaceProtection {
 	}
 
 	static float coverageFactor(float minimumSurfaceClearanceBlocks) {
-		return Math.clamp(
+		return net.minecraft.util.Mth.clamp(
 				(minimumSurfaceClearanceBlocks - REQUIRED_CLEARANCE_BLOCKS) / TRANSITION_BLOCKS,
 				0.0F,
 				1.0F

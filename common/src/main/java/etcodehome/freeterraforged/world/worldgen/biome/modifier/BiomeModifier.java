@@ -10,5 +10,5 @@ import etcodehome.freeterraforged.registries.FTFBuiltInRegistries;
 public interface BiomeModifier {
     public static final Codec<BiomeModifier> DIRECT_CODEC = FTFBuiltInRegistries.BIOME_MODIFIER_TYPE.byNameCodec().dispatch(BiomeModifier::codec, Function.identity());
 
-	MapCodec<? extends BiomeModifier> codec();
+	Codec<? extends BiomeModifier> codec();
 }

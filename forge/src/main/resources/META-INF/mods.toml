@@ -1,0 +1,49 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="MIT"
+
+[[mods]]
+modId="freeterraforged"
+version="${version}"
+displayName="FreeTerraForged"
+authors="dags, Won-Ton, racoonman, psiber, squinch"
+credits="The wider TerraForged community, in all its past and present iterations."
+logoFile="logo.png"
+displayURL="https://github.com/etcodehome/freeterraforged/"
+issueTrackerURL="https://github.com/etcodehome/freeterraforged/issues"
+description="Heavily customizable and feature rich overworld terrain generation options."
+
+[[dependencies.freeterraforged]]
+    modId="forge"
+    mandatory=true
+    versionRange="[47,)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.freeterraforged]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="[1.20.1,1.21)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.freeterraforged]]
+    modId="architectury"
+    mandatory=true
+    versionRange="[9.2,)"
+    ordering="AFTER"
+    side="BOTH"
+
+[[dependencies.freeterraforged]]
+    modId="terrablender"
+    mandatory=false
+    versionRange="[3.0,)"
+    ordering="AFTER"
+    side="BOTH"
+
+[[dependencies.freeterraforged]]
+    modId="biolith"
+    mandatory=false
+    versionRange="[1.0.1,)"
+    ordering="AFTER"
+    side="BOTH"

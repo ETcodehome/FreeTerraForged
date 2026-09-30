@@ -55,13 +55,13 @@ public enum RenderMode {
         @Override
         public int getColor(Cell cell, Levels levels, float scale, float bias) {
             switch (cell.terrain.getCategory()) {
-                case TerrainCategory.DEEP_OCEAN:
+                case DEEP_OCEAN:
                     return rgba(0.63F, 0.65F, 0.8F);
-                case TerrainCategory.SHALLOW_OCEAN:
+                case SHALLOW_OCEAN:
                     return rgba(0.6F, 0.6F, 0.8F);
-                case TerrainCategory.BEACH:
+                case BEACH:
                     return rgba(0.2F, 0.4F, 0.75F);
-                case TerrainCategory.COAST:
+                case COAST:
                     return rgba(0.35F, 0.75F, 0.65F);
                 default:
                     if (cell.terrain.isRiver() || cell.terrain.isWetland()) {
@@ -259,19 +259,19 @@ public enum RenderMode {
 
             switch (cell.riverZone){
 
-                case RiverCarverSettings.RiverZone.None:
+                case None:
                     return rgba(17, 17,17);
 
-                case RiverCarverSettings.RiverZone.Riverbed:
+                case Riverbed:
                     return rgba(0, 0,200);
 
-                case RiverCarverSettings.RiverZone.Banks:
+                case Banks:
                     return rgba(0, 75,0);
 
-                case RiverCarverSettings.RiverZone.ValleyFloor:
+                case ValleyFloor:
                     return rgba(0, 150,0);
 
-                case RiverCarverSettings.RiverZone.ValleyFadeout:
+                case ValleyFadeout:
                     return rgba(0, 255,0);
 
             }

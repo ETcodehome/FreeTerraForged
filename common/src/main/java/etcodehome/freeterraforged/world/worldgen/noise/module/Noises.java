@@ -18,7 +18,7 @@ import etcodehome.freeterraforged.world.worldgen.noise.function.EdgeFunction;
 import etcodehome.freeterraforged.world.worldgen.noise.function.Interpolation;
 
 public class Noises {
-    private static final Codec<Noise> CODEC = FTFBuiltInRegistries.NOISE_TYPE.byNameCodec().dispatch(Noise::codec, Function.identity());
+    private static final Codec<Noise> CODEC = FTFBuiltInRegistries.NOISE_TYPE.byNameCodec().dispatch(Noise::codec, MapCodec::codec);
     public static final float MAX_REASONABLE_NOISE_VALUE = 1000000.0F;
     public static final Codec<Float> NOISE_VALUE_CODEC = Codec.floatRange(-MAX_REASONABLE_NOISE_VALUE, MAX_REASONABLE_NOISE_VALUE);
     public static final Codec<Noise> DIRECT_CODEC = Codec.either(NOISE_VALUE_CODEC, CODEC).xmap(either -> either.map(Noises::constant, Function.identity()), noise -> {

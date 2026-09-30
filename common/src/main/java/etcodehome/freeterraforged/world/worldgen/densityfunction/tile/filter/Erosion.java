@@ -18,6 +18,8 @@ public class Erosion implements Filter {
     private final int maxDropletLifetime;
     private final int[][] erosionBrushIndices;
     private final float[][] erosionBrushWeights;
+    private int[] interiorBrushOffsets;
+    private float[] interiorBrushWeights;
     private final int seed;
     private final int mapSize;
     private final Modifier modifier;
@@ -116,10 +118,18 @@ public class Erosion implements Filter {
             }
             else {
                 final float amountToErode = Math.min((sedimentCapacity - sediment) * this.erodeSpeed, -deltaHeight);
-                for (int brushPointIndex = 0; brushPointIndex < this.erosionBrushIndices[dropletIndex].length; ++brushPointIndex) {
-                    final int nodeIndex = this.erosionBrushIndices[dropletIndex][brushPointIndex];
+                int[] brushIndices = this.erosionBrushIndices[dropletIndex];
+                float[] brushWeights = this.erosionBrushWeights[dropletIndex];
+                int brushBase = 0;
+                if (brushIndices == null) {
+                    brushIndices = this.interiorBrushOffsets;
+                    brushWeights = this.interiorBrushWeights;
+                    brushBase = dropletIndex;
+                }
+                for (int brushPointIndex = 0; brushPointIndex < brushIndices.length; ++brushPointIndex) {
+                    final int nodeIndex = brushBase + brushIndices[brushPointIndex];
                     final Cell cell = cells[nodeIndex];
-                    final float brushWeight = this.erosionBrushWeights[dropletIndex][brushPointIndex];
+                    final float brushWeight = brushWeights[brushPointIndex];
                     final float weighedErodeAmount = amountToErode * brushWeight;
                     final float deltaSediment = Math.min(cell.height, weighedErodeAmount);
                     this.erode(cell, deltaSediment);
@@ -143,7 +153,8 @@ public class Erosion implements Filter {
         for (int i = 0; i < this.erosionBrushIndices.length; ++i) {
             final int centreX = i % size;
             final int centreY = i / size;
-            if (centreY <= radius || centreY >= size - radius || centreX <= radius + 1 || centreX >= size - radius) {
+            boolean boundary = centreY <= radius || centreY >= size - radius || centreX <= radius + 1 || centreX >= size - radius;
+            if (boundary) {
                 weightSum = 0.0f;
                 addIndex = 0;
                 for (int y = -radius; y <= radius; ++y) {
@@ -165,6 +176,19 @@ public class Erosion implements Filter {
                 }
             }
             final int numEntries = addIndex;
+            if (!boundary) {
+                // Every interior brush uses the same ordered offsets and weights.
+                // Boundary brushes keep their coordinate-specific indices below.
+                if (this.interiorBrushOffsets == null) {
+                    this.interiorBrushOffsets = new int[numEntries];
+                    this.interiorBrushWeights = new float[numEntries];
+                    for (int j = 0; j < numEntries; ++j) {
+                        this.interiorBrushOffsets[j] = yOffsets[j] * size + xOffsets[j];
+                        this.interiorBrushWeights[j] = weights[j] / weightSum;
+                    }
+                }
+                continue;
+            }
             this.erosionBrushIndices[i] = new int[numEntries];
             this.erosionBrushWeights[i] = new float[numEntries];
             for (int j = 0; j < numEntries; ++j) {

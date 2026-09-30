@@ -68,12 +68,19 @@ public class MixinBiomeModificationImpl {
 	}
 	
 	static {
-		Constructor<?> ctor;
+		Constructor<?> ctor = null;
 		try {
-			ctor = Class.forName("net.fabricmc.fabric.impl.biome.modification.BiomeModificationImpl$ModifierRecord").getDeclaredConstructor(ModificationPhase.class, ResourceLocation.class, Predicate.class, BiConsumer.class);
-		} catch (NoSuchMethodException | SecurityException | ClassNotFoundException e) {
+			Class<?> clazz = Class.forName("net.fabricmc.fabric.impl.biome.modification.BiomeModificationImpl$ModifierRecord");
+			for (Constructor<?> c : clazz.getDeclaredConstructors()) {
+				Class<?>[] p = c.getParameterTypes();
+				if (p.length == 4 && p[0] == ModificationPhase.class && BiConsumer.class.isAssignableFrom(p[3])) {
+					ctor = c;
+					ctor.setAccessible(true);
+					break;
+				}
+			}
+		} catch (SecurityException | ClassNotFoundException e) {
 			e.printStackTrace();
-			ctor = null;
 		}
 		CTOR = ctor;
 	}
