@@ -87,7 +87,7 @@ public class IslandSettings {
 	public float volcanoChance;
 	public static final GenericFloatSetting volcanoChanceSetting = new GenericFloatSetting(
 			"islands.VolcanoChance",
-			"gui.slider.islandMountainChance",
+			"gui.slider.islandVolcanoChance",
 			0.0F,
 			1.0F,
 			0.5F

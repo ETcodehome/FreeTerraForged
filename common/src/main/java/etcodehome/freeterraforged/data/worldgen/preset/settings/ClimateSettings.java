@@ -6,7 +6,6 @@ import java.util.function.BiFunction;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
-import etcodehome.freeterraforged.world.worldgen.cell.climate.Climate;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
 import net.minecraft.util.StringRepresentable;
@@ -43,7 +42,8 @@ public class ClimateSettings {
 				Codec.INT.fieldOf("falloff").forGetter((o) -> o.falloff),
 				Codec.FLOAT.fieldOf("min").forGetter((o) -> o.min),
 				Codec.FLOAT.fieldOf("max").forGetter((o) -> o.max),
-				Codec.FLOAT.fieldOf("bias").forGetter((o) -> o.bias)
+				Codec.FLOAT.fieldOf("bias").forGetter((o) -> o.offsetBias),
+				Codec.FLOAT.optionalFieldOf("distributionBias", 0.0F).forGetter((o) -> o.distributionBias) // TODO REMAP THIS TO A SETTINGS DEFAULT
 		).apply(instance, RangeValue::new));
 
 		public int seedOffset;
@@ -51,13 +51,15 @@ public class ClimateSettings {
 		public int falloff;
 		public float min;
 		public float max;
-		public float bias;
+		public float offsetBias;
+		public float distributionBias;
 
-		public RangeValue(int seedOffset, int scale, int falloff, float min, float max, float bias) {
+		public RangeValue(int seedOffset, int scale, int falloff, float min, float max, float offsetBias, float distributionBias) {
 			this.seedOffset = seedOffset;
 			this.min = min;
 			this.max = max;
-			this.bias = bias;
+			this.offsetBias = offsetBias;
+			this.distributionBias = distributionBias;
 			this.scale = scale;
 			this.falloff = falloff;
 		}
@@ -70,14 +72,14 @@ public class ClimateSettings {
 			return NoiseUtil.clamp(Math.max(this.min, this.max), this.getMin(), 1.0F);
 		}
 
-		public float getBias() {
-			return NoiseUtil.clamp(this.bias, -1.0F, 1.0F);
+		public float getOffsetBias() {
+			return NoiseUtil.clamp(this.offsetBias, -1.0F, 1.0F);
 		}
 
 		public Noise apply(Noise module) {
 			float min = this.getMin();
 			float max = this.getMax();
-			float bias = this.getBias();
+			float bias = this.getOffsetBias();
 
 			// Convert bias in [-1.0, 1.0] to an exponent k in [2.0, 0.5]
 			// Positive bias reduces exponent (< 1.0) -> pushes values up
@@ -94,7 +96,7 @@ public class ClimateSettings {
 		}
 
 		public RangeValue copy() {
-			return new RangeValue(this.seedOffset, this.scale, this.falloff, this.min, this.max, this.bias);
+			return new RangeValue(this.seedOffset, this.scale, this.falloff, this.min, this.max, this.offsetBias, this.distributionBias);
 		}
 	}
 
@@ -302,7 +304,8 @@ public class ClimateSettings {
 						5,
 						0.1124F,
 						1.0F,
-						0.002F
+						0.002F,
+						0.0F
 				),
 
 				// moisture
@@ -312,7 +315,8 @@ public class ClimateSettings {
 						1,
 						0.0F,
 						1.0F,
-						0.006F
+						0.006F,
+						0.0F
 				),
 
 				new BiomeShape(

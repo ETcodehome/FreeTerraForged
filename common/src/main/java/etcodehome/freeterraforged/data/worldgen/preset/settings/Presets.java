@@ -31,8 +31,8 @@ public class Presets {
 			new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
 			new CaveSettings(0.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, true, false),
 			new ClimateSettings(
-				new RangeValue(0, 6, 2, 0.0F, 0.98F, 0.05F), 
-				new RangeValue(0, 6, 1, 0.0F, 1.0F, 0.0F), 
+				new RangeValue(0, 6, 2, 0.0F, 0.98F, 0.0F, 0.05F),
+				new RangeValue(0, 6, 1, 0.0F, 1.0F, 0.0F, 0.0F),
 				new BiomeShape(225, 8, 150, 80),
 				new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.SIMPLEX, 24, 2, 0.5F, 2.65F, 14)
 			), 
@@ -76,8 +76,8 @@ public class Presets {
 			new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
 			new CaveSettings(1.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.15F, 0.07F, 0.021F, true, false),
 			new ClimateSettings(
-				new RangeValue(0, 4, 1, 0.0F, 0.98F, 0.05F), 
-				new RangeValue(0, 5, 1, 0.0F, 1.0F, 0.0F), 
+				new RangeValue(0, 4, 1, 0.0F, 0.98F, 0.05F, 0.0F),
+				new RangeValue(0, 5, 1, 0.0F, 1.0F, 0.0F, 0.0F),
 				new BiomeShape(176, 6, 150, 80),
 				new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.SIMPLEX, 24, 2, 0.5F, 2.65F, 14)
 			), 
@@ -121,8 +121,8 @@ public class Presets {
 			new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
 			new CaveSettings(0.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, true, false),
 			new ClimateSettings(
-				new RangeValue(0, 7, 1, 0.0F, 1.0F, -0.004F), 
-				new RangeValue(0, 6, 1, 0.0F, 1.0F, 0.0F), 
+				new RangeValue(0, 7, 1, 0.0F, 1.0F, -0.004F, 0.0F),
+				new RangeValue(0, 6, 1, 0.0F, 1.0F, 0.0F, 0.0F),
 				new BiomeShape(185, 8, 150, 80),
 				new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.SIMPLEX, 24, 2, 0.5F, 2.65F, 14)
 			), 
@@ -166,8 +166,8 @@ public class Presets {
 			new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
 			new CaveSettings(0.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, false, false),
 			new ClimateSettings(
-				new RangeValue(0, 4, 1, 0.0F, 0.98F, 0.05F),
-				new RangeValue(0, 5, 1, 0.0F, 1.0F, 0.0F), 
+				new RangeValue(0, 4, 1, 0.0F, 0.98F, 0.05F, 0.0F),
+				new RangeValue(0, 5, 1, 0.0F, 1.0F, 0.0F, 0.0F),
 				new BiomeShape(176, 6, 150, 80),
 				new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.SIMPLEX, 24, 2, 0.5F, 2.65F, 14)
 			), 
@@ -211,8 +211,8 @@ public class Presets {
 			new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
 			new CaveSettings(0.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, true, false),
 			new ClimateSettings(
-				new RangeValue(0, 4, 2, 0.0F, 1.0F, 0.097F), 
-				new RangeValue(0, 3, 1, 0.0F, 1.0F, 0.0F), 
+				new RangeValue(0, 4, 2, 0.0F, 1.0F, 0.097F, 0.0F),
+				new RangeValue(0, 3, 1, 0.0F, 1.0F, 0.0F, 0.0F),
 				new BiomeShape(402, 5, 180, 110),
 				new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.PERLIN2, 24, 1, 0.5F, 2.65F, 60)
 			), 
@@ -305,7 +305,9 @@ public class Presets {
 								7,
 								0.1124F,
 								1.0F,
-								0.002F),
+								0.002F,
+								0.0F
+						),
 
 						// moisture
 						new RangeValue(0,
@@ -313,7 +315,9 @@ public class Presets {
 								2,
 								0.0F,
 								1.0F,
-								0.0103F),
+								0.0103F,
+								0.0F
+						),
 
 						new BiomeShape(586,
 								4,
