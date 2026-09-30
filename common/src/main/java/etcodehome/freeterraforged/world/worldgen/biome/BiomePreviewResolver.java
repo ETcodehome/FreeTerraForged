@@ -341,7 +341,6 @@ public final class BiomePreviewResolver implements AutoCloseable {
 			throw new IllegalArgumentException("Preview zoom must be positive");
 		}
 		int size = tile.getBlockSize().size();
-		int border = tile.getBlockSize().border();
 		int halfSize = size / 2;
 		int[] quartXs = new int[size];
 		int[] quartZs = new int[size];
@@ -371,7 +370,9 @@ public final class BiomePreviewResolver implements AutoCloseable {
 				return (x, z) -> {
 					int quartX = quartXs[x];
 					int quartZ = quartZs[z];
-					Cell cell = tile.getCellRaw(border + x, border + z);
+					Cell cell = request.tileLookup.lookupBlock(
+						QuartPos.toBlock(quartX), QuartPos.toBlock(quartZ)
+					);
 					int quartY = QuartPos.fromBlock(surfaceY(cell, levels));
 					if (quartCache == null) {
 						return request.resolveQuartInCell(quartX, quartY, quartZ, cell);
@@ -393,7 +394,7 @@ public final class BiomePreviewResolver implements AutoCloseable {
 	private TileBiomeRequest tileRequestAtOrigin(Tile tile, float originX, float originZ, int zoom) {
 		var heightmap = this.generatorContext.lookup.getHeightmap();
 		PreviewTileClimateSampler.TileLookup tileLookup = new PreviewTileClimateSampler.TileLookup(
-			tile, originX, originZ, zoom
+			tile, this.generatorContext.lookup, originX, originZ, zoom
 		);
 		Climate.Sampler sampler = new Climate.Sampler(
 			new PreviewTileClimateSampler(tileLookup, heightmap, CellSampler.Field.TEMPERATURE),
@@ -472,7 +473,7 @@ public final class BiomePreviewResolver implements AutoCloseable {
 
 	private static int surfaceY(Cell cell, Levels levels) {
 		int minY = -levels.worldDepth;
-		int maxY = Math.max(minY, levels.terrainScaleFactor - 1);
+		int maxY = Math.max(minY, levels.worldHeight - 1);
 		return Math.max(minY, Math.min(maxY, levels.scale(cell.height)));
 	}
 

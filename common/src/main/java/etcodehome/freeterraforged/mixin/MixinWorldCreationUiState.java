@@ -12,6 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
 import etcodehome.freeterraforged.world.worldgen.runtime.PreServerWorldgenContext;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPreServerFinalizer;
+import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenDimensionInputs;
 
 @Mixin(WorldCreationUiState.class)
 public class MixinWorldCreationUiState {
@@ -26,7 +27,8 @@ public class MixinWorldCreationUiState {
 		this.freeterraforged$finalizePreServerGraph();
 	}
 
-	@Inject(method = "setSettings", at = @At("TAIL"))
+	@Inject(method = "setSettings", at = @At(value = "INVOKE",
+		target = "Lnet/minecraft/client/gui/screens/worldselection/WorldCreationUiState;onChanged()V"))
 	private void freeterraforged$selectOwnedGeneratorRoot(WorldCreationContext context, CallbackInfo callback) {
 		Holder<WorldPreset> preset = this.worldType.preset();
 		if (preset != null
@@ -40,7 +42,8 @@ public class MixinWorldCreationUiState {
 		this.freeterraforged$finalizePreServerGraph();
 	}
 
-	@Inject(method = "updateDimensions", at = @At("TAIL"))
+	@Inject(method = "updateDimensions", at = @At(value = "INVOKE",
+		target = "Lnet/minecraft/client/gui/screens/worldselection/WorldCreationUiState;onChanged()V"))
 	private void freeterraforged$finalizeUpdatedDimensions(
 		WorldCreationContext.DimensionsUpdater updater,
 		CallbackInfo callback
@@ -49,6 +52,12 @@ public class MixinWorldCreationUiState {
 	}
 
 	private void freeterraforged$finalizePreServerGraph() {
+		var acquired = WorldgenDimensionInputs.acquire(
+			this.settings.selectedDimensions(), this.settings.datapackDimensions()
+		);
+		if (acquired != this.settings.selectedDimensions()) {
+			this.settings = this.settings.withDimensions((registries, dimensions) -> acquired);
+		}
 		WorldgenPreServerFinalizer.finalize(new PreServerWorldgenContext(
 			this.settings.worldgenLoadContext(),
 			this.settings.selectedDimensions(),

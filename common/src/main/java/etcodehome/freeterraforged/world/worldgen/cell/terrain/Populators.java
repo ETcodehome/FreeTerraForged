@@ -30,7 +30,7 @@ public class Populators {
 	private static final int EROSION_VARIATION_SCALE = 200;
 	private static final int WEIRDNESS_VARIATION_SCALE = 300;
 
-	public static CellPopulator makeDeepOcean(@Deprecated int seed, Levels levels, int oceanDepth) {
+	public static CellPopulator makeDeepOcean(@Deprecated int seed, Levels levels, int oceanDepth, ClimateParameterSampler climate) {
 		int minDepth = Math.max(8, oceanDepth / 3);
 		int canyonMinDepth = minDepth + Math.max(1, (oceanDepth - minDepth) / 2);
 
@@ -58,17 +58,17 @@ public class Populators {
 		Noise height = Noises.blend(selector, hills, canyons, 0.6F, 0.65F);
 		height = Noises.warpPerlin(height, ++seed, warpScale, 2, warpStrength);
 		height = Noises.clamp(height, lower, upper);
-		return new OceanPopulator(TerrainType.DEEP_OCEAN, height, levels.min);
+		return new OceanPopulator(TerrainType.DEEP_OCEAN, height, levels.min, climate);
 	}
 
-	public static CellPopulator makeShallowOcean(Levels levels, int oceanDepth) {
+	public static CellPopulator makeShallowOcean(Levels levels, int oceanDepth, ClimateParameterSampler climate) {
 		int shallowDepth = Math.max(7, oceanDepth / 9);
 		float height = Math.max(levels.water(-shallowDepth), levels.min);
-		return new OceanPopulator(TerrainType.SHALLOW_OCEAN, Noises.constant(height), levels.min);
+		return new OceanPopulator(TerrainType.SHALLOW_OCEAN, Noises.constant(height), levels.min, climate);
 	}
 
-	public static CellPopulator makeCoast(Levels levels) {
-		return new OceanPopulator(TerrainType.COAST, Noises.constant(levels.water));
+	public static CellPopulator makeCoast(Levels levels, ClimateParameterSampler climate) {
+		return new OceanPopulator(TerrainType.COAST, Noises.constant(levels.water), 0.0F, climate);
 	}
 
     public static TerrainPopulator makeSteppe(@Deprecated Seed seed, Noise ground, TerrainSettings.Terrain settings) {

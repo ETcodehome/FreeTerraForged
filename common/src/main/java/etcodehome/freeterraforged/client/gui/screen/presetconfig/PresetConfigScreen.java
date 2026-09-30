@@ -102,7 +102,6 @@ public class PresetConfigScreen extends LinkedPageScreen {
 	public SaveResult onDone() {
 		SaveResult result = super.onDone();
 		if(result == SaveResult.SCREEN_TRANSITION) {
-			this.applySeedToParent();
 			this.releaseResources();
 		}
 		return result;
@@ -124,6 +123,8 @@ public class PresetConfigScreen extends LinkedPageScreen {
 		if(!repository.addPack("file/" + exportPath.getFileName())) {
 			throw new IOException("The generated ReTerraForged datapack was not discovered by Minecraft");
 		}
+		// Publish the seed before reload captures WorldOptions.
+		this.applySeedToParent();
 		this.parent.tryApplyNewDataPacks(repository, false, (data) -> {
 		});
 		return SaveResult.SCREEN_TRANSITION;

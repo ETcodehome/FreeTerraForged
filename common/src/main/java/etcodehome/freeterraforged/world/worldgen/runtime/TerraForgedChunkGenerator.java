@@ -42,10 +42,13 @@ import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 	implements AutoCloseable, PlanBackedBiomeDecoration {
 	public static final MapCodec<TerraForgedChunkGenerator> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
-		BiomeSource.CODEC.fieldOf("biome_source").forGetter(TerraForgedChunkGenerator::acquisitionBiomeSource),
-		NoiseGeneratorSettings.CODEC.fieldOf("settings").forGetter(TerraForgedChunkGenerator::generatorSettings)
-	).apply(instance, instance.stable(TerraForgedChunkGenerator::new)));
+		BiomeSource.CODEC.fieldOf("biome_source").forGetter(generator -> generator.selectedBiomeSource),
+		NoiseGeneratorSettings.CODEC.fieldOf("settings").forGetter(TerraForgedChunkGenerator::generatorSettings),
+		BiomeSource.CODEC.optionalFieldOf("dimension_biome_source").forGetter(generator -> generator.dimensionBiomeSource)
+	).apply(instance, instance.stable(TerraForgedChunkGenerator::fromDimensionInputs)));
 
+	private final BiomeSource selectedBiomeSource;
+	private final Optional<BiomeSource> dimensionBiomeSource;
 	private final BiomeSource acquisitionBiomeSource;
 	private final Optional<BiomeSourcePlanInput> acquisitionBiomePlanInput;
 	private final Optional<BiomeCandidateRoot> acquisitionBiomeCandidateRoot;
@@ -77,8 +80,17 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 	) {
 		this(
 			biomeSource, settings, planInput, candidateRoot,
-			new UnifiedBiomeSource(biomeSource, planInput)
+			Optional.empty(), new UnifiedBiomeSource(biomeSource, planInput)
 		);
+	}
+
+	private static TerraForgedChunkGenerator fromDimensionInputs(
+		BiomeSource selectedSource,
+		Holder<NoiseGeneratorSettings> settings,
+		Optional<BiomeSource> declaredSource
+	) {
+		return new TerraForgedChunkGenerator(selectedSource, settings, Optional.empty(), Optional.empty(),
+			declaredSource, new UnifiedBiomeSource(declaredSource.orElse(selectedSource), Optional.empty()));
 	}
 
 	private TerraForgedChunkGenerator(
@@ -86,10 +98,13 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 		net.minecraft.core.Holder<NoiseGeneratorSettings> settings,
 		Optional<BiomeSourcePlanInput> planInput,
 		Optional<BiomeCandidateRoot> candidateRoot,
+		Optional<BiomeSource> declaredSource,
 		UnifiedBiomeSource unifiedBiomeSource
 	) {
 		super(unifiedBiomeSource, settings);
-		this.acquisitionBiomeSource = biomeSource;
+		this.selectedBiomeSource = Objects.requireNonNull(biomeSource, "biomeSource");
+		this.dimensionBiomeSource = Objects.requireNonNull(declaredSource, "declaredSource");
+		this.acquisitionBiomeSource = declaredSource.orElse(biomeSource);
 		this.acquisitionBiomePlanInput = Objects.requireNonNull(planInput, "planInput");
 		this.acquisitionBiomeCandidateRoot = Objects.requireNonNull(candidateRoot, "candidateRoot");
 		if (this.acquisitionBiomePlanInput.isPresent() && this.acquisitionBiomeCandidateRoot.isPresent()) {
@@ -102,6 +117,22 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 
 	public BiomeSource acquisitionBiomeSource() {
 		return this.acquisitionBiomeSource;
+	}
+
+	TerraForgedChunkGenerator withDimensionBiomeSource(BiomeSource source) {
+		Objects.requireNonNull(source, "source");
+		if (this.acquisitionBiomeSource == source) {
+			return this;
+		}
+		if (this.acquisitionBiomePlanInput.isPresent() || this.acquisitionBiomeCandidateRoot.isPresent()) {
+			throw new IllegalStateException("Cannot replace an explicit custom biome plan with a dimension declaration");
+		}
+		return fromDimensionInputs(this.selectedBiomeSource, this.generatorSettings(), Optional.of(source));
+	}
+
+	TerraForgedChunkGenerator withoutDimensionBiomeSource() {
+		return this.dimensionBiomeSource.isEmpty() ? this
+			: new TerraForgedChunkGenerator(this.selectedBiomeSource, this.generatorSettings());
 	}
 
 	public Optional<BiomeSourcePlanInput> acquisitionBiomePlanInput() {
@@ -381,8 +412,9 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 		RandomState randomState,
 		ChunkAccess chunk
 	) {
-		this.requireStage(WorldgenFacet.SURFACE);
+		WorldgenRuntimeBinding.State stage = this.requireState(WorldgenFacet.SURFACE);
 		super.buildSurface(region, structureManager, randomState, chunk);
+		stage.surfaceColumns().apply(region, this, chunk, stage.possibleBiomes());
 	}
 
 	@Override

@@ -5,10 +5,13 @@
   "minVersion": "0.8",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "MixinBeehiveDecorator",
     "BiomeSourceAccessor",
     "MixinNoiseChunk",
     "MixinRandomState",
     "MixinChunkMap",
+    "MixinWorldDimensions",
+    "MixinRegistryDataLoader",
     "MixinUtil",
     "MixinSurfaceSystem",
     "MixinStructure",
@@ -46,6 +49,7 @@
     "compat.MixinLithostitchedEvent"
   ],
   "client": [
+    "MixinCreateWorldScreen",
     "MixinCreateWorldScreenWorldTab",
     "MixinWorldCreationUiState",
     "ScreenInvoker"

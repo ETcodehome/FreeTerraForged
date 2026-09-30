@@ -48,8 +48,6 @@ public interface IPreviewHandler {
     float[] LEGEND_SCALES = { 1, 0.9F, 0.75F, 0.6F };
     long REFRESH_DEBOUNCE_MILLIS = 75L;
 
-    Levels levels = new Levels();
-
     PreviewState state();
 
     PresetEditorPage page();
@@ -289,7 +287,7 @@ public interface IPreviewHandler {
                 );
                 return new PreGenContext(
                         generatorContext, biomePreview, cx, cz, zoomLevel, tileKey,
-                        properties, levels, biomeFailure, lease
+                        properties, generatorContext.levels, biomeFailure, lease
                 );
             } catch (RuntimeException | Error failure) {
                 if (lease != null) {

@@ -7,11 +7,6 @@ import java.util.Optional;
 
 import com.mojang.datafixers.util.Either;
 
-import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
-import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
-import etcodehome.freeterraforged.world.worldgen.cell.Cell;
-import etcodehome.freeterraforged.world.worldgen.cell.rivermap.river.RiverCarverSettings;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -47,7 +42,6 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.LiquidSetting
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
-import etcodehome.freeterraforged.world.worldgen.cell.rivermap.river.RiverCarverSettings;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.TileCache;
 import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
@@ -325,7 +319,7 @@ public class MixinJigsawStructure {
 				continue;
 			}
 
-			if (ftf$footprintIntersectsRiver(builder.getBoundingBox(), generationContext.randomState())) {
+			if (ftf$footprintIntersectsRiver(builder, generationContext.randomState())) {
 				continue;
 			}
 
@@ -399,33 +393,34 @@ public class MixinJigsawStructure {
 	}
 
 	@Unique
-	private boolean ftf$footprintIntersectsRiver(BoundingBox box, RandomState randomState) {
-		int step = 3;
-
-		int minX = box.minX();
-		int maxX = box.maxX();
-		int minZ = box.minZ();
-		int maxZ = box.maxZ();
-
-		for (int x = minX; x <= maxX; x += step) {
-			if (ftf$isRiverCell(x, minZ, randomState) || ftf$isRiverCell(x, maxZ, randomState)) {
-				return true;
+	private boolean ftf$footprintIntersectsRiver(StructurePiecesBuilder builder, RandomState randomState) {
+		if (!((Object) randomState instanceof FTFRandomState rtfRandomState)
+			|| rtfRandomState.generatorContext() == null) {
+			return false;
+		}
+		GeneratorContext context = rtfRandomState.generatorContext();
+		Map<Long, TileCache.Lease> chunks = new HashMap<>();
+		try {
+			for (var piece : builder.build().pieces()) {
+				BoundingBox box = piece.getBoundingBox();
+				for (int x = box.minX(); x <= box.maxX(); x++) {
+					for (int z = box.minZ(); z <= box.maxZ(); z++) {
+						int chunkX = SectionPos.blockToSectionCoord(x);
+						int chunkZ = SectionPos.blockToSectionCoord(z);
+						long key = ChunkPos.asLong(chunkX, chunkZ);
+						TileCache.Lease lease = chunks.computeIfAbsent(
+							key, ignored -> context.cache.acquireAtChunk(chunkX, chunkZ)
+						);
+						if (lease.tile().getChunkReader(chunkX, chunkZ).getCell(x, z).terrain.isRiver()) {
+							return true;
+						}
+					}
+				}
 			}
+			return false;
+		} finally {
+			ftf$closeTileLeases(chunks);
 		}
-		if (ftf$isRiverCell(maxX, minZ, randomState) || ftf$isRiverCell(maxX, maxZ, randomState)) {
-			return true;
-		}
-
-		for (int z = minZ; z <= maxZ; z += step) {
-			if (ftf$isRiverCell(minX, z, randomState) || ftf$isRiverCell(maxX, z, randomState)) {
-				return true;
-			}
-		}
-		if (ftf$isRiverCell(minX, maxZ, randomState) || ftf$isRiverCell(maxX, maxZ, randomState)) {
-			return true;
-		}
-
-		return false;
 	}
 
 	@Unique
@@ -446,7 +441,7 @@ public class MixinJigsawStructure {
 		try (var lease = generatorContext.cache.acquireAtChunk(chunkX, chunkZ)) {
 			Tile.Chunk tileChunk = lease.tile().getChunkReader(chunkX, chunkZ);
 			Cell cell = tileChunk.getCell(localX, localZ);
-			return cell.riverZone == RiverCarverSettings.RiverZone.Riverbed;
+			return cell.terrain.isRiver();
 		}
 	}
 
