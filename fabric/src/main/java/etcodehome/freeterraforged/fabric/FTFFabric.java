@@ -1,8 +1,10 @@
 package etcodehome.freeterraforged.fabric;
 
+import etcodehome.freeterraforged.client.command.FtfCommands;
 import etcodehome.freeterraforged.registries.FTFRegistries;
 import etcodehome.freeterraforged.world.worldgen.biome.modifier.BiomeModifier;
 import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.datagen.v1.DataGeneratorEntrypoint;
 import net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator;
 import net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator.Pack;
@@ -32,6 +34,10 @@ public class FTFFabric implements ModInitializer, DataGeneratorEntrypoint {
 			WorldgenLifecycle.tagsReloaded(
 				server, ((WorldgenResourceRevision) server).advanceWorldgenResourceRevision()
 			);
+		});
+
+		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
+			FtfCommands.register(dispatcher);
 		});
 	}
 
