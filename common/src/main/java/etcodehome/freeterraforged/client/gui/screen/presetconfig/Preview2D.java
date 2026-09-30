@@ -28,7 +28,6 @@ public class Preview2D extends Button implements IPreviewHandler {
 
     private final PresetEditorPage page;
     private final PreviewState state = new PreviewState();
-    private final Levels levels = new Levels();
 
     public Preview2D(PresetEditorPage parent, int x, int y, int width, int height) {
         super(x, y, width, height, CommonComponents.EMPTY, IPreviewHandler.onPress(), DEFAULT_NARRATION);
@@ -249,7 +248,8 @@ public class Preview2D extends Button implements IPreviewHandler {
 
     @Override
     public boolean updateLegend(int mx, int my) {
-        if (this.state.tile != null) {
+        Levels levels = this.state.frameLevels;
+        if (this.state.tile != null && levels != null) {
             int left = this.getX();
             int top = this.getY();
             float size = this.width;

@@ -274,7 +274,7 @@ public final class WorldgenBiomeSelection {
 				);
 			}
 			return this.decoration.apply(
-				selection, spatial, target, quartX, quartY, quartZ, sampler, generatorContext
+				selection, spatial, selection.target(), quartX, quartY, quartZ, sampler, generatorContext
 			);
 		}
 

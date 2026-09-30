@@ -104,7 +104,8 @@ public final class WorldgenRuntimeBinding {
 		Map<ResourceKey<Biome>, BiomeGenerationSettings> generationSettings,
 		Set<Holder<Biome>> possibleBiomes,
 		WorldgenBiomeSelection.Executable biomeSelection,
-		BiomeDecorationPlan biomeDecorationPlan
+		BiomeDecorationPlan biomeDecorationPlan,
+		SurfaceColumnPlan surfaceColumns
 	) {
 		State {
 			epoch = Objects.requireNonNull(epoch, "epoch");
@@ -113,6 +114,7 @@ public final class WorldgenRuntimeBinding {
 			possibleBiomes = Set.copyOf(possibleBiomes);
 			biomeSelection = Objects.requireNonNull(biomeSelection, "biomeSelection");
 			biomeDecorationPlan = Objects.requireNonNull(biomeDecorationPlan, "biomeDecorationPlan");
+			surfaceColumns = Objects.requireNonNull(surfaceColumns, "surfaceColumns");
 			if (!epoch.id().equals(plan.owner().id())) {
 				throw new IllegalArgumentException("Worldgen plan is owned by a different epoch");
 			}
@@ -137,6 +139,7 @@ public final class WorldgenRuntimeBinding {
 		Map<ResourceKey<Biome>, BiomeGenerationSettings> generationSettings
 	) {
 		Set<Holder<Biome>> possibleBiomes = WorldgenBiomeSelection.possibleBiomes(plan);
+		SurfaceColumnPlan surfaceColumns = SurfaceColumnPlan.compile(plan.placedFeatures().steps(), generationSettings);
 		return new State(
 			epoch,
 			plan,
@@ -144,9 +147,10 @@ public final class WorldgenRuntimeBinding {
 			possibleBiomes,
 			WorldgenBiomeSelection.prepare(plan, possibleBiomes),
 			new BiomeDecorationPlan(
-				plan.structures().structures(), plan.placedFeatures().steps(), generationSettings,
+				plan.structures().structures(), plan.placedFeatures().steps(), surfaceColumns.decorationSettings(),
 				possibleBiomes
-			)
+			),
+			surfaceColumns
 		);
 	}
 

@@ -1,5 +1,6 @@
 package etcodehome.freeterraforged.world.worldgen.densityfunction;
 
+import java.lang.ref.WeakReference;
 import java.util.function.Supplier;
 
 import com.mojang.serialization.MapCodec;
@@ -39,21 +40,25 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 			throw new IllegalStateException("FTF cell sampler used before its world lookup was initialized");
 		}
 		Cell cell = CELL.get().getAndUpdate(worldLookup, ctx.blockX(), ctx.blockZ(), true);
-		return this.field.read(cell, worldLookup.getHeightmap());
+		return this.field.readFinite(cell, worldLookup.getHeightmap());
 	}
 
 	@Override
 	public double minValue() {
-		return 0.0F;
+		// Fields exceed unit-noise bounds; finite float bounds avoid infinity * zero in vanilla.
+		return -Float.MAX_VALUE;
 	}
 
 	@Override
 	public double maxValue() {
-		return 1.0F;
+		return Float.MAX_VALUE;
 	}
 
 	public static class Cache2d {
 		private long lastPos = Long.MAX_VALUE;
+		private WeakReference<WorldLookup> lastLookup = new WeakReference<>(null);
+		private boolean lastSampleClimate;
+		private boolean valid;
 		private Cell cell = new Cell();
 		
 		public Cell getAndUpdate(WorldLookup lookup, int blockX, int blockZ, boolean sampleClimate) {
@@ -61,9 +66,16 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 			blockZ = QuartPos.toBlock(QuartPos.fromBlock(blockZ));
 			
 			long packedPos = PosUtil.pack(blockX, blockZ);
-			if(this.lastPos != packedPos) {
+			boolean sameOwner = this.lastLookup.get() == lookup;
+			if(!this.valid || !sameOwner || this.lastPos != packedPos || this.lastSampleClimate != sampleClimate) {
+				this.valid = false;
 				lookup.applyCell(this.cell.reset(), blockX, blockZ, false, sampleClimate);
 				this.lastPos = packedPos;
+				if (!sameOwner) {
+					this.lastLookup = new WeakReference<>(lookup);
+				}
+				this.lastSampleClimate = sampleClimate;
+				this.valid = true;
 			}
 			return this.cell;
 		}
@@ -92,7 +104,7 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 			Cell cell = (current != null && this.chunkX == chunkX && this.chunkZ == chunkZ) ?
 				current.getCell(blockX, blockZ) :
 				this.cache2d.getAndUpdate(worldLookup, blockX, blockZ, false);
-			return CellSampler.this.field.read(cell, worldLookup.getHeightmap());
+			return CellSampler.this.field.readFinite(cell, worldLookup.getHeightmap());
 		}
 
 		@Override
@@ -141,8 +153,10 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 				if(cell.terrain == TerrainType.MUSHROOM_FIELDS) {
 					return Continentalness.MUSHROOM_FIELDS.mid();
 				}
+				boolean submergedOffshore = cell.height <= levels.water && cell.continentEdge < beach
+					&& !cell.terrain.isRiver() && !cell.terrain.isLake() && !cell.terrain.isWetland();
 
-				if(cell.terrain.isDeepOcean()) {
+				if(cell.terrain.isDeepOcean() || submergedOffshore && cell.continentEdge <= deepOcean) {
 					if(deepOcean <= 0.0F) {
 						return Continentalness.DEEP_OCEAN.mid();
 					}
@@ -158,6 +172,18 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 					float alpha = NoiseUtil.clamp(cell.continentEdge, deepOcean, shallowOcean);
 					alpha = NoiseUtil.lerp(alpha, deepOcean, shallowOcean, 0.0F, 0.98F);
 					return Math.max(SHALLOW_OCEAN_MIN, NoiseUtil.lerp(Continentalness.OCEAN.min(), Continentalness.OCEAN.max(), alpha));
+				}
+
+				if (submergedOffshore) {
+					if (beach <= deepOcean) {
+						return Continentalness.OCEAN.mid();
+					}
+					float alpha = NoiseUtil.lerp(
+						NoiseUtil.clamp(cell.continentEdge, deepOcean, beach),
+						deepOcean, beach, 0.0F, 0.98F
+					);
+					return Math.max(SHALLOW_OCEAN_MIN,
+						NoiseUtil.lerp(Continentalness.OCEAN.min(), Continentalness.OCEAN.max(), alpha));
 				}
 				
 				if(cell.terrain.getDelegate() == TerrainCategory.BEACH && cell.height + cell.beachNoise < levels.water(5)) {
@@ -261,5 +287,13 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 		}
 		
 		public abstract float read(Cell cell, Heightmap heightmap);
+
+		public float readFinite(Cell cell, Heightmap heightmap) {
+			float value = this.read(cell, heightmap);
+			if (!Float.isFinite(value)) {
+				throw new IllegalStateException("Non-finite FTF cell density field " + this.name + ": " + value);
+			}
+			return value;
+		}
 	}
 }

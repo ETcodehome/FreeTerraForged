@@ -303,10 +303,15 @@ public final class MinecraftWorldgenPlanCompiler {
 				notMaterialized(WorldgenFacet.SURFACE, purpose), Optional.empty()
 			);
 		} else if (generator instanceof NoiseBasedChunkGenerator noiseGenerator) {
-			surfacePlan = new WorldgenPlans.Surface(
-				descriptor(WorldgenFacet.SURFACE, CapabilityState.NORMALIZED,
-					"Active surface-rule graph is retained from the selected noise settings"),
-				Optional.of(noiseGenerator.generatorSettings().value().surfaceRule())
+			surfacePlan = compileFacet(WorldgenFacet.SURFACE, () -> {
+				var root = noiseGenerator.generatorSettings().value().surfaceRule();
+				WorldgenSurfaceInputs.requireSupported(root, owner.registries());
+				return new WorldgenPlans.Surface(
+					descriptor(WorldgenFacet.SURFACE, CapabilityState.NORMALIZED,
+						"Acquired surface graph and provenance are validated against the owner's frozen registries"),
+					Optional.of(root)
+				);
+			}, failure -> new WorldgenPlans.Surface(failure, Optional.empty())
 			);
 		} else {
 			surfacePlan = new WorldgenPlans.Surface(
@@ -708,7 +713,7 @@ public final class MinecraftWorldgenPlanCompiler {
 		WorldgenPlans.SelectionDecoration policy = compileFacet(
 			WorldgenFacet.SELECTION_DECORATION,
 			() -> compileFtfSelectionPolicy(
-				plan.owner(), plan.providerSelection(), purpose
+				plan.owner(), plan.providerSelection(), plan.samplerDecoration(), purpose
 			),
 			failure -> new WorldgenPlans.SelectionDecoration(failure, List.of())
 		);
@@ -763,6 +768,7 @@ public final class MinecraftWorldgenPlanCompiler {
 	private static WorldgenPlans.SelectionDecoration compileFtfSelectionPolicy(
 		WorldgenOwner owner,
 		WorldgenPlans.ProviderSelection providers,
+		WorldgenPlans.SamplerDecoration samplerDecoration,
 		WorldgenCompilationPurpose purpose
 	) {
 		if (providers.providers().isEmpty()) {
@@ -772,17 +778,19 @@ public final class MinecraftWorldgenPlanCompiler {
 				List.of()
 			);
 		}
-		return compileProviderSelectionPolicy(owner, providers, purpose);
+		return compileProviderSelectionPolicy(owner, providers, samplerDecoration, purpose);
 	}
 
 	private static WorldgenPlans.SelectionDecoration compileProviderSelectionPolicy(
 		WorldgenOwner owner,
 		WorldgenPlans.ProviderSelection providers,
+		WorldgenPlans.SamplerDecoration samplerDecoration,
 		WorldgenCompilationPurpose purpose
 	) {
 		ResourceLocation fallback = providers.rootCompositionDomain().orElseThrow(
 			() -> new IllegalStateException("The executable candidate-provider plan has no root composition domain")
 		);
+		TerrainBiomeRoleSelection terrainRoles = new TerrainBiomeRoleSelection(providers);
 		if (purpose == WorldgenCompilationPurpose.BIOME_PREVIEW) {
 			Map<ResourceLocation, SurfaceBiomeFilter<Holder<Biome>>> filters = providers.providers().stream()
 				.collect(java.util.stream.Collectors.toUnmodifiableMap(
@@ -797,7 +805,10 @@ public final class MinecraftWorldgenPlanCompiler {
 					if (filter == null) {
 						throw new IllegalStateException("No surface policy for candidate domain " + domain);
 					}
-					return filter.resolve(target, result.biome());
+					Holder<Biome> selected = filter.resolve(target, result.biome());
+					return terrainRoles.resolve(
+						result, target, selected, quartX, quartY, quartZ, sampler, surfaceContext
+					);
 				}
 			);
 		}
@@ -806,7 +817,8 @@ public final class MinecraftWorldgenPlanCompiler {
 			.collect(java.util.stream.Collectors.toUnmodifiableMap(
 				WorldgenPlans.ProviderDomain::id,
 				domain -> UndergroundBiomeBanding.apply(
-					preset, domain.candidates(), owner.seed()
+					preset, domain.candidates(), owner.seed(),
+					(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value))
 				)
 			));
 		return selectionPolicy(
@@ -821,8 +833,18 @@ public final class MinecraftWorldgenPlanCompiler {
 				if (layout == null) {
 					throw new IllegalStateException("No underground policy for candidate domain " + domain);
 				}
-				return applyUndergroundPolicy(
-					preset, layout, selected, target, quartX, quartY, quartZ, sampler
+				Holder<Biome> resolved = applyUndergroundPolicy(
+					preset, layout, selected, target, quartX, quartY, quartZ, sampler,
+					(identityQuartX, identityQuartY, identityQuartZ) -> providers.projectTarget(
+						domain,
+						result.usedFallback(),
+						samplerDecoration.sample(
+							sampler, identityQuartX, identityQuartY, identityQuartZ
+						)
+					)
+				);
+				return terrainRoles.resolve(
+					result, target, resolved, quartX, quartY, quartZ, sampler, surfaceContext
 				);
 			}
 		);
@@ -878,13 +900,14 @@ public final class MinecraftWorldgenPlanCompiler {
 		int quartX,
 		int quartY,
 		int quartZ,
-		Climate.Sampler sampler
+		Climate.Sampler sampler,
+		UndergroundBiomeBanding.TargetSampler targetSampler
 	) {
 		float coverage = UndergroundBiomeSurfaceProtection.coverageFactor(
 			sampler, target, quartX, quartY, quartZ
 		);
 		if (layout.appliesAt(target)) {
-			return layout.findValue(target, quartX, quartY, quartZ, coverage);
+			return layout.findValue(target, quartX, quartY, quartZ, coverage, targetSampler);
 		}
 		if ((coverage <= 0.0F || preset.climate().biomeShape.undergroundBiomeCoverage() <= 0.0F)
 			&& layout.isCaveCandidate(selected)) {

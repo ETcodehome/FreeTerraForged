@@ -1,6 +1,5 @@
 package etcodehome.freeterraforged.world.worldgen.cell.terrain.populator;
 
-import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
 import etcodehome.freeterraforged.world.worldgen.biome.Erosion;
 import etcodehome.freeterraforged.world.worldgen.biome.Weirdness;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
@@ -27,7 +26,7 @@ public class ArchipelagoPopulator implements CellPopulator {
     private static final float PEAK_DRIFT_STRENGTH = 0.35F;
     private static final float BASE_SUMMIT_PERTURB_STRENGTH = 0.42F;
 
-    private IslandSettings settings;
+    private final IslandSettings settings;
     private Levels levels;
     private ControlPoints controlPoints;
     private int oceanDepth;
@@ -68,9 +67,9 @@ public class ArchipelagoPopulator implements CellPopulator {
     private float gradientStep;
     private float macroDensityPercentage;
 
-    public ArchipelagoPopulator(Levels levels, ControlPoints controlPoints, Seed seed, int oceanDepth) {
-
-        this.settings = PresetManager.PM.islandSettings;
+    public ArchipelagoPopulator(IslandSettings settings, Levels levels, ControlPoints controlPoints, Seed seed, int oceanDepth) {
+        this.settings = settings.copy();
+        settings = this.settings;
 
         this.levels = levels;
         this.controlPoints = controlPoints;
