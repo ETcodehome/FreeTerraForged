@@ -1,10 +1,7 @@
 package etcodehome.freeterraforged.world.worldgen.cell.climate;
 
-import etcodehome.freeterraforged.world.worldgen.biome.Humidity;
-import etcodehome.freeterraforged.world.worldgen.biome.Temperature;
 import etcodehome.freeterraforged.world.worldgen.cell.continent.Continent;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
-import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainCategory;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil.Vec2f;
@@ -32,15 +29,9 @@ public class ClimateModule {
 	private Continent continent;
 	private ControlPoints controlPoints;
 	private Levels levels;
-
-	// Must match Climate.EDGE_BLEND: below this biomeRegionEdge the edge offset is active,
-	// so region-center overrides must be fully faded out by then.
-	private static final float REGION_FADE = 0.4F;
-	// Cell.height range over which the highland override fades in above ground level.
-	private static final float HIGHLAND_RISE = 0.10F;
-	// Blocks above the waterline over which the island override fades in (keeps beaches smooth).
-	private static final float ISLAND_RISE_BLOCKS = 6.0F;
-	private static final float MUSHROOM_THRESHOLD = 0.95F;
+	private static final float ALTITUDE_COOLING_STRENGTH = 2.2F; // TODO - configurable strength
+	private static final float RAIN_SHADOW_STRENGTH = 1.8F;    // Exponent k scales up to 2^1.8 ~ 3.48 // TODO - configurable strength
+	private static final float COASTAL_MOISTURE_BOOST = 0.20F; // TODO - configurable strength
 	
 	public ClimateModule(Seed seed, Continent continent, WorldSettings.ControlPoints controlPoints, ClimateSettings climateSettings, Levels levels) {
 		int biomeSize = climateSettings.biomeShape.biomeSize();
@@ -94,32 +85,6 @@ public class ClimateModule {
 		this.macroBiomeNoise = macroBiomeNoise;
 	}
 
-	ClimateModule(
-		int seed,
-		float biomeFreq,
-		float warpStrength,
-		Noise warpX,
-		Noise warpZ,
-		Noise moisture,
-		Noise temperature,
-		Noise macroBiomeNoise,
-		Continent continent,
-		ControlPoints controlPoints,
-		Levels levels
-	) {
-		this.seed = seed;
-		this.biomeFreq = biomeFreq;
-		this.warpStrength = warpStrength;
-		this.warpX = warpX;
-		this.warpZ = warpZ;
-		this.moisture = moisture;
-		this.temperature = temperature;
-		this.macroBiomeNoise = macroBiomeNoise;
-		this.continent = continent;
-		this.controlPoints = controlPoints;
-		this.levels = levels;
-	}
-
 	public void apply(Cell cell, float x, float z, float originalX, float originalZ) {
 		this.apply(cell, x, z, originalX, originalZ, true);
 	}
@@ -145,75 +110,59 @@ public class ClimateModule {
 			this.modifyTerrain(cell, regionEdge);
 		}
 
-		// Smooth per-pixel climate (values in [0, 1]).
-		float temp = this.temperature.compute(x, z, 0);
-		//float temp = this.modifyTemp(cell.height, this.temperature.compute(x, z, 0), originalX, originalZ);
-		float moist = this.moisture.compute(x, z, 0);
-		//float moist = this.modifyMoisture(this.moisture.compute(x, z, 0), cell.continentEdge);
+		float rawMoist = this.moisture.compute(x, z, 0);
+		float moist = this.modifyMoisture(cell.height, rawMoist);
 
-		/*
-
-		// Highlands: fade toward the terrain region's center climate instead of switching to it.
-		float hw = this.highlandWeight(cell);
-		if (hw > 0.0F) {
-			float hx = cell.terrainRegionCenterX * this.biomeFreq;
-			float hz = cell.terrainRegionCenterZ * this.biomeFreq;
-			float ht = this.modifyTemp(cell.height, this.temperature.compute(hx, hz, 0), originalX, originalZ);
-			float hm = this.modifyMoisture(this.moisture.compute(hx, hz, 0), regionEdge);
-			//temp = NoiseUtil.lerp(temp, ht, hw);
-			//moist = NoiseUtil.lerp(moist, hm, hw);
-		}
-
-		// Islands: fade toward the biome region's center climate (or mushroom climate).
-		float iw = this.islandWeight(cell);
-		if (iw > 0.0F) {
-			// The terrain flag carries the mushroom decision into the edge-offset second pass,
-			// where macroBiomeId belongs to the offset region and can no longer be trusted.
-			boolean mushroom = cell.terrain == TerrainType.MUSHROOM_FIELDS;
-			if (!mushroom && mask && cell.macroBiomeId > MUSHROOM_THRESHOLD) {
-				cell.terrain = TerrainType.MUSHROOM_FIELDS;
-				mushroom = true;
-			}
-			float it;
-			float im;
-			if (mushroom) {
-				it = (Temperature.LEVEL_2.mid() + 1.0F) * 0.5F; // Moderate
-				im = (Humidity.LEVEL_4.mid() + 1.0F) * 0.5F;    // Wet
-			} else {
-				it = this.modifyTemp(cell.height, this.temperature.compute(centerX, centerZ, 0), originalX, originalZ);
-				im = this.modifyMoisture(this.moisture.compute(centerX, centerZ, 0), regionEdge);
-			}
-			//temp = NoiseUtil.lerp(temp, it, iw);
-			//moist = NoiseUtil.lerp(moist, im, iw);
-		}
-
-		 */
+		float rawTemp = this.temperature.compute(x, z, 0);
+		float temp = this.modifyTemp(cell.height, rawTemp);
 
 		// convert from normalised 0-1 range to -1 to 1 range
 		cell.temperature = temp * 2.0F - 1.0F;
 		cell.moisture = moist * 2.0F - 1.0F;
 	}
 
-	/** 0 at terrain-region borders and near ground level, 1 in the interior of a raised highland region. */
-	private float highlandWeight(Cell cell) {
-		if (cell.terrain == null || cell.terrain.getCategory() != TerrainCategory.HIGHLAND) {
-			return 0.0F;
+	private float modifyTemp(float height, float rawTemp) {
+		// Only apply cooling above ground level
+		if (height <= this.levels.ground) {
+			return rawTemp;
 		}
-		float region = NoiseUtil.interpHermite(NoiseUtil.clamp(cell.terrainRegionEdge, 0.0F, 1.0F));
-		float rise = NoiseUtil.interpHermite(NoiseUtil.clamp((cell.height - this.levels.ground) / HIGHLAND_RISE, 0.0F, 1.0F));
-		return region * rise;
+
+		// getNormalizedInlandElevation returns 0.0 at sea level and 1.0 at maximum terrain height
+		float heightNorm = NoiseUtil.clamp(this.levels.getNormalizedInlandElevation(height), 0.0F, 1.0F);
+
+		// Calculate exponential warp factor (k ranges from 1.0 at sea level to 4.0 at peak height)
+		float exponent = (float) Math.pow(2.0, heightNorm * ALTITUDE_COOLING_STRENGTH);
+
+		float tempNormalized = NoiseUtil.clamp(rawTemp, 0.0F, 1.0F);
+
+		return (float) Math.pow(tempNormalized, exponent);
 	}
 
-	/** 0 at biome-region borders and at the shoreline, 1 in the island interior. */
-	private float islandWeight(Cell cell) {
-		if (cell.terrain.getCategory() != TerrainCategory.ISLAND) {
-			return 0.0F;
+	public float modifyMoisture(float height, float rawMoisture) {
+		float moisture = NoiseUtil.clamp(rawMoisture, 0.0F, 1.0F);
+
+		// Calculate height relative to sea level (0.0 at ground, 1.0 at peak inland terrain)
+		float heightNorm = (height <= this.levels.ground) ? 0.0F :
+				NoiseUtil.clamp(this.levels.getNormalizedInlandElevation(height), 0.0F, 1.0F);
+
+		// Coastal boost fades as elevation rises inland
+		float coastalInfluence = 1.0F - heightNorm;
+		if (coastalInfluence > 0.0F) {
+			moisture = moisture + (1.0F - moisture) * (COASTAL_MOISTURE_BOOST * coastalInfluence);
 		}
-		float region = NoiseUtil.interpHermite(NoiseUtil.clamp(cell.biomeRegionEdge / REGION_FADE, 0.0F, 1.0F));
-		float rise = NoiseUtil.interpHermite(NoiseUtil.clamp(
-				(cell.height - this.levels.water) / (ISLAND_RISE_BLOCKS * this.levels.unit), 0.0F, 1.0F));
-		return region * rise;
+
+		// Return boosted moisture directly at or below sea level
+		if (height <= this.levels.ground) {
+			return NoiseUtil.clamp(moisture, 0.0F, 1.0F);
+		}
+
+		// Rain Shadow Exponent (k ranges from 1.0 at sea level to ~3.48 at max peak)
+		float exponent = (float) Math.pow(2.0, heightNorm * RAIN_SHADOW_STRENGTH);
+
+		// Power curve preserves 1.0 (rainforests) while exponentially drying mid-tier moisture
+		return (float) Math.pow(moisture, exponent);
 	}
+
 
 	public void applyRegion(Cell cell, float x, float z, boolean mask) {
 		float warpedX = x + this.warpX.compute(x, z, 0) * this.warpStrength;

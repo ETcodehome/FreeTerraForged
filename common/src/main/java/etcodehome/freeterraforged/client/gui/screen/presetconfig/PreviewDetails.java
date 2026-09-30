@@ -28,7 +28,7 @@ final class PreviewDetails {
             case TERRAIN_REGION -> new Detail(Component.literal("Terrain Type"), cell.terrain.getName());
             case HYPSOMETRIC, TOPOGRAPHY -> new Detail(
                 Component.literal("Elevation"),
-                "Y=" + levels.scale(cell.height)
+                "Y=" + levels.scale(cell.height) + " H=" + cell.height
             );
             case CONTINENT_UPLIFT -> value("Uplift", cell.waterTable);
             case CONTINENT_EDGE -> value("Continent Edge", cell.continentEdge);

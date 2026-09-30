@@ -77,9 +77,19 @@ public class ClimateSettings {
 		public Noise apply(Noise module) {
 			float min = this.getMin();
 			float max = this.getMax();
-			float bias = this.getBias() / 2.0F;
-			module = Noises.add(module, bias);
-			module = Noises.clamp(module, min, max);
+			float bias = this.getBias();
+
+			// Convert bias in [-1.0, 1.0] to an exponent k in [2.0, 0.5]
+			// Positive bias reduces exponent (< 1.0) -> pushes values up
+			// Negative bias increases exponent (> 1.0) -> pushes values down
+			if (bias != 0.0F) {
+				float exponent = (float) Math.pow(2.0, -bias);
+				module = Noises.pow(module, exponent);
+			}
+
+			// Scale output smoothly into [min, max] range
+			module = Noises.map(module, min, max);
+
 			return module;
 		}
 
@@ -131,20 +141,6 @@ public class ClimateSettings {
 			this(
 					biomeSize,
 					biomeSize,
-					DEFAULT_UNDERGROUND_VERTICAL_SIZE,
-					DEFAULT_UNDERGROUND_BIOME_COVERAGE,
-					DEFAULT_UNDERGROUND_BIOME_CLIMATE_INFLUENCE,
-					true,
-					macroNoiseSize,
-					biomeWarpScale,
-					biomeWarpStrength
-			);
-		}
-
-		public BiomeShape(int biomeSize, int undergroundBiomeSize, int macroNoiseSize, int biomeWarpScale, int biomeWarpStrength) {
-			this(
-					biomeSize,
-					undergroundBiomeSize,
 					DEFAULT_UNDERGROUND_VERTICAL_SIZE,
 					DEFAULT_UNDERGROUND_BIOME_COVERAGE,
 					DEFAULT_UNDERGROUND_BIOME_CLIMATE_INFLUENCE,
