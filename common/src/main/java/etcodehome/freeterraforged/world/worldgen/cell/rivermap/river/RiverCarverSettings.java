@@ -12,7 +12,7 @@ public class RiverCarverSettings {
     public CurveFunction valleyCurve;
 
     public RiverCarverSettings(Random random) {
-        this.valleySize = 400.0F;
+        this.valleySize = 275.0F;
         this.fadeIn = 0.7F;
         this.connecting = false;
         this.valleyCurve = getValleyType(random);
