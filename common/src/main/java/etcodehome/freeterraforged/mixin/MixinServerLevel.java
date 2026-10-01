@@ -11,6 +11,13 @@ public class MixinServerLevel {
 	@WrapMethod(method = "close")
 	private void freeterraforged$closeWorldgenEpoch(Operation<Void> original) {
 		ServerLevel level = (ServerLevel) (Object) this;
+
+		// Strictly guard against fake/synthetic level subclasses (e.g. BlockTestLevel, FakeServerLevel)
+		if (level.getClass() != ServerLevel.class) {
+			original.call();
+			return;
+		}
+
 		TerraForgedChunkGenerator generator = level.getChunkSource().getGenerator() instanceof TerraForgedChunkGenerator terra
 			? terra
 			: null;
