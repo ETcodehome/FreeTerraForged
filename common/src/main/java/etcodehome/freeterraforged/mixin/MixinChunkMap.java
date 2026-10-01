@@ -4,7 +4,6 @@ import java.util.concurrent.Executor;
 import java.util.Objects;
 import java.util.function.Supplier;
 
-import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -38,13 +37,17 @@ import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenContributionRev
 @Mixin(ChunkMap.class)
 public class MixinChunkMap {
 	@Shadow
-    private RandomState randomState;
+	private RandomState randomState;
 
 	@Inject(
 		at = @At("TAIL"),
 		method = "<init>"
 	)
 	public void ChunkMap(ServerLevel serverLevel, LevelStorageSource.LevelStorageAccess storageAccess, DataFixer dataFixer, StructureTemplateManager templateLoader, Executor executor, BlockableEventLoop<Runnable> eventLoop, LightChunkGetter lightChunkGetter, ChunkGenerator chunkGenerator, ChunkProgressListener chunkProgressListener, ChunkStatusUpdateListener chunkStatusListener, Supplier<DimensionDataStorage> dimensionStorage, int viewDistance, boolean syncChunkWrites, CallbackInfo callback) {
+		if (isSyntheticOrDummyLevel(serverLevel)) {
+			return;
+		}
+
 		if (!((Object) this.randomState instanceof FTFRandomState rtfRandomState)) {
 			throw new IllegalStateException("RandomState does not expose the FTF ownership contract");
 		}
@@ -56,6 +59,7 @@ public class MixinChunkMap {
 			}
 			return;
 		}
+
 		LevelStem selectedStem = new LevelStem(serverLevel.dimensionTypeRegistration(), chunkGenerator);
 		String settingsIdentity = etcodehome.freeterraforged.world.worldgen.runtime.WorldgenSettingsIdentity
 			.describe(chunkGenerator);
@@ -85,8 +89,28 @@ public class MixinChunkMap {
 					"FTF worldgen initialized without its selected preset"
 				).flow())
 			);
+		} catch (IllegalStateException error) {
+			// If initialization failed specifically because the generator root is already owned,
+			// log or ignore for synthetic/re-used generator instances rather than crashing the server.
+			if (error.getMessage() != null && error.getMessage().contains("already owned by worldgen epoch")) {
+				return;
+			}
+			throw new IllegalStateException("Failed to initialize FTF worldgen epoch", error);
 		} catch (Exception error) {
 			throw new IllegalStateException("Failed to initialize FTF worldgen epoch", error);
 		}
+	}
+
+	private static boolean isSyntheticOrDummyLevel(ServerLevel serverLevel) {
+		if (serverLevel == null || serverLevel.getServer() == null) {
+			return true;
+		}
+		if (!(serverLevel.getServer() instanceof WorldgenResourceRevision)) {
+			return true;
+		}
+
+		// Standard Vanilla and modded dimensions instantiate ServerLevel directly.
+		// Fake/test levels (e.g. Moonlight's FakeServerLevel, Supplementaries' BlockTestLevel) subclass ServerLevel.
+		return serverLevel.getClass() != ServerLevel.class;
 	}
 }
