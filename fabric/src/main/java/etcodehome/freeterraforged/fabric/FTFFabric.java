@@ -11,7 +11,6 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.minecraft.data.metadata.PackMetadataGenerator;
 import net.minecraft.network.chat.Component;
 import etcodehome.freeterraforged.FTFCommon;
-import etcodehome.freeterraforged.client.data.FTFLanguageProvider;
 import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
 import etcodehome.freeterraforged.fabric.network.FTFFabricNetworking;
 import etcodehome.freeterraforged.server.FTFMinecraftServer;
@@ -38,8 +37,6 @@ public class FTFFabric implements ModInitializer, DataGeneratorEntrypoint {
 	@Override
 	public void onInitializeDataGenerator(FabricDataGenerator fabricDataGenerator) {
 		Pack pack = fabricDataGenerator.createPack();
-
-		pack.addProvider((FabricDataOutput output) -> new FTFLanguageProvider.EnglishUS(output));
 		pack.addProvider((FabricDataOutput output) -> PackMetadataGenerator.forFeaturePack(output, Component.translatable(FTFTranslationKeys.METADATA_DESCRIPTION)));
 	}
 }
