@@ -17,6 +17,7 @@ import net.minecraft.resources.ResourceLocation;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.SpawnType;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.filter.TerrainCeiling;
 
 public class Preview3D extends Button implements IPreviewHandler {
     public static final int SIZE = IPreviewHandler.SIZE;
@@ -140,6 +141,7 @@ public class Preview3D extends Button implements IPreviewHandler {
         float heightScale = getHeightScale((float) blockW, params.zoom);
         int halfTile = tileSize / 2;
         float maxCellHeight = properties.worldHeight * levels.unit;
+        int heightLimit = TerrainCeiling.buildLimitHeight(properties, TerrainCeiling.isEnabled(this.page.preset.getPreset()));
         float[] hsb = new float[3];
 
         for (int iz = 0; iz < tileSize; iz++) {
@@ -147,9 +149,9 @@ public class Preview3D extends Button implements IPreviewHandler {
                 Cell cell = activeTile.lookup(ix, iz);
                 float effectiveHeight = cell.height;
                 int color;
-                if (levels.scale(cell.height) > properties.worldHeight) {
+                if (levels.scale(cell.height) > heightLimit) {
                     color = 0xFFFF00FF;
-                    effectiveHeight = maxCellHeight;
+                    effectiveHeight = Math.min(cell.height, maxCellHeight);
                 } else {
                     color = mode.getColor(cell, levels, activeBiomes == null ? 0xFFFF00FF : activeBiomes.color(ix, iz));
                 }

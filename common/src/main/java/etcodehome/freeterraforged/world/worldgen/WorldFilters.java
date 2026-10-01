@@ -27,7 +27,7 @@ public class WorldFilters {
         this.beach = BeachDetect.make(context);
         this.smoothing = Smoothing.make(context.preset.filters().smoothing, context.levels);
         this.steepness = Steepness.make(1, 10.0F, context.levels);
-        if (context.preset.terrain().general.mountainVariety > 0.0F) {
+        if (TerrainCeiling.isEnabled(context.preset)) {
             this.terrainCeiling = TerrainCeiling.make(context.preset.world().properties);
         }
         this.erosion = new WorldErosion<>(factory, (e, size) -> e.getSize() == size);
