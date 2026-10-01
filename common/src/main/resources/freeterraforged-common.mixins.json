@@ -46,7 +46,9 @@
     "MixinServerLevel",
     "compat.MixinBiolithDimensionBiomePlacement",
     "compat.MixinLithostitchedBiomeInjectorManager",
-    "compat.MixinLithostitchedEvent"
+    "compat.MixinLithostitchedEvent",
+    "compat.MixinStreamsReflowingRTFBridge",
+    "compat.MixinStreamsReflowingRTFBridgeSurface"
   ],
   "client": [
     "MixinCreateWorldScreen",

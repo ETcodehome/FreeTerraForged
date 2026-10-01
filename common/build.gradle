@@ -12,6 +12,7 @@ dependencies {
 	compileOnly "com.electronwill.night-config:toml:3.6.7"
 	modCompileOnly "maven.modrinth:biolith:3.0.14-neoforge"
 	modCompileOnly "maven.modrinth:lithostitched:1.8.0+beta6-neoforge-21.1"
+	modCompileOnly "maven.modrinth:streams-reflowing:2.13.8"
 	compileOnly "dev.architectury:architectury-injectables:1.0.13"
 }
 

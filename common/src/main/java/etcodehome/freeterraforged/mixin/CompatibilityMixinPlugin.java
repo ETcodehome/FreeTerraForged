@@ -13,7 +13,9 @@ import etcodehome.freeterraforged.platform.ModLoaderUtil;
 
 public final class CompatibilityMixinPlugin implements IMixinConfigPlugin {
 	private static final Set<String> BIOLITH_VERSIONS = Set.of("3.0.11", "3.0.14");
+	private static final Set<String> STREAMS_REFLOWING_VERSIONS = Set.of("2.13.8");
 	private static final AtomicBoolean LITHOSTITCHED_WARNING_LOGGED = new AtomicBoolean();
+	private static final AtomicBoolean STREAMS_REFLOWING_WARNING_LOGGED = new AtomicBoolean();
 
 	@Override
 	public void onLoad(String mixinPackage) {
@@ -39,6 +41,20 @@ public final class CompatibilityMixinPlugin implements IMixinConfigPlugin {
 				);
 			}
 			return assessment.supported();
+		}
+		if (mixinClassName.endsWith(".compat.MixinStreamsReflowingRTFBridge")
+			|| mixinClassName.endsWith(".compat.MixinStreamsReflowingRTFBridgeSurface")) {
+			boolean supported = ModLoaderUtil.version("streamsreflowing")
+				.filter(STREAMS_REFLOWING_VERSIONS::contains)
+				.isPresent();
+			if (ModLoaderUtil.isLoaded("streamsreflowing") && !supported
+				&& STREAMS_REFLOWING_WARNING_LOGGED.compareAndSet(false, true)) {
+				LogManager.getLogger("FreeTerraForged").warn(
+					"Streams Reflowing bridge is unavailable for version {}",
+					ModLoaderUtil.version("streamsreflowing").orElse("unknown")
+				);
+			}
+			return supported;
 		}
 		return true;
 	}
