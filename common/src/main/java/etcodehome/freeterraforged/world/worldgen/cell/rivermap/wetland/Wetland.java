@@ -51,7 +51,8 @@ public class Wetland {
                 cell.globalContinentScale,
                 cell.continentSizeModifier)
         );
-        float oceanHeightOffset = levels.scale(levels.waterLevel);
+        // levels.water is the top water block (sea level - 1), matching where river/lake/wetland water is placed
+        float oceanHeightOffset = levels.water;
         float localWaterSurface = oceanHeightOffset + upliftOffset;
 
         // generate a single block height factor so we can offset heights by single layers easily
