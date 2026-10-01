@@ -222,6 +222,9 @@ public final class FTFTranslationKeys {
 	public static final String GUI_LABEL_ISLAND_TRANSITIONS = resolve("gui.label.islandTransitions");
 	public static final String GUI_LABEL_ISLAND_SCALES = resolve("gui.label.islandScales");
 	public static final String GUI_LABEL_ISLAND_CHANCES = resolve("gui.label.islandChances");
+    public static final String GUI_SLIDER_ALTITUDE_COOLING_STRENGTH = resolve("gui.slider.altitudeCoolingStrength");
+	public static final String GUI_SLIDER_RAIN_SHADOW_STRENGTH = resolve("gui.slider.rainShadowStrength");
+	public static final String GUI_SLIDER_COASTAL_MOISTURE_BOOST = resolve("gui.slider.coastalMoistureBoost");
 
 	public static String resolve(String key) {
 		return FTFCommon.MOD_ID + "." + key;

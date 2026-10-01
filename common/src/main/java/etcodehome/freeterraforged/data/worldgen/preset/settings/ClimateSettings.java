@@ -16,23 +16,48 @@ public class ClimateSettings {
 			RangeValue.CODEC.fieldOf("temperature").forGetter((o) -> o.temperature),
 			RangeValue.CODEC.fieldOf("moisture").forGetter((o) -> o.moisture),
 			BiomeShape.CODEC.fieldOf("biomeShape").forGetter((o) -> o.biomeShape),
-			BiomeNoise.CODEC.fieldOf("biomeEdgeShape").forGetter((o) -> o.biomeEdgeShape)
+			BiomeNoise.CODEC.fieldOf("biomeEdgeShape").forGetter((o) -> o.biomeEdgeShape),
+			Codec.FLOAT.optionalFieldOf("altitudeCoolingStrength", makeDefault().altitudeCoolingStrength).forGetter((o) -> o.altitudeCoolingStrength),
+			Codec.FLOAT.optionalFieldOf("rainShadowStrength", makeDefault().rainShadowStrength).forGetter((o) -> o.rainShadowStrength),
+			Codec.FLOAT.optionalFieldOf("coastalMoistureBoost", makeDefault().coastalMoistureBoost).forGetter((o) -> o.coastalMoistureBoost)
 	).apply(instance, ClimateSettings::new));
 
 	public RangeValue temperature;
 	public RangeValue moisture;
 	public BiomeShape biomeShape;
 	public BiomeNoise biomeEdgeShape;
+	public float altitudeCoolingStrength;
+	public float rainShadowStrength;
+	public float coastalMoistureBoost;
 
-	public ClimateSettings(RangeValue temperature, RangeValue moisture, BiomeShape biomeShape, BiomeNoise biomeEdgeShape) {
+	public ClimateSettings(
+			RangeValue temperature,
+			RangeValue moisture,
+			BiomeShape biomeShape,
+			BiomeNoise biomeEdgeShape,
+			float altitudeCoolingStrength,
+			float rainShadowStrength,
+			float coastalMoistureBoost
+	) {
 		this.temperature = temperature;
 		this.moisture = moisture;
 		this.biomeShape = biomeShape;
 		this.biomeEdgeShape = biomeEdgeShape;
+		this.altitudeCoolingStrength = altitudeCoolingStrength;
+		this.rainShadowStrength = rainShadowStrength;
+		this.coastalMoistureBoost = coastalMoistureBoost;
 	}
 
 	public ClimateSettings copy() {
-		return new ClimateSettings(this.temperature.copy(), this.moisture.copy(), this.biomeShape.copy(), this.biomeEdgeShape.copy());
+		return new ClimateSettings(
+				this.temperature.copy(),
+				this.moisture.copy(),
+				this.biomeShape.copy(),
+				this.biomeEdgeShape.copy(),
+				this.altitudeCoolingStrength,
+				this.rainShadowStrength,
+				this.coastalMoistureBoost
+		);
 	}
 
 	public static class RangeValue {
@@ -43,7 +68,7 @@ public class ClimateSettings {
 				Codec.FLOAT.fieldOf("min").forGetter((o) -> o.min),
 				Codec.FLOAT.fieldOf("max").forGetter((o) -> o.max),
 				Codec.FLOAT.fieldOf("bias").forGetter((o) -> o.offsetBias),
-				Codec.FLOAT.optionalFieldOf("distributionBias", 0.0F).forGetter((o) -> o.distributionBias) // TODO REMAP THIS TO A SETTINGS DEFAULT
+				Codec.FLOAT.optionalFieldOf("distributionBias", 0.0F).forGetter((o) -> o.distributionBias)
 		).apply(instance, RangeValue::new));
 
 		public int seedOffset;
@@ -79,18 +104,22 @@ public class ClimateSettings {
 		public Noise apply(Noise module) {
 			float min = this.getMin();
 			float max = this.getMax();
-			float bias = this.getOffsetBias();
+			float distBias = this.distributionBias;
 
 			// Convert bias in [-1.0, 1.0] to an exponent k in [2.0, 0.5]
 			// Positive bias reduces exponent (< 1.0) -> pushes values up
 			// Negative bias increases exponent (> 1.0) -> pushes values down
-			if (bias != 0.0F) {
-				float exponent = (float) Math.pow(2.0, -bias);
+			if (distBias != 0.0F) {
+				float exponent = (float) Math.pow(2.0, -distBias);
 				module = Noises.pow(module, exponent);
 			}
 
 			// Scale output smoothly into [min, max] range
 			module = Noises.map(module, min, max);
+
+			// apply fixed bias
+			module = Noises.add(module, this.getOffsetBias());
+			module = Noises.clamp(module, min, max);
 
 			return module;
 		}
@@ -333,7 +362,11 @@ public class ClimateSettings {
 						1.601F,
 						10.5F,
 						300
-				)
+				),
+
+				2.2F,
+				1.8F,
+				0.2F
 		);
 	}
 }

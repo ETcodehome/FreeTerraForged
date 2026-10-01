@@ -19,7 +19,8 @@ class ClimateSettingsPage extends PresetEditorPage {
 	private Slider temperatureMax;
 	private Slider temperatureOffsetBias;
 	private Slider temperatureDistributionBias;
-	
+	private Slider altitudeCoolingStrength;
+
 	private ValueButton<Integer>  moistureSeedOffset;
 	private Slider moistureScale;
 	private Slider moistureFalloff;
@@ -27,6 +28,8 @@ class ClimateSettingsPage extends PresetEditorPage {
 	private Slider moistureMax;
 	private Slider moistureOffsetBias;
 	private Slider moistureDistributionBias;
+	private Slider rainShadowStrength;
+	private Slider coastalMoistureBoost;
 	
 	private Slider biomeSize;
 	private Slider macroNoiseSize;
@@ -91,6 +94,11 @@ class ClimateSettingsPage extends PresetEditorPage {
 			this.regenerate();
 			return value;
 		});
+		this.altitudeCoolingStrength = PresetWidgets.createFloatSlider(climate.altitudeCoolingStrength, 0.0F, 3.0F, FTFTranslationKeys.GUI_SLIDER_ALTITUDE_COOLING_STRENGTH, (slider, value) -> {
+			climate.altitudeCoolingStrength = (float) slider.scaleValue(value);
+			this.regenerate();
+			return value;
+		});
 
 		ClimateSettings.RangeValue moisture = climate.moisture;
 		this.moistureSeedOffset = PresetWidgets.createRandomButton(FTFTranslationKeys.GUI_BUTTON_CLIMATE_SEED_OFFSET, moisture.seedOffset, (value) -> {
@@ -124,6 +132,16 @@ class ClimateSettingsPage extends PresetEditorPage {
 		});
 		this.moistureDistributionBias = PresetWidgets.createFloatSlider(moisture.distributionBias, -3.0F, 3.0F, FTFTranslationKeys.GUI_SLIDER_MOISTURE_DISTRIBUTION_BIAS, (slider, value) -> {
 			moisture.distributionBias = (float) slider.scaleValue(value);
+			this.regenerate();
+			return value;
+		});
+		this.rainShadowStrength = PresetWidgets.createFloatSlider(climate.rainShadowStrength, 0.0F, 3.0F, FTFTranslationKeys.GUI_SLIDER_RAIN_SHADOW_STRENGTH, (slider, value) -> {
+			climate.rainShadowStrength = (float) slider.scaleValue(value);
+			this.regenerate();
+			return value;
+		});
+		this.coastalMoistureBoost = PresetWidgets.createFloatSlider(climate.altitudeCoolingStrength, 0.0F, 1.0F, FTFTranslationKeys.GUI_SLIDER_COASTAL_MOISTURE_BOOST, (slider, value) -> {
+			climate.coastalMoistureBoost = (float) slider.scaleValue(value);
 			this.regenerate();
 			return value;
 		});
@@ -190,6 +208,7 @@ class ClimateSettingsPage extends PresetEditorPage {
 		this.left.addWidget(this.temperatureMax);
 		this.left.addWidget(this.temperatureDistributionBias);
 		this.left.addWidget(this.temperatureOffsetBias);
+		this.left.addWidget(this.altitudeCoolingStrength);
 
 		this.left.addWidget(PresetWidgets.createLabel(FTFTranslationKeys.GUI_LABEL_MOISTURE));
 		this.left.addWidget(this.moistureSeedOffset);
@@ -199,6 +218,8 @@ class ClimateSettingsPage extends PresetEditorPage {
 		this.left.addWidget(this.moistureMax);
 		this.left.addWidget(this.moistureDistributionBias);
 		this.left.addWidget(this.moistureOffsetBias);
+		this.left.addWidget(this.rainShadowStrength);
+		this.left.addWidget(this.coastalMoistureBoost);
 		
 		this.left.addWidget(PresetWidgets.createLabel(FTFTranslationKeys.GUI_LABEL_BIOME_SHAPE));
 		this.left.addWidget(this.biomeSize);
