@@ -18,6 +18,7 @@ import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.SpawnType;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.filter.TerrainCeiling;
 
 public class Preview2D extends Button implements IPreviewHandler {
     public static final int SIZE = IPreviewHandler.SIZE;
@@ -122,12 +123,13 @@ public class Preview2D extends Button implements IPreviewHandler {
     public int[] createRasterData(Tile tile, BiomePreview.Sidecar biomes, RenderMode mode, Levels levels, WorldSettings.Properties properties, RasterParams params) {
         int stroke = 2;
         int tileWidth = tile.getBlockSize().size();
+        int heightLimit = TerrainCeiling.buildLimitHeight(properties, TerrainCeiling.isEnabled(this.page.preset.getPreset()));
         int[] pixels = new int[tileWidth * tileWidth];
         tile.iterate((cell, bx, bz) -> {
             int color;
             if (bx < stroke || bz < stroke || bx >= tileWidth - stroke || bz >= tileWidth - stroke) {
                 color = 0xFF000000;
-            } else if (levels.scale(cell.height) > properties.worldHeight) {
+            } else if (levels.scale(cell.height) > heightLimit) {
                 color = 0xFFFF00FF;
             } else {
                 int biomeColor = biomes == null ? 0xFFFF00FF : biomes.color(bx, bz);
