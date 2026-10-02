@@ -4,7 +4,6 @@ import java.lang.ref.WeakReference;
 import java.util.function.Supplier;
 
 import com.mojang.serialization.MapCodec;
-import com.mojang.serialization.codecs.KeyDispatchCodec;
 import net.minecraft.world.level.levelgen.DensityFunction;
 import org.jetbrains.annotations.Nullable;
 
@@ -102,7 +101,7 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 			WorldLookup worldLookup = CellSampler.this.deferredLookup.get();
 			Tile.Chunk current = this.chunk.get();
 			Cell cell = (current != null && this.chunkX == chunkX && this.chunkZ == chunkZ) ?
-				current.getCell(blockX, blockZ) :
+				current.getCellAtWorldCoords(blockX, blockZ) : // checked
 				this.cache2d.getAndUpdate(worldLookup, blockX, blockZ, false);
 			return CellSampler.this.field.readFinite(cell, worldLookup.getHeightmap());
 		}

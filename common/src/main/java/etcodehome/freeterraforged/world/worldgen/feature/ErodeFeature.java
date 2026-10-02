@@ -104,7 +104,7 @@ public class ErodeFeature extends Feature<Config> {
                     int worldX = chunkPos.getBlockX(x);
                     int worldZ = chunkPos.getBlockZ(z);
 
-                    Cell cell = tileChunk.getCell(x, z);
+                    Cell cell = tileChunk.getCellAtChunkCoords(x, z); // checked
                     int scaledY = levels.scale(cell.height);
                     int surfaceY = chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, x, z);
                     Holder<Biome> biome = level.getBiome(pos.set(worldX, surfaceY, worldZ));

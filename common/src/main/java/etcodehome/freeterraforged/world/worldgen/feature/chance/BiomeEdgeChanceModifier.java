@@ -41,7 +41,7 @@ class BiomeEdgeChanceModifier extends RangeChanceModifier {
 			int chunkZ = SectionPos.blockToSectionCoord(z);
 			try (var lease = generatorContext.cache.acquireAtChunk(chunkX, chunkZ)) {
 				Tile.Chunk chunk = lease.tile().getChunkReader(chunkX, chunkZ);
-				return chunk.getCell(x, z).biomeRegionEdge;
+				return chunk.getCellAtWorldCoords(x, z).biomeRegionEdge; // checked
 			}
 		} else {
 			throw new UnsupportedOperationException();

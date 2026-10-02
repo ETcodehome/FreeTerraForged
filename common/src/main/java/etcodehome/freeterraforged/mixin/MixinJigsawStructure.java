@@ -215,7 +215,7 @@ public class MixinJigsawStructure {
 						Tile.Chunk chunk = lease.tile().getChunkReader(chunkX, chunkZ);
 						maxSuspension = Math.max(
 							maxSuspension,
-							groundPlane - generatorContext.levels.scale(chunk.getCell(x, z).height)
+							groundPlane - generatorContext.levels.scale(chunk.getCellAtWorldCoords(x, z).height) // checked
 						);
 					}
 				}
@@ -411,7 +411,7 @@ public class MixinJigsawStructure {
 						TileCache.Lease lease = chunks.computeIfAbsent(
 							key, ignored -> context.cache.acquireAtChunk(chunkX, chunkZ)
 						);
-						if (lease.tile().getChunkReader(chunkX, chunkZ).getCell(x, z).terrain.isRiver()) {
+						if (lease.tile().getChunkReader(chunkX, chunkZ).getCellAtWorldCoords(x, z).terrain.isRiver()) { // checked
 							return true;
 						}
 					}
@@ -435,12 +435,10 @@ public class MixinJigsawStructure {
 
 		int chunkX = SectionPos.blockToSectionCoord(x);
 		int chunkZ = SectionPos.blockToSectionCoord(z);
-		int localX = x & 15;
-		int localZ = z & 15;
 
 		try (var lease = generatorContext.cache.acquireAtChunk(chunkX, chunkZ)) {
 			Tile.Chunk tileChunk = lease.tile().getChunkReader(chunkX, chunkZ);
-			Cell cell = tileChunk.getCell(localX, localZ);
+			Cell cell = tileChunk.getCellAtWorldCoords(x, z); // checked
 			return cell.terrain.isRiver();
 		}
 	}

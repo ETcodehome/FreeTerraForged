@@ -138,7 +138,7 @@ public class TileGenerator {
 									for (int dx = 0; dx < 16; dx++) {
 										int worldX = chunk.getBlockX() + dx;
 										int worldZ = chunk.getBlockZ() + dz;
-										Cell cell = chunk.getCell(dx, dz);
+										Cell cell = chunk.getCellAtWorldCoords(worldX, worldZ); // checked 2
 
 										this.heightmap.applyTerrain(cell, worldX, worldZ);
 										rivers = Rivermap.get(cell, rivers, this.heightmap);
@@ -160,7 +160,7 @@ public class TileGenerator {
 			return this.failAfterScheduledWork(tile, futures, submitted, failure);
 		}
 	}
-	
+
 	public CompletableFuture<Tile> generateZoomed(float centerX, float centerZ, float zoom, boolean applyOptionalFilters) {
 		return this.generateZoomed(centerX, centerZ, zoom, applyOptionalFilters, () -> false);
 	}
@@ -210,7 +210,7 @@ public class TileGenerator {
 									for (int dx = 0; dx < 16; dx++) {
 										float worldX = (chunk.getBlockX() + dx) * zoom + translateX;
 										float worldZ = (chunk.getBlockZ() + dz) * zoom + translateZ;
-										Cell cell = chunk.getCell(dx, dz);
+										Cell cell = chunk.getCellAtWorldCoords((int) worldX, (int) worldZ); // checked 2
 
 										this.heightmap.applyTerrain(cell, worldX, worldZ);
 										rivers = Rivermap.get(cell, rivers, this.heightmap);

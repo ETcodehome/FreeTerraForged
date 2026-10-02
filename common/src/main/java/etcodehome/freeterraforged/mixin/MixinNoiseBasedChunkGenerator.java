@@ -185,7 +185,7 @@ abstract class MixinNoiseBasedChunkGenerator extends ChunkGenerator {
 		ChunkFlowField flowField = holder.freeterraforged$getFlowField();
 		for(int x = 0; x < 16; x++) {
 			for(int z = 0; z < 16; z++) {
-				Cell cell = tileChunk.getCell(x, z);
+				Cell cell = tileChunk.getCellAtChunkCoords(x, z); // checked
 				if (cell.hasFlow) {
 					if (flowField == null) {
 						flowField = holder.freeterraforged$getOrCreateFlowField();
@@ -222,7 +222,7 @@ abstract class MixinNoiseBasedChunkGenerator extends ChunkGenerator {
 				if (blockX >> 4 != tileChunk.getChunkX() || blockZ >> 4 != tileChunk.getChunkZ()) {
 					return generator.resolveBiome(quartX, quartY, quartZ, sampler);
 				}
-				Cell cell = tileChunk.getCell(blockX, blockZ);
+				Cell cell = tileChunk.getCellAtWorldCoords(blockX, blockZ); // checked
 				return generator.resolveBiomeInCell(
 					quartX, quartY, quartZ, sampler, cell.biomeRegionX, cell.biomeRegionZ
 				);

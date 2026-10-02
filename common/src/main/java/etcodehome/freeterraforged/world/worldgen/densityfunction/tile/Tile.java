@@ -196,12 +196,19 @@ public class Tile implements SafeCloseable, Filterable, CellLookup {
         public int getBlockZ() {
             return this.blockZ;
         }
-        
-        public Cell getCell(int blockX, int blockZ) {
-            int relX = this.regionBlockX + (blockX & 0xF);
-            int relZ = this.regionBlockZ + (blockZ & 0xF);
-            int index = Tile.this.blockSize.indexOf(relX, relZ);
-            return Tile.this.cache[index];
-        }
+
+		public Cell getCellAtWorldCoords(int blockX, int blockZ) {
+			return Tile.this.lookup(blockX, blockZ);
+		}
+
+		public Cell getCellAtChunkCoords(int localX, int localZ) {
+			if (localX < 0 || localX > 15 || localZ < 0 || localZ > 15) {
+				throw new IllegalArgumentException(String.format(
+						"Chunk local coordinates out of bounds [0..15]: localX=%d, localZ=%d for Chunk[%d, %d] (blockOrigin=[%d, %d])",
+						localX, localZ, this.chunkX, this.chunkZ, this.blockX, this.blockZ
+				));
+			}
+			return Tile.this.lookup(this.blockX + localX, this.blockZ + localZ);
+		}
 	}
 }

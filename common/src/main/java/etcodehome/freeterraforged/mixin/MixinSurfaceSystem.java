@@ -39,14 +39,8 @@ import net.minecraft.world.level.levelgen.SurfaceRules;
 import net.minecraft.world.level.levelgen.SurfaceSystem;
 import net.minecraft.world.level.levelgen.WorldGenerationContext;
 import etcodehome.freeterraforged.FTFCommon;
-import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
-import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
-import etcodehome.freeterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
-import etcodehome.freeterraforged.world.worldgen.cell.rivermap.river.RiverCarverSettings;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.TileCache;
-import etcodehome.freeterraforged.world.worldgen.surface.FTFSurfaceSystem;
-import etcodehome.freeterraforged.world.worldgen.surface.rule.StrataRule;
 
 @Mixin(SurfaceSystem.class)
 @Implements(@Interface(iface = FTFSurfaceSystem.class, prefix = FTFCommon.MOD_ID + "$FTFSurfaceSystem$"))
@@ -126,7 +120,7 @@ class MixinSurfaceSystem {
 				int globalX = chunkPos.getMinBlockX() + localX;
 				int globalZ = chunkPos.getMinBlockZ() + localZ;
 
-				Cell cell = reader.getCell(localX, localZ);
+				Cell cell = reader.getCellAtChunkCoords(localX, localZ); // checked
 				boolean isWaterCell = (cell.terrain.isRiver() || cell.terrain.isLake() || cell.terrain.isWetland()) && cell.riverWaterLevel > 0;
 				int scaledY = levels.scale(cell.height);
 
@@ -152,7 +146,7 @@ class MixinSurfaceSystem {
 							int nz = globalZ + NEIGHBOR_Z[i];
 
 							var neighborReader = tiles.reader(nx >> 4, nz >> 4);
-							var neighborCell = neighborReader.getCell(nx & 0xF, nz & 0xF);
+							var neighborCell = neighborReader.getCellAtChunkCoords(nx & 0xF, nz & 0xF); // checked
 
 							// Only consider the neighbor's water height if it is actually a water cell
 							boolean nIsWaterCell = (neighborCell.terrain.isRiver() || neighborCell.terrain.isLake() || neighborCell.terrain.isWetland()) && neighborCell.riverWaterLevel > 0;
@@ -230,7 +224,7 @@ class MixinSurfaceSystem {
 							int nx = globalX + NEIGHBOR_X[i];
 							int nz = globalZ + NEIGHBOR_Z[i];
 							var neighborReader = tiles.reader(nx >> 4, nz >> 4);
-							var neighborCell = neighborReader.getCell(nx & 0xF, nz & 0xF);
+							var neighborCell = neighborReader.getCellAtChunkCoords(nx & 0xF, nz & 0xF); // checked
 
 							if ((neighborCell.terrain.isRiver() || neighborCell.terrain.isLake())) {
 								int nWaterY = levels.scale(

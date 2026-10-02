@@ -55,7 +55,7 @@ public class BiomeVariance implements Noise {
 
     @Override
 	public float compute(float x, float z, int seed) {
-        Cell cell = this.chunk.getCell((int) x, (int) z);
+        Cell cell = this.chunk.getCellAtWorldCoords((int) x, (int) z); // checked
         float edge = 0.02F + cell.biomeRegionEdge;
 
         if (edge >= this.fade) {

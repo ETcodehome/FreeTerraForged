@@ -41,7 +41,7 @@ class ElevationChanceModifier extends RangeChanceModifier {
 			int chunkZ = SectionPos.blockToSectionCoord(z);
 			try (var lease = generatorContext.cache.acquireAtChunk(chunkX, chunkZ)) {
 				Tile.Chunk chunk = lease.tile().getChunkReader(chunkX, chunkZ);
-				return generatorContext.generator.getHeightmap().levels().elevation(chunk.getCell(x, z).height);
+				return generatorContext.generator.getHeightmap().levels().elevation(chunk.getCellAtWorldCoords(x, z).height); // checked
 			}
 		} else {
 			throw new UnsupportedOperationException();

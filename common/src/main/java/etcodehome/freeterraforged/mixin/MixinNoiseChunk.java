@@ -8,7 +8,6 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
-import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -154,10 +153,10 @@ class MixinNoiseChunk implements NoiseChunkTileOwner {
 				float continentEdge;
 				Tile ownedTile = this.freeterraforged$currentTile();
 				if (ownedTile != null) {
-					continentEdge = ownedTile.getChunkReader(cx, cz).getCell(x, z).continentEdge;
+					continentEdge = ownedTile.getChunkReader(cx, cz).getCellAtWorldCoords(x, z).continentEdge; // checked
 				} else {
 					try (TileCache.Lease lease = cache.acquireAtChunk(cx, cz)) {
-						continentEdge = lease.tile().getChunkReader(cx, cz).getCell(x, z).continentEdge;
+						continentEdge = lease.tile().getChunkReader(cx, cz).getCellAtWorldCoords(x, z).continentEdge; // checked
 					}
 				}
 
