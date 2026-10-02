@@ -21,6 +21,7 @@ final class PreviewDetails {
             case TEMPERATURE -> value("Temperature", cell.temperature);
             case MOISTURE -> value("Moisture", cell.moisture);
             case EROSION -> value("Erosion", cell.erosion);
+            case GRADIENT -> value("Gradient", cell.gradient);
             case WEIRDNESS -> value("Weirdness", cell.weirdness);
             case BIOME_REGION_EDGE -> value("Mask", cell.biomeRegionEdge);
             case BIOME_CELLS -> value("Biome Cell", cell.biomeRegionId);
