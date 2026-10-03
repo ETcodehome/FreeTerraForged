@@ -21,13 +21,15 @@ final class PreviewDetails {
             case TEMPERATURE -> value("Temperature", cell.temperature);
             case MOISTURE -> value("Moisture", cell.moisture);
             case EROSION -> value("Erosion", cell.erosion);
+            case GRADIENT -> value("Gradient", cell.gradient);
             case WEIRDNESS -> value("Weirdness", cell.weirdness);
+            case BIOME_REGION_EDGE -> value("Mask", cell.biomeRegionEdge);
             case BIOME_CELLS -> value("Biome Cell", cell.biomeRegionId);
             case MACRO_NOISE -> value("Macro Noise", cell.macroBiomeId);
             case TERRAIN_REGION -> new Detail(Component.literal("Terrain Type"), cell.terrain.getName());
             case HYPSOMETRIC, TOPOGRAPHY -> new Detail(
                 Component.literal("Elevation"),
-                "Y=" + levels.scale(cell.height)
+                "Y=" + levels.scale(cell.height) + " H=" + cell.height
             );
             case CONTINENT_UPLIFT -> value("Uplift", cell.waterTable);
             case CONTINENT_EDGE -> value("Continent Edge", cell.continentEdge);

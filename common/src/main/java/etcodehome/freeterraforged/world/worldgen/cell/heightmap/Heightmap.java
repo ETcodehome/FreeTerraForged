@@ -65,26 +65,7 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
 	}
 	
 	public void applyClimate(Cell cell, float x, float z, boolean applyClimate) {
-		float riverValleyThreshold = 0.675F;
-        if(cell.terrain.isRiver()) {
-            cell.erosion = -0.05F;
-            cell.weirdness = -0.03F;
-        }
-        
-        if(cell.terrain.isLake() && cell.height < this.levels.water) {
-            cell.erosion = Erosion.LEVEL_4.mid();
-            cell.weirdness = -0.03F;
-        }
-        if(cell.terrain.isWetland()) {
-        	cell.erosion = Erosion.LEVEL_6.mid();
-        	cell.weirdness = Weirdness.VALLEY.mid();
-        }
-        
         this.climate.apply(cell, x, z, applyClimate);
-
-        if(cell.riverMask >= riverValleyThreshold && cell.macroBiomeId > 0.5F) { 
-        	cell.weirdness = -cell.weirdness;
-        }
 	}
 
 	public void applyBiomeRegion(Cell cell, float x, float z) {

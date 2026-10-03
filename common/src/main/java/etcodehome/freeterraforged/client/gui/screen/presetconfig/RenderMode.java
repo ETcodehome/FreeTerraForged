@@ -214,6 +214,18 @@ public enum RenderMode {
             return rgba(hue, saturation, brightness);
         }
     },
+    GRADIENT {
+        @Override
+        public int getColor(Cell cell, Levels levels, float scale, float bias) {
+
+            float erosion = NoiseUtil.clamp((cell.gradient + 1.0F) * 0.5F, 0.0F, 1.0F);
+
+            float hue = 0.0F;
+            float saturation = 0.0F;
+            float brightness = erosion;
+            return rgba(hue, saturation, brightness);
+        }
+    },
     WEIRDNESS{
         @Override
         public int getColor(Cell cell, Levels levels, float scale, float bias) {
@@ -223,6 +235,18 @@ public enum RenderMode {
             float hue = 0.0F;
             float saturation = 0.0F;
             float brightness = weirdness;
+            return rgba(hue, saturation, brightness);
+        }
+    },
+    BIOME_REGION_EDGE{
+        @Override
+        public int getColor(Cell cell, Levels levels, float scale, float bias) {
+
+            float edge = NoiseUtil.clamp((cell.biomeRegionEdge + 1.0F) * 0.5F, 0.0F, 1.0F);
+
+            float hue = 0.0F;
+            float saturation = 0.0F;
+            float brightness = edge;
             return rgba(hue, saturation, brightness);
         }
     },

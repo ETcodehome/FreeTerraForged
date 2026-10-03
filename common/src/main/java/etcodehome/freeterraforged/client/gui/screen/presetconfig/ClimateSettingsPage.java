@@ -8,7 +8,6 @@ import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.network.chat.Component;
 import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
 import etcodehome.freeterraforged.client.gui.screen.page.LinkedPageScreen.Page;
-import etcodehome.freeterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.ClimateSettings;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 
@@ -18,14 +17,19 @@ class ClimateSettingsPage extends PresetEditorPage {
 	private Slider temperatureFalloff;
 	private Slider temperatureMin;
 	private Slider temperatureMax;
-	private Slider temperatureBias;
-	
+	private Slider temperatureOffsetBias;
+	private Slider temperatureDistributionBias;
+	private Slider altitudeCoolingStrength;
+
 	private ValueButton<Integer>  moistureSeedOffset;
 	private Slider moistureScale;
 	private Slider moistureFalloff;
 	private Slider moistureMin;
 	private Slider moistureMax;
-	private Slider moistureBias;
+	private Slider moistureOffsetBias;
+	private Slider moistureDistributionBias;
+	private Slider rainShadowStrength;
+	private Slider coastalMoistureBoost;
 	
 	private Slider biomeSize;
 	private Slider macroNoiseSize;
@@ -80,8 +84,18 @@ class ClimateSettingsPage extends PresetEditorPage {
 			this.regenerate();
 			return value;
 		});
-		this.temperatureBias = PresetWidgets.createFloatSlider(temperature.bias, -1.0F, 1.0F, FTFTranslationKeys.GUI_SLIDER_TEMPERATURE_BIAS, (slider, value) -> {
-			temperature.bias = (float) slider.scaleValue(value);
+		this.temperatureOffsetBias = PresetWidgets.createFloatSlider(temperature.offsetBias, -1.0F, 1.0F, FTFTranslationKeys.GUI_SLIDER_TEMPERATURE_OFFSET_BIAS, (slider, value) -> {
+			temperature.offsetBias = (float) slider.scaleValue(value);
+			this.regenerate();
+			return value;
+		});
+		this.temperatureDistributionBias = PresetWidgets.createFloatSlider(temperature.distributionBias, -3.0F, 3.0F, FTFTranslationKeys.GUI_SLIDER_TEMPERATURE_DISTRIBUTION_BIAS, (slider, value) -> {
+			temperature.distributionBias = (float) slider.scaleValue(value);
+			this.regenerate();
+			return value;
+		});
+		this.altitudeCoolingStrength = PresetWidgets.createFloatSlider(climate.altitudeCoolingStrength, 0.0F, 3.0F, FTFTranslationKeys.GUI_SLIDER_ALTITUDE_COOLING_STRENGTH, (slider, value) -> {
+			climate.altitudeCoolingStrength = (float) slider.scaleValue(value);
 			this.regenerate();
 			return value;
 		});
@@ -111,8 +125,23 @@ class ClimateSettingsPage extends PresetEditorPage {
 			this.regenerate();
 			return value;
 		});
-		this.moistureBias = PresetWidgets.createFloatSlider(moisture.bias, -1.0F, 1.0F, FTFTranslationKeys.GUI_SLIDER_MOISTURE_BIAS, (slider, value) -> {
-			moisture.bias = (float) slider.scaleValue(value);
+		this.moistureOffsetBias = PresetWidgets.createFloatSlider(moisture.offsetBias, -1.0F, 1.0F, FTFTranslationKeys.GUI_SLIDER_MOISTURE_OFFSET_BIAS, (slider, value) -> {
+			moisture.offsetBias = (float) slider.scaleValue(value);
+			this.regenerate();
+			return value;
+		});
+		this.moistureDistributionBias = PresetWidgets.createFloatSlider(moisture.distributionBias, -3.0F, 3.0F, FTFTranslationKeys.GUI_SLIDER_MOISTURE_DISTRIBUTION_BIAS, (slider, value) -> {
+			moisture.distributionBias = (float) slider.scaleValue(value);
+			this.regenerate();
+			return value;
+		});
+		this.rainShadowStrength = PresetWidgets.createFloatSlider(climate.rainShadowStrength, 0.0F, 3.0F, FTFTranslationKeys.GUI_SLIDER_RAIN_SHADOW_STRENGTH, (slider, value) -> {
+			climate.rainShadowStrength = (float) slider.scaleValue(value);
+			this.regenerate();
+			return value;
+		});
+		this.coastalMoistureBoost = PresetWidgets.createFloatSlider(climate.altitudeCoolingStrength, 0.0F, 1.0F, FTFTranslationKeys.GUI_SLIDER_COASTAL_MOISTURE_BOOST, (slider, value) -> {
+			climate.coastalMoistureBoost = (float) slider.scaleValue(value);
 			this.regenerate();
 			return value;
 		});
@@ -177,7 +206,9 @@ class ClimateSettingsPage extends PresetEditorPage {
 		this.left.addWidget(this.temperatureFalloff);
 		this.left.addWidget(this.temperatureMin);
 		this.left.addWidget(this.temperatureMax);
-		this.left.addWidget(this.temperatureBias);
+		this.left.addWidget(this.temperatureDistributionBias);
+		this.left.addWidget(this.temperatureOffsetBias);
+		this.left.addWidget(this.altitudeCoolingStrength);
 
 		this.left.addWidget(PresetWidgets.createLabel(FTFTranslationKeys.GUI_LABEL_MOISTURE));
 		this.left.addWidget(this.moistureSeedOffset);
@@ -185,7 +216,10 @@ class ClimateSettingsPage extends PresetEditorPage {
 		this.left.addWidget(this.moistureFalloff);
 		this.left.addWidget(this.moistureMin);
 		this.left.addWidget(this.moistureMax);
-		this.left.addWidget(this.moistureBias);
+		this.left.addWidget(this.moistureDistributionBias);
+		this.left.addWidget(this.moistureOffsetBias);
+		this.left.addWidget(this.rainShadowStrength);
+		this.left.addWidget(this.coastalMoistureBoost);
 		
 		this.left.addWidget(PresetWidgets.createLabel(FTFTranslationKeys.GUI_LABEL_BIOME_SHAPE));
 		this.left.addWidget(this.biomeSize);
