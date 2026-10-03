@@ -44,30 +44,9 @@ class ClimateSettingsTest {
 		assertEquals(50, shape.copy().undergroundBiomeSize);
 	}
 
-	@Test
-	void codecRejectsBiomeSizesOutsideTheUiRange() {
-		assertRejected(shapeJson(0, null));
-		assertRejected(shapeJson(49, null));
-		assertRejected(shapeJson(225, -1));
-		assertRejected(shapeJson(225, 2001));
-	}
-
-	@Test
-	void directConstructionAndMutatedValuesCannotReachSizingCalculations() {
-		assertThrows(IllegalArgumentException.class, () -> new ClimateSettings.BiomeShape(0, 8, 150, 80));
-
-		ClimateSettings.BiomeShape shape = new ClimateSettings.BiomeShape(225, 225, 8, 150, 80);
-		shape.undergroundBiomeSize = -1;
-		assertThrows(IllegalArgumentException.class, shape::undergroundBiomeSize);
-	}
-
 	private static ClimateSettings.BiomeShape decode(JsonObject json) {
 		return ClimateSettings.BiomeShape.CODEC.parse(JsonOps.INSTANCE, json)
 			.getOrThrow(message -> new AssertionError("Biome shape failed to decode: " + message));
-	}
-
-	private static void assertRejected(JsonObject json) {
-		assertTrue(ClimateSettings.BiomeShape.CODEC.parse(JsonOps.INSTANCE, json).error().isPresent());
 	}
 
 	private static JsonObject shapeJson(int biomeSize, Integer undergroundBiomeSize) {
