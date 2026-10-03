@@ -1,5 +1,8 @@
 accessWidener	v2	named
 
+extendable class net/minecraft/world/level/levelgen/NoiseBasedChunkGenerator
+accessible method net/minecraft/world/level/levelgen/NoiseBasedChunkGenerator createNoiseChunk (Lnet/minecraft/world/level/chunk/ChunkAccess;Lnet/minecraft/world/level/StructureManager;Lnet/minecraft/world/level/levelgen/blending/Blender;Lnet/minecraft/world/level/levelgen/RandomState;)Lnet/minecraft/world/level/levelgen/NoiseChunk;
+
 accessible class net/minecraft/world/level/levelgen/SurfaceRules$Condition
 accessible class net/minecraft/world/level/levelgen/SurfaceRules$Context
 accessible class net/minecraft/world/level/levelgen/SurfaceRules$SurfaceRule
@@ -66,6 +69,3 @@ accessible field net/minecraft/world/level/biome/Climate$RTree$Node parameterSpa
 accessible class net/minecraft/world/level/biome/Climate$RTree$Leaf
 accessible field net/minecraft/world/level/biome/Climate$RTree$Leaf value Ljava/lang/Object;
 accessible method net/minecraft/world/level/biome/Climate$RTree$Leaf <init> (Lnet/minecraft/world/level/biome/Climate$ParameterPoint;Ljava/lang/Object;)V
-accessible class net/minecraft/world/level/levelgen/DensityFunctions$Marker
-accessible class net/minecraft/world/level/levelgen/DensityFunctions$Marker$Type
-accessible method net/minecraft/world/level/levelgen/DensityFunctions$Marker <init> (Lnet/minecraft/world/level/levelgen/DensityFunctions$Marker$Type;Lnet/minecraft/world/level/levelgen/DensityFunction;)V

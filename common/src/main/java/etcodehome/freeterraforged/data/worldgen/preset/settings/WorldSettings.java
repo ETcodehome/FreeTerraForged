@@ -120,14 +120,14 @@ public class WorldSettings {
             Codec.INT.optionalFieldOf("spawnZ", 0).forGetter((o) -> o.spawnZ)
     	).apply(instance, Properties::new));
 
-        public static SpawnType spawnType;
+        public SpawnType spawnType;
         public int worldHeight;
         public int worldDepth;
         public int seaLevel;
         public int lavaLevel;
         public int oceanDepth;
-        public static int spawnX;
-        public static int spawnZ;
+        public int spawnX;
+        public int spawnZ;
 
         public Properties(SpawnType spawnType, int worldHeight, int worldDepth, int seaLevel, int lavaLevel, int oceanDepth, int spawnX, int spawnZ) {
         	this.spawnType = spawnType;
@@ -148,5 +148,40 @@ public class WorldSettings {
         public int terrainScaler() {
         	return Math.min(this.worldHeight, 256);
         }
+    }
+
+    public static WorldSettings makeDefault(){
+        return new WorldSettings(
+            new Continent(
+                ContinentType.UPLIFT,
+                DistanceFunction.EUCLIDEAN,
+                4000,
+                0.8F,
+                0.2F,
+                0.6161F,
+                5,
+                0.2516F,
+                5.7262F
+            ),
+            new ControlPoints(
+                0.0F,
+                0.074F,
+                0.102F,
+                0.13144F,
+                0.2210F,
+                0.3576F,
+                0.4717F
+            ),
+            new Properties(
+                SpawnType.CONTINENT_CENTER,
+                512,
+                256,
+                63,
+                -236,
+                256,
+                0,
+                0
+            )
+        );
     }
 }

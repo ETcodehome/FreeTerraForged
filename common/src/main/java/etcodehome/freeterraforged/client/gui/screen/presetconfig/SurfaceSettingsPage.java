@@ -22,8 +22,8 @@ public class SurfaceSettingsPage extends PresetEditorPage {
 	private Slider screeSteepness;
 	private Slider dirtSteepness;
 	
-	public SurfaceSettingsPage(PresetConfigScreen screen, PresetEntry preset) {
-		super(screen, preset);
+	public SurfaceSettingsPage(PresetConfigScreen screen) {
+		super(screen);
 	}
 	
 	@Override
@@ -109,11 +109,11 @@ public class SurfaceSettingsPage extends PresetEditorPage {
 
 	@Override
 	public Optional<Page> previous() {
-		return Optional.of(new WorldSettingsPage(this.screen, this.preset));
+		return Optional.of(new WorldSettingsPage(this.screen));
 	}
 
 	@Override
 	public Optional<Page> next() {
-		return Optional.of(new UndergroundSettingsPage(this.screen, this.preset));
+		return Optional.of(new UndergroundSettingsPage(this.screen));
 	}
 }

@@ -6,7 +6,7 @@ import net.minecraft.data.PackOutput;
 
 // TODO add some more languages
 public final class FTFLanguageProvider {
-	
+
 	public static final class EnglishUS extends LanguageProvider {
 
 		public EnglishUS(PackOutput output) {
@@ -19,9 +19,9 @@ public final class FTFLanguageProvider {
 			this.add(FTFTranslationKeys.PRESET_METADATA_DESCRIPTION, "FreeTerraForged preset");
 			this.add(FTFTranslationKeys.MUD_SWAMPS_METADATA_DESCRIPTION, "Changes the swamp material to mud");
 			this.add(FTFTranslationKeys.NO_ERROR_MESSAGE, "{No error message}");
-			
+
 			this.add(FTFTranslationKeys.GUI_INPUT_PROMPT, "Type preset name");
-			
+
 			this.add(FTFTranslationKeys.GUI_SELECT_PRESET_MISSING_LEGACY_PRESETS, "Couldn't find any legacy presets");
 			this.add(FTFTranslationKeys.GUI_SELECT_PRESET_TITLE, "Presets & Defaults");
 			this.add(FTFTranslationKeys.GUI_DEFAULT_PRESET_NAME, "Default");
@@ -38,7 +38,6 @@ public final class FTFLanguageProvider {
 			this.add(FTFTranslationKeys.GUI_TERRAIN_SETTINGS_TITLE, "Terrain Settings");
 			this.add(FTFTranslationKeys.GUI_RIVER_SETTINGS_TITLE, "River Settings");
 			this.add(FTFTranslationKeys.GUI_FILTER_SETTINGS_TITLE, "Filter Settings");
-			this.add(FTFTranslationKeys.GUI_STRUCTURE_SETTINGS_TITLE, "Structure Settings");
 			this.add(FTFTranslationKeys.GUI_MISCELLANEOUS_SETTINGS_TITLE, "Miscellaneous Settings");
 
 			this.add(FTFTranslationKeys.GUI_BUTTON_TRUE, "true");
@@ -115,12 +114,13 @@ public final class FTFLanguageProvider {
 			this.add(FTFTranslationKeys.GUI_SLIDER_TEMPERATURE_FALLOFF, "Falloff");
 			this.add(FTFTranslationKeys.GUI_SLIDER_TEMPERATURE_MIN, "Min");
 			this.add(FTFTranslationKeys.GUI_SLIDER_TEMPERATURE_MAX, "Max");
-			this.add(FTFTranslationKeys.GUI_SLIDER_TEMPERATURE_BIAS, "Bias");
+			this.add(FTFTranslationKeys.GUI_SLIDER_TEMPERATURE_OFFSET_BIAS, "Bias");
 			this.add(FTFTranslationKeys.GUI_SLIDER_MOISTURE_SCALE, "Scale");
 			this.add(FTFTranslationKeys.GUI_SLIDER_MOISTURE_FALLOFF, "Falloff");
 			this.add(FTFTranslationKeys.GUI_SLIDER_MOISTURE_MIN, "Min");
 			this.add(FTFTranslationKeys.GUI_SLIDER_MOISTURE_MAX, "Max");
-			this.add(FTFTranslationKeys.GUI_SLIDER_MOISTURE_BIAS, "Bias");
+			this.add(FTFTranslationKeys.GUI_SLIDER_MOISTURE_OFFSET_BIAS, "Offset Bias");
+			this.add(FTFTranslationKeys.GUI_SLIDER_MOISTURE_DISTRIBUTION_BIAS, "Distribution Bias");
 			this.add(FTFTranslationKeys.GUI_SLIDER_BIOME_SIZE, "Surface Biome Size");
 			this.add(FTFTranslationKeys.GUI_SLIDER_UNDERGROUND_BIOME_SIZE, "Underground Biome Horizontal Size");
 			this.add(FTFTranslationKeys.GUI_SLIDER_UNDERGROUND_BIOME_VERTICAL_SIZE, "Underground Biome Vertical Size");
@@ -206,7 +206,7 @@ public final class FTFLanguageProvider {
 			this.add(FTFTranslationKeys.GUI_LABEL_WETLANDS, "Wetlands");
 			this.add(FTFTranslationKeys.GUI_LABEL_EROSION, "Erosion");
 			this.add(FTFTranslationKeys.GUI_LABEL_SMOOTHING, "Smoothing");
-			
+
 			this.add(Tooltips.failTranslationKey(FTFTranslationKeys.GUI_BUTTON_CREATE), "Failed to create preset");
 			this.add(Tooltips.failTranslationKey(FTFTranslationKeys.GUI_BUTTON_COPY), "Failed to copy preset");
 			this.add(Tooltips.failTranslationKey(FTFTranslationKeys.GUI_BUTTON_DELETE), "Failed to delete preset");
@@ -276,12 +276,12 @@ public final class FTFLanguageProvider {
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_TEMPERATURE_FALLOFF), "How quickly values transition from an extremity");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_TEMPERATURE_MIN), "The lower limit of the range");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_TEMPERATURE_MAX), "The upper limit of the range");
-			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_TEMPERATURE_BIAS), "The bias towards either end of the range");
+			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_TEMPERATURE_OFFSET_BIAS), "The bias towards either end of the range");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_MOISTURE_SCALE), "The horizontal scale");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_MOISTURE_FALLOFF), "How quickly values transition from an extremity");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_MOISTURE_MIN), "The lower limit of the range");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_MOISTURE_MAX), "The upper limit of the range");
-			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_MOISTURE_BIAS), "The bias towards either end of the range");
+			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_MOISTURE_OFFSET_BIAS), "The bias towards either end of the range");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_BIOME_SIZE), "Controls the horizontal scale of surface biome climate regions.");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_UNDERGROUND_BIOME_SIZE), "Controls how wide underground biome regions are. This includes both cave biomes and ordinary surface biomes below the surface.");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_UNDERGROUND_BIOME_VERTICAL_SIZE), "Controls how tall cave-biome and surface-biome areas are underground. With Vertical Cave Biome Banding off, it still controls the height of those areas but does not move cave biomes away from their normal depths. You can set it as high as 512 blocks, or the world's full height when the world is shorter.");

@@ -28,8 +28,6 @@ public class Cell {
     public float heightErosion;
     public float sediment;
     public float gradient;
-    public float regionMoisture;
-    public float regionTemperature;
     public float continentId;
     public float continentSizeModifier;
     public float continentEdge;
@@ -41,6 +39,10 @@ public class Cell {
     public float terrainRegionCenterZ;
     public float biomeRegionId;
     public float biomeRegionEdge;
+    public float biomeRegionCenterX;
+    public float biomeRegionCenterZ;
+    public long biomeRegionX;
+    public long biomeRegionZ;
     public float macroBiomeId;
     public float riverMask;
     public float riverWaterLevel = 0.0F;
@@ -62,8 +64,6 @@ public class Cell {
     public boolean hasFlow;
 
     public Cell() {
-        this.regionMoisture = 0.5F;
-        this.regionTemperature = 0.5F;
         this.biomeRegionEdge = 1.0F;
         this.riverMask = 1.0F;
         this.erosionMask = false;
@@ -77,8 +77,6 @@ public class Cell {
         this.heightErosion = other.heightErosion;
         this.sediment = other.sediment;
         this.gradient = other.gradient;
-        this.regionMoisture = other.regionMoisture;
-        this.regionTemperature = other.regionTemperature;
         this.continentId = other.continentId;
         this.continentEdge = other.continentEdge;
         this.continentDistance = other.continentDistance;
@@ -88,6 +86,10 @@ public class Cell {
         this.terrainRegionCenterZ = other.terrainRegionCenterZ;
         this.biomeRegionId = other.biomeRegionId;
         this.biomeRegionEdge = other.biomeRegionEdge;
+        this.biomeRegionCenterX = other.biomeRegionCenterX;
+        this.biomeRegionCenterZ = other.biomeRegionCenterZ;
+        this.biomeRegionX = other.biomeRegionX;
+        this.biomeRegionZ = other.biomeRegionZ;
         this.macroBiomeId = other.macroBiomeId;
         this.riverMask = other.riverMask;
         this.continentX = other.continentX;

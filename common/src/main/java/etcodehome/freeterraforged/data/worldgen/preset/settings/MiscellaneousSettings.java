@@ -67,4 +67,22 @@ public class MiscellaneousSettings {
 	public MiscellaneousSettings copy() {
 		return new MiscellaneousSettings(this.smoothLayerDecorator, this.strataRegionSize, this.strataDecorator, this.oreCompatibleStoneOnly, this.erosionDecorator, this.plainStoneErosion, this.naturalSnowDecorator, this.customBiomeFeatures, this.vanillaSprings, this.vanillaLavaLakes, this.vanillaLavaSprings, this.mountainBiomeUsage, this.volcanoBiomeUsage);
 	}
+
+	public static MiscellaneousSettings makeDefault(){
+		return new MiscellaneousSettings(
+			true,
+			889,
+			true,
+			true,
+			true,
+			false,
+			true,
+			true,
+			true,
+			false,
+			false,
+			0.85438144F,
+			0.855F
+		);
+	}
 }

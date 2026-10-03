@@ -40,7 +40,6 @@ public final class FTFTranslationKeys {
 	public static final String GUI_TERRAIN_SETTINGS_TITLE = resolve("gui.terrainSettings.title");
 	public static final String GUI_RIVER_SETTINGS_TITLE = resolve("gui.riverSettings.title");
 	public static final String GUI_FILTER_SETTINGS_TITLE = resolve("gui.filterSettings.title");
-	public static final String GUI_STRUCTURE_SETTINGS_TITLE = resolve("gui.structureSettings.title");
 	public static final String GUI_MISCELLANEOUS_SETTINGS_TITLE = resolve("gui.miscellaneousSettings.title");
 	public static final String GUI_ISLAND_SETTINGS_TITLE = resolve("gui.islandSettings.title");
 
@@ -120,12 +119,14 @@ public final class FTFTranslationKeys {
 	public static final String GUI_SLIDER_TEMPERATURE_FALLOFF = resolve("gui.slider.temperatureFalloff");
 	public static final String GUI_SLIDER_TEMPERATURE_MIN = resolve("gui.slider.temperatureMin");
 	public static final String GUI_SLIDER_TEMPERATURE_MAX = resolve("gui.slider.temperatureMax");
-	public static final String GUI_SLIDER_TEMPERATURE_BIAS = resolve("gui.slider.temperatureBias");
+	public static final String GUI_SLIDER_TEMPERATURE_OFFSET_BIAS = resolve("gui.slider.temperatureOffsetBias");
+	public static final String GUI_SLIDER_TEMPERATURE_DISTRIBUTION_BIAS = resolve("gui.slider.temperatureDistributionBias");
 	public static final String GUI_SLIDER_MOISTURE_SCALE = resolve("gui.slider.moistureScale");
 	public static final String GUI_SLIDER_MOISTURE_FALLOFF = resolve("gui.slider.moistureFalloff");
 	public static final String GUI_SLIDER_MOISTURE_MIN = resolve("gui.slider.moistureMin");
 	public static final String GUI_SLIDER_MOISTURE_MAX = resolve("gui.slider.moistureMax");
-	public static final String GUI_SLIDER_MOISTURE_BIAS = resolve("gui.slider.moistureBias");
+	public static final String GUI_SLIDER_MOISTURE_OFFSET_BIAS = resolve("gui.slider.moistureOffsetBias");
+	public static final String GUI_SLIDER_MOISTURE_DISTRIBUTION_BIAS = resolve("gui.slider.moistureDistributionBias");
 	public static final String GUI_SLIDER_BIOME_SIZE = resolve("gui.slider.biomeSize");
 	public static final String GUI_SLIDER_UNDERGROUND_BIOME_SIZE = resolve("gui.slider.undergroundBiomeSize");
 	public static final String GUI_SLIDER_UNDERGROUND_BIOME_VERTICAL_SIZE = resolve("gui.slider.undergroundBiomeVerticalSize");
@@ -179,19 +180,6 @@ public final class FTFTranslationKeys {
 	public static final String GUI_SLIDER_STRATA_REGION_SIZE = resolve("gui.slider.strataRegionSize");
 	public static final String GUI_SLIDER_MOUNTAIN_BIOME_USAGE = resolve("gui.slider.mountainBiomeUsage");
 	public static final String GUI_SLIDER_VOLCANO_BIOME_USAGE = resolve("gui.slider.volcanoBiomeUsage");
-	public static final String GUI_SLIDER_ISLAND_DENSITY = resolve("gui.slider.islandDensity");
-	public static final String GUI_SLIDER_ISLAND_SIZE = resolve("gui.slider.islandSize");
-	public static final String GUI_SLIDER_ISLAND_HEIGHT = resolve("gui.slider.islandHeight");
-	public static final String GUI_SLIDER_ISLAND_BASE_SCALE = resolve("gui.slider.islandBaseScale");
-	public static final String GUI_SLIDER_ISLAND_VERTICAL_SCALE = resolve("gui.slider.islandVerticalScale");
-	public static final String GUI_SLIDER_ISLAND_HORIZONTAL_SCALE = resolve("gui.slider.islandHorizontalScale");
-	public static final String GUI_SLIDER_ISLAND_MOUNTAIN_CHANCE = resolve("gui.slider.islandMountainChance");
-	public static final String GUI_SLIDER_ISLAND_VOLCANO_CHANCE = resolve("gui.slider.islandVolcanoChance");
-	public static final String GUI_SLIDER_ISLAND_VOLCANISM_SCALE = resolve("gui.slider.islandVolcanismScale");
-	public static final String GUI_SLIDER_ISLAND_MOUNTAIN_SCALE = resolve("gui.slider.islandMountainScale");
-	public static final String GUI_SLIDER_ISLAND_OFFSHORE_DEPTH = resolve("gui.slider.islandOffshoreDepth");
-	public static final String GUI_SLIDER_ISLAND_BEACH_WIDTH = resolve("gui.slider.islandBeachWidth");
-	public static final String GUI_SLIDER_ISLAND_BEACH_COVERAGE = resolve("gui.slider.islandBeachCoverage");
 	public static final String GUI_LABEL_PREVIEW_AREA = resolve("gui.label.previewArea");
 	public static final String GUI_LABEL_PREVIEW_TERRAIN = resolve("gui.label.previewTerrain");
 	public static final String GUI_LABEL_PREVIEW_BIOME = resolve("gui.label.previewBiome");
@@ -231,14 +219,14 @@ public final class FTFTranslationKeys {
 	public static final String GUI_BUTTON_FLOW_PARTICLES = resolve("gui.button.river.flow.particles");
 	public static final String GUI_BUTTON_BOAT_FLOW_DYNAMICS = resolve("gui.button.boat.flow.dynamics");
 	public static final String GUI_BUTTON_NAVIGABLE_WATERFALLS = resolve("gui.button.boat.navigable.waterfalls");
-    public static final String GUI_SLIDER_ISLAND_MOUNTAIN_HORIZONTAL_SCALE = resolve("gui.slider.islandMountainHorizontalScale");
-	public static final String GUI_SLIDER_ISLAND_VOLCANISM_HORIZONTAL_SCALE = resolve("gui.slider.islandVolcanismHorizontalScale");
-    public static final String GUI_SLIDER_ISLAND_MACRO_DENSITY = resolve("gui.slider.islandMacroDensityPercentage");
 	public static final String GUI_LABEL_ISLAND_TRANSITIONS = resolve("gui.label.islandTransitions");
 	public static final String GUI_LABEL_ISLAND_SCALES = resolve("gui.label.islandScales");
 	public static final String GUI_LABEL_ISLAND_CHANCES = resolve("gui.label.islandChances");
+    public static final String GUI_SLIDER_ALTITUDE_COOLING_STRENGTH = resolve("gui.slider.altitudeCoolingStrength");
+	public static final String GUI_SLIDER_RAIN_SHADOW_STRENGTH = resolve("gui.slider.rainShadowStrength");
+	public static final String GUI_SLIDER_COASTAL_MOISTURE_BOOST = resolve("gui.slider.coastalMoistureBoost");
 
-	private static String resolve(String key) {
+	public static String resolve(String key) {
 		return FTFCommon.MOD_ID + "." + key;
 	}
 }

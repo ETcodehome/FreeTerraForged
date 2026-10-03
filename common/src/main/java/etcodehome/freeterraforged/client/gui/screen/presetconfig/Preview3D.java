@@ -17,6 +17,7 @@ import net.minecraft.resources.ResourceLocation;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.SpawnType;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.filter.TerrainCeiling;
 
 public class Preview3D extends Button implements IPreviewHandler {
     public static final int SIZE = IPreviewHandler.SIZE;
@@ -41,7 +42,6 @@ public class Preview3D extends Button implements IPreviewHandler {
     public Preview3D(PresetEditorPage page, int x, int y, int width, int height) {
         super(x, y, width, height, CommonComponents.EMPTY, IPreviewHandler.onPress(), DEFAULT_NARRATION);
         this.page = page;
-        this.state.cacheKey = BiomePreview.cacheKey(page.getScreen().getSettings(), page.preset.getPreset());
     }
 
     @Override
@@ -140,6 +140,7 @@ public class Preview3D extends Button implements IPreviewHandler {
         float heightScale = getHeightScale((float) blockW, params.zoom);
         int halfTile = tileSize / 2;
         float maxCellHeight = properties.worldHeight * levels.unit;
+        int heightLimit = TerrainCeiling.buildLimitHeight(properties, TerrainCeiling.isEnabled(this.page.preset.getPreset()));
         float[] hsb = new float[3];
 
         for (int iz = 0; iz < tileSize; iz++) {
@@ -147,9 +148,9 @@ public class Preview3D extends Button implements IPreviewHandler {
                 Cell cell = activeTile.lookup(ix, iz);
                 float effectiveHeight = cell.height;
                 int color;
-                if (levels.scale(cell.height) > properties.worldHeight) {
+                if (levels.scale(cell.height) > heightLimit) {
                     color = 0xFFFF00FF;
-                    effectiveHeight = maxCellHeight;
+                    effectiveHeight = Math.min(cell.height, maxCellHeight);
                 } else {
                     color = mode.getColor(cell, levels, activeBiomes == null ? 0xFFFF00FF : activeBiomes.color(ix, iz));
                 }
@@ -307,16 +308,6 @@ public class Preview3D extends Button implements IPreviewHandler {
         }
 
         renderSpawnMarker(guiGraphics);
-        BiomePreview.Sidecar activeBiomes = this.state.biomes;
-        if (activeBiomes != null && activeBiomes.warning() != null) {
-            guiGraphics.drawCenteredString(
-                    Minecraft.getInstance().font,
-                    activeBiomes.warning(),
-                    x + this.width / 2,
-                    y + 4,
-                    0xFFFF5555
-            );
-        }
         updateLegend(mx, my);
         renderLegend(guiGraphics, mx, my, this.state.legendLabels, this.state.legendValues, x, y + this.width + 30, 10, 0xFFFFFF);
     }
@@ -401,9 +392,10 @@ public class Preview3D extends Button implements IPreviewHandler {
 
     @Override
     public boolean updateLegend(int mx, int my) {
+        Levels levels = this.state.frameLevels;
         Tile activeTile = this.state.tile;
         BiomePreview.Sidecar activeBiomes = this.state.biomes;
-        if (activeTile != null) {
+        if (activeTile != null && levels != null) {
             int left = this.getX();
             int top = this.getY();
 
@@ -445,10 +437,9 @@ public class Preview3D extends Button implements IPreviewHandler {
                     Cell cell = activeTile.lookup(ix, iz);
                     this.state.legendValues[1] = IPreviewHandler.getTerrainName(cell);
                     String biomeId = activeBiomes == null ? null : activeBiomes.id(ix, iz);
-                    WorldSettings.Properties properties = this.page.preset.getPreset().world().properties;
                     PreviewDetails.Detail detail = PreviewDetails.forCell(
                             getRenderMode(), cell,
-                            new Levels(properties.terrainScaler(), properties.worldHeight, properties.worldDepth, properties.seaLevel),
+                            levels,
                             biomeId
                     );
                     this.state.legendLabels[2] = detail.label();

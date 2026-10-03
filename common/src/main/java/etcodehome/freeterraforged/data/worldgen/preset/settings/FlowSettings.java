@@ -48,19 +48,7 @@ public class FlowSettings {
         );
     }
 
-    // Static cache of settings of current preset, used by mixins
-    public class CurrentPresetState {
-        private static FlowSettings currentSettings = new FlowSettings();
-
-        public static FlowSettings get() {
-            return currentSettings;
-        }
-
-        public static void set(FlowSettings settings) {
-            currentSettings = settings != null ? settings : new FlowSettings();
-        }
-    }
-    public static boolean enableFlowParticles() { return CurrentPresetState.currentSettings.flowParticles; }
-    public static boolean enableBoatFlowDynamics() { return CurrentPresetState.currentSettings.boatFlowDynamics; }
-    public static boolean enableNavigableWaterfalls() { return CurrentPresetState.currentSettings.navigableWaterfalls; }
+    public boolean enableFlowParticles() { return this.flowParticles; }
+    public boolean enableBoatFlowDynamics() { return this.boatFlowDynamics; }
+    public boolean enableNavigableWaterfalls() { return this.navigableWaterfalls; }
 }

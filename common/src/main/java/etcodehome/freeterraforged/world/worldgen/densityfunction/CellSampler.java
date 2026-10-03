@@ -1,9 +1,11 @@
 package etcodehome.freeterraforged.world.worldgen.densityfunction;
 
+import java.lang.ref.WeakReference;
 import java.util.function.Supplier;
 
 import com.mojang.serialization.MapCodec;
-
+import com.mojang.serialization.codecs.KeyDispatchCodec;
+import net.minecraft.world.level.levelgen.DensityFunction;
 import org.jetbrains.annotations.Nullable;
 
 import com.mojang.serialization.Codec;
@@ -11,10 +13,9 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import net.minecraft.core.QuartPos;
 import net.minecraft.core.SectionPos;
+import net.minecraft.world.level.biome.Climate;
 import net.minecraft.util.KeyDispatchDataCodec;
 import net.minecraft.util.StringRepresentable;
-import net.minecraft.world.level.biome.Climate;
-import net.minecraft.world.level.levelgen.DensityFunction;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.ControlPoints;
 import etcodehome.freeterraforged.world.worldgen.biome.Continentalness;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
@@ -27,54 +28,37 @@ import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.util.PosUtil;
 
-public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) implements MarkerFunction.Mapped, FTFCellFunction {
-	// Ocean ranges share an inclusive endpoint. A target on that endpoint ties
-	// both biomes, allowing Climate.RTree's previous result to paint scan-line bands.
-	// Stay one quantized climate unit inside the terrain category on either side.
+public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) implements MarkerFunction.Mapped {
 	private static final float DEEP_OCEAN_MAX = Climate.unquantizeCoord(Climate.quantizeCoord(Continentalness.DEEP_OCEAN.max()) - 1);
 	private static final float SHALLOW_OCEAN_MIN = Climate.unquantizeCoord(Climate.quantizeCoord(Continentalness.OCEAN.min()) + 1);
 	private static final ThreadLocal<Cache2d> CELL = ThreadLocal.withInitial(Cache2d::new);
-	private static final ThreadLocal<Cell> SHARED_FAST_CELL = ThreadLocal.withInitial(Cell::new);
-
-	@Override
-	public CellSampler ftf$unwrap() { return this; }
 
 	@Override
 	public double compute(DensityFunction.FunctionContext ctx) {
-		try {
-			WorldLookup lookup = this.deferredLookup.get();
-			if (lookup != null) {
-				// Grab the reusable cell for this specific worker thread
-				Cell cell = SHARED_FAST_CELL.get();
-
-				// Populate it via the zero-allocation fast path
-				PointCellCache.fill(lookup, ctx.blockX(), ctx.blockZ(), cell);
-
-				// Read and return the data
-				return this.field.read(cell, lookup.getHeightmap());
-			}
-		} catch (Throwable t) {
-			// Intentionally swallowed to fall through to original logic on failure
-		}
-
-		// Fallback to original single-slot Cache2d path if the cache fails/is uninitialized
 		WorldLookup worldLookup = this.deferredLookup.get();
+		if (worldLookup == null) {
+			throw new IllegalStateException("FTF cell sampler used before its world lookup was initialized");
+		}
 		Cell cell = CELL.get().getAndUpdate(worldLookup, ctx.blockX(), ctx.blockZ(), true);
-		return this.field.read(cell, worldLookup.getHeightmap());
+		return this.field.readFinite(cell, worldLookup.getHeightmap());
 	}
 
 	@Override
 	public double minValue() {
-		return 0.0F;
+		// Fields exceed unit-noise bounds; finite float bounds avoid infinity * zero in vanilla.
+		return -Float.MAX_VALUE;
 	}
 
 	@Override
 	public double maxValue() {
-		return 1.0F;
+		return Float.MAX_VALUE;
 	}
 
 	public static class Cache2d {
 		private long lastPos = Long.MAX_VALUE;
+		private WeakReference<WorldLookup> lastLookup = new WeakReference<>(null);
+		private boolean lastSampleClimate;
+		private boolean valid;
 		private Cell cell = new Cell();
 		
 		public Cell getAndUpdate(WorldLookup lookup, int blockX, int blockZ, boolean sampleClimate) {
@@ -82,21 +66,27 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 			blockZ = QuartPos.toBlock(QuartPos.fromBlock(blockZ));
 			
 			long packedPos = PosUtil.pack(blockX, blockZ);
-			if(this.lastPos != packedPos) {
+			boolean sameOwner = this.lastLookup.get() == lookup;
+			if(!this.valid || !sameOwner || this.lastPos != packedPos || this.lastSampleClimate != sampleClimate) {
+				this.valid = false;
 				lookup.applyCell(this.cell.reset(), blockX, blockZ, false, sampleClimate);
 				this.lastPos = packedPos;
+				if (!sameOwner) {
+					this.lastLookup = new WeakReference<>(lookup);
+				}
+				this.lastSampleClimate = sampleClimate;
+				this.valid = true;
 			}
 			return this.cell;
 		}
 	}
-
+	
 	public class CacheChunk implements MarkerFunction.Mapped {
-		@Nullable
-		private final Tile.Chunk chunk;
-		private final Cache2d cache2d;
-		private final int chunkX, chunkZ;
-
-		public CacheChunk(@Nullable Tile.Chunk chunk, @Nullable Cache2d cache2d, int chunkX, int chunkZ) {
+		private Supplier<@Nullable Tile.Chunk> chunk;
+		private Cache2d cache2d;
+		private int chunkX, chunkZ;
+		
+		public CacheChunk(Supplier<@Nullable Tile.Chunk> chunk, @Nullable Cache2d cache2d, int chunkX, int chunkZ) {
 			this.chunk = chunk;
 			this.cache2d = cache2d != null ? cache2d : new Cache2d();
 			this.chunkX = chunkX;
@@ -107,14 +97,14 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 		public double compute(FunctionContext ctx) {
 			int blockX = ctx.blockX();
 			int blockZ = ctx.blockZ();
-			int currentChunkX = SectionPos.blockToSectionCoord(blockX);
-			int currentChunkZ = SectionPos.blockToSectionCoord(blockZ);
-
+			int chunkX = SectionPos.blockToSectionCoord(blockX);
+			int chunkZ = SectionPos.blockToSectionCoord(blockZ);
 			WorldLookup worldLookup = CellSampler.this.deferredLookup.get();
-			Cell cell = (this.chunk != null && this.chunkX == currentChunkX && this.chunkZ == currentChunkZ) ?
-					this.chunk.getCell(blockX, blockZ) :
-					this.cache2d.getAndUpdate(worldLookup, blockX, blockZ, true);
-			return CellSampler.this.field.read(cell, worldLookup.getHeightmap());
+			Tile.Chunk current = this.chunk.get();
+			Cell cell = (current != null && this.chunkX == chunkX && this.chunkZ == chunkZ) ?
+				current.getCell(blockX, blockZ) :
+				this.cache2d.getAndUpdate(worldLookup, blockX, blockZ, false);
+			return CellSampler.this.field.readFinite(cell, worldLookup.getHeightmap());
 		}
 
 		@Override
@@ -163,8 +153,10 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 				if(cell.terrain == TerrainType.MUSHROOM_FIELDS) {
 					return Continentalness.MUSHROOM_FIELDS.mid();
 				}
+				boolean submergedOffshore = cell.height <= levels.water && cell.continentEdge < beach
+					&& !cell.terrain.isRiver() && !cell.terrain.isLake() && !cell.terrain.isWetland();
 
-				if(cell.terrain.isDeepOcean()) {
+				if(cell.terrain.isDeepOcean() || submergedOffshore && cell.continentEdge <= deepOcean) {
 					if(deepOcean <= 0.0F) {
 						return Continentalness.DEEP_OCEAN.mid();
 					}
@@ -180,6 +172,18 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 					float alpha = NoiseUtil.clamp(cell.continentEdge, deepOcean, shallowOcean);
 					alpha = NoiseUtil.lerp(alpha, deepOcean, shallowOcean, 0.0F, 0.98F);
 					return Math.max(SHALLOW_OCEAN_MIN, NoiseUtil.lerp(Continentalness.OCEAN.min(), Continentalness.OCEAN.max(), alpha));
+				}
+
+				if (submergedOffshore) {
+					if (beach <= deepOcean) {
+						return Continentalness.OCEAN.mid();
+					}
+					float alpha = NoiseUtil.lerp(
+						NoiseUtil.clamp(cell.continentEdge, deepOcean, beach),
+						deepOcean, beach, 0.0F, 0.98F
+					);
+					return Math.max(SHALLOW_OCEAN_MIN,
+						NoiseUtil.lerp(Continentalness.OCEAN.min(), Continentalness.OCEAN.max(), alpha));
 				}
 				
 				if(cell.terrain.getDelegate() == TerrainCategory.BEACH && cell.height + cell.beachNoise < levels.water(5)) {
@@ -283,14 +287,13 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 		}
 		
 		public abstract float read(Cell cell, Heightmap heightmap);
-	}
-	@Override
-	public boolean equals(Object o) {
-		return o instanceof CellSampler other && this.field == other.field;
-	}
-	@Override
-	public int hashCode() {
-		return field.hashCode();
-	}
 
+		public float readFinite(Cell cell, Heightmap heightmap) {
+			float value = this.read(cell, heightmap);
+			if (!Float.isFinite(value)) {
+				throw new IllegalStateException("Non-finite FTF cell density field " + this.name + ": " + value);
+			}
+			return value;
+		}
+	}
 }

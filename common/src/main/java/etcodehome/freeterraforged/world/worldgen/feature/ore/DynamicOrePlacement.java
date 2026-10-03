@@ -7,15 +7,15 @@ import java.util.stream.Stream;
 
 import etcodehome.freeterraforged.server.FTFMinecraftServer;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.placement.HeightRangePlacement;
 import net.minecraft.world.level.levelgen.placement.PlacementModifier;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.minecraft.world.level.levelgen.placement.PlacementContext;
+import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
+import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPlan;
+import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPlans;
 import etcodehome.freeterraforged.world.worldgen.feature.ore.DynamicOrePlan.FanoutStage;
 import etcodehome.freeterraforged.world.worldgen.feature.ore.DynamicOrePlan.VerticalFrame;
 import etcodehome.freeterraforged.world.worldgen.feature.ore.DynamicOrePlan.VerticalTransform;
@@ -96,6 +96,9 @@ public final class DynamicOrePlacement {
 	}
 
 	public static boolean isStandardOrePlacement(HeightRangePlacement placement, PlacementContext context) {
+		if (!(context.generator() instanceof TerraForgedChunkGenerator)) {
+			return false;
+		}
 		return context.topFeature()
 			.filter(feature -> feature.placement().stream().anyMatch(modifier -> modifier == placement))
 			.filter(DynamicOrePlacement::isStandardOre)
@@ -108,7 +111,7 @@ public final class DynamicOrePlacement {
 	}
 
 	private static Optional<Activation> activation(PlacementModifier modifier, PlacementContext context) {
-		if (!Level.OVERWORLD.equals(context.getLevel().getLevel().dimension())) {
+		if (!(context.generator() instanceof TerraForgedChunkGenerator generator)) {
 			return Optional.empty();
 		}
 		Optional<PlacedFeature> topFeature = context.topFeature().filter(DynamicOrePlacement::isStandardOre);
@@ -119,14 +122,13 @@ public final class DynamicOrePlacement {
 		if (modifierIndex < 0) {
 			return Optional.empty();
 		}
-		ResourceLocation featureId = context.getLevel()
-			.registryAccess()
-			.registryOrThrow(Registries.PLACED_FEATURE)
-			.getKey(topFeature.orElseThrow());
-		if (featureId == null || !(context.getLevel().getServer() instanceof FTFMinecraftServer owner)) {
+		WorldgenPlans.PlacedFeatures placedFeatures = generator.plan()
+			.map(WorldgenPlan::placedFeatures)
+			.orElse(null);
+		if (placedFeatures == null) {
 			return Optional.empty();
 		}
-		DynamicOrePlan plan = owner.getDynamicOrePlan();
+		DynamicOrePlan plan = placedFeatures.ores();
 		VerticalFrame currentFrame = new VerticalFrame(
 			context.getMinGenY(),
 			context.getMinGenY() + context.getGenDepth() - 1,
@@ -135,8 +137,8 @@ public final class DynamicOrePlacement {
 		if (plan.verticalFrame().isEmpty() || !plan.verticalFrame().orElseThrow().equals(currentFrame)) {
 			return Optional.empty();
 		}
-		VerticalTransform transform = plan.verticalTransforms().get(featureId.toString());
-		return transform == null ? Optional.empty() : Optional.of(new Activation(transform, modifierIndex));
+		return placedFeatures.oreTransform(topFeature.orElseThrow())
+			.map(transform -> new Activation(transform, modifierIndex));
 	}
 
 	private static int identityIndex(List<PlacementModifier> modifiers, PlacementModifier target) {

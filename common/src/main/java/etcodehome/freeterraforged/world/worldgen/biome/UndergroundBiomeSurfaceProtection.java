@@ -31,7 +31,19 @@ public final class UndergroundBiomeSurfaceProtection {
 				Climate.unquantizeCoord(target.depth()) - SURFACE_DEPTH
 		) / DEPTH_UNITS_PER_BLOCK;
 
-		// Shift clearance downward to prevent surface breakthrough
+		if (localClearance <= EXTRA_SAFETY_MARGIN_BLOCKS + REQUIRED_CLEARANCE_BLOCKS) {
+			return 0.0F;
+		}
+		if ((Object) sampler instanceof FTFClimateSampler ftfSampler) {
+			GeneratorContext context = ftfSampler.climateQuerySemantics().surfaceContext();
+			if (context != null) {
+				int minimumSurfaceY = context.biomeSurfaceEnvelope.minimumSurfaceY(context, quartX, quartZ);
+				float envelopeClearance = minimumSurfaceY - QuartPos.toBlock(quartY)
+					- BiomeSurfaceEnvelope.MAX_VERTICAL_OFFSET;
+				localClearance = Math.min(localClearance, envelopeClearance);
+			}
+		}
+
 		float paddedClearance = localClearance - EXTRA_SAFETY_MARGIN_BLOCKS;
 
 		return coverageFactor(paddedClearance);

@@ -1,12 +1,11 @@
 package etcodehome.freeterraforged.world.worldgen.cell.climate;
 
-import etcodehome.freeterraforged.world.worldgen.biome.Humidity;
-import etcodehome.freeterraforged.world.worldgen.biome.Temperature;
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
 import etcodehome.freeterraforged.world.worldgen.cell.continent.Continent;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
-import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainCategory;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
+import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil.Vec2f;
 import etcodehome.freeterraforged.world.worldgen.noise.function.DistanceFunction;
 import etcodehome.freeterraforged.world.worldgen.noise.function.EdgeFunction;
 import etcodehome.freeterraforged.world.worldgen.noise.module.LegacyMoisture;
@@ -89,12 +88,89 @@ public class ClimateModule {
 	}
 
 	public void apply(Cell cell, float x, float z, float originalX, float originalZ, boolean mask) {
-		float ox = this.warpX.compute(x, z, 0) * this.warpStrength;
-		float oz = this.warpZ.compute(x, z, 0) * this.warpStrength;
-		x += ox;
-		z += oz;
-		x *= this.biomeFreq;
-		z *= this.biomeFreq;
+		float warpedX = x + this.warpX.compute(x, z, 0) * this.warpStrength;
+		float warpedZ = z + this.warpZ.compute(x, z, 0) * this.warpStrength;
+		x = warpedX * this.biomeFreq;
+		z = warpedZ * this.biomeFreq;
+		this.resolveRegion(cell, x, z, mask);
+		float centerX = cell.biomeRegionCenterX;
+		float centerZ = cell.biomeRegionCenterZ;
+		int cellX = (int) cell.biomeRegionX;
+		int cellZ = (int) cell.biomeRegionZ;
+		cell.biomeRegionId = this.cellValue(this.seed, cellX, cellZ);
+		cell.macroBiomeId = this.macroBiomeNoise.compute(centerX, centerZ, 0);
+		int posX = NoiseUtil.floor(centerX / this.biomeFreq);
+		int posZ = NoiseUtil.floor(centerZ / this.biomeFreq);
+
+		// Constant per biome cell: only for things meant to be uniform across a region.
+		float regionEdge = this.continent.getLandValue(posX, posZ);
+		if (mask) {
+			this.modifyTerrain(cell, regionEdge);
+		}
+
+		float rawMoist = this.moisture.compute(x, z, 0);
+		float moist = this.modifyMoisture(cell.height, rawMoist);
+
+		float rawTemp = this.temperature.compute(x, z, 0);
+		float temp = this.modifyTemp(cell.height, rawTemp);
+
+		// convert from normalised 0-1 range to -1 to 1 range
+		cell.temperature = temp * 2.0F - 1.0F;
+		cell.moisture = moist * 2.0F - 1.0F;
+	}
+
+	private float modifyTemp(float height, float rawTemp) {
+		// Only apply cooling above ground level
+		if (height <= this.levels.ground) {
+			return rawTemp;
+		}
+
+		// getNormalizedInlandElevation returns 0.0 at sea level and 1.0 at maximum terrain height
+		float heightNorm = NoiseUtil.clamp(this.levels.getNormalizedInlandElevation(height), 0.0F, 1.0F);
+
+		// Calculate exponential warp factor (k ranges from 1.0 at sea level to 4.0 at peak height)
+		float exponent = (float) Math.pow(2.0, heightNorm * PresetManager.PM.climateSettings.altitudeCoolingStrength);
+
+		float tempNormalized = NoiseUtil.clamp(rawTemp, 0.0F, 1.0F);
+
+		return (float) Math.pow(tempNormalized, exponent);
+	}
+
+	public float modifyMoisture(float height, float rawMoisture) {
+		float moisture = NoiseUtil.clamp(rawMoisture, 0.0F, 1.0F);
+
+		// Calculate height relative to sea level (0.0 at ground, 1.0 at peak inland terrain)
+		float heightNorm = (height <= this.levels.ground) ? 0.0F :
+				NoiseUtil.clamp(this.levels.getNormalizedInlandElevation(height), 0.0F, 1.0F);
+
+		// Coastal boost fades as elevation rises inland
+		float coastalInfluence = 1.0F - heightNorm;
+		if (coastalInfluence > 0.0F) {
+			moisture = moisture + (1.0F - moisture) * (PresetManager.PM.climateSettings.coastalMoistureBoost * coastalInfluence);
+		}
+
+		// Return boosted moisture directly at or below sea level
+		if (height <= this.levels.ground) {
+			return NoiseUtil.clamp(moisture, 0.0F, 1.0F);
+		}
+
+		// Rain Shadow Exponent (k ranges from 1.0 at sea level to ~3.48 at max peak)
+		float exponent = (float) Math.pow(2.0, heightNorm * PresetManager.PM.climateSettings.rainShadowStrength);
+
+		// Power curve preserves 1.0 (rainforests) while exponentially drying mid-tier moisture
+		return (float) Math.pow(moisture, exponent);
+	}
+
+
+	public void applyRegion(Cell cell, float x, float z, boolean mask) {
+		float warpedX = x + this.warpX.compute(x, z, 0) * this.warpStrength;
+		float warpedZ = z + this.warpZ.compute(x, z, 0) * this.warpStrength;
+		this.resolveRegion(
+			cell, warpedX * this.biomeFreq, warpedZ * this.biomeFreq, mask
+		);
+	}
+
+	private void resolveRegion(Cell cell, float x, float z, boolean mask) {
 		int xr = NoiseUtil.floor(x);
 		int zr = NoiseUtil.floor(z);
 		int cellX = xr;
@@ -108,7 +184,7 @@ public class ClimateModule {
 			for (int dx = -1; dx <= 1; ++dx) {
 				int cx = xr + dx;
 				int cz = zr + dz;
-				NoiseUtil.Vec2f vec = NoiseUtil.cell(this.seed, cx, cz);
+				Vec2f vec = NoiseUtil.cell(this.seed, cx, cz);
 				float cxf = cx + vec.x();
 				float czf = cz + vec.y();
 				float distance = dist.apply(cxf - x, czf - z);
@@ -124,94 +200,12 @@ public class ClimateModule {
 				}
 			}
 		}
-		cell.biomeRegionId = this.cellValue(this.seed , cellX, cellZ);
-		cell.regionMoisture = this.moisture.compute(centerX, centerZ, 0);
-		cell.regionTemperature = this.temperature.compute(centerX, centerZ, 0);
-		cell.macroBiomeId = this.macroBiomeNoise.compute(centerX, centerZ, 0);
-		int posX = NoiseUtil.floor(centerX / this.biomeFreq);
-		int posZ = NoiseUtil.floor(centerZ / this.biomeFreq);
-		float continentEdge = this.continent.getLandValue(posX, posZ);
+		cell.biomeRegionCenterX = centerX;
+		cell.biomeRegionCenterZ = centerZ;
+		cell.biomeRegionX = cellX;
+		cell.biomeRegionZ = cellZ;
 		if (mask) {
 			cell.biomeRegionEdge = this.edgeValue(edgeDistance, edgeDistance2);
-			this.modifyTerrain(cell, continentEdge);
-		}
-		cell.regionMoisture = this.modifyMoisture(cell.regionMoisture, continentEdge);
-
-		cell.regionTemperature = this.modifyTemp(cell.height, cell.regionTemperature, originalX, originalZ);
-
-		float queryTemp = this.temperature.compute(x, z, 0);
-		float queryMoist = this.moisture.compute(x, z, 0);
-		queryMoist = this.modifyMoisture(queryMoist, continentEdge);
-		queryTemp = this.modifyTemp(cell.height, queryTemp, originalX, originalZ);
-		cell.temperature = queryTemp * 2.0F - 1.0F;
-		cell.moisture = queryMoist * 2.0F - 1.0F;
-
-		if (cell.terrain != null && cell.terrain.getCategory() == TerrainCategory.HIGHLAND) {
-			float mtnFreqX = cell.terrainRegionCenterX * this.biomeFreq;
-			float mtnFreqZ = cell.terrainRegionCenterZ * this.biomeFreq;
-
-			float mtnTemp = this.temperature.compute(mtnFreqX, mtnFreqZ, 0);
-			float mtnMoist = this.moisture.compute(mtnFreqX, mtnFreqZ, 0);
-			mtnMoist = this.modifyMoisture(mtnMoist, continentEdge);
-			mtnTemp = this.modifyTemp(cell.height, mtnTemp, originalX, originalZ);
-			cell.temperature = mtnTemp * 2.0F - 1.0F;
-			cell.moisture = mtnMoist * 2.0F - 1.0F;
-		}
-
-		if (cell.terrain == TerrainType.ISLAND_BEACH || cell.terrain == TerrainType.ISLAND || cell.terrain == TerrainType.ISLAND_MOUNTAINS) {
-
-			if (madeMushroomIslands(cell)){ return; }
-
-			float islTemp = this.temperature.compute(centerX, centerZ, 0);
-			float islMoist = this.moisture.compute(centerX, centerZ, 0);
-			islMoist = this.modifyMoisture(islMoist, continentEdge);
-			islTemp = this.modifyTemp(cell.height, islTemp, originalX, originalZ);
-			cell.temperature = islTemp * 2.0F - 1.0F;
-			cell.moisture = islMoist * 2.0F - 1.0F;
-		}
-	}
-
-	private boolean madeMushroomIslands(Cell cell)
-	{
-		// Check for a rare noise threshold (e.g., top 5% of macroBiomeId)
-		if (cell.macroBiomeId > 0.95F) {
-			cell.terrain = TerrainType.MUSHROOM_FIELDS;
-
-			// Set appropriate temperature and moisture for mushrooms/mycelium
-			cell.temperature = Temperature.LEVEL_2.mid(); // Moderate
-			cell.moisture = Humidity.LEVEL_4.mid();       // Wet
-			return true;
-		}
-		return false;
-	}
-
-	private float modifyTemp(float height, float temp, float x, float z) {
-		if (height > 0.75F) {
-			return Math.max(0.0F, temp - 0.05F);
-		}
-		if (height > 0.45F) {
-			float delta = (height - 0.45F) / 0.3F;
-			return Math.max(0.0F, temp - delta * 0.05F);
-		}
-		height = Math.max(this.levels.ground, height);
-		if (height >= this.levels.ground) {
-			float delta = 1.0F - (height - this.levels.ground) / (0.45F - this.levels.ground);
-			return Math.min(1.0F, temp + delta * 0.05F);
-		}
-		return temp;
-	}
-
-	private float modifyMoisture(float moisture, float continentEdge) {
-		float limit = 0.75F;
-		float range = 1.0F - limit;
-		if (continentEdge < limit) {
-			float alpha = (limit - continentEdge) / range;
-			float multiplier = 1.0F + alpha * range;
-			return NoiseUtil.clamp(moisture * multiplier, 0.0F, 1.0F);
-		} else {
-			float alpha = (continentEdge - limit) / range;
-			float multiplier = 1.0F - alpha * range;
-			return moisture *= multiplier;
 		}
 	}
 

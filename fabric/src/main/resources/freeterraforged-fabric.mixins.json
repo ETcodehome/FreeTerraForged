@@ -8,10 +8,8 @@
   	"MixinPresetEditor"
   ],
   "mixins": [
-    "MixinBiolithTerraBlenderCompat",
-    "MixinChunkStatusTasks",
-    "MixinMinecraftServer",
-    "MixinBiomeModificationImpl"
+  	"MixinChunkStatusTasks",
+		"MixinMinecraftServer"
   ],
   "injectors": {
     "defaultRequire": 1

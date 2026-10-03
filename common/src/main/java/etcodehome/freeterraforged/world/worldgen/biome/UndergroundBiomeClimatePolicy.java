@@ -14,12 +14,17 @@ public final class UndergroundBiomeClimatePolicy {
 		Climate.TargetPoint target,
 		int quartX,
 		int quartY,
-		int quartZ
+		int quartZ,
+		ClimateQueryPolicy policy,
+		Preset preset,
+		long seed
 	) {
 		if (!((Object) sampler instanceof FTFClimateSampler ftfSampler)) {
 			return target;
 		}
-		Preset preset = ftfSampler.getUndergroundBiomeBandingPreset();
+		if (!policy.appliesUndergroundBanding()) {
+			return target;
+		}
 		if (preset == null) {
 			return target;
 		}
@@ -32,7 +37,7 @@ public final class UndergroundBiomeClimatePolicy {
 		);
 		if (UndergroundBiomeBanding.allowsCaveBiome(
 			preset,
-			ftfSampler.getUndergroundBiomeBandingSeed(),
+			seed,
 			target,
 			quartX,
 			quartY,

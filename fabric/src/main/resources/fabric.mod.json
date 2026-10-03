@@ -35,7 +35,6 @@
     "minecraft": ">=1.21.1"
   },
   "breaks": {
-    "biolith": "<3.0.14",
     "reterraforged": "*"
   },
   "mixins": [

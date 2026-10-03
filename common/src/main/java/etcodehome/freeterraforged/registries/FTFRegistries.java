@@ -25,7 +25,7 @@ public class FTFRegistries {
 	public static final ResourceKey<Registry<MapCodec<? extends StructureRule>>> STRUCTURE_RULE_TYPE = createKey("worldgen/structure_rule_type");
 
 	public static final ResourceKey<Registry<Noise>> NOISE = createKey("worldgen/noise");
-	public static final ResourceKey<Registry<BiomeModifier>> BIOME_MODIFIER = createKey("neoforge:biome_modifier");
+	public static final ResourceKey<Registry<BiomeModifier>> BIOME_MODIFIER = createKey("worldgen/biome_modifier");
 	public static final ResourceKey<Registry<StructureRule>> STRUCTURE_RULE = createKey("worldgen/structure_rule");
 
 	@Deprecated

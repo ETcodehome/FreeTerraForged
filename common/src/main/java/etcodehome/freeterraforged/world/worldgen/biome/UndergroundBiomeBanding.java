@@ -59,6 +59,26 @@ public final class UndergroundBiomeBanding {
 
 	public static <T> Layout<T> apply(
 		Preset preset,
+		Climate.ParameterList<T> source,
+		long seed
+	) {
+		return apply(
+			preset, source, source.values(), seed,
+			(point, value) -> classify(point, false)
+		);
+	}
+
+	public static <T> Layout<T> apply(
+		Preset preset,
+		Climate.ParameterList<T> source,
+		long seed,
+		BiFunction<Climate.ParameterPoint, T, CandidateRole> classifier
+	) {
+		return apply(preset, source, source.values(), seed, classifier);
+	}
+
+	public static <T> Layout<T> apply(
+		Preset preset,
 		List<Pair<Climate.ParameterPoint, T>> entries,
 		BiFunction<Climate.ParameterPoint, T, CandidateRole> classifier
 	) {
@@ -81,7 +101,23 @@ public final class UndergroundBiomeBanding {
 		long seed,
 		BiFunction<Climate.ParameterPoint, T, CandidateRole> classifier
 	) {
-		Climate.ParameterList<T> original = new Climate.ParameterList<>(sourceEntries);
+		return apply(
+			preset,
+			new Climate.ParameterList<>(sourceEntries),
+			candidateEntries,
+			seed,
+			classifier
+		);
+	}
+
+	private static <T> Layout<T> apply(
+		Preset preset,
+		Climate.ParameterList<T> original,
+		List<Pair<Climate.ParameterPoint, T>> candidateEntries,
+		long seed,
+		BiFunction<Climate.ParameterPoint, T, CandidateRole> classifier
+	) {
+		List<Pair<Climate.ParameterPoint, T>> sourceEntries = original.values();
 		Map<T, Candidate<T>> candidates = new LinkedHashMap<>();
 		int unknownEntryCount = 0;
 		int classificationFailureCount = 0;
@@ -221,12 +257,12 @@ public final class UndergroundBiomeBanding {
 		}
 
 		long surface = Climate.quantizeCoord(0.0F);
-		long bottom = Climate.quantizeCoord(VANILLA_BOTTOM_DEPTH);
 		if (depth.max() <= surface) {
 			return CandidateRole.SURFACE;
 		}
-		if (caveTagged && depth.min() > surface) {
-			return depth.min() >= bottom ? CandidateRole.DEEP_CAVE : CandidateRole.SHALLOW_CAVE;
+		if (depth.min() > surface || (caveTagged && depth.min() == surface && depth.max() > surface)) {
+			return depth.min() >= Climate.quantizeCoord(VANILLA_UNDERGROUND_DEPTH_END)
+				? CandidateRole.DEEP_CAVE : CandidateRole.SHALLOW_CAVE;
 		}
 		return CandidateRole.UNKNOWN;
 	}
@@ -305,6 +341,9 @@ public final class UndergroundBiomeBanding {
 		int cellZ = (int) Math.floor(z);
 		double nearestDistance = Double.POSITIVE_INFINITY;
 		long nearestKey = 0L;
+		double nearestSiteX = 0.0D;
+		double nearestSiteY = 0.0D;
+		double nearestSiteZ = 0.0D;
 
 		for (int offsetY = -1; offsetY <= 1; offsetY++) {
 			for (int offsetZ = -1; offsetZ <= 1; offsetZ++) {
@@ -323,11 +362,20 @@ public final class UndergroundBiomeBanding {
 					if (distance < nearestDistance || (distance == nearestDistance && key < nearestKey)) {
 						nearestDistance = distance;
 						nearestKey = key;
+						nearestSiteX = siteX;
+						nearestSiteY = siteY;
+						nearestSiteZ = siteZ;
 					}
 				}
 			}
 		}
-		return new RegionSample(nearestKey, unit(nearestKey ^ OCCUPANCY_SCORE_SALT));
+		return new RegionSample(
+			nearestKey,
+			unit(nearestKey ^ OCCUPANCY_SCORE_SALT),
+			QuartPos.fromBlock((int) Math.floor(nearestSiteX * horizontalSize)),
+			QuartPos.fromBlock((int) Math.floor(nearestSiteY * verticalSize)),
+			QuartPos.fromBlock((int) Math.floor(nearestSiteZ * horizontalSize))
+		);
 	}
 
 	public static boolean allowsCaveBiome(
@@ -498,7 +546,18 @@ public final class UndergroundBiomeBanding {
 		}
 	}
 
-	private record RegionSample(long key, double occupancy) {
+	private record RegionSample(
+		long key,
+		double occupancy,
+		int identityQuartX,
+		int identityQuartY,
+		int identityQuartZ
+	) {
+	}
+
+	@FunctionalInterface
+	public interface TargetSampler {
+		Climate.TargetPoint sample(int quartX, int quartY, int quartZ);
 	}
 
 	public static final class Layout<T> {
@@ -658,6 +717,20 @@ public final class UndergroundBiomeBanding {
 			int quartZ,
 			float surfaceCoverageFactor
 		) {
+			return this.findValue(
+				target, quartX, quartY, quartZ, surfaceCoverageFactor,
+				(identityQuartX, identityQuartY, identityQuartZ) -> target
+			);
+		}
+
+		public T findValue(
+			Climate.TargetPoint target,
+			int quartX,
+			int quartY,
+			int quartZ,
+			float surfaceCoverageFactor,
+			TargetSampler targetSampler
+		) {
 			if (!this.appliesAt(target)) {
 				return this.original.findValue(target);
 			}
@@ -699,7 +772,10 @@ public final class UndergroundBiomeBanding {
 			if (!this.bandingEnabled) {
 				return this.original.findValue(target);
 			}
-			return stage.findValue(target, region.key(), this.climateInfluence);
+			Climate.TargetPoint identityTarget = targetSampler.sample(
+				region.identityQuartX(), region.identityQuartY(), region.identityQuartZ()
+			);
+			return stage.findValue(identityTarget, region.key(), this.climateInfluence);
 		}
 
 		private float surfaceFactor(long depth) {

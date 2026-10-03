@@ -18,6 +18,7 @@ import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.SpawnType;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.filter.TerrainCeiling;
 
 public class Preview2D extends Button implements IPreviewHandler {
     public static final int SIZE = IPreviewHandler.SIZE;
@@ -32,8 +33,6 @@ public class Preview2D extends Button implements IPreviewHandler {
     public Preview2D(PresetEditorPage parent, int x, int y, int width, int height) {
         super(x, y, width, height, CommonComponents.EMPTY, IPreviewHandler.onPress(), DEFAULT_NARRATION);
         this.page = parent;
-        this.state.cacheKey = BiomePreview.cacheKey(parent.getScreen().getSettings(), parent.preset.getPreset());
-
         // Ensure static texture is initialized
         getOrCreateTexture();
     }
@@ -131,12 +130,13 @@ public class Preview2D extends Button implements IPreviewHandler {
     public int[] createRasterData(Tile tile, BiomePreview.Sidecar biomes, RenderMode mode, Levels levels, WorldSettings.Properties properties, RasterParams params) {
         int stroke = 2;
         int tileWidth = tile.getBlockSize().size();
+        int heightLimit = TerrainCeiling.buildLimitHeight(properties, TerrainCeiling.isEnabled(this.page.preset.getPreset()));
         int[] pixels = new int[tileWidth * tileWidth];
         tile.iterate((cell, bx, bz) -> {
             int color;
             if (bx < stroke || bz < stroke || bx >= tileWidth - stroke || bz >= tileWidth - stroke) {
                 color = 0xFF000000;
-            } else if (levels.scale(cell.height) > properties.worldHeight) {
+            } else if (levels.scale(cell.height) > heightLimit) {
                 color = 0xFFFF00FF;
             } else {
                 int biomeColor = biomes == null ? 0xFFFF00FF : biomes.color(bx, bz);
@@ -221,15 +221,6 @@ public class Preview2D extends Button implements IPreviewHandler {
         guiGraphics.blit(getOrCreateTexture(), xPos, yPos, 0, 0, this.width, this.height, this.width, this.height);
 
         renderSpawnMarker(guiGraphics);
-        if (this.state.biomes != null && this.state.biomes.warning() != null) {
-            guiGraphics.drawCenteredString(
-                    Minecraft.getInstance().font,
-                    this.state.biomes.warning(),
-                    xPos + this.width / 2,
-                    yPos + 4,
-                    0xFFFF5555
-            );
-        }
         updateLegend(mx, my);
         renderLegend(guiGraphics, mx, my, this.state.legendLabels, this.state.legendValues, xPos, yPos + this.width + 30, 10, 0xFFFFFF);
     }
@@ -266,7 +257,8 @@ public class Preview2D extends Button implements IPreviewHandler {
 
     @Override
     public boolean updateLegend(int mx, int my) {
-        if (this.state.tile != null) {
+        Levels levels = this.state.frameLevels;
+        if (this.state.tile != null && levels != null) {
             int left = this.getX();
             int top = this.getY();
             float size = this.width;
@@ -284,9 +276,8 @@ public class Preview2D extends Button implements IPreviewHandler {
                 Cell cell = this.state.tile.lookup(ix, iz);
                 this.state.legendValues[1] = IPreviewHandler.getTerrainName(cell);
                 String biomeId = this.state.biomes == null ? null : this.state.biomes.id(ix, iz);
-                WorldSettings.Properties properties = this.page.preset.getPreset().world().properties;
                 PreviewDetails.Detail detail = PreviewDetails.forCell(
-                        getRenderMode(), cell, new Levels(properties.terrainScaler(), properties.worldHeight, properties.worldDepth, properties.seaLevel), biomeId
+                        getRenderMode(), cell, levels, biomeId
                 );
                 this.state.legendLabels[2] = detail.label();
                 this.state.legendValues[2] = detail.value();

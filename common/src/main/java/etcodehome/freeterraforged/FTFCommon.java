@@ -18,6 +18,8 @@ import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
 import etcodehome.freeterraforged.world.worldgen.structure.rule.StructureRule;
 import etcodehome.freeterraforged.world.worldgen.structure.rule.StructureRules;
 import etcodehome.freeterraforged.world.worldgen.surface.rule.FTFSurfaceRules;
+import etcodehome.freeterraforged.world.worldgen.runtime.FTFChunkGenerators;
+import etcodehome.freeterraforged.world.worldgen.biome.modifier.BiomeModifier;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -32,6 +34,7 @@ public class FTFCommon {
 	public static final Logger LOGGER = LogManager.getLogger("FreeTerraForged");
 
 	public static void bootstrap() {
+		FTFChunkGenerators.bootstrap();
 		FTFBuiltInRegistries.bootstrap();
 		TemplatePlacements.bootstrap();
 		TemplateDecorators.bootstrap();
@@ -49,6 +52,7 @@ public class FTFCommon {
 		StructureRules.bootstrap();
 
 		RegistryUtil.createDataRegistry(FTFRegistries.NOISE, Noise.DIRECT_CODEC, false);
+		RegistryUtil.createDataRegistry(FTFRegistries.BIOME_MODIFIER, BiomeModifier.DIRECT_CODEC, false);
 		RegistryUtil.createDataRegistry(FTFRegistries.PRESET, Preset.DIRECT_CODEC, false);
 		RegistryUtil.createDataRegistry(FTFRegistries.STRUCTURE_RULE, StructureRule.DIRECT_CODEC, false);
 	}

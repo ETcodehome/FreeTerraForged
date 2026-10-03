@@ -1,14 +1,28 @@
 package etcodehome.freeterraforged.world.worldgen.biome.modifier;
 
 import java.util.function.Function;
+import java.util.List;
 
 import com.mojang.serialization.Codec;
 
 import com.mojang.serialization.MapCodec;
+import net.minecraft.core.Holder;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.levelgen.GenerationStep;
+import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import etcodehome.freeterraforged.registries.FTFBuiltInRegistries;
 
 public interface BiomeModifier {
     public static final Codec<BiomeModifier> DIRECT_CODEC = FTFBuiltInRegistries.BIOME_MODIFIER_TYPE.byNameCodec().dispatch(BiomeModifier::codec, Function.identity());
 
 	MapCodec<? extends BiomeModifier> codec();
+
+	GenerationStep.Decoration step();
+
+	List<Holder<PlacedFeature>> apply(
+		Holder<Biome> biome,
+		List<Holder<PlacedFeature>> features,
+		HolderLookup.Provider lookups
+	);
 }

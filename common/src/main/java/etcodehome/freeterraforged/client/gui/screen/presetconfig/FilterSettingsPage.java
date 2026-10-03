@@ -24,8 +24,8 @@ class FilterSettingsPage extends PresetEditorPage {
 	private Slider smoothingRadius;
 	private Slider smoothingRate;
 
-	public FilterSettingsPage(PresetConfigScreen screen, PresetEntry preset) {
-		super(screen, preset);
+	public FilterSettingsPage(PresetConfigScreen screen) {
+		super(screen);
 	}
 
 	@Override
@@ -96,12 +96,12 @@ class FilterSettingsPage extends PresetEditorPage {
 
 	@Override
 	public Optional<Page> previous() {
-		return Optional.of(new IslandSettingsPage(this.screen, this.preset));
+		return Optional.of(new IslandSettingsPage(this.screen));
 	}
 
 	@Override
 	public Optional<Page> next() {
-		return Optional.of(new MiscellaneousPage(this.screen, this.preset));
+		return Optional.of(new MiscellaneousPage(this.screen));
 	}
 
 }

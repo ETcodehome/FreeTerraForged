@@ -22,19 +22,16 @@ import etcodehome.freeterraforged.data.worldgen.preset.PresetNoiseGeneratorSetti
 import etcodehome.freeterraforged.data.worldgen.preset.PresetNoiseRouterData;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetPlacedFeatures;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetStructureRuleData;
+import etcodehome.freeterraforged.data.worldgen.preset.PresetWorldPresets;
+import etcodehome.freeterraforged.registries.FTFRegistries;
+import etcodehome.freeterraforged.world.worldgen.biome.modifier.BiomeModifier;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
+import etcodehome.freeterraforged.world.worldgen.structure.rule.StructureRule;
 
 import java.util.*;
 import java.util.stream.Stream;
 
-public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings caves, ClimateSettings climate, TerrainSettings terrain, RiverSettings rivers, FlowSettings flow, IslandSettings island, FilterSettings filters, StructureSettings structures, MiscellaneousSettings miscellaneous, PresentationSettings presentation) {
-	private static final Set<ResourceKey<? extends Registry<?>>> PREVIEW_REGISTRIES = Set.of(
-		FTFRegistries.PRESET,
-		FTFRegistries.NOISE,
-		Registries.DENSITY_FUNCTION,
-		Registries.NOISE_SETTINGS
-	);
-
+public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings caves, ClimateSettings climate, TerrainSettings terrain, RiverSettings rivers, FlowSettings flow, IslandSettings island, FilterSettings filters, MiscellaneousSettings miscellaneous, PresentationSettings presentation) {
 	public static final Codec<Preset> DIRECT_CODEC = RecordCodecBuilder.create(instance -> instance.group(
 			WorldSettings.CODEC.fieldOf("world").forGetter(Preset::world),
 			SurfaceSettings.CODEC.optionalFieldOf("surface", new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F))).forGetter(Preset::surface),
@@ -45,7 +42,6 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 			FlowSettings.CODEC.optionalFieldOf("flow").xmap(optional -> optional.orElseGet(FlowSettings::makeDefault),Optional::of).forGetter(Preset::flow),
 			IslandSettings.CODEC.optionalFieldOf("island").xmap(optional -> optional.orElseGet(IslandSettings::makeDefault),Optional::of).forGetter(Preset::island),
 			FilterSettings.CODEC.fieldOf("filters").forGetter(Preset::filters),
-			StructureSettings.CODEC.fieldOf("structures").forGetter(Preset::structures),
 			MiscellaneousSettings.CODEC.fieldOf("miscellaneous").forGetter(Preset::miscellaneous),
 			PresentationSettings.CODEC.optionalFieldOf("presentation").xmap(optional -> optional.orElseGet(PresentationSettings::makeDefault),Optional::of).forGetter(Preset::presentation)
 	).apply(instance, Preset::new));
@@ -54,26 +50,43 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 	public static final ResourceKey<Preset> KEY = FTFRegistries.createKey(FTFRegistries.PRESET, "preset");
 
 	public Preset copy() {
-		return new Preset(this.world.copy(), this.surface.copy(), this.caves.copy(), this.climate.copy(), this.terrain.copy(), this.rivers.copy(), this.flow.copy(), this.island.copy(), this.filters.copy(), this.structures.copy(), this.miscellaneous.copy(), this.presentation.copy());
+		return new Preset(this.world.copy(), this.surface.copy(), this.caves.copy(), this.climate.copy(), this.terrain.copy(), this.rivers.copy(), this.flow.copy(), this.island.copy(), this.filters.copy(), this.miscellaneous.copy(), this.presentation.copy());
 	}
 
 	public HolderLookup.Provider buildPatch(HolderLookup.Provider registries) {
 		return this.buildPatchedRegistries(registries).patches();
 	}
 
-	public HolderLookup.Provider buildFullPatch(RegistryAccess registries) {
-		return materialize(this.buildPatchedRegistries(registries).full());
-	}
+	public HolderLookup.Provider buildPreviewLookups(RegistryAccess registries) {
+		RegistryAccess.Frozen selected = registries.freeze();
+		Set<ResourceKey<? extends Registry<?>>> overrides = Set.of(
+			FTFRegistries.PRESET,
+			FTFRegistries.NOISE
+		);
+		RegistrySetBuilder builder = new RegistrySetBuilder();
+		this.addPatch(builder, FTFRegistries.PRESET, (preset, ctx) -> ctx.register(KEY, preset));
+		this.addPatch(builder, FTFRegistries.NOISE, PresetNoiseData::bootstrap);
+		Cloner.Factory factory = new Cloner.Factory();
+		factory.addCodec(FTFRegistries.PRESET, Preset.DIRECT_CODEC);
+		factory.addCodec(FTFRegistries.NOISE, Noise.DIRECT_CODEC);
+		HolderLookup.Provider patches = builder.buildPatch(
+			RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY),
+			this.filterToArmedOnly(selected, overrides),
+			factory
+		).patches();
+		return new HolderLookup.Provider() {
+			@Override
+			public Stream<ResourceKey<? extends Registry<?>>> listRegistries() {
+				return Stream.concat(selected.listRegistries(), overrides.stream()).distinct();
+			}
 
-	private static final Set<String> PREVIEW_NAMESPACES = Set.of("minecraft", "freeterraforged");
-
-	private static HolderLookup.Provider materialize(HolderLookup.Provider provider) {
-		provider.listRegistries()
-			.filter(PREVIEW_REGISTRIES::contains)
-			.forEach(key -> provider.lookupOrThrow(key).listElements()
-				.filter(holder -> PREVIEW_NAMESPACES.contains(holder.key().location().getNamespace()))
-				.forEach(holder -> holder.value()));
-		return provider;
+			@Override
+			public <T> Optional<HolderLookup.RegistryLookup<T>> lookup(
+				ResourceKey<? extends Registry<? extends T>> key
+			) {
+				return overrides.contains(key) ? patches.lookup(key) : selected.lookup(key);
+			}
+		};
 	}
 
 	private RegistrySetBuilder.PatchedRegistries buildPatchedRegistries(HolderLookup.Provider registries) {
@@ -92,21 +105,16 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 			TBNoiseRouterData.bootstrap(ctx);
 		});
 		this.addPatch(builder, Registries.NOISE_SETTINGS, PresetNoiseGeneratorSettings::bootstrap);
+		this.addPatch(builder, Registries.WORLD_PRESET, PresetWorldPresets::bootstrap);
 
 		// 2. Initialize Cloner and Gatekeeper tracking
 		Cloner.Factory factory = new Cloner.Factory();
 		Set<ResourceKey<? extends Registry<?>>> armedRegistries = new HashSet<>();
 
-		// 3. Process Vanilla Worldgen Registries
 		RegistryDataLoader.WORLDGEN_REGISTRIES.forEach(registryData -> {
 			ResourceKey<? extends Registry<?>> key = registryData.key();
-			// Only arm registries from known safe namespaces to be extra cautious
-			String namespace = key.location().getNamespace();
-
-			if (namespace.equals("minecraft") || namespace.equals("freeterraforged")) {
-				registryData.runWithArguments(factory::addCodec);
-				armedRegistries.add(key);
-			}
+			registryData.runWithArguments(factory::addCodec);
+			armedRegistries.add(key);
 		});
 
 		armedRegistries.add(Registries.STRUCTURE_SET);
@@ -137,6 +145,9 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 		set.add(key);
 	}
 
+	/**
+	 * Creates a virtual view of the RegistryAccess that hides any folders we don't have a cloner for.
+	 */
 	private HolderLookup.Provider filterToArmedOnly(HolderLookup.Provider original, Set<ResourceKey<? extends Registry<?>>> armed) {
 		return new HolderLookup.Provider() {
 			@Override
