@@ -1,0 +1,11 @@
+{
+  "required": false,
+  "plugin": "etcodehome.freeterraforged.fabric.compat.c2me.C2MEMixinPlugin",
+  "package": "etcodehome.freeterraforged.fabric.compat.c2me.mixin",
+  "minVersion": "0.8",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}

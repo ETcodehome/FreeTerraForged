@@ -40,7 +40,8 @@
   },
   "mixins": [
     "freeterraforged-common.mixins.json",
-    "freeterraforged-fabric.mixins.json"
+    "freeterraforged-fabric.mixins.json",
+    "freeterraforged-c2me.mixins.json"
   ],
   "icon": "logo.png"
 }

@@ -1,5 +1,7 @@
 package etcodehome.freeterraforged.world.worldgen.util;
 
+import java.lang.management.ManagementFactory;
+import java.lang.management.ThreadMXBean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
@@ -11,6 +13,36 @@ public final class WorldGenTracker {
 
     // Thread-safe high-performance primitives
     public static final LongAdder TOTAL_NANOS = new LongAdder();
+    public static final LongAdder TOTAL_CPU_NANOS = new LongAdder();
+
+    private static final ThreadMXBean THREADS = ManagementFactory.getThreadMXBean();
+    private static final boolean CPU_TIME_SUPPORTED = cpuTimeSupported();
+
+    private static boolean cpuTimeSupported() {
+        try {
+            if (THREADS.isCurrentThreadCpuTimeSupported()) {
+                if (!THREADS.isThreadCpuTimeEnabled()) {
+                    THREADS.setThreadCpuTimeEnabled(true);
+                }
+                return true;
+            }
+        } catch (Throwable t) {
+            return false;
+        }
+        return false;
+    }
+
+    public static long cpuNanos() {
+        if (!CPU_TIME_SUPPORTED) {
+            return 0L;
+        }
+        try {
+            return THREADS.getCurrentThreadCpuTime();
+        } catch (Throwable t) {
+            return 0L;
+        }
+    }
+
     public static final LongAdder TOTAL_CHUNKS = new LongAdder();
     public static final AtomicInteger ACTIVE_THREADS = new AtomicInteger(0);
     public static final AtomicInteger PEAK_CONCURRENCY = new AtomicInteger(0);
@@ -25,6 +57,10 @@ public final class WorldGenTracker {
 
             if (chunks > 0 && totalMs > 0) {
                 double avgMs = (double) totalMs / chunks;
+                long cpuMs = TOTAL_CPU_NANOS.sum() / 1_000_000;
+                double avgCpuMs = (double) cpuMs / chunks;
+                double avgBlockedMs = Math.max(0.0, avgMs - avgCpuMs);
+                double blockedShare = avgMs > 0 ? (avgBlockedMs / avgMs) * 100.0 : 0.0;
                 double chunksPerThreadSecond = ((double) chunks * 1000.0) / totalMs;
 
                 int peakConcurrency = PEAK_CONCURRENCY.get();
@@ -39,6 +75,8 @@ public final class WorldGenTracker {
                          Total Chunks Generated   : {}
                          Total Thread Time Spent  : {} ms
                          Thread Time Per Chunk    : {} ms
+                         Thread CPU Per Chunk     : {} ms
+                         Thread Blocked Per Chunk : {} ms ({}% waiting)
                          Chunks per Thread Second : {}
                          Peak Threads In Use      : {}
                          Wall Clock Time          : {} ms
@@ -49,6 +87,9 @@ public final class WorldGenTracker {
                         chunks,
                         totalMs,
                         String.format("%.2f", avgMs),
+                        String.format("%.2f", avgCpuMs),
+                        String.format("%.2f", avgBlockedMs),
+                        String.format("%.1f", blockedShare),
                         String.format("%.2f", chunksPerThreadSecond),
                         peakConcurrency,
                         wallClockMs,

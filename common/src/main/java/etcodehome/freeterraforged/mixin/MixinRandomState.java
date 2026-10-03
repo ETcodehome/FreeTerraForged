@@ -7,6 +7,7 @@ import etcodehome.freeterraforged.data.worldgen.preset.settings.FlowSettings;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.registries.FTFRegistries;
 import etcodehome.freeterraforged.tags.FTFDensityFunctionTags;
+import etcodehome.freeterraforged.world.worldgen.FTFAcceleration;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 import etcodehome.freeterraforged.world.worldgen.FTFWorldGenContext;
@@ -135,6 +136,8 @@ class MixinRandomState {
 
 			// populate static fields needed for mixins
 			FlowSettings.CurrentPresetState.set(preset.flow());
+			FTFAcceleration.markWorldActive();
+			FTFAcceleration.setGeneratorContext(this.generatorContext);
 		}
 	}
 
