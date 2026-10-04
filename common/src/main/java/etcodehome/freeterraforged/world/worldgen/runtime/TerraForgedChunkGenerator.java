@@ -6,25 +6,26 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeSet;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import etcodehome.freeterraforged.FTFCommon;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.QuartPos;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.WorldGenRegion;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.StructureManager;
 import net.minecraft.world.level.WorldGenLevel;
-import net.minecraft.world.level.biome.*;
+import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.BiomeGenerationSettings;
+import net.minecraft.world.level.biome.BiomeManager;
+import net.minecraft.world.level.biome.BiomeSource;
+import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
 import net.minecraft.world.level.levelgen.GenerationStep;
@@ -39,12 +40,17 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 
 public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
-	implements AutoCloseable, PlanBackedBiomeDecoration {
+		implements AutoCloseable, PlanBackedBiomeDecoration {
 	public static final MapCodec<TerraForgedChunkGenerator> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
-		BiomeSource.CODEC.fieldOf("biome_source").forGetter(generator -> generator.selectedBiomeSource),
-		NoiseGeneratorSettings.CODEC.fieldOf("settings").forGetter(TerraForgedChunkGenerator::generatorSettings),
-		BiomeSource.CODEC.optionalFieldOf("dimension_biome_source").forGetter(generator -> generator.dimensionBiomeSource)
+			BiomeSource.CODEC.fieldOf("biome_source").forGetter(generator -> generator.selectedBiomeSource),
+			NoiseGeneratorSettings.CODEC.fieldOf("settings").forGetter(TerraForgedChunkGenerator::generatorSettings),
+			BiomeSource.CODEC.optionalFieldOf("dimension_biome_source").forGetter(generator -> generator.dimensionBiomeSource)
 	).apply(instance, instance.stable(TerraForgedChunkGenerator::fromDimensionInputs)));
+
+	private static final net.minecraft.resources.ResourceKey<PlacedFeature> FREEZE_TOP_LAYER =
+			net.minecraft.resources.ResourceKey.create(
+					Registries.PLACED_FEATURE, ResourceLocation.withDefaultNamespace("freeze_top_layer")
+			);
 
 	private final BiomeSource selectedBiomeSource;
 	private final Optional<BiomeSource> dimensionBiomeSource;
@@ -52,7 +58,7 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 	private final Optional<BiomeSourcePlanInput> acquisitionBiomePlanInput;
 	private final Optional<BiomeCandidateRoot> acquisitionBiomeCandidateRoot;
 	private final AtomicReference<Map<ResourceLocation, CapabilityFailure>> preServerFailures =
-		new AtomicReference<>(Map.of());
+			new AtomicReference<>(Map.of());
 	private WorldgenProviderCatalog providerCatalog;
 	private volatile WorldgenRuntimeBinding runtime;
 	private FTFRandomState randomState;
@@ -64,41 +70,41 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 	}
 
 	public TerraForgedChunkGenerator(
-		BiomeSource biomeSource,
-		net.minecraft.core.Holder<NoiseGeneratorSettings> settings,
-		Optional<BiomeSourcePlanInput> planInput
+			BiomeSource biomeSource,
+			net.minecraft.core.Holder<NoiseGeneratorSettings> settings,
+			Optional<BiomeSourcePlanInput> planInput
 	) {
 		this(biomeSource, settings, planInput, Optional.empty());
 	}
 
 	public TerraForgedChunkGenerator(
-		BiomeSource biomeSource,
-		net.minecraft.core.Holder<NoiseGeneratorSettings> settings,
-		Optional<BiomeSourcePlanInput> planInput,
-		Optional<BiomeCandidateRoot> candidateRoot
+			BiomeSource biomeSource,
+			net.minecraft.core.Holder<NoiseGeneratorSettings> settings,
+			Optional<BiomeSourcePlanInput> planInput,
+			Optional<BiomeCandidateRoot> candidateRoot
 	) {
 		this(
-			biomeSource, settings, planInput, candidateRoot,
-			Optional.empty(), new UnifiedBiomeSource(biomeSource, planInput)
+				biomeSource, settings, planInput, candidateRoot,
+				Optional.empty(), new UnifiedBiomeSource(biomeSource, planInput)
 		);
 	}
 
 	private static TerraForgedChunkGenerator fromDimensionInputs(
-		BiomeSource selectedSource,
-		Holder<NoiseGeneratorSettings> settings,
-		Optional<BiomeSource> declaredSource
+			BiomeSource selectedSource,
+			Holder<NoiseGeneratorSettings> settings,
+			Optional<BiomeSource> declaredSource
 	) {
 		return new TerraForgedChunkGenerator(selectedSource, settings, Optional.empty(), Optional.empty(),
-			declaredSource, new UnifiedBiomeSource(declaredSource.orElse(selectedSource), Optional.empty()));
+				declaredSource, new UnifiedBiomeSource(declaredSource.orElse(selectedSource), Optional.empty()));
 	}
 
 	private TerraForgedChunkGenerator(
-		BiomeSource biomeSource,
-		net.minecraft.core.Holder<NoiseGeneratorSettings> settings,
-		Optional<BiomeSourcePlanInput> planInput,
-		Optional<BiomeCandidateRoot> candidateRoot,
-		Optional<BiomeSource> declaredSource,
-		UnifiedBiomeSource unifiedBiomeSource
+			BiomeSource biomeSource,
+			net.minecraft.core.Holder<NoiseGeneratorSettings> settings,
+			Optional<BiomeSourcePlanInput> planInput,
+			Optional<BiomeCandidateRoot> candidateRoot,
+			Optional<BiomeSource> declaredSource,
+			UnifiedBiomeSource unifiedBiomeSource
 	) {
 		super(unifiedBiomeSource, settings);
 		this.selectedBiomeSource = Objects.requireNonNull(biomeSource, "biomeSource");
@@ -108,7 +114,7 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 		this.acquisitionBiomeCandidateRoot = Objects.requireNonNull(candidateRoot, "candidateRoot");
 		if (this.acquisitionBiomePlanInput.isPresent() && this.acquisitionBiomeCandidateRoot.isPresent()) {
 			throw new IllegalArgumentException(
-				"A direct custom-source plan and a candidate-table root are mutually exclusive"
+					"A direct custom-source plan and a candidate-table root are mutually exclusive"
 			);
 		}
 		unifiedBiomeSource.bind(this);
@@ -131,7 +137,7 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 
 	TerraForgedChunkGenerator withoutDimensionBiomeSource() {
 		return this.dimensionBiomeSource.isEmpty() ? this
-			: new TerraForgedChunkGenerator(this.selectedBiomeSource, this.generatorSettings());
+				: new TerraForgedChunkGenerator(this.selectedBiomeSource, this.generatorSettings());
 	}
 
 	public Optional<BiomeSourcePlanInput> acquisitionBiomePlanInput() {
@@ -151,17 +157,17 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 				return Optional.empty();
 			}
 			input = Objects.requireNonNull(
-				factory.createBiomeSourcePlanInput(owner), "custom biome-source plan input"
+					factory.createBiomeSourcePlanInput(owner), "custom biome-source plan input"
 			);
 			if (!factory.biomeSourcePlanFactoryId().equals(input.id())) {
 				throw new IllegalStateException(
-					"Custom biome-source plan ID " + input.id() + " does not match factory "
-						+ factory.biomeSourcePlanFactoryId()
+						"Custom biome-source plan ID " + input.id() + " does not match factory "
+								+ factory.biomeSourcePlanFactoryId()
 				);
 			}
 		}
 		return Optional.of(input.canonicalize(
-			owner.registries().registryOrThrow(Registries.BIOME)
+				owner.registries().registryOrThrow(Registries.BIOME)
 		));
 	}
 
@@ -176,7 +182,7 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 	public synchronized WorldgenProviderCatalog acquireProviderCatalog() {
 		if (this.providerCatalog == null) {
 			this.providerCatalog = WorldgenCapabilityDiscovery.discover(
-				TerraForgedChunkGenerator.class.getClassLoader()
+					TerraForgedChunkGenerator.class.getClassLoader()
 			);
 		}
 		return this.providerCatalog;
@@ -187,8 +193,8 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 	}
 
 	synchronized void publishPreServerCatalog(
-		WorldgenProviderCatalog catalog,
-		Map<ResourceLocation, CapabilityFailure> failures
+			WorldgenProviderCatalog catalog,
+			Map<ResourceLocation, CapabilityFailure> failures
 	) {
 		if (this.runtime != null && this.providerCatalog != catalog) {
 			throw new IllegalStateException("Cannot replace a live worldgen owner's provider catalog");
@@ -208,9 +214,9 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 	}
 
 	public synchronized WorldgenPlan initializeEpoch(
-		WorldgenEpoch epoch,
-		FTFRandomState randomState,
-		WorldgenProviderCatalog providers
+			WorldgenEpoch epoch,
+			FTFRandomState randomState,
+			WorldgenProviderCatalog providers
 	) throws Exception {
 		Objects.requireNonNull(epoch, "epoch");
 		Objects.requireNonNull(randomState, "randomState");
@@ -221,7 +227,7 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 				return current.plan();
 			}
 			throw new IllegalStateException(
-				"Generator root is already owned by worldgen epoch " + current.epoch().id()
+					"Generator root is already owned by worldgen epoch " + current.epoch().id()
 			);
 		}
 
@@ -235,7 +241,7 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 		try {
 			randomState.initialize(epoch);
 			prepared = WorldgenRuntimeBinding.create(
-				epoch, compiled, composeGenerationSettings(compiled)
+					epoch, compiled, composeGenerationSettings(compiled)
 			);
 			randomState.bindPlan(prepared);
 			logOrePlan(compiled);
@@ -278,21 +284,21 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 	}
 
 	public synchronized WorldgenPlan refreshInputs(
-		long replacementResourceRevision,
-		String replacementResourceLayerFingerprint,
-		TagEpoch replacementTags,
-		WorldgenContributionRevision.Snapshot replacementContributions,
-		FTFRandomState randomState
+			long replacementResourceRevision,
+			String replacementResourceLayerFingerprint,
+			TagEpoch replacementTags,
+			WorldgenContributionRevision.Snapshot replacementContributions,
+			FTFRandomState randomState
 	) throws Exception {
 		WorldgenRuntimeBinding binding = Objects.requireNonNull(this.runtime, "Generator root has no active epoch");
 		WorldgenRuntimeBinding.State current = binding.current();
 		WorldgenEpoch refreshedEpoch = current.epoch().withInputs(
-			replacementResourceRevision, replacementResourceLayerFingerprint,
-			replacementTags, replacementContributions
+				replacementResourceRevision, replacementResourceLayerFingerprint,
+				replacementTags, replacementContributions
 		);
 		try {
 			WorldgenProviderCatalog providers = Objects.requireNonNull(
-				this.providerCatalog, "Generator root has no provider acquisition session"
+					this.providerCatalog, "Generator root has no provider acquisition session"
 			);
 			WorldgenPlan refreshedPlan = MinecraftWorldgenPlanCompiler.compile(refreshedEpoch, providers);
 			WorldgenBiomeSelection.requireExecutablePlan(refreshedPlan);
@@ -314,27 +320,27 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 	}
 
 	void rejectInputSnapshot(
-		long resourceRevision,
-		String resourceLayerFingerprint,
-		TagEpoch tags,
-		WorldgenContributionRevision.Snapshot attempted,
-		Throwable failure
+			long resourceRevision,
+			String resourceLayerFingerprint,
+			TagEpoch tags,
+			WorldgenContributionRevision.Snapshot attempted,
+			Throwable failure
 	) {
 		WorldgenRuntimeBinding binding = Objects.requireNonNull(
-			this.runtime, "Generator root has no active epoch"
+				this.runtime, "Generator root has no active epoch"
 		);
 		WorldgenEpoch current = binding.epoch();
 		binding.reject(
-			current.id(), resourceRevision, resourceLayerFingerprint, tags, attempted, failure
+				current.id(), resourceRevision, resourceLayerFingerprint, tags, attempted, failure
 		);
 	}
 
 	@Override
 	public java.util.concurrent.CompletableFuture<ChunkAccess> createBiomes(
-		RandomState randomState,
-		Blender blender,
-		StructureManager structureManager,
-		ChunkAccess chunk
+			RandomState randomState,
+			Blender blender,
+			StructureManager structureManager,
+			ChunkAccess chunk
 	) {
 		this.requireBiomeSelection();
 		return super.createBiomes(randomState, blender, structureManager, chunk);
@@ -342,26 +348,26 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 
 	public Holder<Biome> resolveBiome(int quartX, int quartY, int quartZ, Climate.Sampler sampler) {
 		WorldgenRuntimeBinding binding = Objects.requireNonNull(
-			this.runtime, "Generator root has no active worldgen epoch"
+				this.runtime, "Generator root has no active worldgen epoch"
 		);
 		WorldgenRuntimeBinding.State state = binding.current();
 		return state.biomeSelection().resolve(quartX, quartY, quartZ, sampler);
 	}
 
 	public Holder<Biome> resolveBiomeInCell(
-		int quartX,
-		int quartY,
-		int quartZ,
-		Climate.Sampler sampler,
-		long biomeCellX,
-		long biomeCellZ
+			int quartX,
+			int quartY,
+			int quartZ,
+			Climate.Sampler sampler,
+			long biomeCellX,
+			long biomeCellZ
 	) {
 		WorldgenRuntimeBinding binding = Objects.requireNonNull(
-			this.runtime, "Generator root has no active worldgen epoch"
+				this.runtime, "Generator root has no active worldgen epoch"
 		);
 		WorldgenRuntimeBinding.State state = binding.current();
 		return state.biomeSelection().resolveInCell(
-			quartX, quartY, quartZ, sampler, biomeCellX, biomeCellZ
+				quartX, quartY, quartZ, sampler, biomeCellX, biomeCellZ
 		);
 	}
 
@@ -380,23 +386,23 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 
 	@Override
 	public java.util.concurrent.CompletableFuture<ChunkAccess> fillFromNoise(
-		Blender blender,
-		RandomState randomState,
-		StructureManager structureManager,
-		ChunkAccess chunk
+			Blender blender,
+			RandomState randomState,
+			StructureManager structureManager,
+			ChunkAccess chunk
 	) {
 		WorldgenPlan current = this.requireStage(WorldgenFacet.DENSITY_SETTINGS);
 		Holder<NoiseGeneratorSettings> selectedSettings = current.densitySettings().settings().orElseThrow(
-			() -> new IllegalStateException("FTF density stage has no executable settings root")
+				() -> new IllegalStateException("FTF density stage has no executable settings root")
 		);
 		if (selectedSettings.value() != this.generatorSettings().value()) {
 			throw new IllegalStateException(
-				"FTF density plan is not coupled to the registered generator root"
+					"FTF density plan is not coupled to the registered generator root"
 			);
 		}
 		NoiseFillExtent extent = NoiseFillExtent.fullConfiguredHeight(
-			selectedSettings.value().noiseSettings(),
-			chunk.getHeightAccessorForGeneration()
+				selectedSettings.value().noiseSettings(),
+				chunk.getHeightAccessorForGeneration()
 		);
 		if (extent.empty()) {
 			return java.util.concurrent.CompletableFuture.completedFuture(chunk);
@@ -406,10 +412,10 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 
 	@Override
 	public void buildSurface(
-		WorldGenRegion region,
-		StructureManager structureManager,
-		RandomState randomState,
-		ChunkAccess chunk
+			WorldGenRegion region,
+			StructureManager structureManager,
+			RandomState randomState,
+			ChunkAccess chunk
 	) {
 		WorldgenRuntimeBinding.State stage = this.requireState(WorldgenFacet.SURFACE);
 		super.buildSurface(region, structureManager, randomState, chunk);
@@ -418,84 +424,61 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 
 	@Override
 	public void buildSurface(
-		ChunkAccess chunk,
-		WorldGenerationContext context,
-		RandomState randomState,
-		StructureManager structureManager,
-		BiomeManager biomeManager,
-		Registry<Biome> biomes,
-		Blender blender
+			ChunkAccess chunk,
+			WorldGenerationContext context,
+			RandomState randomState,
+			StructureManager structureManager,
+			BiomeManager biomeManager,
+			Registry<Biome> biomes,
+			Blender blender
 	) {
 		WorldgenPlan current = this.requireStage(WorldgenFacet.SURFACE);
 		NoiseGeneratorSettings settings = current.densitySettings().settings().orElseThrow(
-			() -> new IllegalStateException("FTF surface stage has no coupled noise-settings root")
+				() -> new IllegalStateException("FTF surface stage has no coupled noise-settings root")
 		).value();
 		var surfaceRule = current.surface().root().orElseThrow(
-			() -> new IllegalStateException("FTF surface stage has no typed surface-rule root")
+				() -> new IllegalStateException("FTF surface stage has no typed surface-rule root")
 		);
 		NoiseChunk noiseChunk = chunk.getOrCreateNoiseChunk(
-			value -> this.createNoiseChunk(value, structureManager, blender, randomState)
+				value -> this.createNoiseChunk(value, structureManager, blender, randomState)
 		);
 		randomState.surfaceSystem().buildSurface(
-			randomState,
-			biomeManager,
-			biomes,
-			settings.useLegacyRandomSource(),
-			context,
-			chunk,
-			noiseChunk,
-			surfaceRule
+				randomState,
+				biomeManager,
+				biomes,
+				settings.useLegacyRandomSource(),
+				context,
+				chunk,
+				noiseChunk,
+				surfaceRule
 		);
 	}
 
 	@Override
 	public void applyCarvers(
-		WorldGenRegion region,
-		long seed,
-		RandomState randomState,
-		BiomeManager biomeManager,
-		StructureManager structureManager,
-		ChunkAccess chunk,
-		GenerationStep.Carving step
+			WorldGenRegion region,
+			long seed,
+			RandomState randomState,
+			BiomeManager biomeManager,
+			StructureManager structureManager,
+			ChunkAccess chunk,
+			GenerationStep.Carving step
 	) {
 		this.requireStage(WorldgenFacet.CARVERS);
 		this.requireStage(WorldgenFacet.SURFACE);
 		super.applyCarvers(region, seed, randomState, biomeManager, structureManager, chunk, step);
 	}
 
-	private static final AtomicBoolean LOGGED = new AtomicBoolean();
-	private static final ResourceKey<PlacedFeature> FREEZE = ResourceKey.create(
-			Registries.PLACED_FEATURE, ResourceLocation.withDefaultNamespace("freeze_top_layer"));
-
-	private static boolean hasFreeze(BiomeGenerationSettings s) {
-		var f = s.features();
-		return f.size() > 10 && f.get(10).stream().anyMatch(h -> h.is(FREEZE));
-	}
-
 	@Override
 	public void applyBiomeDecoration(WorldGenLevel level, ChunkAccess chunk, StructureManager structureManager) {
-
 		WorldgenRuntimeBinding.State stage = this.requireState(WorldgenFacet.PLACED_FEATURES);
 		WorldgenPlan current = stage.plan();
-
-		// inside applyBiomeDecoration, before super(...)
-		if (LOGGED.compareAndSet(false, true)) {
-			this.getBiomeSource().possibleBiomes().stream()
-					.filter(h -> h.is(Biomes.SNOWY_PLAINS)).findFirst().ifPresentOrElse(h ->
-									FTFCommon.LOGGER.info("snowy_plains freeze_top_layer: plan={} realized={} steps plan={} realized={}",
-											hasFreeze(stage.biomeDecorationPlan().generationSettings(h)),
-											hasFreeze(this.realizedBiomeGenerationSettings(h)),
-											stage.biomeDecorationPlan().generationSettings(h).features().size(),
-											this.realizedBiomeGenerationSettings(h).features().size()),
-							() -> FTFCommon.LOGGER.warn("snowy_plains missing from possibleBiomes()"));
-		}
-
 		PlanDescriptor structures = current.structures().descriptor();
 		if (structures.state() == CapabilityState.UNAVAILABLE) {
 			CapabilityFailure cause = structures.firstCause().orElseThrow();
 			throw new IllegalStateException(
-				"FTF generator stage " + WorldgenFacet.STRUCTURES + " is unavailable [" +
-				cause.code() + "]: " + cause.message()
+					"FTF generator stage " + WorldgenFacet.STRUCTURES + " is unavailable [" +
+							cause.code() + "]: " + cause.message()
 			);
 		}
 		BiomeDecorationPlan stagePlan = stage.biomeDecorationPlan();
@@ -519,15 +502,15 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 
 	@Override
 	public void createStructures(
-		RegistryAccess registries,
-		ChunkGeneratorStructureState structureState,
-		StructureManager structureManager,
-		ChunkAccess chunk,
-		StructureTemplateManager templates
+			RegistryAccess registries,
+			ChunkGeneratorStructureState structureState,
+			StructureManager structureManager,
+			ChunkAccess chunk,
+			StructureTemplateManager templates
 	) {
 		WorldgenPlans.Structures plan = this.requireStage(WorldgenFacet.STRUCTURES).structures();
 		Set<net.minecraft.resources.ResourceKey<net.minecraft.world.level.levelgen.structure.StructureSet>> allowed =
-			plan.sets().stream().map(Holder.Reference::key).collect(Collectors.toUnmodifiableSet());
+				plan.sets().stream().map(Holder.Reference::key).collect(Collectors.toUnmodifiableSet());
 		structureState.possibleStructureSets().forEach(holder -> {
 			if (holder.unwrapKey().map(allowed::contains).orElse(false)) {
 				return;
@@ -570,7 +553,7 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 		if (descriptor.state() == CapabilityState.UNAVAILABLE) {
 			CapabilityFailure cause = descriptor.firstCause().orElseThrow();
 			throw new IllegalStateException(
-				"FTF generator stage " + facet + " is unavailable [" + cause.code() + "]: " + cause.message()
+					"FTF generator stage " + facet + " is unavailable [" + cause.code() + "]: " + cause.message()
 			);
 		}
 		return runtime;
@@ -587,7 +570,7 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 		var ores = plan.placedFeatures().ores();
 		etcodehome.freeterraforged.FTFCommon.LOGGER.info("Dynamic ore contract inventory: {}", ores.summary());
 		ores.failures().forEach(failure -> etcodehome.freeterraforged.FTFCommon.LOGGER.warn(
-			"Dynamic ore contract inspection failure: {}", failure
+				"Dynamic ore contract inspection failure: {}", failure
 		));
 	}
 
@@ -629,11 +612,6 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 		}
 	}
 
-	private static final net.minecraft.resources.ResourceKey<PlacedFeature> FREEZE_TOP_LAYER =
-			net.minecraft.resources.ResourceKey.create(
-					Registries.PLACED_FEATURE, ResourceLocation.withDefaultNamespace("freeze_top_layer")
-			);
-
 	private static Map<net.minecraft.resources.ResourceKey<Biome>, BiomeGenerationSettings>
 	composeGenerationSettings(WorldgenPlan plan) {
 		Map<net.minecraft.resources.ResourceKey<Biome>, BiomeGenerationSettings> settings =
@@ -646,18 +624,9 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 					() -> new IllegalStateException("Selected biome has no registry identity")
 			));
 		}
-
-		// BiomeFilter on freeze_top_layer checks the biome at the chunk's min corner (min Y),
-		// so every possible biome must carry the feature or whole chunks lose snow.
-		Holder<PlacedFeature> freezeTopLayer = findFeature(plan, biomes, FREEZE_TOP_LAYER);
-		if (freezeTopLayer == null) {
-			etcodehome.freeterraforged.FTFCommon.LOGGER.warn(
-					"No possible biome carries {}; cannot guarantee snow coverage", FREEZE_TOP_LAYER.location()
-			);
-		}
-		int topLayerStep = GenerationStep.Decoration.TOP_LAYER_MODIFICATION.ordinal();
-		List<net.minecraft.resources.ResourceKey<Biome>> patched = new java.util.ArrayList<>();
-
+		// freeze_top_layer is gated by a BiomeFilter evaluated at the chunk's min corner, so
+		// every possible biome must carry it or whole chunks lose snow.
+		Holder<PlacedFeature> freezeTopLayer = findFeature(plan, biomes);
 		for (net.minecraft.resources.ResourceKey<Biome> biome : biomes) {
 			BiomeGenerationSettings.PlainBuilder builder = new BiomeGenerationSettings.PlainBuilder();
 			for (GenerationStep.Carving step : GenerationStep.Carving.values()) {
@@ -676,32 +645,21 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 				}
 			}
 			if (!hasFreeze && freezeTopLayer != null) {
-				// Appended last so it keeps vanilla's position at the end of the top-layer step.
-				builder.addFeature(topLayerStep, freezeTopLayer);
-				patched.add(biome);
+				builder.addFeature(GenerationStep.Decoration.TOP_LAYER_MODIFICATION.ordinal(), freezeTopLayer);
 			}
 			settings.put(biome, builder.build());
-		}
-
-		if (!patched.isEmpty()) {
-			etcodehome.freeterraforged.FTFCommon.LOGGER.info(
-					"Added {} to {} biome(s) lacking it: {}",
-					FREEZE_TOP_LAYER.location(), patched.size(),
-					patched.stream().map(key -> key.location().toString()).collect(Collectors.joining(", "))
-			);
 		}
 		return Map.copyOf(settings);
 	}
 
 	private static Holder<PlacedFeature> findFeature(
 			WorldgenPlan plan,
-			Set<net.minecraft.resources.ResourceKey<Biome>> biomes,
-			net.minecraft.resources.ResourceKey<PlacedFeature> target
+			Set<net.minecraft.resources.ResourceKey<Biome>> biomes
 	) {
 		for (net.minecraft.resources.ResourceKey<Biome> biome : biomes) {
 			for (int step : plan.placedFeatures().byBiome().getOrDefault(biome, Map.of()).keySet()) {
 				for (Holder<PlacedFeature> feature : plan.placedFeatures().forBiome(biome, step)) {
-					if (feature.is(target)) {
+					if (feature.is(FREEZE_TOP_LAYER)) {
 						return feature;
 					}
 				}
