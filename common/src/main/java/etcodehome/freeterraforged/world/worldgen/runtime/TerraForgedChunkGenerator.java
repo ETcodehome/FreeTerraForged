@@ -6,26 +6,25 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeSet;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import etcodehome.freeterraforged.FTFCommon;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.QuartPos;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.WorldGenRegion;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.StructureManager;
 import net.minecraft.world.level.WorldGenLevel;
-import net.minecraft.world.level.biome.Biome;
-import net.minecraft.world.level.biome.BiomeGenerationSettings;
-import net.minecraft.world.level.biome.BiomeManager;
-import net.minecraft.world.level.biome.BiomeSource;
-import net.minecraft.world.level.biome.Climate;
+import net.minecraft.world.level.biome.*;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
 import net.minecraft.world.level.levelgen.GenerationStep;
@@ -464,10 +463,33 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 		super.applyCarvers(region, seed, randomState, biomeManager, structureManager, chunk, step);
 	}
 
+	private static final AtomicBoolean LOGGED = new AtomicBoolean();
+	private static final ResourceKey<PlacedFeature> FREEZE = ResourceKey.create(
+			Registries.PLACED_FEATURE, ResourceLocation.withDefaultNamespace("freeze_top_layer"));
+
+	private static boolean hasFreeze(BiomeGenerationSettings s) {
+		var f = s.features();
+		return f.size() > 10 && f.get(10).stream().anyMatch(h -> h.is(FREEZE));
+	}
+
 	@Override
 	public void applyBiomeDecoration(WorldGenLevel level, ChunkAccess chunk, StructureManager structureManager) {
+
 		WorldgenRuntimeBinding.State stage = this.requireState(WorldgenFacet.PLACED_FEATURES);
 		WorldgenPlan current = stage.plan();
+
+		// inside applyBiomeDecoration, before super(...)
+		if (LOGGED.compareAndSet(false, true)) {
+			this.getBiomeSource().possibleBiomes().stream()
+					.filter(h -> h.is(Biomes.SNOWY_PLAINS)).findFirst().ifPresentOrElse(h ->
+									FTFCommon.LOGGER.info("snowy_plains freeze_top_layer: plan={} realized={} steps plan={} realized={}",
+											hasFreeze(stage.biomeDecorationPlan().generationSettings(h)),
+											hasFreeze(this.realizedBiomeGenerationSettings(h)),
+											stage.biomeDecorationPlan().generationSettings(h).features().size(),
+											this.realizedBiomeGenerationSettings(h).features().size()),
+							() -> FTFCommon.LOGGER.warn("snowy_plains missing from possibleBiomes()"));
+		}
+
 		PlanDescriptor structures = current.structures().descriptor();
 		if (structures.state() == CapabilityState.UNAVAILABLE) {
 			CapabilityFailure cause = structures.firstCause().orElseThrow();
@@ -607,35 +629,84 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 		}
 	}
 
+	private static final net.minecraft.resources.ResourceKey<PlacedFeature> FREEZE_TOP_LAYER =
+			net.minecraft.resources.ResourceKey.create(
+					Registries.PLACED_FEATURE, ResourceLocation.withDefaultNamespace("freeze_top_layer")
+			);
+
 	private static Map<net.minecraft.resources.ResourceKey<Biome>, BiomeGenerationSettings>
 	composeGenerationSettings(WorldgenPlan plan) {
-			Map<net.minecraft.resources.ResourceKey<Biome>, BiomeGenerationSettings> settings =
+		Map<net.minecraft.resources.ResourceKey<Biome>, BiomeGenerationSettings> settings =
 				new java.util.LinkedHashMap<>(plan.placedFeatures().generationSettings());
-			TreeSet<net.minecraft.resources.ResourceKey<Biome>> biomes = new TreeSet<>(
+		TreeSet<net.minecraft.resources.ResourceKey<Biome>> biomes = new TreeSet<>(
 				java.util.Comparator.comparing(key -> key.location().toString())
-			);
-			for (Holder<Biome> biome : WorldgenBiomeSelection.possibleBiomes(plan)) {
-				biomes.add(biome.unwrapKey().orElseThrow(
+		);
+		for (Holder<Biome> biome : WorldgenBiomeSelection.possibleBiomes(plan)) {
+			biomes.add(biome.unwrapKey().orElseThrow(
 					() -> new IllegalStateException("Selected biome has no registry identity")
-				));
+			));
+		}
+
+		// BiomeFilter on freeze_top_layer checks the biome at the chunk's min corner (min Y),
+		// so every possible biome must carry the feature or whole chunks lose snow.
+		Holder<PlacedFeature> freezeTopLayer = findFeature(plan, biomes, FREEZE_TOP_LAYER);
+		if (freezeTopLayer == null) {
+			etcodehome.freeterraforged.FTFCommon.LOGGER.warn(
+					"No possible biome carries {}; cannot guarantee snow coverage", FREEZE_TOP_LAYER.location()
+			);
+		}
+		int topLayerStep = GenerationStep.Decoration.TOP_LAYER_MODIFICATION.ordinal();
+		List<net.minecraft.resources.ResourceKey<Biome>> patched = new java.util.ArrayList<>();
+
+		for (net.minecraft.resources.ResourceKey<Biome> biome : biomes) {
+			BiomeGenerationSettings.PlainBuilder builder = new BiomeGenerationSettings.PlainBuilder();
+			for (GenerationStep.Carving step : GenerationStep.Carving.values()) {
+				plan.carvers().forBiome(biome, step).forEach(carver -> builder.addCarver(step, carver));
 			}
-			for (net.minecraft.resources.ResourceKey<Biome> biome : biomes) {
-				BiomeGenerationSettings.PlainBuilder builder = new BiomeGenerationSettings.PlainBuilder();
-				for (GenerationStep.Carving step : GenerationStep.Carving.values()) {
-					plan.carvers().forBiome(biome, step).forEach(carver -> builder.addCarver(step, carver));
-				}
-				int featureSteps = plan.placedFeatures().byBiome().getOrDefault(biome, Map.of())
+			int featureSteps = plan.placedFeatures().byBiome().getOrDefault(biome, Map.of())
 					.keySet().stream()
 					.mapToInt(Integer::intValue)
 					.max()
 					.orElse(-1);
-				for (int step = 0; step <= featureSteps; step++) {
-					for (Holder<PlacedFeature> feature : plan.placedFeatures().forBiome(biome, step)) {
-						builder.addFeature(step, feature);
+			boolean hasFreeze = false;
+			for (int step = 0; step <= featureSteps; step++) {
+				for (Holder<PlacedFeature> feature : plan.placedFeatures().forBiome(biome, step)) {
+					builder.addFeature(step, feature);
+					hasFreeze |= feature.is(FREEZE_TOP_LAYER);
+				}
+			}
+			if (!hasFreeze && freezeTopLayer != null) {
+				// Appended last so it keeps vanilla's position at the end of the top-layer step.
+				builder.addFeature(topLayerStep, freezeTopLayer);
+				patched.add(biome);
+			}
+			settings.put(biome, builder.build());
+		}
+
+		if (!patched.isEmpty()) {
+			etcodehome.freeterraforged.FTFCommon.LOGGER.info(
+					"Added {} to {} biome(s) lacking it: {}",
+					FREEZE_TOP_LAYER.location(), patched.size(),
+					patched.stream().map(key -> key.location().toString()).collect(Collectors.joining(", "))
+			);
+		}
+		return Map.copyOf(settings);
+	}
+
+	private static Holder<PlacedFeature> findFeature(
+			WorldgenPlan plan,
+			Set<net.minecraft.resources.ResourceKey<Biome>> biomes,
+			net.minecraft.resources.ResourceKey<PlacedFeature> target
+	) {
+		for (net.minecraft.resources.ResourceKey<Biome> biome : biomes) {
+			for (int step : plan.placedFeatures().byBiome().getOrDefault(biome, Map.of()).keySet()) {
+				for (Holder<PlacedFeature> feature : plan.placedFeatures().forBiome(biome, step)) {
+					if (feature.is(target)) {
+						return feature;
 					}
 				}
-				settings.put(biome, builder.build());
 			}
-			return Map.copyOf(settings);
+		}
+		return null;
 	}
 }
