@@ -52,6 +52,7 @@ public class Cell {
     public boolean erosionMask;
     public Terrain terrain;
     public float erosion;
+    public boolean forceErosion;
     public float weirdness;
     // Terrain-selected erosion before rivers and climate apply biome-specific overrides.
     public float terrainErosion;

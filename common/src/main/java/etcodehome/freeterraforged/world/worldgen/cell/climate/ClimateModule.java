@@ -26,6 +26,7 @@ public class ClimateModule {
 	private Noise warpZ;
 	private Noise moisture;
 	private Noise temperature;
+	private Noise erosion;
 	private Noise macroBiomeNoise;
 	private Continent continent;
 	private ControlPoints controlPoints;
@@ -81,6 +82,9 @@ public class ClimateModule {
 		
 		Noise macroBiomeNoise = Noises.worley(seed.next(), climateSettings.biomeShape.macroNoiseSize);
 		this.macroBiomeNoise = macroBiomeNoise;
+
+		Noise erosionNoise = Noises.simplex(seed.next(), climateSettings.biomeShape.macroNoiseSize, 3);
+		this.erosion = erosionNoise;
 	}
 
 	public void apply(Cell cell, float x, float z, float originalX, float originalZ) {
@@ -114,9 +118,12 @@ public class ClimateModule {
 		float rawTemp = this.temperature.compute(x, z, 0);
 		float temp = this.modifyTemp(cell.height, rawTemp);
 
+		float erosion = this.erosion.compute(x, z, 0);
+
 		// convert from normalised 0-1 range to -1 to 1 range
 		cell.temperature = temp * 2.0F - 1.0F;
 		cell.moisture = moist * 2.0F - 1.0F;
+		cell.erosion = erosion * 2.0F - 1.0F;
 	}
 
 	private float modifyTemp(float height, float rawTemp) {

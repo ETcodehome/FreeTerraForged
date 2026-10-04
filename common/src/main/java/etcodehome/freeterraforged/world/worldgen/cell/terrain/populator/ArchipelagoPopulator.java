@@ -325,7 +325,6 @@ public class ArchipelagoPopulator implements CellPopulator {
         // --- WEIRDNESS & EROSION COMPUTATION ---
         if (cell.height > this.levels.water) {
             // Target beach values
-            float targetBeachErosion = this.beachErosion.compute(x, z, 0);
             float targetBeachWeirdness = this.beachWeirdness.compute(x, z, 0);
 
             // 1. Calculate normalized relief ratio for island weirdness mapping
@@ -353,21 +352,15 @@ public class ArchipelagoPopulator implements CellPopulator {
             float weirdnessNoiseVal = this.islandWeirdness.compute(x, z, 0);
             float islandWeirdnessValue = NoiseUtil.clamp(baseWeirdness + weirdnessNoiseVal * 0.15F, -1.0F, 1.0F);
 
-            // Target island erosion
-            float targetIslandErosion = this.islandErosion.compute(x, z, 0);
-
             // 4. Smoothly interpolate weirdness and erosion to surrounding terrain weirdness (originalWeirdness)
             float beachBlend = smoothStep(shelfEnd, dynamicBeachEnd, perturbedAlpha);
             if (cell.terrain == TerrainType.ISLAND_BEACH) {
-                cell.erosion = NoiseUtil.lerp(originalErosion, targetBeachErosion, beachBlend);
                 cell.weirdness = NoiseUtil.lerp(originalWeirdness, targetBeachWeirdness, beachBlend);
             } else {
                 float targetWeirdness = NoiseUtil.lerp(targetBeachWeirdness, islandWeirdnessValue, inlandAlpha);
-                float targetErosion = NoiseUtil.lerp(targetBeachErosion, targetIslandErosion, inlandAlpha);
 
                 float islandBlend = NoiseUtil.lerp(beachBlend, 1.0F, inlandAlpha);
                 cell.weirdness = NoiseUtil.lerp(originalWeirdness, targetWeirdness, islandBlend);
-                cell.erosion = NoiseUtil.lerp(originalErosion, targetErosion, islandBlend);
             }
         }
     }
