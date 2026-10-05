@@ -15,11 +15,67 @@ import etcodehome.freeterraforged.world.worldgen.util.Seed;
  * Replaces iterative hydraulic droplet simulations with direct analytical evaluation.
  */
 public class Erosion implements Filter {
+
+    // =========================================================================
+    // EXPLICIT TUNING KNOBS (GLOBAL CONSTANTS)
+    // =========================================================================
+
+    /** Spatial scale/frequency of gully features (smaller = denser, finer gullies). */
+    private static final float EROSION_SCALE = 0.04f;
+
+    /** Global strength multiplier applied to FilterSettings.erosionRate. */
+    private static final float EROSION_STRENGTH_MULT = 0.35f;
+
+    /** Carving strength/weight of directional gullies (0.0 = smooth peaks, 1.0 = deep sharp gullies). */
+    private static final float GULLY_WEIGHT = 0.85f;
+
+    /** Detail exponent restricting high-frequency gullies to steep slopes (higher = steeper only). */
+    private static final float GULLY_DETAIL_EXPONENT = 1.4f;
+
+    /** Total number of flow noise octaves layered per cell. */
+    private static final int OCTAVES = 5;
+
+    /** Frequency multiplication factor applied per octave. */
+    private static final float LACUNARITY = 2.0f;
+
+    /** Amplitude decay factor applied per octave. */
+    private static final float GAIN = 0.5f;
+
+    /** Relative cell scale inside Phacelle cellular noise wave grid. */
+    private static final float PHACELLE_CELL_SCALE = 0.7f;
+
+    /** Phase wave offset inside Phacelle wave calculation. */
+    private static final float PHACELLE_PHASE_OFFSET = 0.25f;
+
+    /** Phacelle vector normalization factor [0.0 = unnormalized, 1.0 = fully normalized]. */
+    private static final float PHACELLE_NORMALIZATION = 0.5f;
+
+    /** Minimum slope threshold factor needed to trigger primary gully carving. */
+    private static final float SLOPE_ONSET_BASE = 1.25f;
+
+    /** Slope sensitivity multiplier for ridge line network and drainage channel calculation. */
+    private static final float SLOPE_ONSET_RIDGE = 2.8f;
+
+    /** Slope threshold multiplier applied across individual octaves. */
+    private static final float SLOPE_ONSET_OCTAVE = 1.5f;
+
+    /** Minimum crease/valley floor rounding factor. */
+    private static final float ROUNDING_MIN = 0.2f;
+
+    /** Maximum mountain peak/ridge line rounding factor. */
+    private static final float ROUNDING_MAX = 0.5f;
+
+    /** Decay multiplier applied to ridge rounding across octaves. */
+    private static final float ROUNDING_DECAY = 0.8f;
+
+    // =========================================================================
+    // INSTANCE FIELDS
+    // =========================================================================
+
     private final int seed;
     private final int mapSize;
     private final Modifier modifier;
 
-    // Filter Tuning Parameters derived from settings
     private final float scale;
     private final float strength;
     private final float gullyWeight;
@@ -33,14 +89,14 @@ public class Erosion implements Filter {
         this.mapSize = mapSize;
         this.modifier = modifier;
 
-        // Map settings to procedural erosion controls
-        this.scale = 0.04f;
-        this.strength = settings.erosionRate * 0.35f;
-        this.gullyWeight = 0.85f;
-        this.detail = 1.4f;
-        this.octaves = 5;
-        this.lacunarity = 2.0f;
-        this.gain = 0.5f;
+        // Map tuned defaults and preset settings
+        this.scale = EROSION_SCALE;
+        this.strength = settings.erosionRate * EROSION_STRENGTH_MULT;
+        this.gullyWeight = GULLY_WEIGHT;
+        this.detail = GULLY_DETAIL_EXPONENT;
+        this.octaves = OCTAVES;
+        this.lacunarity = LACUNARITY;
+        this.gain = GAIN;
     }
 
     public int getSize() {
@@ -72,13 +128,13 @@ public class Erosion implements Filter {
             }
         }
 
-        // Temporary thread-safe result buffer to avoid allocations inside loop
+        // Buffer for zero-allocation Phacelle noise output (x, y, dx, dz)
         final float[] phacelleOut = new float[4];
 
         final int worldBlockX = map.getBlockX();
         final int worldBlockZ = map.getBlockZ();
 
-        // Step 3: Single procedural pass over the cell grid
+        // Step 3: Single procedural pass over cell grid
         for (int z = 1; z < mapSize - 1; ++z) {
             final int row = z * mapSize;
             final float worldZ = (float) (worldBlockZ + z);
@@ -97,18 +153,18 @@ public class Erosion implements Filter {
                 float curSlopeX = slopeX[idx];
                 float curSlopeZ = slopeZ[idx];
 
-                // Peak/Valley fade target indicator in range [-1.0, 1.0]
+                // Relative peak/valley indicator in range [-1.0, 1.0]
                 float fadeTarget = NoiseUtil.clamp((baseHeight - 0.5f) * 2.0f, -1.0f, 1.0f);
 
                 float currentStrength = this.strength * this.scale;
-                float freq = 1.0f / (this.scale * 0.7f);
+                float freq = 1.0f / (this.scale * PHACELLE_CELL_SCALE);
 
                 float slopeLen = (float) Math.sqrt(curSlopeX * curSlopeX + curSlopeZ * curSlopeZ + 1e-10f);
 
-                float roundingForInput = lerp(0.2f, 0.5f, NoiseUtil.clamp(fadeTarget + 0.5f, 0.0f, 1.0f));
-                float combiMask = easeOut(smoothStart(slopeLen * 1.25f, roundingForInput * 1.25f));
+                float roundingForInput = lerp(ROUNDING_MIN, ROUNDING_MAX, NoiseUtil.clamp(fadeTarget + 0.5f, 0.0f, 1.0f));
+                float combiMask = easeOut(smoothStart(slopeLen * SLOPE_ONSET_BASE, roundingForInput * SLOPE_ONSET_BASE));
 
-                float ridgeMapCombiMask = easeOut(slopeLen * 2.8f);
+                float ridgeMapCombiMask = easeOut(slopeLen * SLOPE_ONSET_RIDGE);
                 float ridgeMapFadeTarget = fadeTarget;
 
                 float gullySlopeX = curSlopeX;
@@ -126,7 +182,8 @@ public class Erosion implements Filter {
                     samplePhacelleNoise(
                             worldX * freq, worldZ * freq,
                             normGullyX, normGullyZ,
-                            0.7f, 0.25f, 0.5f, this.seed + octave,
+                            PHACELLE_CELL_SCALE, PHACELLE_PHASE_OFFSET, PHACELLE_NORMALIZATION,
+                            this.seed + octave,
                             phacelleOut
                     );
 
@@ -137,7 +194,7 @@ public class Erosion implements Filter {
 
                     float sloping = Math.abs(phacelleY);
 
-                    // Update gully directions for upcoming octaves
+                    // Accumulate slope directions for subsequent octaves
                     float gullySign = Math.signum(phacelleY);
                     gullySlopeX += gullySign * phacelleZ * currentStrength * this.gullyWeight;
                     gullySlopeZ += gullySign * phacelleW * currentStrength * this.gullyWeight;
@@ -147,19 +204,19 @@ public class Erosion implements Filter {
                     accumulatedHeightDelta += fadedGullyVal * currentStrength;
                     fadeTarget = fadedGullyVal;
 
-                    float roundingOctave = lerp(0.2f, 0.5f, NoiseUtil.clamp(phacelleX + 0.5f, 0.0f, 1.0f)) * roundingMult;
-                    float newMask = easeOut(smoothStart(sloping * 1.25f, roundingOctave * 1.25f));
+                    float roundingOctave = lerp(ROUNDING_MIN, ROUNDING_MAX, NoiseUtil.clamp(phacelleX + 0.5f, 0.0f, 1.0f)) * roundingMult;
+                    float newMask = easeOut(smoothStart(sloping * SLOPE_ONSET_BASE, roundingOctave * SLOPE_ONSET_BASE));
                     combiMask = powInv(combiMask, this.detail) * newMask;
 
                     ridgeMapFadeTarget = lerp(ridgeMapFadeTarget, phacelleX, ridgeMapCombiMask);
-                    ridgeMapCombiMask *= easeOut(sloping * 1.5f);
+                    ridgeMapCombiMask *= easeOut(sloping * SLOPE_ONSET_OCTAVE);
 
                     currentStrength *= this.gain;
                     freq *= this.lacunarity;
-                    roundingMult *= 0.8f;
+                    roundingMult *= ROUNDING_DECAY;
                 }
 
-                // Apply erosion height changes and store ridge/drainage channel features
+                // Apply terrain changes and output ridge/drainage channel features
                 float change = this.modifier.modify(cell, accumulatedHeightDelta);
                 cell.height += change;
                 cell.heightErosion += change;
@@ -169,7 +226,7 @@ public class Erosion implements Filter {
     }
 
     /**
-     * Evaluates 2D Phacelle Noise aligned with direction vector (normDirX, normDirZ).
+     * Samples 2D Phacelle Noise vector aligned with flow direction (normDirX, normDirZ).
      */
     private static void samplePhacelleNoise(
             float px, float pz,
