@@ -1,8 +1,7 @@
 package etcodehome.freeterraforged.world.worldgen.densityfunction.tile.filter;
 
 import java.util.function.IntFunction;
-
-import etcodehome.freeterraforged.data.worldgen.preset.settings.FilterSettings;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.ErosionFilterSettings;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
@@ -36,13 +35,13 @@ public class Erosion implements Filter {
      * Carving strength/weight of directional gullies.
      * Low values produce rounded, smooth peaks with minimal flow lines; high values carve sharp, pronounced downhill drainage grooves.
      */
-    private static final float GULLY_WEIGHT = 1.5f;
+    private static final float GULLY_SHARPNESS = 1.5f;
 
     /**
      * Detail exponent restricting high-frequency gullies to steep slopes.
      * Low values allow fine gully patterns onto gentle rolling hills; high values confine detailed erosion strictly to steep mountain walls.
      */
-    private static final float GULLY_DETAIL_EXPONENT = 1.0f;
+    private static final float GULLY_SLOPE_ADHESION = 1.0f;
 
     /**
      * Total number of flow noise octaves layered per cell.
@@ -136,7 +135,7 @@ public class Erosion implements Filter {
     public Erosion(
             final int seed,
             final int mapSize,
-            final FilterSettings.Erosion settings,
+            final ErosionFilterSettings settings,
             final Modifier modifier,
             final Levels levels
     ) {
@@ -149,9 +148,9 @@ public class Erosion implements Filter {
         this.maxFloatHeight = levels.worldHeight / (float) terrainScaler;
 
         this.scale = EROSION_SCALE;
-        this.strength = settings.erosionRate * EROSION_STRENGTH_MULT;
-        this.gullyWeight = GULLY_WEIGHT;
-        this.detail = GULLY_DETAIL_EXPONENT;
+        this.strength = 0.20F * EROSION_STRENGTH_MULT;
+        this.gullyWeight = GULLY_SHARPNESS;
+        this.detail = GULLY_SLOPE_ADHESION;
         this.octaves = OCTAVES;
         this.lacunarity = LACUNARITY;
         this.gain = GAIN;
@@ -383,19 +382,19 @@ public class Erosion implements Filter {
     }
 
     public static IntFunction<Erosion> factory(final GeneratorContext context) {
-        return new Factory(Seed.toInt(context.seed.root()), context.preset.filters(), context.levels);
+        return new Factory(Seed.toInt(context.seed.root()), context.preset.erosionFilters(), context.levels);
     }
 
     private static class Factory implements IntFunction<Erosion> {
         private static final int SEED_OFFSET = 12768;
         private final int seed;
         private final Modifier modifier;
-        private final FilterSettings.Erosion settings;
+        private final ErosionFilterSettings settings;
         private final Levels levels;
 
-        private Factory(final int seed, final FilterSettings filters, final Levels levels) {
+        private Factory(final int seed, final ErosionFilterSettings filterSettings, final Levels levels) {
             this.seed = seed + SEED_OFFSET;
-            this.settings = filters.erosion.copy();
+            this.settings = filterSettings.copy();
             this.modifier = Modifier.range(levels.ground, levels.ground(15));
             this.levels = levels;
         }

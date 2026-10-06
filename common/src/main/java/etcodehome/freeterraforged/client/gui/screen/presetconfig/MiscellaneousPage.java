@@ -7,7 +7,6 @@ import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.network.chat.Component;
 import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
 import etcodehome.freeterraforged.client.gui.screen.page.LinkedPageScreen.Page;
-import etcodehome.freeterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.MiscellaneousSettings;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 
@@ -97,7 +96,7 @@ public class MiscellaneousPage extends PresetEditorPage {
 	
 	@Override
 	public Optional<Page> previous() {
-		return Optional.of(new FilterSettingsPage(this.screen));
+		return Optional.of(new ErosionFilterSettingsPage(this.screen));
 	}
 
 	@Override

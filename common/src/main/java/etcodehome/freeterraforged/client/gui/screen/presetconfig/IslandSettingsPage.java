@@ -50,5 +50,5 @@ public class IslandSettingsPage extends PresetEditorPage {
 	public Optional<Page> previous() { return Optional.of(new RiverSettingsPage(this.screen)); }
 
 	@Override
-	public Optional<Page> next() { return Optional.of(new FilterSettingsPage(this.screen));	}
+	public Optional<Page> next() { return Optional.of(new ErosionFilterSettingsPage(this.screen));	}
 }
