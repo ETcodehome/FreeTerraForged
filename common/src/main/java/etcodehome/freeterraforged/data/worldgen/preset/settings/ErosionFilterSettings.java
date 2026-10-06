@@ -26,7 +26,7 @@ public class ErosionFilterSettings {
     public float gullySharpness;
     public static final GenericFloatSetting gullySharpnessSetting = new GenericFloatSetting(
             "erosionFilter.gullySharpness",
-            "gui.slider.erosionFilterGullyStrength",
+            "gui.slider.erosionFilterGullySharpness",
             0.01F,
             3.0F,
             1.5F
