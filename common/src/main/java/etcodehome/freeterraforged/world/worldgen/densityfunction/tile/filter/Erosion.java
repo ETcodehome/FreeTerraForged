@@ -207,7 +207,7 @@ public class Erosion implements Filter {
 
                 // Apply terrain changes and clamp within valid float range [0.0f, maxFloatHeight]
                 float change = this.modifier.modify(cell, accumulatedHeightDelta);
-                float newHeight = NoiseUtil.clamp(cell.height + change, 0.0f, this.maxFloatHeight);
+                float newHeight = cell.height + change;
 
                 cell.heightErosion += (newHeight - cell.height);
                 cell.height = newHeight;
