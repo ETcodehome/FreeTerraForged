@@ -227,6 +227,15 @@ public enum RenderMode {
             return rgba(hue, saturation, brightness);
         }
     },
+    SEDIMENT {
+        @Override
+        public int getColor(Cell cell, Levels levels, float scale, float bias) {
+            float hue = 0.0F;
+            float saturation = 0.0F;
+            float brightness = cell.sediment;
+            return rgba(hue, saturation, brightness);
+        }
+    },
     WEIRDNESS{
         @Override
         public int getColor(Cell cell, Levels levels, float scale, float bias) {

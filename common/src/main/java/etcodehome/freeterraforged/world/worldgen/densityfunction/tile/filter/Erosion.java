@@ -206,12 +206,13 @@ public class Erosion implements Filter {
                 }
 
                 // Apply terrain changes and clamp within valid float range [0.0f, maxFloatHeight]
-                float change = this.modifier.modify(cell, accumulatedHeightDelta);
-                float newHeight = cell.height + change;
+                cell.sediment = NoiseUtil.clamp(cell.sediment + ridgeMapFadeTarget * (1.0f - ridgeMapCombiMask), -1.0f, 1.0f);
+                float sedimentModifier = 1.0F - cell.sediment;
 
+                float change = this.modifier.modify(cell, accumulatedHeightDelta) * sedimentModifier;
+                float newHeight = cell.height + change;
                 cell.heightErosion += (newHeight - cell.height);
                 cell.height = newHeight;
-                cell.sediment = NoiseUtil.clamp(cell.sediment + ridgeMapFadeTarget * (1.0f - ridgeMapCombiMask), -1.0f, 1.0f);
             }
         }
     }
