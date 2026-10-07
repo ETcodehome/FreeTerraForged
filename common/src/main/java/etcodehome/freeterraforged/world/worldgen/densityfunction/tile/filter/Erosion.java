@@ -17,6 +17,9 @@ import etcodehome.freeterraforged.world.worldgen.util.Seed;
  */
 public class Erosion implements Filter {
 
+    // Per thread scratch buffers, allocated once and reused across apply() calls.
+    private static final ThreadLocal<Scratch> SCRATCH = ThreadLocal.withInitial(Scratch::new);
+
     private final int seed;
     private final int mapSize;
     private final Modifier modifier;
@@ -65,16 +68,22 @@ public class Erosion implements Filter {
         final int mapSize = size.total();
         final Cell[] cells = map.getBacking();
 
+        // Fetch this thread's scratch buffers, growing them only if this map is larger than any seen so far.
+        // NOTE: the arrays may be longer than cells.length, so all loops below are bounded by cells.length / mapSize,
+        // never by array.length. Every index in [0, cells.length) is fully written before it is read.
+        final Scratch scratch = SCRATCH.get();
+        scratch.reserve(cells.length);
+        final float[] heights = scratch.heights;
+        final float[] slopeX = scratch.slopeX;
+        final float[] slopeZ = scratch.slopeZ;
+        final float[] phacelleOut = scratch.phacelleOut;
+
         // Step 1: Pre-extract initial height state into flat primitive array
-        final float[] heights = new float[cells.length];
         for (int i = 0; i < cells.length; ++i) {
             heights[i] = cells[i].height;
         }
 
         // Step 2: Compute initial slopes with clamped boundary checks
-        final float[] slopeX = new float[cells.length];
-        final float[] slopeZ = new float[cells.length];
-
         for (int z = 0; z < mapSize; ++z) {
             final int zPrev = Math.max(0, z - 1);
             final int zNext = Math.min(mapSize - 1, z + 1);
@@ -92,7 +101,6 @@ public class Erosion implements Filter {
             }
         }
 
-        final float[] phacelleOut = new float[4];
         final int worldBlockX = map.getBlockX();
         final int worldBlockZ = map.getBlockZ();
 
@@ -126,7 +134,6 @@ public class Erosion implements Filter {
                 float freq = 1.0f / (this.scale * s.phacelleScale);
 
                 float slopeLen = (float) Math.sqrt(curSlopeX * curSlopeX + curSlopeZ * curSlopeZ + 1e-10f);
-
 
                 float roundingForInput = lerp(
                         s.roundingMin,
@@ -290,6 +297,23 @@ public class Erosion implements Filter {
             return t - 0.5f * smoothing;
         }
         return 0.5f * t * t / Math.max(smoothing, 1e-5f);
+    }
+
+    // Per thread scratch storage.
+    private static final class Scratch {
+        float[] heights = new float[0];
+        float[] slopeX = new float[0];
+        float[] slopeZ = new float[0];
+        final float[] phacelleOut = new float[4];
+
+        /** Grow-only: reallocates only when a larger map than any previously seen arrives on this thread. */
+        void reserve(final int n) {
+            if (this.heights.length < n) {
+                this.heights = new float[n];
+                this.slopeX = new float[n];
+                this.slopeZ = new float[n];
+            }
+        }
     }
 
     public static IntFunction<Erosion> factory(final GeneratorContext context) {
