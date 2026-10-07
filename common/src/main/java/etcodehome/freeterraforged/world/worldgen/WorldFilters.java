@@ -16,12 +16,12 @@ public class WorldFilters {
     
     public WorldFilters(GeneratorContext context) {
         IntFunction<Erosion> factory = Erosion.factory(context);
+        this.erosion = new WorldErosion<>(factory, (e, size) -> e.getSize() == size);
         this.beach = BeachDetect.make(context);
         this.steepness = Steepness.make(1, 10.0F, context.levels);
         if (TerrainCeiling.isEnabled(context.preset)) {
             this.terrainCeiling = TerrainCeiling.make(context.preset.world().properties);
         }
-        this.erosion = new WorldErosion<>(factory, (e, size) -> e.getSize() == size);
     }
     
     public void apply(Tile tile) {
@@ -34,9 +34,10 @@ public class WorldFilters {
     }
     
     private void applyRequiredFilters(Filterable map, int seedX, int seedZ) {
-        this.steepness.apply(map, seedX, seedZ, 1);
-        this.beach.apply(map, seedX, seedZ, 1);
+
         Erosion erosion = this.erosion.get(map.getBlockSize().total());
         erosion.apply(map, seedX, seedZ, 1);
+        this.beach.apply(map, seedX, seedZ, 1);
+        this.steepness.apply(map, seedX, seedZ, 1);
     }
 }
