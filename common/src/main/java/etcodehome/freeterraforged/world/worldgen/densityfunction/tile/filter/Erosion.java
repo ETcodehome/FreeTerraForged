@@ -14,8 +14,17 @@ import etcodehome.freeterraforged.world.worldgen.util.Seed;
 /**
  * Single-pass procedural erosion filter based on Runevision's Phacelle Noise algorithm.
  * Replaces iterative hydraulic droplet simulations with direct analytical evaluation.
+ *
+ * Cliff relaxation runs as a separate double-buffered pre-pass, so the erosion pass
+ * operates on the already-smoothed terrain.
  */
 public class Erosion implements Filter {
+
+    // Cliff relaxation tuning. RATE must stay < 0.5 or the filter can oscillate/amplify noise.
+    private static final int   CLIFF_PASSES     = 3;
+    private static final float CLIFF_RELAX_RATE = 0.4f;
+    private static final float MIN_CLIFF_BLOCKS = 3.0f;
+    private static final float MAX_CLIFF_BLOCKS = 8.0f;
 
     // Per thread scratch buffers, allocated once and reused across apply() calls.
     private static final ThreadLocal<Scratch> SCRATCH = ThreadLocal.withInitial(Scratch::new);
@@ -23,7 +32,6 @@ public class Erosion implements Filter {
     private final int seed;
     private final int mapSize;
     private final Modifier modifier;
-    private final float maxFloatHeight;
 
     private final float scale;
     private final float strength;
@@ -33,6 +41,7 @@ public class Erosion implements Filter {
     private final float lacunarity;
     private final float gain;
     private final ErosionFilterSettings s;
+    private final Levels levels;
 
     public Erosion(
             final int seed,
@@ -43,10 +52,7 @@ public class Erosion implements Filter {
         this.seed = seed;
         this.mapSize = mapSize;
         this.modifier = modifier;
-
-        // Calculate maximum allowed float height derived from terrainScaler
-        int terrainScaler = Math.max(1, Math.min(levels.worldHeight, 256));
-        this.maxFloatHeight = levels.worldHeight / (float) terrainScaler;
+        this.levels = levels;
 
         this.s = PresetManager.PM.erosionFilterSettings;
         this.scale = s.scale;
@@ -69,11 +75,10 @@ public class Erosion implements Filter {
         final Cell[] cells = map.getBacking();
 
         // Fetch this thread's scratch buffers, growing them only if this map is larger than any seen so far.
-        // NOTE: the arrays may be longer than cells.length, so all loops below are bounded by cells.length / mapSize,
-        // never by array.length. Every index in [0, cells.length) is fully written before it is read.
         final Scratch scratch = SCRATCH.get();
         scratch.reserve(cells.length);
         final float[] heights = scratch.heights;
+        final float[] relaxed = scratch.relaxed;
         final float[] slopeX = scratch.slopeX;
         final float[] slopeZ = scratch.slopeZ;
         final float[] phacelleOut = scratch.phacelleOut;
@@ -83,7 +88,10 @@ public class Erosion implements Filter {
             heights[i] = cells[i].height;
         }
 
-        // Step 2: Compute initial slopes with clamped boundary checks
+        // Step 1b: Relax cliffs BEFORE computing slopes, so erosion sees the smoothed terrain
+        relaxCliffs(cells, heights, relaxed, mapSize);
+
+        // Step 2: Compute slopes (from relaxed heights) with clamped boundary checks
         for (int z = 0; z < mapSize; ++z) {
             final int zPrev = Math.max(0, z - 1);
             final int zNext = Math.min(mapSize - 1, z + 1);
@@ -126,14 +134,13 @@ public class Erosion implements Filter {
 
                 float curSlopeX = slopeX[idx];
                 float curSlopeZ = slopeZ[idx];
+                float slopeLen = (float) Math.sqrt(curSlopeX * curSlopeX + curSlopeZ * curSlopeZ + 1e-10f);
 
                 // baseHeight is in terrainScaler float units (0.5f ~ midpoint)
                 float fadeTarget = NoiseUtil.clamp((baseHeight - 0.5f) * 2.0f, -1.0f, 1.0f);
 
                 float currentStrength = this.strength * this.scale;
                 float freq = 1.0f / (this.scale * s.phacelleScale);
-
-                float slopeLen = (float) Math.sqrt(curSlopeX * curSlopeX + curSlopeZ * curSlopeZ + 1e-10f);
 
                 float roundingForInput = lerp(
                         s.roundingMin,
@@ -205,7 +212,7 @@ public class Erosion implements Filter {
                     continue;
                 }
 
-                // Apply terrain changes and clamp within valid float range [0.0f, maxFloatHeight]
+                // Apply terrain changes and clamp within valid float range
                 cell.sediment = NoiseUtil.clamp(cell.sediment + ridgeMapFadeTarget * (1.0f - ridgeMapCombiMask), -1.0f, 1.0f);
                 float sedimentModifier = 1.0F - cell.sediment;
 
@@ -214,6 +221,66 @@ public class Erosion implements Filter {
                 cell.heightErosion += (newHeight - cell.height);
                 cell.height = newHeight;
             }
+        }
+    }
+
+    /**
+     * Double-buffered (Jacobi) cliff relaxation. Uses local relief (max - min over the cell and its
+     * 4 neighbors) for the mask so spikes and pits are detected, and a smoothstep ramp so the
+     * mask has no hard kinks. Commits to the cells once after all passes.
+     */
+    private void relaxCliffs(final Cell[] cells, final float[] heights, final float[] next, final int mapSize) {
+        final float minRelief = MIN_CLIFF_BLOCKS / this.levels.worldHeight;
+        final float maxRelief = MAX_CLIFF_BLOCKS / this.levels.worldHeight;
+        final float invRange = 1.0f / Math.max(1e-5f, maxRelief - minRelief);
+        final int total = mapSize * mapSize;
+
+        for (int pass = 0; pass < CLIFF_PASSES; ++pass) {
+            for (int z = 0; z < mapSize; ++z) {
+                final int row = z * mapSize;
+                final int zPrevRow = Math.max(0, z - 1) * mapSize;
+                final int zNextRow = Math.min(mapSize - 1, z + 1) * mapSize;
+
+                for (int x = 0; x < mapSize; ++x) {
+                    final int idx = row + x;
+                    final float c = heights[idx];
+                    final Cell cell = cells[idx];
+
+                    if (cell.erosionMask || Float.isNaN(c) || Float.isInfinite(c)) {
+                        next[idx] = c;
+                        continue;
+                    }
+
+                    final float l = heights[row + Math.max(0, x - 1)];
+                    final float r = heights[row + Math.min(mapSize - 1, x + 1)];
+                    final float d = heights[zPrevRow + x];
+                    final float u = heights[zNextRow + x];
+
+                    final float avg = 0.25f * (l + r + d + u);
+
+                    // Symmetric local relief: includes the center, so spikes and pits are detected too.
+                    final float hi = Math.max(Math.max(c, l), Math.max(Math.max(r, d), u));
+                    final float lo = Math.min(Math.min(c, l), Math.min(Math.min(r, d), u));
+
+                    final float t = NoiseUtil.clamp((hi - lo - minRelief) * invRange, 0.0f, 1.0f);
+                    final float mask = t * t * (3.0f - 2.0f * t); // smoothstep, no hard kinks
+
+                    final float delta = (avg - c) * mask * CLIFF_RELAX_RATE;
+                    next[idx] = c + this.modifier.modify(cell, delta);
+                }
+            }
+            System.arraycopy(next, 0, heights, 0, total);
+        }
+
+        // Commit to cells once, after all passes.
+        for (int i = 0; i < total; ++i) {
+            final Cell cell = cells[i];
+            final float h = heights[i];
+            if (cell.erosionMask || Float.isNaN(h) || Float.isInfinite(h)) {
+                continue;
+            }
+            cell.heightErosion += (h - cell.height);
+            cell.height = h;
         }
     }
 
@@ -303,6 +370,7 @@ public class Erosion implements Filter {
     // Per thread scratch storage.
     private static final class Scratch {
         float[] heights = new float[0];
+        float[] relaxed = new float[0];   // Jacobi back-buffer for cliff relaxation
         float[] slopeX = new float[0];
         float[] slopeZ = new float[0];
         final float[] phacelleOut = new float[4];
@@ -311,6 +379,7 @@ public class Erosion implements Filter {
         void reserve(final int n) {
             if (this.heights.length < n) {
                 this.heights = new float[n];
+                this.relaxed = new float[n];
                 this.slopeX = new float[n];
                 this.slopeZ = new float[n];
             }
