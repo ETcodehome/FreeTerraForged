@@ -2,6 +2,7 @@ package etcodehome.freeterraforged.client.gui.screen.presetconfig;
 
 import java.awt.Color;
 
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.river.RiverCarverSettings;
@@ -218,11 +219,11 @@ public enum RenderMode {
         @Override
         public int getColor(Cell cell, Levels levels, float scale, float bias) {
 
-            float erosion = NoiseUtil.clamp((cell.gradient + 1.0F) * 0.5F, 0.0F, 1.0F);
+            float normalized = Math.min(1.0F, cell.gradient / PresetManager.PM.worldSettings.properties.terrainScaler());
 
             float hue = 0.0F;
             float saturation = 0.0F;
-            float brightness = erosion;
+            float brightness = normalized;
             return rgba(hue, saturation, brightness);
         }
     },
