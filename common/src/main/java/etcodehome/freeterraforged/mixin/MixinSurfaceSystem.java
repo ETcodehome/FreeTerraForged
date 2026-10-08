@@ -6,8 +6,6 @@ import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
-import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
@@ -15,13 +13,13 @@ import etcodehome.freeterraforged.world.worldgen.cell.rivermap.ContinentalHydrol
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.river.RiverCarverSettings;
 import etcodehome.freeterraforged.world.worldgen.surface.FTFSurfaceSystem;
 import etcodehome.freeterraforged.world.worldgen.surface.rule.StrataRule;
-import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Implements;
 import org.spongepowered.asm.mixin.Interface;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import net.minecraft.core.BlockPos;
@@ -42,14 +40,8 @@ import net.minecraft.world.level.levelgen.SurfaceRules;
 import net.minecraft.world.level.levelgen.SurfaceSystem;
 import net.minecraft.world.level.levelgen.WorldGenerationContext;
 import etcodehome.freeterraforged.FTFCommon;
-import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
-import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
-import etcodehome.freeterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
-import etcodehome.freeterraforged.world.worldgen.cell.rivermap.river.RiverCarverSettings;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.TileCache;
-import etcodehome.freeterraforged.world.worldgen.surface.FTFSurfaceSystem;
-import etcodehome.freeterraforged.world.worldgen.surface.rule.StrataRule;
 
 @Mixin(SurfaceSystem.class)
 @Implements(@Interface(iface = FTFSurfaceSystem.class, prefix = FTFCommon.MOD_ID + "$FTFSurfaceSystem$"))
@@ -68,17 +60,15 @@ class MixinSurfaceSystem {
 		this.randomState = randomState;
 	}
 
-	@WrapOperation(
+	// Sanitize Y parameter passed into getBand to prevent negative array indexing in Badlands terracotta bands
+	@ModifyVariable(
 			method = "getBand",
-			at = @At(
-					value = "ARRAY",
-					opcode = Opcodes.AALOAD
-			)
+			at = @At("HEAD"),
+			ordinal = 1,
+			argsOnly = true
 	)
-	private BlockState safeClayBandAccess(BlockState[] array, int index, Operation<BlockState> original) {
-		// Math.floorMod turns negative indices into valid positive wrap-around indices [0, 191]
-		int safeIndex = Math.floorMod(index, array.length);
-		return original.call(array, safeIndex);
+	private int freeterraforged$safeYForBadlandsBand(int y) {
+		return Math.floorMod(y, 192) + 3840;
 	}
 
 	// INJECT AT HEAD to carve out rivers and lakes before surface rules run
