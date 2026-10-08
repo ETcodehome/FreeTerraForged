@@ -123,7 +123,7 @@ public class PresetConfiguredFeatures {
 				3F / 255F
 		);
 
-		if(miscellaneous.erosionDecorator) {
+		if(miscellaneous.screeDecorator) {
 			FeatureUtils.register(ctx, ERODE, FTFFeatures.ERODE, erodeConfig);
 		}
 		

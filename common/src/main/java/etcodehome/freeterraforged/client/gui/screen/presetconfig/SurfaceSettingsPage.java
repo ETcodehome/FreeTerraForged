@@ -41,8 +41,8 @@ public class SurfaceSettingsPage extends PresetEditorPage {
 
 		// Erosion Decorator
 
-		this.erosionDecorator = PresetWidgets.createToggle(miscellaneous.erosionDecorator, FTFTranslationKeys.GUI_BUTTON_EROSION_DECORATOR, (button, value) -> {
-			miscellaneous.erosionDecorator = value;
+		this.erosionDecorator = PresetWidgets.createToggle(miscellaneous.screeDecorator, FTFTranslationKeys.GUI_BUTTON_EROSION_DECORATOR, (button, value) -> {
+			miscellaneous.screeDecorator = value;
 			this.rockSteepness.active = value;
 			this.screeSteepness.active = value;
 			this.dirtSteepness.active = value;

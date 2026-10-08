@@ -11,6 +11,8 @@ import java.util.stream.Collectors;
 
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
+import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
@@ -19,6 +21,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.WorldGenRegion;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.LevelHeightAccessor;
 import net.minecraft.world.level.StructureManager;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.biome.Biome;
@@ -28,12 +31,7 @@ import net.minecraft.world.level.biome.BiomeSource;
 import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
-import net.minecraft.world.level.levelgen.GenerationStep;
-import net.minecraft.world.level.levelgen.NoiseChunk;
-import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
-import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
-import net.minecraft.world.level.levelgen.RandomState;
-import net.minecraft.world.level.levelgen.WorldGenerationContext;
+import net.minecraft.world.level.levelgen.*;
 import net.minecraft.world.level.levelgen.blending.Blender;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
@@ -64,6 +62,7 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 	private FTFRandomState randomState;
 	private final ThreadLocal<BiomeDecorationPlan> activeBiomeDecoration = new ThreadLocal<>();
 	private final ThreadLocal<WorldgenPlans.Structures> activeStructures = new ThreadLocal<>();
+	private static final ThreadLocal<Cell> SCRATCH_CELL = ThreadLocal.withInitial(Cell::new);
 
 	public TerraForgedChunkGenerator(BiomeSource biomeSource, net.minecraft.core.Holder<NoiseGeneratorSettings> settings) {
 		this(biomeSource, settings, Optional.empty(), Optional.empty());
@@ -344,6 +343,31 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 	) {
 		this.requireBiomeSelection();
 		return super.createBiomes(randomState, blender, structureManager, chunk);
+	}
+
+	private GeneratorContext getGeneratorContext(RandomState random) {
+		if (this.randomState != null) {
+			return this.randomState.generatorContext();
+		}
+		return null;
+	}
+
+	@Override
+	public int getBaseHeight(int x, int z, Heightmap.Types type, LevelHeightAccessor level, RandomState random) {
+		GeneratorContext ctx = getGeneratorContext(random);
+
+		// Safety fallback if generator context isn't bound yet
+		if (ctx == null) {
+			return super.getBaseHeight(x, z, type, level, random);
+		}
+
+		Cell cell = SCRATCH_CELL.get();
+
+		// load = true -> triggers computeAccurate() -> TileCache.acquire() -> WorldFilters/Erosion
+		ctx.lookup.applyCell(cell, x, z, true, false);
+
+		// Convert normalized height (0.0F - 1.0F) to world Y block coordinate
+		return ctx.levels.scale(cell.height);
 	}
 
 	public Holder<Biome> resolveBiome(int quartX, int quartY, int quartZ, Climate.Sampler sampler) {

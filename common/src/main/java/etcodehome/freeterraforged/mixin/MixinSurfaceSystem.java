@@ -6,6 +6,8 @@ import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
@@ -13,6 +15,7 @@ import etcodehome.freeterraforged.world.worldgen.cell.rivermap.ContinentalHydrol
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.river.RiverCarverSettings;
 import etcodehome.freeterraforged.world.worldgen.surface.FTFSurfaceSystem;
 import etcodehome.freeterraforged.world.worldgen.surface.rule.StrataRule;
+import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Implements;
 import org.spongepowered.asm.mixin.Interface;
 import org.spongepowered.asm.mixin.Mixin;
@@ -63,6 +66,19 @@ class MixinSurfaceSystem {
 	)
 	public void SurfaceSystem(RandomState randomState, BlockState blockState, int i, PositionalRandomFactory positionalRandomFactory, CallbackInfo callback) {
 		this.randomState = randomState;
+	}
+
+	@WrapOperation(
+			method = "getBand",
+			at = @At(
+					value = "ARRAY",
+					opcode = Opcodes.AALOAD
+			)
+	)
+	private BlockState safeClayBandAccess(BlockState[] array, int index, Operation<BlockState> original) {
+		// Math.floorMod turns negative indices into valid positive wrap-around indices [0, 191]
+		int safeIndex = Math.floorMod(index, array.length);
+		return original.call(array, safeIndex);
 	}
 
 	// INJECT AT HEAD to carve out rivers and lakes before surface rules run
