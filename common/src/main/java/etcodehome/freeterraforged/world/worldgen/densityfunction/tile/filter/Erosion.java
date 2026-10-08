@@ -1,5 +1,6 @@
 package etcodehome.freeterraforged.world.worldgen.densityfunction.tile.filter;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntFunction;
 
 import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
@@ -17,14 +18,49 @@ import etcodehome.freeterraforged.world.worldgen.util.Seed;
  *
  * Cliff relaxation runs as a separate double-buffered pre-pass, so the erosion pass
  * operates on the already-smoothed terrain.
+ *
+ * Units: the erosion math runs entirely in BLOCKS.
+ *  - Wavelength: s.scale * BASE_WAVELENGTH_BLOCKS blocks (octave n: divided by lacunarity^n).
+ *  - Depth: strength * wavelength, in blocks, so depth-to-wavelength ratio is fixed.
+ *  - Slope: blocks of rise per block of run (normalized slope * worldHeight).
+ * The accumulated delta is converted to normalized height (divided by worldHeight) only when written,
+ * which makes the result independent of world height.
+ *
+ * Octave ladder: gain is clamped to 1/lacunarity so fine octaves never get steeper than coarse ones,
+ * and octaves that are too short in wavelength (alias at 1-block sampling) or too shallow (below voxel
+ * resolution) are dropped.
  */
 public class Erosion implements Filter {
+
+    /** Gully wavelength in blocks when s.scale == 1. Octave n has wavelength ~ this / lacunarity^n. */
+    private static final float BASE_WAVELENGTH_BLOCKS = 96.0f;
+
+    // Octaves finer than this wavelength alias at 1-block sampling and just produce single-block noise.
+    private static final float MIN_OCTAVE_WAVELENGTH_BLOCKS = 12.0f;
+    // Octaves shallower than this are below voxel resolution.
+    private static final float MIN_OCTAVE_AMPLITUDE_BLOCKS = 0.75f;
+
+    /** Small baseline mask. Keep low; slope should drive the mask once slopeOnsetBase > 0. */
+    private static final float BASE_MASK_FLOOR = 0.05f;
+
+    /** Logs effective settings once, and mean slope / mask per apply() call. */
+    private static final boolean DEBUG_STATS = false;
+    private static final AtomicBoolean SETTINGS_LOGGED = new AtomicBoolean(false);
 
     // Cliff relaxation tuning. RATE must stay < 0.5 or the filter can oscillate/amplify noise.
     private static final int   CLIFF_PASSES     = 3;
     private static final float CLIFF_RELAX_RATE = 0.4f;
     private static final float MIN_CLIFF_BLOCKS = 3.0f;
     private static final float MAX_CLIFF_BLOCKS = 8.0f;
+
+    // Prevents sediment from fully zeroing the carve.
+    private static final float MIN_SEDIMENT_MODIFIER = 0.2f;
+
+    // Erosion fades in from ground level up to ground + this many levels (see Modifier.range / Modifier.modify).
+    // Cells near ground get a linear fraction of the carve. Lower = more detail on low ground.
+    private static final int ERODE_RAMP_LEVELS = 15;
+
+    private static final float TAU = 6.2831855f;
 
     // Per thread scratch buffers, allocated once and reused across apply() calls.
     private static final ThreadLocal<Scratch> SCRATCH = ThreadLocal.withInitial(Scratch::new);
@@ -33,13 +69,14 @@ public class Erosion implements Filter {
     private final int mapSize;
     private final Modifier modifier;
 
-    private final float scale;
+    private final float scaleBlocks;   // base gully wavelength in blocks
+    private final float worldHeight;   // blocks
     private final float strength;
     private final float gullyWeight;
     private final float detail;
-    private final int octaves;
+    private final int octaves;         // effective (pruned) octave count
     private final float lacunarity;
-    private final float gain;
+    private final float gain;          // effective (clamped) gain
     private final ErosionFilterSettings s;
     private final Levels levels;
 
@@ -55,13 +92,40 @@ public class Erosion implements Filter {
         this.levels = levels;
 
         this.s = PresetManager.PM.erosionFilterSettings;
-        this.scale = s.scale;
+        this.scaleBlocks = s.scale * BASE_WAVELENGTH_BLOCKS;
+        this.worldHeight = (float) levels.worldHeight;
         this.strength = 0.20F * s.strengthMultiplier;
         this.gullyWeight = s.gullySharpness;
         this.detail = s.gullySlopeAdhesion;
-        this.octaves = s.flowOctaves;
         this.lacunarity = s.lacunarity;
-        this.gain = s.gain;
+        // Slope per octave is constant when gain == 1/lacunarity. Never let fine octaves get steeper than that.
+        this.gain = Math.min(s.gain, 1.0f / Math.max(s.lacunarity, 1.01f));
+
+        // Keep only octaves that are resolvable and visible at voxel scale.
+        int usable = 0;
+        float wl = this.scaleBlocks * s.phacelleScale;
+        float amp = this.strength * this.scaleBlocks;
+        while (usable < s.flowOctaves
+                && wl >= MIN_OCTAVE_WAVELENGTH_BLOCKS
+                && amp >= MIN_OCTAVE_AMPLITUDE_BLOCKS) {
+            ++usable;
+            wl /= this.lacunarity;
+            amp *= this.gain;
+        }
+        this.octaves = Math.max(1, usable);
+
+        if (DEBUG_STATS && SETTINGS_LOGGED.compareAndSet(false, true)) {
+            System.out.printf(
+                    "[Erosion] settings: scale=%s strengthMult=%s gullySharpness=%s adhesion=%s octaves=%d "
+                            + "lacunarity=%s gain=%s phacelleScale=%s offset=%s norm=%s onsetBase=%s onsetRidge=%s "
+                            + "onsetOctave=%s roundMin=%s roundMax=%s roundDecay=%s "
+                            + "effectiveOctaves=%d effectiveGain=%s%n",
+                    s.scale, s.strengthMultiplier, s.gullySharpness, s.gullySlopeAdhesion, s.flowOctaves,
+                    s.lacunarity, s.gain, s.phacelleScale, s.phacelleOffset, s.phacelleNormalization,
+                    s.slopeOnsetBase, s.slopeOnsetRidge, s.slopeOnsetOctave,
+                    s.roundingMin, s.roundingMax, s.roundingDecay,
+                    this.octaves, this.gain);
+        }
     }
 
     public int getSize() {
@@ -91,7 +155,9 @@ public class Erosion implements Filter {
         // Step 1b: Relax cliffs BEFORE computing slopes, so erosion sees the smoothed terrain
         relaxCliffs(cells, heights, relaxed, mapSize);
 
-        // Step 2: Compute slopes (from relaxed heights) with clamped boundary checks
+        // Step 2: Compute slopes (from relaxed heights) with clamped boundary checks.
+        // Multiplying by worldHeight gives blocks of rise per block of run.
+        final float wh = this.worldHeight;
         for (int z = 0; z < mapSize; ++z) {
             final int zPrev = Math.max(0, z - 1);
             final int zNext = Math.min(mapSize - 1, z + 1);
@@ -104,13 +170,16 @@ public class Erosion implements Filter {
                 final float dx = (float) (xNext - xPrev);
 
                 final int idx = row + x;
-                slopeX[idx] = (heights[row + xNext] - heights[row + xPrev]) / dx;
-                slopeZ[idx] = (heights[zNext * mapSize + x] - heights[zPrev * mapSize + x]) / dz;
+                slopeX[idx] = (heights[row + xNext] - heights[row + xPrev]) / dx * wh;
+                slopeZ[idx] = (heights[zNext * mapSize + x] - heights[zPrev * mapSize + x]) / dz * wh;
             }
         }
 
         final int worldBlockX = map.getBlockX();
         final int worldBlockZ = map.getBlockZ();
+
+        double statSlope = 0.0, statMask = 0.0;
+        int statCount = 0;
 
         // Step 3: Single procedural pass over all cells
         for (int z = 0; z < mapSize; ++z) {
@@ -132,24 +201,32 @@ public class Erosion implements Filter {
 
                 final float worldX = (float) (worldBlockX + x);
 
-                float curSlopeX = slopeX[idx];
-                float curSlopeZ = slopeZ[idx];
-                float slopeLen = (float) Math.sqrt(curSlopeX * curSlopeX + curSlopeZ * curSlopeZ + 1e-10f);
+                final float curSlopeX = slopeX[idx];
+                final float curSlopeZ = slopeZ[idx];
+                final float slopeLen = (float) Math.sqrt(curSlopeX * curSlopeX + curSlopeZ * curSlopeZ + 1e-10f);
 
                 // baseHeight is in terrainScaler float units (0.5f ~ midpoint)
                 float fadeTarget = NoiseUtil.clamp((baseHeight - 0.5f) * 2.0f, -1.0f, 1.0f);
 
-                float currentStrength = this.strength * this.scale;
-                float freq = 1.0f / (this.scale * s.phacelleScale);
+                // Depth in BLOCKS, wavelength in blocks: the ratio stays constant at any world height.
+                float currentStrength = this.strength * this.scaleBlocks;
+                float freq = 1.0f / (this.scaleBlocks * s.phacelleScale);
 
                 float roundingForInput = lerp(
                         s.roundingMin,
                         s.roundingMax,
                         NoiseUtil.clamp(fadeTarget + 0.5f, 0.0f, 1.0f));
-                float combiMask = easeOut(
-                        smoothStart(
+                float combiMask = Math.max(
+                        BASE_MASK_FLOOR,
+                        easeOut(smoothStart(
                                 slopeLen * s.slopeOnsetBase,
-                                roundingForInput * s.slopeOnsetBase));
+                                roundingForInput * s.slopeOnsetBase)));
+
+                if (DEBUG_STATS) {
+                    statSlope += slopeLen;
+                    statMask += combiMask;
+                    ++statCount;
+                }
 
                 float ridgeMapCombiMask = easeOut(slopeLen * s.slopeOnsetRidge);
                 float ridgeMapFadeTarget = fadeTarget;
@@ -157,7 +234,7 @@ public class Erosion implements Filter {
                 float gullySlopeX = curSlopeX;
                 float gullySlopeZ = curSlopeZ;
 
-                float accumulatedHeightDelta = 0.0f;
+                float accumulatedHeightDelta = 0.0f; // blocks
                 float roundingMult = 1.0f;
 
                 // Multi-octave flow erosion iteration
@@ -183,10 +260,12 @@ public class Erosion implements Filter {
 
                     float sloping = Math.abs(phacelleY);
 
-                    // Accumulate slope directions for subsequent octaves
+                    // Slope of a wave with depth A (blocks) at this octave's frequency: A * TAU * phacelleScale * freq.
+                    // Keeps the slope feedback in blocks/block, the same units as gullySlope.
+                    float gradient = currentStrength * TAU * s.phacelleScale * freq;
                     float gullySign = Math.signum(phacelleY);
-                    gullySlopeX += gullySign * phacelleZ * currentStrength * this.gullyWeight;
-                    gullySlopeZ += gullySign * phacelleW * currentStrength * this.gullyWeight;
+                    gullySlopeX += gullySign * phacelleZ * gradient * this.gullyWeight;
+                    gullySlopeZ += gullySign * phacelleW * gradient * this.gullyWeight;
 
                     float fadedGullyVal = lerp(fadeTarget, phacelleX * this.gullyWeight, combiMask);
 
@@ -198,7 +277,7 @@ public class Erosion implements Filter {
                             s.roundingMax,
                             NoiseUtil.clamp(phacelleX + 0.5f, 0.0f, 1.0f)) * roundingMult;
                     float newMask = easeOut(smoothStart(sloping * s.slopeOnsetBase, roundingOctave * s.slopeOnsetBase));
-                    combiMask = powInv(combiMask, this.detail) * newMask;
+                    combiMask = Math.max(BASE_MASK_FLOOR, powInv(combiMask, this.detail) * newMask);
 
                     ridgeMapFadeTarget = lerp(ridgeMapFadeTarget, phacelleX, ridgeMapCombiMask);
                     ridgeMapCombiMask *= easeOut(sloping * s.slopeOnsetOctave);
@@ -212,15 +291,23 @@ public class Erosion implements Filter {
                     continue;
                 }
 
-                // Apply terrain changes and clamp within valid float range
-                cell.sediment = NoiseUtil.clamp(cell.sediment + ridgeMapFadeTarget * (1.0f - ridgeMapCombiMask), -1.0f, 1.0f);
-                float sedimentModifier = 1.0F - cell.sediment;
+                // Blocks -> this world's normalized height units.
+                final float deltaNormalized = accumulatedHeightDelta / this.worldHeight;
 
-                float change = this.modifier.modify(cell, accumulatedHeightDelta) * sedimentModifier;
+                cell.sediment = NoiseUtil.clamp(cell.sediment + ridgeMapFadeTarget * (1.0f - ridgeMapCombiMask), -1.0f, 1.0f);
+                float sedimentModifier = Math.max(MIN_SEDIMENT_MODIFIER, 1.0F - cell.sediment);
+
+                float change = this.modifier.modify(cell, deltaNormalized) * sedimentModifier;
                 float newHeight = cell.height + change;
                 cell.heightErosion += (newHeight - cell.height);
                 cell.height = newHeight;
             }
+        }
+
+        if (DEBUG_STATS && statCount > 0) {
+            System.out.printf(
+                    "[Erosion] worldHeight=%s meanSlope(blocks/block)=%.4f meanInitialMask=%.4f%n",
+                    this.levels.worldHeight, statSlope / statCount, statMask / statCount);
         }
     }
 
@@ -230,8 +317,8 @@ public class Erosion implements Filter {
      * mask has no hard kinks. Commits to the cells once after all passes.
      */
     private void relaxCliffs(final Cell[] cells, final float[] heights, final float[] next, final int mapSize) {
-        final float minRelief = MIN_CLIFF_BLOCKS / this.levels.worldHeight;
-        final float maxRelief = MAX_CLIFF_BLOCKS / this.levels.worldHeight;
+        final float minRelief = MIN_CLIFF_BLOCKS / this.worldHeight;
+        final float maxRelief = MAX_CLIFF_BLOCKS / this.worldHeight;
         final float invRange = 1.0f / Math.max(1e-5f, maxRelief - minRelief);
         final int total = mapSize * mapSize;
 
@@ -293,7 +380,6 @@ public class Erosion implements Filter {
             float freq, float offset, float normalization, int seed,
             float[] result
     ) {
-        final float TAU = 6.283185307179586f;
         float sideDirX = -normDirZ * freq * TAU;
         float sideDirZ = normDirX * freq * TAU;
         offset *= TAU;
@@ -398,7 +484,7 @@ public class Erosion implements Filter {
 
         private Factory(final int seed, final Levels levels) {
             this.seed = seed + SEED_OFFSET;
-            this.modifier = Modifier.range(levels.ground, levels.ground(15));
+            this.modifier = Modifier.range(levels.ground, levels.ground(ERODE_RAMP_LEVELS));
             this.levels = levels;
         }
 

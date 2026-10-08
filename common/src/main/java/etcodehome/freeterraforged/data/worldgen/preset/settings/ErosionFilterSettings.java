@@ -10,26 +10,26 @@ public class ErosionFilterSettings {
             "erosionFilter.scale",
             "gui.slider.erosionFilterScale",
             0.01F,
-            1.0F,
-            0.04F
+            4.0F,
+            0.969F
     );
 
     public float strengthMultiplier;
     public static final GenericFloatSetting strengthMultiplierSetting = new GenericFloatSetting(
             "erosionFilter.strengthMultiplier",
             "gui.slider.erosionFilterStrengthMultiplier",
-            0.01F,
+            0.001F,
             2.0F,
-            0.85F
+            0.01F
     );
 
     public float gullySharpness;
     public static final GenericFloatSetting gullySharpnessSetting = new GenericFloatSetting(
             "erosionFilter.gullySharpness",
             "gui.slider.erosionFilterGullySharpness",
-            0.01F,
+            0.001F,
             3.0F,
-            1.5F
+            0.01F
     );
 
     public float gullySlopeAdhesion;
@@ -38,7 +38,7 @@ public class ErosionFilterSettings {
             "gui.slider.erosionFilterGullySlopeAdhesion",
             0.01F,
             3.0F,
-            1.0F
+            0.01F
     );
 
     public int flowOctaves;
@@ -56,7 +56,7 @@ public class ErosionFilterSettings {
             "gui.slider.erosionFilterLacunarity",
             0.01F,
             4.0F,
-            2.0F
+            0.09F
     );
 
     public float gain;
@@ -65,7 +65,7 @@ public class ErosionFilterSettings {
             "gui.slider.erosionFilterGain",
             0.01F,
             1.0F,
-            0.5F
+            0.656F
     );
 
     public float phacelleScale;
@@ -74,7 +74,7 @@ public class ErosionFilterSettings {
             "gui.slider.erosionFilterPhacelleScale",
             0.01F,
             2.0F,
-            0.7F
+            0.955F
     );
 
     public float phacelleOffset;
@@ -101,7 +101,7 @@ public class ErosionFilterSettings {
             "gui.slider.erosionFilterSlopeOnsetBase",
             0.0F,
             3.0F,
-            1.25F
+            0.0F
     );
 
     public float slopeOnsetRidge;
@@ -109,8 +109,8 @@ public class ErosionFilterSettings {
             "erosionFilter.slopeOnsetRidge",
             "gui.slider.erosionFilterSlopeOnsetRidge",
             0.0F,
-            5.0F,
-            2.0F
+            10.0F,
+            5.0F
     );
 
     public float slopeOnsetOctave;
@@ -118,8 +118,8 @@ public class ErosionFilterSettings {
             "erosionFilter.slopeOnsetOctave",
             "gui.slider.erosionFilterSlopeOnsetOctave",
             0.01F,
-            3.0F,
-            1.5F
+            10.0F,
+            3.0F
     );
 
     public float roundingMin;
@@ -127,8 +127,8 @@ public class ErosionFilterSettings {
             "erosionFilter.roundingMin",
             "gui.slider.erosionFilterRoundingMin",
             0.01F,
-            2.0F,
-            0.2F
+            5.0F,
+            2.0F
     );
 
     public float roundingMax;
@@ -136,8 +136,8 @@ public class ErosionFilterSettings {
             "erosionFilter.roundingMax",
             "gui.slider.erosionFilterRoundingMax",
             0.01F,
-            2.0F,
-            0.5F
+            5.0F,
+            1.00F
     );
 
     public float roundingDecay;
@@ -146,7 +146,7 @@ public class ErosionFilterSettings {
             "gui.slider.erosionFilterRoundingDecay",
             0.01F,
             2.0F,
-            0.8F
+            0.01F
     );
 
     // Single source of truth for default values
