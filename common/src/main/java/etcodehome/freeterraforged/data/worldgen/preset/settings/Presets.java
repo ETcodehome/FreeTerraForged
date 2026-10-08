@@ -4,7 +4,6 @@ import etcodehome.freeterraforged.world.worldgen.noise.function.DistanceFunction
 import etcodehome.freeterraforged.data.worldgen.preset.settings.ClimateSettings.BiomeNoise;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.ClimateSettings.BiomeShape;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.ClimateSettings.RangeValue;
-import etcodehome.freeterraforged.data.worldgen.preset.settings.ErosionFilterSettings;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.RiverSettings.Lake;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.RiverSettings.River;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.RiverSettings.Wetland;
@@ -27,7 +26,7 @@ public class Presets {
 				new ControlPoints(0.0F, 0.074F, 0.1F, 0.25F, 0.327F, 0.448F, 0.502F),
 				new Properties(SpawnType.CONTINENT_CENTER, 320, 64, 63, -54, 63, 0, 0)
 			),
-			new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
+			new SurfaceSettings(new SurfaceSettings.Scree(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
 			new CaveSettings(0.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, true, false),
 			new ClimateSettings(
 				new RangeValue(0, 6, 2, 0.0F, 0.98F, 0.0F, 0.05F),
@@ -72,7 +71,7 @@ public class Presets {
 				new ControlPoints(0.0F, 0.074F, 0.1F, 0.25F, 0.326F, 0.448F, 0.5F),
 				new Properties(SpawnType.WORLD_ORIGIN, 320, 64, 63, -54, 63, 0, 0)
 			), 
-			new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
+			new SurfaceSettings(new SurfaceSettings.Scree(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
 			new CaveSettings(1.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.15F, 0.07F, 0.021F, true, false),
 			new ClimateSettings(
 				new RangeValue(0, 4, 1, 0.0F, 0.98F, 0.05F, 0.0F),
@@ -117,7 +116,7 @@ public class Presets {
 				new ControlPoints(0.0F, 0.074F, 0.1F, 0.25F, 0.326F, 0.448F, 0.5F),
 				new Properties(SpawnType.CONTINENT_CENTER, 320, 64, 63, -54, 63, 0, 0)
 			),
-			new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
+			new SurfaceSettings(new SurfaceSettings.Scree(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
 			new CaveSettings(0.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, true, false),
 			new ClimateSettings(
 				new RangeValue(0, 7, 1, 0.0F, 1.0F, -0.004F, 0.0F),
@@ -162,7 +161,7 @@ public class Presets {
 				new ControlPoints(0.0F, 0.074F, 0.1F, 0.25F, 0.326F, 0.448F, 0.5F),
 				new Properties(SpawnType.CONTINENT_CENTER, 320, 64, 63, -54, 63, 0, 0)
 			),
-			new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
+			new SurfaceSettings(new SurfaceSettings.Scree(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
 			new CaveSettings(0.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, false, false),
 			new ClimateSettings(
 				new RangeValue(0, 4, 1, 0.0F, 0.98F, 0.05F, 0.0F),
@@ -207,7 +206,7 @@ public class Presets {
 				new ControlPoints(0.0F, 0.074F, 0.1F, 0.25F, 0.326F, 0.448F, 0.5F),
 				new Properties(SpawnType.CONTINENT_CENTER, 320, 64, 63, -54, 63, 0, 0)
 			), 
-			new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
+			new SurfaceSettings(new SurfaceSettings.Scree(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
 			new CaveSettings(0.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, true, false),
 			new ClimateSettings(
 				new RangeValue(0, 4, 2, 0.0F, 1.0F, 0.097F, 0.0F),
@@ -277,7 +276,7 @@ public class Presets {
 								0,
 								0)
 				),
-				new SurfaceSettings(new SurfaceSettings.Erosion(30,
+				new SurfaceSettings(new SurfaceSettings.Scree(30,
 						250,
 						20,
 						10,

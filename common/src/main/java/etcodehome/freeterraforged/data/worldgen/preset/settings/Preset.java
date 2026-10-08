@@ -23,10 +23,7 @@ import etcodehome.freeterraforged.data.worldgen.preset.PresetNoiseRouterData;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetPlacedFeatures;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetStructureRuleData;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetWorldPresets;
-import etcodehome.freeterraforged.registries.FTFRegistries;
-import etcodehome.freeterraforged.world.worldgen.biome.modifier.BiomeModifier;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
-import etcodehome.freeterraforged.world.worldgen.structure.rule.StructureRule;
 
 import java.util.*;
 import java.util.stream.Stream;
@@ -34,7 +31,7 @@ import java.util.stream.Stream;
 public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings caves, ClimateSettings climate, TerrainSettings terrain, RiverSettings rivers, FlowSettings flow, IslandSettings island, ErosionFilterSettings erosionFilters, MiscellaneousSettings miscellaneous, PresentationSettings presentation) {
 	public static final Codec<Preset> DIRECT_CODEC = RecordCodecBuilder.create(instance -> instance.group(
 			WorldSettings.CODEC.fieldOf("world").forGetter(Preset::world),
-			SurfaceSettings.CODEC.optionalFieldOf("surface", new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F))).forGetter(Preset::surface),
+			SurfaceSettings.CODEC.optionalFieldOf("surface", new SurfaceSettings(new SurfaceSettings.Scree(30, 140, 40, 95, 0.65F, 0.475F, 0.4F))).forGetter(Preset::surface),
 			CaveSettings.CODEC.optionalFieldOf("caves", new CaveSettings(0.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, true, false)).forGetter(Preset::caves),
 			ClimateSettings.CODEC.fieldOf("climate").forGetter(Preset::climate),
 			TerrainSettings.CODEC.fieldOf("terrain").forGetter(Preset::terrain),

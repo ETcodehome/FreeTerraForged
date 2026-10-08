@@ -10,7 +10,7 @@ import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.SurfaceSettings;
 import etcodehome.freeterraforged.world.worldgen.feature.BushFeature;
 import etcodehome.freeterraforged.world.worldgen.feature.DecorateSnowFeature;
-import etcodehome.freeterraforged.world.worldgen.feature.ErodeFeature;
+import etcodehome.freeterraforged.world.worldgen.feature.ScreeFeature;
 import etcodehome.freeterraforged.world.worldgen.feature.FTFFeatures;
 import etcodehome.freeterraforged.world.worldgen.feature.template.placement.TemplatePlacements;
 import net.minecraft.core.Direction;
@@ -108,17 +108,17 @@ public class PresetConfiguredFeatures {
 	public static void bootstrap(Preset preset, BootstrapContext<ConfiguredFeature<?, ?>> ctx) {
 		MiscellaneousSettings miscellaneous = preset.miscellaneous();
 		SurfaceSettings surface = preset.surface();
-		SurfaceSettings.Erosion erosion = surface.erosion();
+		SurfaceSettings.Scree scree = surface.scree();
 
 		// Pass the configured selectors directly into the final parameters of the Config record
-		ErodeFeature.Config erodeConfig = new ErodeFeature.Config(
-				erosion.rockVariance,
-				erosion.rockMin,
-				erosion.dirtVariance,
-				erosion.dirtMin,
-				erosion.rockSteepness,
-				erosion.dirtSteepness,
-				erosion.screeSteepness,
+		ScreeFeature.Config erodeConfig = new ScreeFeature.Config(
+				scree.rockVariance,
+				scree.rockMin,
+				scree.dirtVariance,
+				scree.dirtMin,
+				scree.rockSteepness,
+				scree.dirtSteepness,
+				scree.screeSteepness,
 				6F / 255F,
 				3F / 255F
 		);
