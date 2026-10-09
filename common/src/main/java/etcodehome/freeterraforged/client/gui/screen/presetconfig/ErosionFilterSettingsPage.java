@@ -22,7 +22,6 @@ class ErosionFilterSettingsPage extends PresetEditorPage {
 		this.left.addWidget(PresetWidgets.createFloatSlider(s.scale, ErosionFilterSettings.scaleSetting, val -> s.scale = val, this::regenerate));
 		this.left.addWidget(PresetWidgets.createFloatSlider(s.strengthMultiplier, ErosionFilterSettings.strengthMultiplierSetting, val -> s.strengthMultiplier = val, this::regenerate));
 		this.left.addWidget(PresetWidgets.createFloatSlider(s.gullySharpness, ErosionFilterSettings.gullySharpnessSetting, val -> s.gullySharpness = val, this::regenerate));
-		this.left.addWidget(PresetWidgets.createFloatSlider(s.gullySlopeAdhesion, ErosionFilterSettings.gullySlopeAdhesionSetting, val -> s.gullySlopeAdhesion = val, this::regenerate));
 		this.left.addWidget(PresetWidgets.createIntSlider(s.flowOctaves, ErosionFilterSettings.flowOctavesSetting, val -> s.flowOctaves = val, this::regenerate));
 		this.left.addWidget(PresetWidgets.createFloatSlider(s.lacunarity, ErosionFilterSettings.lacunaritySetting, val -> s.lacunarity = val, this::regenerate));
 		this.left.addWidget(PresetWidgets.createFloatSlider(s.gain, ErosionFilterSettings.gainSetting, val -> s.gain = val, this::regenerate));
@@ -34,7 +33,6 @@ class ErosionFilterSettingsPage extends PresetEditorPage {
 		this.left.addWidget(PresetWidgets.createFloatSlider(s.slopeOnsetOctave, ErosionFilterSettings.slopeOnsetOctaveSetting, val -> s.slopeOnsetOctave = val, this::regenerate));
 		this.left.addWidget(PresetWidgets.createFloatSlider(s.roundingMin, ErosionFilterSettings.roundingMinSetting, val -> s.roundingMin = val, this::regenerate));
 		this.left.addWidget(PresetWidgets.createFloatSlider(s.roundingMax, ErosionFilterSettings.roundingMaxSetting, val -> s.roundingMax = val, this::regenerate));
-		this.left.addWidget(PresetWidgets.createFloatSlider(s.roundingDecay, ErosionFilterSettings.roundingDecaySetting, val -> s.roundingDecay = val, this::regenerate));
 
 	}
 		

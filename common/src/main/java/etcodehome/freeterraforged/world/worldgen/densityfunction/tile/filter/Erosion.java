@@ -95,20 +95,20 @@ public class Erosion implements Filter {
         this.worldHeight = (float) levels.worldHeight;
         this.strength = 0.20F * s.strengthMultiplier;
         this.gullyWeight = s.gullySharpness;
-        this.detail = s.gullySlopeAdhesion;
+        this.detail = 3.00F;
         this.octaves = s.flowOctaves;
         this.lacunarity = s.lacunarity;
         this.gain = s.gain;
 
         if (DEBUG_STATS && SETTINGS_LOGGED.compareAndSet(false, true)) {
             System.out.printf(
-                    "[Erosion] settings: scale=%s strengthMult=%s gullySharpness=%s adhesion=%s octaves=%d "
+                    "[Erosion] settings: scale=%s strengthMult=%s gullySharpness=%s octaves=%d "
                             + "lacunarity=%s gain=%s phacelleScale=%s offset=%s norm=%s onsetBase=%s onsetRidge=%s "
-                            + "onsetOctave=%s roundMin=%s roundMax=%s roundDecay=%s%n",
-                    s.scale, s.strengthMultiplier, s.gullySharpness, s.gullySlopeAdhesion, s.flowOctaves,
+                            + "onsetOctave=%s roundMin=%s roundMax=%s%n",
+                    s.scale, s.strengthMultiplier, s.gullySharpness, s.flowOctaves,
                     s.lacunarity, s.gain, s.phacelleScale, s.phacelleOffset, s.phacelleNormalization,
                     s.slopeOnsetBase, s.slopeOnsetRidge, s.slopeOnsetOctave,
-                    s.roundingMin, s.roundingMax, s.roundingDecay);
+                    s.roundingMin, s.roundingMax);
         }
     }
 
@@ -269,7 +269,7 @@ public class Erosion implements Filter {
 
                     currentStrength *= this.gain;
                     freq *= this.lacunarity;
-                    roundingMult *= s.roundingDecay;
+                    roundingMult *= 0.001;
                 }
 
                 if (Float.isNaN(accumulatedHeightDelta) || Float.isInfinite(accumulatedHeightDelta)) {

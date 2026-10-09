@@ -20,7 +20,7 @@ public class ErosionFilterSettings {
             "gui.slider.erosionFilterStrengthMultiplier",
             0.001F,
             100.0F,
-            25.0F
+            0.001F
     );
 
     public float gullySharpness;
@@ -30,15 +30,6 @@ public class ErosionFilterSettings {
             0.001F,
             1.0F,
             0.001F
-    );
-
-    public float gullySlopeAdhesion;
-    public static final GenericFloatSetting gullySlopeAdhesionSetting = new GenericFloatSetting(
-            "erosionFilter.gullySlopeAdhesion",
-            "gui.slider.erosionFilterGullySlopeAdhesion",
-            0.01F,
-            3.0F,
-            0.01F
     );
 
     public int flowOctaves;
@@ -101,7 +92,7 @@ public class ErosionFilterSettings {
             "gui.slider.erosionFilterSlopeOnsetBase",
             0.1F,
             5.0F,
-            0.0F
+            0.1F
     );
 
     public float slopeOnsetRidge;
@@ -128,7 +119,7 @@ public class ErosionFilterSettings {
             "gui.slider.erosionFilterRoundingMin",
             0.01F,
             100.0F,
-            2.0F
+            50.0F
     );
 
     public float roundingMax;
@@ -137,16 +128,7 @@ public class ErosionFilterSettings {
             "gui.slider.erosionFilterRoundingMax",
             0.01F,
             100.0F,
-            1.00F
-    );
-
-    public float roundingDecay;
-    public static final GenericFloatSetting roundingDecaySetting = new GenericFloatSetting(
-            "erosionFilter.roundingDecay",
-            "gui.slider.erosionFilterRoundingDecay",
-            0.01F,
-            100.0F,
-            0.51F
+            25.00F
     );
 
     // Single source of truth for default values
@@ -155,7 +137,6 @@ public class ErosionFilterSettings {
                 scaleSetting.defaultValue,
                 strengthMultiplierSetting.defaultValue,
                 gullySharpnessSetting.defaultValue,
-                gullySlopeAdhesionSetting.defaultValue,
                 flowOctavesSetting.defaultValue,
                 lacunaritySetting.defaultValue,
                 gainSetting.defaultValue,
@@ -166,8 +147,7 @@ public class ErosionFilterSettings {
                 slopeOnsetRidgeSetting.defaultValue,
                 slopeOnsetOctaveSetting.defaultValue,
                 roundingMinSetting.defaultValue,
-                roundingMaxSetting.defaultValue,
-                roundingDecaySetting.defaultValue
+                roundingMaxSetting.defaultValue
         );
     }
 
@@ -175,7 +155,6 @@ public class ErosionFilterSettings {
             float scale,
             float strengthMultiplier,
             float gullySharpness,
-            float gullySlopeAdhesion,
             int flowOctaves,
             float lacunarity,
             float gain,
@@ -186,13 +165,11 @@ public class ErosionFilterSettings {
             float slopeOnsetRidge,
             float slopeOnsetOctave,
             float roundingMin,
-            float roundingMax,
-            float roundingDecay)
+            float roundingMax)
     {
             this.scale = scale;
             this.strengthMultiplier = strengthMultiplier;
             this.gullySharpness = gullySharpness;
-            this.gullySlopeAdhesion = gullySlopeAdhesion;
             this.flowOctaves = flowOctaves;
             this.lacunarity = lacunarity;
             this.gain = gain;
@@ -204,7 +181,6 @@ public class ErosionFilterSettings {
             this.slopeOnsetOctave = slopeOnsetOctave;
             this.roundingMin = roundingMin;
             this.roundingMax = roundingMax;
-            this.roundingDecay = roundingDecay;
     }
 
     public static final ErosionFilterSettings DEFAULT = makeDefault();
@@ -213,7 +189,6 @@ public class ErosionFilterSettings {
             Codec.FLOAT.optionalFieldOf("scale", DEFAULT.scale).forGetter(o -> o.scale),
             Codec.FLOAT.optionalFieldOf("strengthMultiplier", DEFAULT.strengthMultiplier).forGetter(o -> o.strengthMultiplier),
             Codec.FLOAT.optionalFieldOf("gullySharpness", DEFAULT.gullySharpness).forGetter(o -> o.gullySharpness),
-            Codec.FLOAT.optionalFieldOf("gullySlopeAdhesion", DEFAULT.gullySlopeAdhesion).forGetter(o -> o.gullySlopeAdhesion),
             Codec.INT.optionalFieldOf("flowOctaves", DEFAULT.flowOctaves).forGetter(o -> o.flowOctaves),
             Codec.FLOAT.optionalFieldOf("lacunarity", DEFAULT.lacunarity).forGetter(o -> o.lacunarity),
             Codec.FLOAT.optionalFieldOf("gain", DEFAULT.gain).forGetter(o -> o.gain),
@@ -224,8 +199,7 @@ public class ErosionFilterSettings {
             Codec.FLOAT.optionalFieldOf("slopeOnsetRidge", DEFAULT.slopeOnsetRidge).forGetter(o -> o.slopeOnsetRidge),
             Codec.FLOAT.optionalFieldOf("slopeOnsetOctave", DEFAULT.slopeOnsetOctave).forGetter(o -> o.slopeOnsetOctave),
             Codec.FLOAT.optionalFieldOf("roundingMin", DEFAULT.roundingMin).forGetter(o -> o.roundingMin),
-            Codec.FLOAT.optionalFieldOf("roundingMax", DEFAULT.roundingMax).forGetter(o -> o.roundingMax),
-            Codec.FLOAT.optionalFieldOf("roundingDecay", DEFAULT.roundingDecay).forGetter(o -> o.roundingDecay)
+            Codec.FLOAT.optionalFieldOf("roundingMax", DEFAULT.roundingMax).forGetter(o -> o.roundingMax)
     ).apply(instance, ErosionFilterSettings::new));
 
     public ErosionFilterSettings copy() {
@@ -233,7 +207,6 @@ public class ErosionFilterSettings {
                 this.scale,
                 this.strengthMultiplier,
                 this.gullySharpness,
-                this.gullySlopeAdhesion,
                 this.flowOctaves,
                 this.lacunarity,
                 this.gain,
@@ -244,8 +217,7 @@ public class ErosionFilterSettings {
                 this.slopeOnsetRidge,
                 this.slopeOnsetOctave,
                 this.roundingMin,
-                this.roundingMax,
-                this.roundingDecay
+                this.roundingMax
         );
     }
 
