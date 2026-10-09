@@ -26,24 +26,23 @@ import etcodehome.freeterraforged.world.worldgen.util.Seed;
  * The accumulated delta is converted to normalized height (divided by worldHeight) only when written,
  * which makes the result independent of world height.
  *
- * Octave ladder: gain is clamped to 1/lacunarity so fine octaves never get steeper than coarse ones,
- * and octaves that are too short in wavelength (alias at 1-block sampling) or too shallow (below voxel
- * resolution) are dropped.
+ * Octave count and gain come straight from the preset with no limiting, so every slider is live.
  */
 public class Erosion implements Filter {
 
     /** Gully wavelength in blocks when s.scale == 1. Octave n has wavelength ~ this / lacunarity^n. */
     private static final float BASE_WAVELENGTH_BLOCKS = 96.0f;
 
-    // Octaves finer than this wavelength alias at 1-block sampling and just produce single-block noise.
-    private static final float MIN_OCTAVE_WAVELENGTH_BLOCKS = 12.0f;
-    // Octaves shallower than this are below voxel resolution.
-    private static final float MIN_OCTAVE_AMPLITUDE_BLOCKS = 0.75f;
-
     /** Small baseline mask. Keep low; slope should drive the mask once slopeOnsetBase > 0. */
     private static final float BASE_MASK_FLOOR = 0.05f;
 
-    /** Logs effective settings once, and mean slope / mask per apply() call. */
+    /**
+     * slopeOnsetRidge was authored for tiny normalized slopes; blocks/block slopes are ~100-1000x larger.
+     * This rescales the ridge mask input so it doesn't saturate at 1. Tune this before the slider.
+     */
+    private static final float RIDGE_SLOPE_SCALE = 0.01f;
+
+    /** Logs effective settings once, and mean slope / masks per apply() call. */
     private static final boolean DEBUG_STATS = false;
     private static final AtomicBoolean SETTINGS_LOGGED = new AtomicBoolean(false);
 
@@ -74,9 +73,9 @@ public class Erosion implements Filter {
     private final float strength;
     private final float gullyWeight;
     private final float detail;
-    private final int octaves;         // effective (pruned) octave count
+    private final int octaves;
     private final float lacunarity;
-    private final float gain;          // effective (clamped) gain
+    private final float gain;
     private final ErosionFilterSettings s;
     private final Levels levels;
 
@@ -97,34 +96,19 @@ public class Erosion implements Filter {
         this.strength = 0.20F * s.strengthMultiplier;
         this.gullyWeight = s.gullySharpness;
         this.detail = s.gullySlopeAdhesion;
+        this.octaves = s.flowOctaves;
         this.lacunarity = s.lacunarity;
-        // Slope per octave is constant when gain == 1/lacunarity. Never let fine octaves get steeper than that.
-        this.gain = Math.min(s.gain, 1.0f / Math.max(s.lacunarity, 1.01f));
-
-        // Keep only octaves that are resolvable and visible at voxel scale.
-        int usable = 0;
-        float wl = this.scaleBlocks * s.phacelleScale;
-        float amp = this.strength * this.scaleBlocks;
-        while (usable < s.flowOctaves
-                && wl >= MIN_OCTAVE_WAVELENGTH_BLOCKS
-                && amp >= MIN_OCTAVE_AMPLITUDE_BLOCKS) {
-            ++usable;
-            wl /= this.lacunarity;
-            amp *= this.gain;
-        }
-        this.octaves = Math.max(1, usable);
+        this.gain = s.gain;
 
         if (DEBUG_STATS && SETTINGS_LOGGED.compareAndSet(false, true)) {
             System.out.printf(
                     "[Erosion] settings: scale=%s strengthMult=%s gullySharpness=%s adhesion=%s octaves=%d "
                             + "lacunarity=%s gain=%s phacelleScale=%s offset=%s norm=%s onsetBase=%s onsetRidge=%s "
-                            + "onsetOctave=%s roundMin=%s roundMax=%s roundDecay=%s "
-                            + "effectiveOctaves=%d effectiveGain=%s%n",
+                            + "onsetOctave=%s roundMin=%s roundMax=%s roundDecay=%s%n",
                     s.scale, s.strengthMultiplier, s.gullySharpness, s.gullySlopeAdhesion, s.flowOctaves,
                     s.lacunarity, s.gain, s.phacelleScale, s.phacelleOffset, s.phacelleNormalization,
                     s.slopeOnsetBase, s.slopeOnsetRidge, s.slopeOnsetOctave,
-                    s.roundingMin, s.roundingMax, s.roundingDecay,
-                    this.octaves, this.gain);
+                    s.roundingMin, s.roundingMax, s.roundingDecay);
         }
     }
 
@@ -178,7 +162,7 @@ public class Erosion implements Filter {
         final int worldBlockX = map.getBlockX();
         final int worldBlockZ = map.getBlockZ();
 
-        double statSlope = 0.0, statMask = 0.0;
+        double statSlope = 0.0, statMask = 0.0, statRidge = 0.0;
         int statCount = 0;
 
         // Step 3: Single procedural pass over all cells
@@ -222,14 +206,15 @@ public class Erosion implements Filter {
                                 slopeLen * s.slopeOnsetBase,
                                 roundingForInput * s.slopeOnsetBase)));
 
+                float ridgeMapCombiMask = easeOut(slopeLen * RIDGE_SLOPE_SCALE * s.slopeOnsetRidge);
+                float ridgeMapFadeTarget = fadeTarget;
+
                 if (DEBUG_STATS) {
                     statSlope += slopeLen;
                     statMask += combiMask;
+                    statRidge += ridgeMapCombiMask;
                     ++statCount;
                 }
-
-                float ridgeMapCombiMask = easeOut(slopeLen * s.slopeOnsetRidge);
-                float ridgeMapFadeTarget = fadeTarget;
 
                 float gullySlopeX = curSlopeX;
                 float gullySlopeZ = curSlopeZ;
@@ -306,8 +291,8 @@ public class Erosion implements Filter {
 
         if (DEBUG_STATS && statCount > 0) {
             System.out.printf(
-                    "[Erosion] worldHeight=%s meanSlope(blocks/block)=%.4f meanInitialMask=%.4f%n",
-                    this.levels.worldHeight, statSlope / statCount, statMask / statCount);
+                    "[Erosion] worldHeight=%s meanSlope(blocks/block)=%.4f meanInitialMask=%.4f meanInitialRidgeMask=%.4f%n",
+                    this.levels.worldHeight, statSlope / statCount, statMask / statCount, statRidge / statCount);
         }
     }
 
