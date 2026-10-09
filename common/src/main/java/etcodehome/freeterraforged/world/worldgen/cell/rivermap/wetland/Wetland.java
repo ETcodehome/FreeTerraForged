@@ -105,9 +105,11 @@ public class Wetland {
             cell.height = NoiseUtil.lerp(banks, targetHeight, internalAlpha);
         }
 
-        // Restrict Biome and Water Level to the basin
+        // Restrict Biome and Water Level to the basin.
+        // Never lower an existing level: river carvers store an absolute water height here, and
+        // overwriting it with the uplift offset (0 on the lowest water table step) dries the channel.
         if (internalAlpha > 0.1F) {
-            cell.riverWaterLevel = upliftOffset;
+            cell.riverWaterLevel = Math.max(cell.riverWaterLevel, upliftOffset);
         }
 
         if (dist >= tEnd) {
@@ -118,7 +120,7 @@ public class Wetland {
         // Strict Biome Containment
         // Ensure water level is set for the carved area so pools form correctly against the walls
         if (internalAlpha > 0.0F) {
-            cell.riverWaterLevel = upliftOffset;
+            cell.riverWaterLevel = Math.max(cell.riverWaterLevel, upliftOffset);
         }
 
         // Strictly restrict the Wetland biome to the flat bottom of the bowl.
