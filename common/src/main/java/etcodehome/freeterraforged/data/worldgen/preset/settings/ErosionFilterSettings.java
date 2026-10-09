@@ -19,8 +19,8 @@ public class ErosionFilterSettings {
             "erosionFilter.strengthMultiplier",
             "gui.slider.erosionFilterStrengthMultiplier",
             0.001F,
-            1.0F,
-            0.001F
+            50.0F,
+            25.0F
     );
 
     public float gullySharpness;
@@ -55,7 +55,7 @@ public class ErosionFilterSettings {
             "erosionFilter.lacunarity",
             "gui.slider.erosionFilterLacunarity",
             0.01F,
-            1.0F,
+            5.0F,
             0.01F
     );
 
@@ -73,7 +73,7 @@ public class ErosionFilterSettings {
             "erosionFilter.phacelleScale",
             "gui.slider.erosionFilterPhacelleScale",
             0.01F,
-            2.0F,
+            5.0F,
             0.352F
     );
 
@@ -99,8 +99,8 @@ public class ErosionFilterSettings {
     public static final GenericFloatSetting slopeOnsetBaseSetting = new GenericFloatSetting(
             "erosionFilter.slopeOnsetBase",
             "gui.slider.erosionFilterSlopeOnsetBase",
-            0.0F,
-            3.0F,
+            0.1F,
+            5.0F,
             0.0F
     );
 
@@ -109,7 +109,7 @@ public class ErosionFilterSettings {
             "erosionFilter.slopeOnsetRidge",
             "gui.slider.erosionFilterSlopeOnsetRidge",
             0.0F,
-            2.0F,
+            5.0F,
             0.129F
     );
 
@@ -118,7 +118,7 @@ public class ErosionFilterSettings {
             "erosionFilter.slopeOnsetOctave",
             "gui.slider.erosionFilterSlopeOnsetOctave",
             0.01F,
-            2.0F,
+            5.0F,
             0.01F
     );
 
@@ -127,7 +127,7 @@ public class ErosionFilterSettings {
             "erosionFilter.roundingMin",
             "gui.slider.erosionFilterRoundingMin",
             0.01F,
-            5.0F,
+            100.0F,
             2.0F
     );
 
@@ -136,7 +136,7 @@ public class ErosionFilterSettings {
             "erosionFilter.roundingMax",
             "gui.slider.erosionFilterRoundingMax",
             0.01F,
-            5.0F,
+            100.0F,
             1.00F
     );
 
@@ -145,7 +145,7 @@ public class ErosionFilterSettings {
             "erosionFilter.roundingDecay",
             "gui.slider.erosionFilterRoundingDecay",
             0.01F,
-            2.0F,
+            100.0F,
             0.51F
     );
 
