@@ -38,6 +38,7 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureProc
 import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeBanding;
+import etcodehome.freeterraforged.world.worldgen.terrablender.BiomeReplacerCompat;
 import etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeSurfaceProtection;
 import etcodehome.freeterraforged.world.worldgen.biome.SurfaceBiomeFilter;
 import etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeTags;
@@ -375,8 +376,11 @@ public final class MinecraftWorldgenPlanCompiler {
 		Optional<BiomeCandidateRoot> retainedRoot
 	) {
 		if (source instanceof MultiNoiseBiomeSource) {
-			BiomeCandidateRoot root = retainedRoot.orElseGet(
-				() -> MinecraftBiomeSourceGraphs.multiNoiseRoot(source, owner.registries())
+			BiomeCandidateRoot root = BiomeReplacerCompat.apply(
+				retainedRoot.orElseGet(
+					() -> MinecraftBiomeSourceGraphs.multiNoiseRoot(source, owner.registries())
+				),
+				owner.dimension().location().toString()
 			);
 			return new WorldgenPlans.BiomeComposition(
 				descriptor(WorldgenFacet.BIOME_COMPOSITION, CapabilityState.NORMALIZED,
