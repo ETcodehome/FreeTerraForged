@@ -43,7 +43,7 @@ public class Erosion implements Filter {
     private static final float RIDGE_SLOPE_SCALE = 0.01f;
 
     /** Logs effective settings once, and mean slope / masks per apply() call. */
-    private static final boolean DEBUG_STATS = true;
+    private static final boolean DEBUG_STATS = false;
     private static final AtomicBoolean SETTINGS_LOGGED = new AtomicBoolean(false);
 
     // Cliff relaxation tuning. RATE must stay < 0.5 or the filter can oscillate/amplify noise.

@@ -19,7 +19,7 @@ public class ErosionFilterSettings {
             "erosionFilter.strengthMultiplier",
             "gui.slider.erosionFilterStrengthMultiplier",
             0.001F,
-            50.0F,
+            100.0F,
             25.0F
     );
 
