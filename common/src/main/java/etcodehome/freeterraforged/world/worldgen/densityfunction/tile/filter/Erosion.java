@@ -1,6 +1,5 @@
 package etcodehome.freeterraforged.world.worldgen.densityfunction.tile.filter;
 
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntFunction;
 
 import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
@@ -24,6 +23,13 @@ import etcodehome.freeterraforged.world.worldgen.util.Seed;
  * the final delta is capped by what the local slope can physically support. There is no mask floor,
  * so a low slope really does mean zero erosion.
  *
+ * The depth cap uses a SATURATED slope (MAX_SLOPE_FOR_CAP). Without saturation the cap grows without
+ * bound on cliffs (where slopes are 10-50 blocks/block), which lets full-amplitude noise through exactly
+ * where it produces spikes. The cap is also applied AFTER the sediment multiplier, which can be up to 2x.
+ *
+ * Slopes are a minmod of the one-sided differences rather than a central difference, so the flat rim of a
+ * cliff top does not inherit half the cliff's slope (which used to put full-amplitude noise on the rim).
+ *
  * Cliff relaxation runs as a separate double-buffered pre-pass, so the erosion pass
  * operates on the already-smoothed terrain.
  *
@@ -43,8 +49,7 @@ public class Erosion implements Filter {
 
     /**
      * Slope (blocks/block) below which erosion is fully off, and above which the gate is fully open.
-     * Smoothstep in between. Tune these against the DEBUG_STATS meanSlope output: START should sit just
-     * above what your flat and rolling terrain produces.
+     * Smoothstep in between. START should sit just above the slope your flat and rolling terrain produces.
      */
     private static final float FLAT_SLOPE_START = 0.15f;
     private static final float FLAT_SLOPE_FULL  = 0.60f;
@@ -54,6 +59,14 @@ public class Erosion implements Filter {
      * supports. Lower this if gentle slopes still ripple too much.
      */
     private static final float MAX_DEPTH_PER_SLOPE = 0.5f;
+
+    /**
+     * Slope (blocks/block) at which the depth cap stops growing. The cap is
+     * MAX_DEPTH_PER_SLOPE * min(slope, MAX_SLOPE_FOR_CAP) * scaleBlocks, so the absolute ceiling is
+     * MAX_DEPTH_PER_SLOPE * MAX_SLOPE_FOR_CAP * scaleBlocks blocks (about 34 with the default preset).
+     * Behaviour below this slope is unchanged. Lower it (2-3) for tamer cliffs, raise it (4-6) for wilder ones.
+     */
+    private static final float MAX_SLOPE_FOR_CAP = 3.0f;
 
     /**
      * slopeOnsetRidge was authored for tiny normalized slopes; blocks/block slopes are ~100-1000x larger.
@@ -79,10 +92,6 @@ public class Erosion implements Filter {
      * which is intentional: rounding only shapes the first (coarsest) octave.
      */
     private static final float ROUNDING_DECAY_PER_OCTAVE = 0.001f;
-
-    /** Logs effective settings once, and mean slope / masks per apply() call. */
-    private static final boolean DEBUG_STATS = false;
-    private static final AtomicBoolean SETTINGS_LOGGED = new AtomicBoolean(false);
 
     // Cliff relaxation tuning. RATE must stay < 0.5 or the filter can oscillate/amplify noise.
     private static final int   CLIFF_PASSES     = 3;
@@ -137,17 +146,6 @@ public class Erosion implements Filter {
         this.octaves = s.flowOctaves;
         this.lacunarity = s.lacunarity;
         this.gain = s.gain;
-
-        if (DEBUG_STATS && SETTINGS_LOGGED.compareAndSet(false, true)) {
-            System.out.printf(
-                    "[Erosion] settings: scale=%s strengthMult=%s gullySharpness=%s octaves=%d "
-                            + "lacunarity=%s gain=%s phacelleScale=%s offset=%s norm=%s onsetBase=%s onsetRidge=%s "
-                            + "onsetOctave=%s roundMin=%s roundMax=%s%n",
-                    s.scale, s.strengthMultiplier, s.gullySharpness, s.flowOctaves,
-                    s.lacunarity, s.gain, s.phacelleScale, s.phacelleOffset, s.phacelleNormalization,
-                    s.slopeOnsetBase, s.slopeOnsetRidge, s.slopeOnsetOctave,
-                    s.roundingMin, s.roundingMax);
-        }
     }
 
     public int getSize() {
@@ -165,6 +163,7 @@ public class Erosion implements Filter {
         scratch.reserve(cells.length);
         final float[] heights = scratch.heights;
         final float[] relaxed = scratch.relaxed;
+        final float[] relaxMod = scratch.relaxMod;
         final float[] slopeX = scratch.slopeX;
         final float[] slopeZ = scratch.slopeZ;
         final float[] phacelleOut = scratch.phacelleOut;
@@ -180,33 +179,52 @@ public class Erosion implements Filter {
         }
 
         // Step 1b: Relax cliffs BEFORE computing slopes, so erosion sees the smoothed terrain
-        relaxCliffs(cells, heights, relaxed, tileSize);
+        relaxCliffs(cells, heights, relaxed, relaxMod, tileSize);
 
         // Step 2: Compute slopes (from relaxed heights) with clamped boundary checks.
         // Multiplying by worldHeight gives blocks of rise per block of run.
+        //
+        // Slopes use a minmod of the one-sided differences (not a central difference), so a plateau rim
+        // cell whose far side is flat reads slope 0 instead of half the cliff drop. Tile borders use the
+        // one side that exists. Border cases are handled outside the hot loops so the interior loops
+        // are branch-light and easy for the JIT to vectorize/inline. Requires tileSize >= 2.
         final float wh = this.worldHeight;
+        final int last = tileSize - 1;
         for (int z = 0; z < tileSize; ++z) {
-            final int zPrev = Math.max(0, z - 1);
-            final int zNext = Math.min(tileSize - 1, z + 1);
-            final float dz = (float) (zNext - zPrev);
             final int row = z * tileSize;
 
-            for (int x = 0; x < tileSize; ++x) {
-                final int xPrev = Math.max(0, x - 1);
-                final int xNext = Math.min(tileSize - 1, x + 1);
-                final float dx = (float) (xNext - xPrev);
-
+            // slopeX: border cells first, then the interior.
+            slopeX[row] = (heights[row + 1] - heights[row]) * wh;
+            for (int x = 1; x < last; ++x) {
                 final int idx = row + x;
-                slopeX[idx] = (heights[row + xNext] - heights[row + xPrev]) / dx * wh;
-                slopeZ[idx] = (heights[zNext * tileSize + x] - heights[zPrev * tileSize + x]) / dz * wh;
+                final float c = heights[idx];
+                slopeX[idx] = minmod(c - heights[idx - 1], heights[idx + 1] - c) * wh;
+            }
+            slopeX[row + last] = (heights[row + last] - heights[row + last - 1]) * wh;
+
+            // slopeZ: the z border test is loop-invariant, so pick the loop once per row.
+            if (z == 0) {
+                final int nextRow = row + tileSize;
+                for (int x = 0; x < tileSize; ++x) {
+                    slopeZ[row + x] = (heights[nextRow + x] - heights[row + x]) * wh;
+                }
+            } else if (z == last) {
+                final int prevRow = row - tileSize;
+                for (int x = 0; x < tileSize; ++x) {
+                    slopeZ[row + x] = (heights[row + x] - heights[prevRow + x]) * wh;
+                }
+            } else {
+                final int prevRow = row - tileSize;
+                final int nextRow = row + tileSize;
+                for (int x = 0; x < tileSize; ++x) {
+                    final float c = heights[row + x];
+                    slopeZ[row + x] = minmod(c - heights[prevRow + x], heights[nextRow + x] - c) * wh;
+                }
             }
         }
 
         final int worldBlockX = map.getBlockX();
         final int worldBlockZ = map.getBlockZ();
-
-        double statSlope = 0.0, statMask = 0.0, statRidge = 0.0;
-        int statCount = 0;
 
         final float slopeGateRange = Math.max(1e-5f, FLAT_SLOPE_FULL - FLAT_SLOPE_START);
 
@@ -239,6 +257,15 @@ public class Erosion implements Filter {
                     continue;
                 }
 
+                // Modifier is linear in its value argument and depends only on the cell (its relaxed height,
+                // terrain, river mask), so evaluate it once. A factor of exactly 0 (below ground, river
+                // centers) means the result is exactly 0, so skip all noise work. Note: skipped cells do not
+                // update cell.sediment, because that update depends on the octave loop below.
+                final float erosionFactor = this.modifier.modify(cell, 1.0F);
+                if (erosionFactor == 0.0F) {
+                    continue;
+                }
+
                 final float worldX = (float) (worldBlockX + x);
 
                 // Used ONLY for masking / sediment seeding, never as a height offset.
@@ -260,13 +287,6 @@ public class Erosion implements Filter {
 
                 float ridgeMapCombiMask = easeOut(slopeLen * RIDGE_SLOPE_SCALE * s.slopeOnsetRidge);
                 float ridgeMapFadeTarget = heightFade;
-
-                if (DEBUG_STATS) {
-                    statSlope += slopeLen;
-                    statMask += combiMask;
-                    statRidge += ridgeMapCombiMask;
-                    ++statCount;
-                }
 
                 float gullySlopeX = curSlopeX;
                 float gullySlopeZ = curSlopeZ;
@@ -333,28 +353,25 @@ public class Erosion implements Filter {
                     continue;
                 }
 
-                // Gate by slope, then cap the depth by what the slope can physically support.
-                float gated = accumulatedHeightDelta * flatGate;
-                final float maxDepth = MAX_DEPTH_PER_SLOPE * slopeLen * this.scaleBlocks;
-                gated = NoiseUtil.clamp(gated, -maxDepth, maxDepth);
+                cell.sediment = NoiseUtil.clamp(cell.sediment + ridgeMapFadeTarget * (1.0f - ridgeMapCombiMask), -1.0f, 1.0f);
+                // Up to 2.0 when sediment == -1, so the depth cap below must be applied AFTER this.
+                final float sedimentModifier = Math.max(MIN_SEDIMENT_MODIFIER, 1.0F - cell.sediment);
+
+                // Gate by slope, apply sediment, then cap by what the (saturated) slope can physically support.
+                // Saturating the slope keeps the cap finite on cliffs, where raw slope is 10-50 blocks/block.
+                final float capSlope = Math.min(slopeLen, MAX_SLOPE_FOR_CAP);
+                final float maxDepth = MAX_DEPTH_PER_SLOPE * capSlope * this.scaleBlocks;
+                final float gatedBlocks = NoiseUtil.clamp(
+                        accumulatedHeightDelta * flatGate * sedimentModifier,
+                        -maxDepth, maxDepth);
 
                 // Blocks -> this world's normalized height units.
-                final float deltaNormalized = gated / this.worldHeight;
+                final float deltaNormalized = gatedBlocks / this.worldHeight;
 
-                cell.sediment = NoiseUtil.clamp(cell.sediment + ridgeMapFadeTarget * (1.0f - ridgeMapCombiMask), -1.0f, 1.0f);
-                float sedimentModifier = Math.max(MIN_SEDIMENT_MODIFIER, 1.0F - cell.sediment);
-
-                float change = this.modifier.modify(cell, deltaNormalized) * sedimentModifier;
+                final float change = erosionFactor * deltaNormalized;
                 cell.heightErosion += change;
                 cell.height += change;
             }
-        }
-
-        if (DEBUG_STATS && statCount > 0) {
-            System.out.printf(
-                    "[Erosion] worldHeight=%s meanSlope(blocks/block)=%.4f meanInitialMask=%.4f meanInitialRidgeMask=%.4f cellsEroded=%d/%d%n",
-                    this.levels.worldHeight, statSlope / statCount, statMask / statCount, statRidge / statCount,
-                    statCount, cells.length);
         }
 
         // Keep land that was carved below the waterline at ground level, and keep heightErosion consistent.
@@ -373,11 +390,20 @@ public class Erosion implements Filter {
      * 4 neighbors) for the mask so spikes and pits are detected, and a smoothstep ramp so the
      * mask has no hard kinks. Commits to the cells once after all passes.
      */
-    private void relaxCliffs(final Cell[] cells, final float[] heights, final float[] next, final int mapSize) {
+    private void relaxCliffs(final Cell[] cells, final float[] heights, final float[] next, final float[] mods, final int mapSize) {
         final float minRelief = MIN_CLIFF_BLOCKS / this.worldHeight;
         final float maxRelief = MAX_CLIFF_BLOCKS / this.worldHeight;
         final float invRange = 1.0f / Math.max(1e-5f, maxRelief - minRelief);
         final int total = mapSize * mapSize;
+
+        // Modifier.modify depends only on per-cell state, and cell.height is not committed until after all
+        // passes, so its factor is identical in every pass. Evaluate it once here instead of once per pass.
+        // 0 marks cells that are masked, non-finite, or have a zero factor: they never change, so the passes
+        // skip them without reading their neighbors.
+        for (int i = 0; i < total; ++i) {
+            final Cell cell = cells[i];
+            mods[i] = (cell.erosionMask || !Float.isFinite(heights[i])) ? 0.0f : this.modifier.modify(cell, 1.0F);
+        }
 
         for (int pass = 0; pass < CLIFF_PASSES; ++pass) {
             for (int z = 0; z < mapSize; ++z) {
@@ -388,9 +414,9 @@ public class Erosion implements Filter {
                 for (int x = 0; x < mapSize; ++x) {
                     final int idx = row + x;
                     final float c = heights[idx];
-                    final Cell cell = cells[idx];
+                    final float m = mods[idx];
 
-                    if (cell.erosionMask || !Float.isFinite(c)) {
+                    if (m == 0.0f) {
                         next[idx] = c;
                         continue;
                     }
@@ -410,22 +436,35 @@ public class Erosion implements Filter {
                     final float mask = t * t * (3.0f - 2.0f * t); // smoothstep, no hard kinks
 
                     final float delta = (avg - c) * mask * CLIFF_RELAX_RATE;
-                    next[idx] = c + this.modifier.modify(cell, delta);
+                    next[idx] = c + m * delta;
                 }
             }
             System.arraycopy(next, 0, heights, 0, total);
         }
 
         // Commit to cells once, after all passes.
+        // Cells with a 0 factor were never changed, so there is nothing to commit for them.
         for (int i = 0; i < total; ++i) {
-            final Cell cell = cells[i];
             final float h = heights[i];
-            if (cell.erosionMask || !Float.isFinite(h)) {
+            if (mods[i] == 0.0f || !Float.isFinite(h)) {
                 continue;
             }
+            final Cell cell = cells[i];
             cell.heightErosion += (h - cell.height);
             cell.height = h;
         }
+    }
+
+    /**
+     * Minmod limiter on the backward and forward one-sided differences: if they disagree in sign, or
+     * either is zero, the result is 0; otherwise the one with the smaller magnitude wins.
+     * Pure and allocation-free, so it is safe to call from any thread and trivially inlined.
+     */
+    private static float minmod(final float back, final float fwd) {
+        if (back * fwd <= 0.0f) {
+            return 0.0f;
+        }
+        return Math.abs(back) < Math.abs(fwd) ? back : fwd;
     }
 
     /**
@@ -514,6 +553,7 @@ public class Erosion implements Filter {
     private static final class Scratch {
         float[] heights = new float[0];
         float[] relaxed = new float[0];   // Jacobi back-buffer for cliff relaxation
+        float[] relaxMod = new float[0];  // Modifier factor per cell, constant across relaxation passes
         float[] slopeX = new float[0];
         float[] slopeZ = new float[0];
         final float[] phacelleOut = new float[4];
@@ -523,6 +563,7 @@ public class Erosion implements Filter {
             if (this.heights.length < n) {
                 this.heights = new float[n];
                 this.relaxed = new float[n];
+                this.relaxMod = new float[n];
                 this.slopeX = new float[n];
                 this.slopeZ = new float[n];
             }
