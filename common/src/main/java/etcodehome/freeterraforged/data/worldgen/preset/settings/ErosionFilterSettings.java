@@ -20,7 +20,7 @@ public class ErosionFilterSettings {
             "gui.slider.erosionFilterStrengthMultiplier",
             0.001F,
             200.0F,
-            81.0FF
+            81.0F
     );
 
     public float gullySharpness;
