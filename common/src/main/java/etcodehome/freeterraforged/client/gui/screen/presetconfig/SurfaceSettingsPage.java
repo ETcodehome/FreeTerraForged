@@ -7,7 +7,6 @@ import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.network.chat.Component;
 import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
 import etcodehome.freeterraforged.client.gui.screen.page.LinkedPageScreen.Page;
-import etcodehome.freeterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.MiscellaneousSettings;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.SurfaceSettings;
@@ -37,13 +36,13 @@ public class SurfaceSettingsPage extends PresetEditorPage {
 		
 		Preset preset = this.preset.getPreset();
 		SurfaceSettings surface = preset.surface();
-		SurfaceSettings.Erosion erosion = surface.erosion();
+		SurfaceSettings.Scree scree = surface.scree();
 		MiscellaneousSettings miscellaneous = preset.miscellaneous();
 
 		// Erosion Decorator
 
-		this.erosionDecorator = PresetWidgets.createToggle(miscellaneous.erosionDecorator, FTFTranslationKeys.GUI_BUTTON_EROSION_DECORATOR, (button, value) -> {
-			miscellaneous.erosionDecorator = value;
+		this.erosionDecorator = PresetWidgets.createToggle(miscellaneous.screeDecorator, FTFTranslationKeys.GUI_BUTTON_EROSION_DECORATOR, (button, value) -> {
+			miscellaneous.screeDecorator = value;
 			this.rockSteepness.active = value;
 			this.screeSteepness.active = value;
 			this.dirtSteepness.active = value;
@@ -52,41 +51,41 @@ public class SurfaceSettingsPage extends PresetEditorPage {
 			this.dirtMin.active = value;
 			this.dirtVariance.active = value;
 		});
-		this.rockSteepness = PresetWidgets.createFloatSlider(erosion.rockSteepness, 0.0F, 3.0F, FTFTranslationKeys.GUI_SLIDER_ROCK_STEEPNESS, (slider, value) -> {
+		this.rockSteepness = PresetWidgets.createFloatSlider(scree.rockSteepness, 0.0F, 3.0F, FTFTranslationKeys.GUI_SLIDER_ROCK_STEEPNESS, (slider, value) -> {
 			value = Math.max(value, this.screeSteepness.getValue());
-			erosion.rockSteepness = (float) slider.scaleValue(value);
+			scree.rockSteepness = (float) slider.scaleValue(value);
 			return value;
 		});
-		this.screeSteepness = PresetWidgets.createFloatSlider(erosion.screeSteepness, 0.0F, 3.0F, FTFTranslationKeys.GUI_SLIDER_SCREE_STEEPNESS, (slider, value) -> {
+		this.screeSteepness = PresetWidgets.createFloatSlider(scree.screeSteepness, 0.0F, 3.0F, FTFTranslationKeys.GUI_SLIDER_SCREE_STEEPNESS, (slider, value) -> {
 			value = Math.max(value, this.dirtSteepness.getValue());
 			value = Math.min(value, this.rockSteepness.getValue());
-			erosion.screeSteepness = (float) slider.scaleValue(value);
+			scree.screeSteepness = (float) slider.scaleValue(value);
 			return value;
 		});
-		this.dirtSteepness = PresetWidgets.createFloatSlider(erosion.dirtSteepness, 0.0F, 3.0F, FTFTranslationKeys.GUI_SLIDER_DIRT_STEEPNESS, (slider, value) -> {
+		this.dirtSteepness = PresetWidgets.createFloatSlider(scree.dirtSteepness, 0.0F, 3.0F, FTFTranslationKeys.GUI_SLIDER_DIRT_STEEPNESS, (slider, value) -> {
 			value = Math.min(value, this.screeSteepness.getValue());
-			erosion.dirtSteepness = (float) slider.scaleValue(value);
+			scree.dirtSteepness = (float) slider.scaleValue(value);
 			return value;
 		});
 
 		// Transitions Decorator
 
-		this.rockVariance = PresetWidgets.createIntSlider(erosion.rockVariance, 0, 256, FTFTranslationKeys.GUI_SLIDER_ROCK_VARIANCE, (slider, value) -> {
-			erosion.rockVariance = (int) slider.scaleValue(value);
+		this.rockVariance = PresetWidgets.createIntSlider(scree.rockVariance, 0, 256, FTFTranslationKeys.GUI_SLIDER_ROCK_VARIANCE, (slider, value) -> {
+			scree.rockVariance = (int) slider.scaleValue(value);
 			return value;
 		});
-		this.rockMin = PresetWidgets.createIntSlider(erosion.rockMin, -1024, 1024, FTFTranslationKeys.GUI_SLIDER_ROCK_MIN, (slider, value) -> {
+		this.rockMin = PresetWidgets.createIntSlider(scree.rockMin, -1024, 1024, FTFTranslationKeys.GUI_SLIDER_ROCK_MIN, (slider, value) -> {
 			value = Math.max(value, this.dirtMin.getValue());
-			erosion.rockMin = (int) slider.scaleValue(value);
+			scree.rockMin = (int) slider.scaleValue(value);
 			return value;
 		});
-		this.dirtVariance = PresetWidgets.createIntSlider(erosion.dirtVariance, 0, 256, FTFTranslationKeys.GUI_SLIDER_DIRT_VARIANCE, (slider, value) -> {
-			erosion.dirtVariance = (int) slider.scaleValue(value);
+		this.dirtVariance = PresetWidgets.createIntSlider(scree.dirtVariance, 0, 256, FTFTranslationKeys.GUI_SLIDER_DIRT_VARIANCE, (slider, value) -> {
+			scree.dirtVariance = (int) slider.scaleValue(value);
 			return value;
 		});
-		this.dirtMin = PresetWidgets.createIntSlider(erosion.dirtMin, -1024, 1024, FTFTranslationKeys.GUI_SLIDER_DIRT_MIN, (slider, value) -> {
+		this.dirtMin = PresetWidgets.createIntSlider(scree.dirtMin, -1024, 1024, FTFTranslationKeys.GUI_SLIDER_DIRT_MIN, (slider, value) -> {
 			value = Math.min(value, this.rockMin.getValue());
-			erosion.dirtMin = (int) slider.scaleValue(value);
+			scree.dirtMin = (int) slider.scaleValue(value);
 			return value;
 		});
 

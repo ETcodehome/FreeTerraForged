@@ -32,7 +32,7 @@ import etcodehome.freeterraforged.world.worldgen.cell.rivermap.ContinentalHydrol
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.TileCache;
-import etcodehome.freeterraforged.world.worldgen.feature.ErodeFeature.Config;
+import etcodehome.freeterraforged.world.worldgen.feature.ScreeFeature.Config;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
 
@@ -41,7 +41,7 @@ import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
-public class ErodeFeature extends Feature<Config> {
+public class ScreeFeature extends Feature<Config> {
 
     // Internal fixed modifiers
     private static final float SEDIMENT_NOISE = 3F / 255F;
@@ -67,7 +67,7 @@ public class ErodeFeature extends Feature<Config> {
             new WeightedBlockEntry(Blocks.GRAVEL.defaultBlockState(), 1)
     ));
 
-    public ErodeFeature(Codec<Config> codec) {
+    public ScreeFeature(Codec<Config> codec) {
         super(codec);
     }
 

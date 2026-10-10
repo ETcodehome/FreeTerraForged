@@ -23,25 +23,22 @@ import etcodehome.freeterraforged.data.worldgen.preset.PresetNoiseRouterData;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetPlacedFeatures;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetStructureRuleData;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetWorldPresets;
-import etcodehome.freeterraforged.registries.FTFRegistries;
-import etcodehome.freeterraforged.world.worldgen.biome.modifier.BiomeModifier;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
-import etcodehome.freeterraforged.world.worldgen.structure.rule.StructureRule;
 
 import java.util.*;
 import java.util.stream.Stream;
 
-public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings caves, ClimateSettings climate, TerrainSettings terrain, RiverSettings rivers, FlowSettings flow, IslandSettings island, FilterSettings filters, MiscellaneousSettings miscellaneous, PresentationSettings presentation) {
+public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings caves, ClimateSettings climate, TerrainSettings terrain, RiverSettings rivers, FlowSettings flow, IslandSettings island, ErosionFilterSettings erosionFilters, MiscellaneousSettings miscellaneous, PresentationSettings presentation) {
 	public static final Codec<Preset> DIRECT_CODEC = RecordCodecBuilder.create(instance -> instance.group(
 			WorldSettings.CODEC.fieldOf("world").forGetter(Preset::world),
-			SurfaceSettings.CODEC.optionalFieldOf("surface", new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F))).forGetter(Preset::surface),
+			SurfaceSettings.CODEC.optionalFieldOf("surface", new SurfaceSettings(new SurfaceSettings.Scree(30, 140, 40, 95, 0.65F, 0.475F, 0.4F))).forGetter(Preset::surface),
 			CaveSettings.CODEC.optionalFieldOf("caves", new CaveSettings(0.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, true, false)).forGetter(Preset::caves),
 			ClimateSettings.CODEC.fieldOf("climate").forGetter(Preset::climate),
 			TerrainSettings.CODEC.fieldOf("terrain").forGetter(Preset::terrain),
 			RiverSettings.CODEC.fieldOf("rivers").forGetter(Preset::rivers),
 			FlowSettings.CODEC.optionalFieldOf("flow").xmap(optional -> optional.orElseGet(FlowSettings::makeDefault),Optional::of).forGetter(Preset::flow),
 			IslandSettings.CODEC.optionalFieldOf("island").xmap(optional -> optional.orElseGet(IslandSettings::makeDefault),Optional::of).forGetter(Preset::island),
-			FilterSettings.CODEC.fieldOf("filters").forGetter(Preset::filters),
+			ErosionFilterSettings.CODEC.optionalFieldOf("erosionFilters").xmap(optional -> optional.orElseGet(ErosionFilterSettings::makeDefault),Optional::of).forGetter(Preset::erosionFilters),
 			MiscellaneousSettings.CODEC.fieldOf("miscellaneous").forGetter(Preset::miscellaneous),
 			PresentationSettings.CODEC.optionalFieldOf("presentation").xmap(optional -> optional.orElseGet(PresentationSettings::makeDefault),Optional::of).forGetter(Preset::presentation)
 	).apply(instance, Preset::new));
@@ -50,7 +47,7 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 	public static final ResourceKey<Preset> KEY = FTFRegistries.createKey(FTFRegistries.PRESET, "preset");
 
 	public Preset copy() {
-		return new Preset(this.world.copy(), this.surface.copy(), this.caves.copy(), this.climate.copy(), this.terrain.copy(), this.rivers.copy(), this.flow.copy(), this.island.copy(), this.filters.copy(), this.miscellaneous.copy(), this.presentation.copy());
+		return new Preset(this.world.copy(), this.surface.copy(), this.caves.copy(), this.climate.copy(), this.terrain.copy(), this.rivers.copy(), this.flow.copy(), this.island.copy(), this.erosionFilters.copy(), this.miscellaneous.copy(), this.presentation.copy());
 	}
 
 	public HolderLookup.Provider buildPatch(HolderLookup.Provider registries) {

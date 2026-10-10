@@ -4,8 +4,6 @@ import etcodehome.freeterraforged.world.worldgen.noise.function.DistanceFunction
 import etcodehome.freeterraforged.data.worldgen.preset.settings.ClimateSettings.BiomeNoise;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.ClimateSettings.BiomeShape;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.ClimateSettings.RangeValue;
-import etcodehome.freeterraforged.data.worldgen.preset.settings.FilterSettings.Erosion;
-import etcodehome.freeterraforged.data.worldgen.preset.settings.FilterSettings.Smoothing;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.RiverSettings.Lake;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.RiverSettings.River;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.RiverSettings.Wetland;
@@ -28,7 +26,7 @@ public class Presets {
 				new ControlPoints(0.0F, 0.074F, 0.1F, 0.25F, 0.327F, 0.448F, 0.502F),
 				new Properties(SpawnType.CONTINENT_CENTER, 320, 64, 63, -54, 63, 0, 0)
 			),
-			new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
+			new SurfaceSettings(new SurfaceSettings.Scree(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
 			new CaveSettings(0.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, true, false),
 			new ClimateSettings(
 				new RangeValue(0, 6, 2, 0.0F, 0.98F, 0.0F, 0.05F),
@@ -60,10 +58,7 @@ public class Presets {
 			),
 			FlowSettings.makeDefault(),
 			IslandSettings.makeDefault(),
-			new FilterSettings(
-				new Erosion(135, 12, 0.7F, 0.7F, 0.5F, 0.5F),
-				new Smoothing(1, 1.8F, 0.9F)
-			),
+			ErosionFilterSettings.makeDefault(),
 			new MiscellaneousSettings(true, 600, true, true, true, false, true, true, true, true, true, 0.4F, 0.4F),
 			PresentationSettings.makeDefault()
 		);
@@ -76,7 +71,7 @@ public class Presets {
 				new ControlPoints(0.0F, 0.074F, 0.1F, 0.25F, 0.326F, 0.448F, 0.5F),
 				new Properties(SpawnType.WORLD_ORIGIN, 320, 64, 63, -54, 63, 0, 0)
 			), 
-			new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
+			new SurfaceSettings(new SurfaceSettings.Scree(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
 			new CaveSettings(1.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.15F, 0.07F, 0.021F, true, false),
 			new ClimateSettings(
 				new RangeValue(0, 4, 1, 0.0F, 0.98F, 0.05F, 0.0F),
@@ -108,10 +103,7 @@ public class Presets {
 			),
 			FlowSettings.makeDefault(),
 			IslandSettings.makeDefault(),
-			new FilterSettings(
-				new Erosion(100, 12, 0.699F, 0.699F, 0.5F, 0.5F),
-				new Smoothing(2, 1.8F, 0.75F)
-			),
+			ErosionFilterSettings.makeDefault(),
 			new MiscellaneousSettings(false, 600, false, true, false, false, false, false, true, true, true, 1.0F, 0.75F),
 			PresentationSettings.makeDefault()
 		);
@@ -124,7 +116,7 @@ public class Presets {
 				new ControlPoints(0.0F, 0.074F, 0.1F, 0.25F, 0.326F, 0.448F, 0.5F),
 				new Properties(SpawnType.CONTINENT_CENTER, 320, 64, 63, -54, 63, 0, 0)
 			),
-			new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
+			new SurfaceSettings(new SurfaceSettings.Scree(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
 			new CaveSettings(0.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, true, false),
 			new ClimateSettings(
 				new RangeValue(0, 7, 1, 0.0F, 1.0F, -0.004F, 0.0F),
@@ -156,10 +148,7 @@ public class Presets {
 			),
 			FlowSettings.makeDefault(),
 			IslandSettings.makeDefault(),
-			new FilterSettings(
-				new Erosion(175, 12, 0.648F, 0.657F, 0.5F, 0.5F),
-				new Smoothing(1, 1.855F, 0.916F)
-			),
+			ErosionFilterSettings.makeDefault(),
 			new MiscellaneousSettings(true, 684, true, true, true, false, true, true, true, true, false, 0.853F, 0.855F),
 			PresentationSettings.makeDefault()
 		); 
@@ -172,7 +161,7 @@ public class Presets {
 				new ControlPoints(0.0F, 0.074F, 0.1F, 0.25F, 0.326F, 0.448F, 0.5F),
 				new Properties(SpawnType.CONTINENT_CENTER, 320, 64, 63, -54, 63, 0, 0)
 			),
-			new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
+			new SurfaceSettings(new SurfaceSettings.Scree(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
 			new CaveSettings(0.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, false, false),
 			new ClimateSettings(
 				new RangeValue(0, 4, 1, 0.0F, 0.98F, 0.05F, 0.0F),
@@ -204,10 +193,7 @@ public class Presets {
 			),
 			FlowSettings.makeDefault(),
 			IslandSettings.makeDefault(),
-			new FilterSettings(
-				new Erosion(100, 12, 0.699F, 0.699F, 0.5F, 0.5F),
-				new Smoothing(2, 1.799F, 0.75F)
-			),
+			ErosionFilterSettings.makeDefault(),
 			new MiscellaneousSettings(true, 600, false, true, true, false, true, true, true, true, true, 1.0F, 0.75F),
 			PresentationSettings.makeDefault()
 		);
@@ -220,7 +206,7 @@ public class Presets {
 				new ControlPoints(0.0F, 0.074F, 0.1F, 0.25F, 0.326F, 0.448F, 0.5F),
 				new Properties(SpawnType.CONTINENT_CENTER, 320, 64, 63, -54, 63, 0, 0)
 			), 
-			new SurfaceSettings(new SurfaceSettings.Erosion(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
+			new SurfaceSettings(new SurfaceSettings.Scree(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
 			new CaveSettings(0.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, true, false),
 			new ClimateSettings(
 				new RangeValue(0, 4, 2, 0.0F, 1.0F, 0.097F, 0.0F),
@@ -252,10 +238,7 @@ public class Presets {
 			),
 			FlowSettings.makeDefault(),
 			IslandSettings.makeDefault(),
-			new FilterSettings(
-				new Erosion(165, 15, 0.612F, 0.652F, 0.5F, 0.5F),
-				new Smoothing(1, 1.799F, 0.898F)
-			),
+			ErosionFilterSettings.makeDefault(),
 			new MiscellaneousSettings(true, 721, true, true, true, false, true, true, true, true, false, 0.902F, 0.945F),
 			PresentationSettings.makeDefault()
 		);
@@ -293,7 +276,7 @@ public class Presets {
 								0,
 								0)
 				),
-				new SurfaceSettings(new SurfaceSettings.Erosion(30,
+				new SurfaceSettings(new SurfaceSettings.Scree(30,
 						250,
 						20,
 						10,
@@ -468,17 +451,7 @@ public class Presets {
 						1.0F,
 						0.5F
 				),
-				new FilterSettings(
-
-						new Erosion(38,
-								2,
-								0.3F,
-								0.3F,
-								0.2F,
-								0.279F),
-
-						new Smoothing(0, 0.0F, 0.0F)
-				),
+				ErosionFilterSettings.makeDefault(),
 				new MiscellaneousSettings(true,
 						1000,
 						true,
@@ -506,7 +479,7 @@ public class Presets {
 			RiverSettings.makeDefault(),
 			FlowSettings.makeDefault(),
 			IslandSettings.makeDefault(),
-			FilterSettings.makeDefault(),
+			ErosionFilterSettings.makeDefault(),
 			MiscellaneousSettings.makeDefault(),
 			PresentationSettings.makeDefault()
 		);

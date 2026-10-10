@@ -26,6 +26,7 @@ public class Cell {
      */
     public float height;
     public float heightErosion;
+    public float preErosionHeight;
     public float sediment;
     public float gradient;
     public float continentId;
