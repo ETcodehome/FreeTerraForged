@@ -1,24 +1,30 @@
 package etcodehome.freeterraforged.client.gui.widget;
 
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.MutableComponent;
 import org.jetbrains.annotations.Nullable;
 
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 
-//TODO this should be cleaned up
 public class Slider extends AbstractSliderButton {
 	private double min;
 	private double max;
+	private final float defaultValue;
+	private final boolean highlightModified;
 	private Component name;
 	private Format format;
 	@Nullable
 	private Callback callback;
 
-	public Slider(int x, int y, int width, int height, float initialValue, float min, float max, Component name, Format format, @Nullable Callback callback) {
+	public Slider(int x, int y, int width, int height, float initialValue, float min, float max, Component name, Format format, @Nullable Callback callback, boolean highlightModified, float defaultValue) {
 		super(x, y, width, height, CommonComponents.EMPTY, 0.0);
 		this.name = name;
+		this.defaultValue = defaultValue;
+		this.highlightModified = highlightModified;
 		this.format = format;
 		this.min = min;
 		this.max = max;
@@ -41,6 +47,10 @@ public class Slider extends AbstractSliderButton {
 
 	public double getMax() {
 		return this.max;
+	}
+
+	public float getDefaultValue() {
+		return this.defaultValue;
 	}
 
 	public void setRange(double min, double max) {
@@ -71,6 +81,17 @@ public class Slider extends AbstractSliderButton {
 	}
 
 	@Override
+	public boolean mouseClicked(double mouseX, double mouseY, int button) {
+		// Reset to default value on Shift + Left Click
+		if (button == 0 && this.clicked(mouseX, mouseY) && Screen.hasShiftDown()) {
+			this.setValue(this.getSliderValue(this.defaultValue));
+			this.applyValue();
+			return true;
+		}
+		return super.mouseClicked(mouseX, mouseY, button);
+	}
+
+	@Override
 	public void applyValue() {
 		if (this.callback != null) {
 			this.setValue(this.callback.apply(this, this.value));
@@ -79,7 +100,15 @@ public class Slider extends AbstractSliderButton {
 
 	@Override
 	protected void updateMessage() {
-		this.setMessage(CommonComponents.optionNameValue(this.name, Component.literal(this.format.getMessage(this.scaleValue(this.value)))));
+		double scaledCurrent = this.scaleValue(this.value);
+		boolean isModified = this.highlightModified && Math.abs(scaledCurrent - this.format.scale(this.defaultValue)) > 1e-5;
+
+		MutableComponent valueComponent = Component.literal(this.format.getMessage(scaledCurrent));
+		if (isModified) {
+			valueComponent.withStyle(ChatFormatting.GOLD);
+		}
+
+		this.setMessage(CommonComponents.optionNameValue(this.name, valueComponent));
 	}
 
 	public static enum Format {

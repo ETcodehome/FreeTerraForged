@@ -4,6 +4,7 @@ import java.util.Optional;
 
 import etcodehome.freeterraforged.client.gui.widget.Slider;
 import etcodehome.freeterraforged.client.gui.widget.ValueButton;
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
 import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.network.chat.Component;
 import etcodehome.freeterraforged.client.data.FTFTranslationKeys;

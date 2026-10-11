@@ -41,14 +41,15 @@ final class PresetWidgets {
 		return new Label(-1, -1, -1, -1, text);
 	}
 
-	private static Slider createSlider(float initial, float min, float max, String text, Slider.Format format, Slider.Callback callback) {
-		Slider slider = new Slider(-1, -1, -1, -1, initial, min, max, Component.translatable(text), format, callback);
+	private static Slider createSlider(float initial, float min, float max, String text, Slider.Format format, Slider.Callback callback, boolean highlightModified, float defaultValue) {
+		Slider slider = new Slider(-1, -1, -1, -1, initial, min, max, Component.translatable(text), format, callback, highlightModified, defaultValue);
 		slider.setTooltip(Tooltips.create(Tooltips.translationKey(text)));
 		return slider;
 	}
 
+	// Bridging interface until settings migration is completed to use only GenericFloatSetting passes.
 	public static Slider createFloatSlider(float initial, float min, float max, String text, Slider.Callback callback) {
-		return createSlider(initial, min, max, text, Slider.Format.FLOAT, callback);
+		return createSlider(initial, min, max, text, Slider.Format.FLOAT, callback, false, 0.0F);
 	}
 
 	public static Slider createFloatSlider(
@@ -70,12 +71,15 @@ final class PresetWidgets {
 						onChange.run();
 					}
 					return value;
-				}
+				},
+				true,
+				setting.defaultValue
 		);
 	}
 
+	// Bridging interface until settings migration is completed to use only GenericIntSetting passes.
 	public static Slider createIntSlider(int initial, int min, int max, String text, Slider.Callback callback) {
-		return createSlider(initial, min, max, text, Slider.Format.INT, callback);
+		return createSlider(initial, min, max, text, Slider.Format.INT, callback, false, 0.0F);
 	}
 
 	public static Slider createIntSlider(
@@ -97,7 +101,9 @@ final class PresetWidgets {
 						onChange.run();
 					}
 					return value;
-				}
+				},
+				true,
+				setting.defaultValue
 		);
 	}
 
