@@ -33,6 +33,18 @@ import etcodehome.freeterraforged.world.worldgen.util.Seed;
  * Cliff relaxation runs as a separate double-buffered pre-pass, so the erosion pass
  * operates on the already-smoothed terrain.
  *
+ * CLIFF ZONE: relaxation turns a sheer step into a short ramp. Minmod reads real slopes on that ramp
+ * (and only there), which is the one place the erosion gate opens next to a cliff, and the slope it sees
+ * is an artifact of the relaxation rather than real terrain. relaxCliffs therefore records a per-cell
+ * "cliff zone" weight (0..1) covering the ramp. Inside the zone the erosion pass:
+ *  - caps the carve by the local RELIEF (not just the slope), so a ramp can't be given gullies deeper
+ *    than the height difference actually present around it,
+ *  - clamps the final height into the local [min, max] of the relaxed terrain, so rim cells can't rise
+ *    above the plateau and base cells can't dip below the floor,
+ *  - stops sediment from accumulating / doubling the carve (the sediment term is phase-correlated with
+ *    the gully noise, which is what produced the wave pattern).
+ * Outside the zone (weight 0) behaviour is identical to the unmodified filter.
+ *
  * Units: the erosion math runs entirely in BLOCKS.
  *  - Wavelength: s.scale * BASE_WAVELENGTH_BLOCKS blocks (octave n: divided by lacunarity^n).
  *  - Depth: strength * wavelength, in blocks, so depth-to-wavelength ratio is fixed.
@@ -99,6 +111,20 @@ public class Erosion implements Filter {
     private static final float MIN_CLIFF_BLOCKS = 3.0f;
     private static final float MAX_CLIFF_BLOCKS = 8.0f;
 
+    /**
+     * Inside the cliff zone, the carve is limited to this fraction of the local relief (max - min height
+     * over the window, in blocks). Lower = tamer gullies on cliff faces; raise it if they look too timid.
+     * Only has effect where the cliff zone weight is > 0.
+     */
+    private static final float CLIFF_RELIEF_CAP = 0.35f;
+
+    /**
+     * Radius (cells) of the square window used to measure local relief inside the cliff zone.
+     * Should be at least as wide as the ramp relaxation produces (about CLIFF_PASSES cells either side
+     * of the step) or the window won't see both the plateau and the floor.
+     */
+    private static final int CLIFF_RELIEF_RADIUS = 2;
+
     // Prevents sediment from fully zeroing the carve.
     private static final float MIN_SEDIMENT_MODIFIER = 0.2f;
 
@@ -164,6 +190,7 @@ public class Erosion implements Filter {
         final float[] heights = scratch.heights;
         final float[] relaxed = scratch.relaxed;
         final float[] relaxMod = scratch.relaxMod;
+        final float[] cliffZone = scratch.cliffZone;
         final float[] slopeX = scratch.slopeX;
         final float[] slopeZ = scratch.slopeZ;
         final float[] phacelleOut = scratch.phacelleOut;
@@ -178,8 +205,9 @@ public class Erosion implements Filter {
             heights[i] = cells[i].height;
         }
 
-        // Step 1b: Relax cliffs BEFORE computing slopes, so erosion sees the smoothed terrain
-        relaxCliffs(cells, heights, relaxed, relaxMod, tileSize);
+        // Step 1b: Relax cliffs BEFORE computing slopes, so erosion sees the smoothed terrain.
+        // Also fills cliffZone with the per-cell weight of the ramp the relaxation created.
+        relaxCliffs(cells, heights, relaxed, relaxMod, cliffZone, tileSize);
 
         // Step 2: Compute slopes (from relaxed heights) with clamped boundary checks.
         // Multiplying by worldHeight gives blocks of rise per block of run.
@@ -268,6 +296,9 @@ public class Erosion implements Filter {
 
                 final float worldX = (float) (worldBlockX + x);
 
+                // Weight of the relaxation-created ramp at this cell (0 = ordinary terrain).
+                final float zone = cliffZone[idx];
+
                 // Used ONLY for masking / sediment seeding, never as a height offset.
                 final float heightFade = NoiseUtil.clamp((baseHeight - HEIGHT_MIDPOINT) * 2.0f, -1.0f, 1.0f);
 
@@ -353,14 +384,44 @@ public class Erosion implements Filter {
                     continue;
                 }
 
-                cell.sediment = NoiseUtil.clamp(cell.sediment + ridgeMapFadeTarget * (1.0f - ridgeMapCombiMask), -1.0f, 1.0f);
+                // Sediment: inside the cliff zone the update is faded out, because it is driven by the same
+                // phase-correlated noise as the gullies and would otherwise double the carve on the ramp.
+                final float sedimentUpdate = ridgeMapFadeTarget * (1.0f - ridgeMapCombiMask) * (1.0f - zone);
+                cell.sediment = NoiseUtil.clamp(cell.sediment + sedimentUpdate, -1.0f, 1.0f);
                 // Up to 2.0 when sediment == -1, so the depth cap below must be applied AFTER this.
-                final float sedimentModifier = Math.max(MIN_SEDIMENT_MODIFIER, 1.0F - cell.sediment);
+                // In the cliff zone the multiplier is blended back towards neutral (1.0).
+                final float sedimentModifier = lerp(
+                        Math.max(MIN_SEDIMENT_MODIFIER, 1.0F - cell.sediment),
+                        1.0f,
+                        zone);
 
                 // Gate by slope, apply sediment, then cap by what the (saturated) slope can physically support.
                 // Saturating the slope keeps the cap finite on cliffs, where raw slope is 10-50 blocks/block.
                 final float capSlope = Math.min(slopeLen, MAX_SLOPE_FOR_CAP);
-                final float maxDepth = MAX_DEPTH_PER_SLOPE * capSlope * this.scaleBlocks;
+                float maxDepth = MAX_DEPTH_PER_SLOPE * capSlope * this.scaleBlocks;
+
+                // Local range of the relaxed terrain. Only measured inside the cliff zone.
+                float localLo = baseHeight;
+                float localHi = baseHeight;
+                if (zone > 0.0f) {
+                    final int zMin = Math.max(0, z - CLIFF_RELIEF_RADIUS);
+                    final int zMax = Math.min(last, z + CLIFF_RELIEF_RADIUS);
+                    final int xMin = Math.max(0, x - CLIFF_RELIEF_RADIUS);
+                    final int xMax = Math.min(last, x + CLIFF_RELIEF_RADIUS);
+                    for (int wz = zMin; wz <= zMax; ++wz) {
+                        final int wRow = wz * tileSize;
+                        for (int wx = xMin; wx <= xMax; ++wx) {
+                            final float h = heights[wRow + wx];
+                            if (h < localLo) localLo = h;
+                            if (h > localHi) localHi = h;
+                        }
+                    }
+                    // The carve can't exceed a fraction of the relief that actually exists around this cell.
+                    final float reliefBlocks = (localHi - localLo) * wh;
+                    final float reliefDepth = Math.min(maxDepth, CLIFF_RELIEF_CAP * reliefBlocks);
+                    maxDepth = lerp(maxDepth, reliefDepth, zone);
+                }
+
                 final float gatedBlocks = NoiseUtil.clamp(
                         accumulatedHeightDelta * flatGate * sedimentModifier,
                         -maxDepth, maxDepth);
@@ -368,7 +429,15 @@ public class Erosion implements Filter {
                 // Blocks -> this world's normalized height units.
                 final float deltaNormalized = gatedBlocks / this.worldHeight;
 
-                final float change = erosionFactor * deltaNormalized;
+                float change = erosionFactor * deltaNormalized;
+
+                // Hard bound: inside the cliff zone the result may not leave the local range of the relaxed
+                // terrain, so no spikes above the rim and no pits below the base.
+                if (zone > 0.0f) {
+                    final float bounded = NoiseUtil.clamp(baseHeight + change, localLo, localHi) - baseHeight;
+                    change = lerp(change, bounded, zone);
+                }
+
                 cell.heightErosion += change;
                 cell.height += change;
             }
@@ -389,8 +458,19 @@ public class Erosion implements Filter {
      * Double-buffered (Jacobi) cliff relaxation. Uses local relief (max - min over the cell and its
      * 4 neighbors) for the mask so spikes and pits are detected, and a smoothstep ramp so the
      * mask has no hard kinks. Commits to the cells once after all passes.
+     *
+     * Also fills {@code zone} with the cliff zone weight: the strongest relief mask any pass applied to
+     * the cell, spread outward by CLIFF_PASSES cells with a linear falloff so it covers the whole ramp
+     * the relaxation produces.
      */
-    private void relaxCliffs(final Cell[] cells, final float[] heights, final float[] next, final float[] mods, final int mapSize) {
+    private void relaxCliffs(
+            final Cell[] cells,
+            final float[] heights,
+            final float[] next,
+            final float[] mods,
+            final float[] zone,
+            final int mapSize
+    ) {
         final float minRelief = MIN_CLIFF_BLOCKS / this.worldHeight;
         final float maxRelief = MAX_CLIFF_BLOCKS / this.worldHeight;
         final float invRange = 1.0f / Math.max(1e-5f, maxRelief - minRelief);
@@ -404,6 +484,8 @@ public class Erosion implements Filter {
             final Cell cell = cells[i];
             mods[i] = (cell.erosionMask || !Float.isFinite(heights[i])) ? 0.0f : this.modifier.modify(cell, 1.0F);
         }
+
+        java.util.Arrays.fill(zone, 0, total, 0.0f);
 
         for (int pass = 0; pass < CLIFF_PASSES; ++pass) {
             for (int z = 0; z < mapSize; ++z) {
@@ -435,6 +517,10 @@ public class Erosion implements Filter {
                     final float t = NoiseUtil.clamp((hi - lo - minRelief) * invRange, 0.0f, 1.0f);
                     final float mask = t * t * (3.0f - 2.0f * t); // smoothstep, no hard kinks
 
+                    if (mask > zone[idx]) {
+                        zone[idx] = mask;
+                    }
+
                     final float delta = (avg - c) * mask * CLIFF_RELAX_RATE;
                     next[idx] = c + m * delta;
                 }
@@ -452,6 +538,46 @@ public class Erosion implements Filter {
             final Cell cell = cells[i];
             cell.heightErosion += (h - cell.height);
             cell.height = h;
+        }
+
+        // Spread the zone outward so it covers the full ramp, not just the cells that were detected as
+        // cliffs. `next` is free again here, so it doubles as the temp buffer for the separable max.
+        dilateZone(zone, next, mapSize, CLIFF_PASSES);
+    }
+
+    /**
+     * Separable max-dilation with a linear falloff: each cell takes the largest of (neighbor value *
+     * (1 - distance / (radius + 1))) over a square window. Result is written back into {@code zone}.
+     */
+    private static void dilateZone(final float[] zone, final float[] tmp, final int size, final int radius) {
+        final int last = size - 1;
+        final float invReach = 1.0f / (radius + 1.0f);
+
+        // Horizontal pass: zone -> tmp
+        for (int z = 0; z < size; ++z) {
+            final int row = z * size;
+            for (int x = 0; x < size; ++x) {
+                float best = 0.0f;
+                for (int k = -radius; k <= radius; ++k) {
+                    final int xx = Math.min(last, Math.max(0, x + k));
+                    final float v = zone[row + xx] * (1.0f - Math.abs(k) * invReach);
+                    if (v > best) best = v;
+                }
+                tmp[row + x] = best;
+            }
+        }
+
+        // Vertical pass: tmp -> zone
+        for (int z = 0; z < size; ++z) {
+            for (int x = 0; x < size; ++x) {
+                float best = 0.0f;
+                for (int k = -radius; k <= radius; ++k) {
+                    final int zz = Math.min(last, Math.max(0, z + k));
+                    final float v = tmp[zz * size + x] * (1.0f - Math.abs(k) * invReach);
+                    if (v > best) best = v;
+                }
+                zone[z * size + x] = best;
+            }
         }
     }
 
@@ -552,8 +678,9 @@ public class Erosion implements Filter {
     // Per thread scratch storage.
     private static final class Scratch {
         float[] heights = new float[0];
-        float[] relaxed = new float[0];   // Jacobi back-buffer for cliff relaxation
+        float[] relaxed = new float[0];   // Jacobi back-buffer for cliff relaxation (also temp for zone dilation)
         float[] relaxMod = new float[0];  // Modifier factor per cell, constant across relaxation passes
+        float[] cliffZone = new float[0]; // Per-cell weight (0..1) of the ramp created by cliff relaxation
         float[] slopeX = new float[0];
         float[] slopeZ = new float[0];
         final float[] phacelleOut = new float[4];
@@ -564,6 +691,7 @@ public class Erosion implements Filter {
                 this.heights = new float[n];
                 this.relaxed = new float[n];
                 this.relaxMod = new float[n];
+                this.cliffZone = new float[n];
                 this.slopeX = new float[n];
                 this.slopeZ = new float[n];
             }
