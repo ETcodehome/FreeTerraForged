@@ -7,6 +7,7 @@ import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.TileCache;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
@@ -144,11 +145,13 @@ public class FtfCommands {
                     for (int z = 0; z < h; z++) {
                         int rx = generatorContext.cache.chunkToTile((startX + x) >> 4);
                         int rz = generatorContext.cache.chunkToTile((startZ + z) >> 4);
-                        Tile tile = generatorContext.cache.provide(rx, rz);
-                        Cell cell = tile.lookup(startX + x, startZ + z);
-                        float height = generatorContext.levels.getNormalizedElevation(cell.height);
-                        int gray = (int) (Math.clamp(height, 0, 1) * 65356);
-                        raster.setSample(x,z,0,gray);
+                        try (TileCache.Lease acquire = generatorContext.cache.acquire(rx, rz)) {
+                            Tile tile = acquire.tile();
+                            Cell cell = tile.lookup(startX + x, startZ + z);
+                            float height = generatorContext.levels.getNormalizedElevation(cell.height);
+                            int gray = (int) (Math.clamp(height, 0, 1) * 65356);
+                            raster.setSample(x,z,0,gray);
+                        }
                     }
                 }
 
