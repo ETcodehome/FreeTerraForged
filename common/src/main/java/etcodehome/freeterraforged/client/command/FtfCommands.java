@@ -146,7 +146,7 @@ public class FtfCommands {
                         int rz = generatorContext.cache.chunkToTile((startZ + z) >> 4);
                         Tile tile = generatorContext.cache.provide(rx, rz);
                         Cell cell = tile.lookup(startX + x, startZ + z);
-                        float height = cell.height;
+                        float height = generatorContext.levels.getNormalizedElevation(cell.height);
                         int gray = (int) (Math.clamp(height, 0, 1) * 65356);
                         raster.setSample(x,z,0,gray);
                     }

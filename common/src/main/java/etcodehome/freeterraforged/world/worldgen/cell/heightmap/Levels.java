@@ -71,4 +71,8 @@ public class Levels {
     public float getNormalizedInlandElevation(float rawCellHeight) {
         return (scale(rawCellHeight) - waterLevel) / (float) (worldHeight - waterLevel);
     }
+
+    public float getNormalizedElevation(float rawCellHeight) {
+        return (scale(rawCellHeight)) / (float) worldHeight;
+    }
 }
