@@ -65,7 +65,7 @@ public class DecorateSnowFeature extends Feature<Config> {
 				Noise rand = Noises.white(heightmap.climate().randomSeed(), 1);
 				BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 				Config config = placeContext.config();
-				ErodeFeature.Config erodeConfig = config.erodeConfig();
+				ScreeFeature.Config erodeConfig = config.erodeConfig();
 			
 			for(int x = 0; x < 16; x++) {
 				for(int z = 0; z < 16; z++) {
@@ -125,7 +125,7 @@ public class DecorateSnowFeature extends Feature<Config> {
 		}
 	}
 
-    private static boolean snowErosion(ErodeFeature.Config erodeConfig, float x, float z, float steepness, float height) {
+    private static boolean snowErosion(ScreeFeature.Config erodeConfig, float x, float z, float steepness, float height) {
         return steepness > erodeConfig.rockSteepness() || (steepness > SNOW_ROCK_STEEPNESS && height > SNOW_ROCK_HEIGHT) || (steepness > erodeConfig.dirtSteepness() && height > ColumnDecorator.sampleNoise(x, z, erodeConfig.dirtVar(), erodeConfig.dirtMin()));
     }
 
@@ -201,11 +201,11 @@ public class DecorateSnowFeature extends Feature<Config> {
         return property.getPossibleValues().stream().max(Integer::compareTo).orElse(0);
     }
 
-	public record Config(boolean erode, boolean smooth, ErodeFeature.Config erodeConfig) implements FeatureConfiguration {
+	public record Config(boolean erode, boolean smooth, ScreeFeature.Config erodeConfig) implements FeatureConfiguration {
 		public static final Codec<Config> CODEC = RecordCodecBuilder.create(instance -> instance.group(
 			Codec.BOOL.fieldOf("erode").forGetter(Config::erode),
 			Codec.BOOL.fieldOf("smooth").forGetter(Config::smooth),
-			ErodeFeature.Config.CODEC.fieldOf("erode_config").forGetter(Config::erodeConfig)
+			ScreeFeature.Config.CODEC.fieldOf("erode_config").forGetter(Config::erodeConfig)
 		).apply(instance, Config::new));
 	}
 }

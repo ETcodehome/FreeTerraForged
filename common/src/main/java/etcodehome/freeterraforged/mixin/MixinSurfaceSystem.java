@@ -19,6 +19,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import net.minecraft.core.BlockPos;
@@ -39,14 +40,8 @@ import net.minecraft.world.level.levelgen.SurfaceRules;
 import net.minecraft.world.level.levelgen.SurfaceSystem;
 import net.minecraft.world.level.levelgen.WorldGenerationContext;
 import etcodehome.freeterraforged.FTFCommon;
-import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
-import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
-import etcodehome.freeterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
-import etcodehome.freeterraforged.world.worldgen.cell.rivermap.river.RiverCarverSettings;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.TileCache;
-import etcodehome.freeterraforged.world.worldgen.surface.FTFSurfaceSystem;
-import etcodehome.freeterraforged.world.worldgen.surface.rule.StrataRule;
 
 @Mixin(SurfaceSystem.class)
 @Implements(@Interface(iface = FTFSurfaceSystem.class, prefix = FTFCommon.MOD_ID + "$FTFSurfaceSystem$"))
@@ -63,6 +58,17 @@ class MixinSurfaceSystem {
 	)
 	public void SurfaceSystem(RandomState randomState, BlockState blockState, int i, PositionalRandomFactory positionalRandomFactory, CallbackInfo callback) {
 		this.randomState = randomState;
+	}
+
+	// Sanitize Y parameter passed into getBand to prevent negative array indexing in Badlands terracotta bands
+	@ModifyVariable(
+			method = "getBand",
+			at = @At("HEAD"),
+			ordinal = 1,
+			argsOnly = true
+	)
+	private int freeterraforged$safeYForBadlandsBand(int y) {
+		return Math.floorMod(y, 192) + 3840;
 	}
 
 	// INJECT AT HEAD to carve out rivers and lakes before surface rules run

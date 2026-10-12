@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import etcodehome.freeterraforged.world.worldgen.feature.ErodeFeature;
+import etcodehome.freeterraforged.world.worldgen.feature.ScreeFeature;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.Holder;
 import net.minecraft.core.SectionPos;
@@ -46,7 +46,7 @@ public record SurfaceColumnPlan(
 		if (steps.size() > RAW) {
 			for (PlacedFeature feature : steps.get(RAW).features()) {
 				// Only this exact implementation is known to be chunk-local and placement-independent.
-				if (feature.feature().value().feature().getClass() == ErodeFeature.class
+				if (feature.feature().value().feature().getClass() == ScreeFeature.class
 					&& feature.placement().isEmpty()) eligible.add(feature);
 			}
 		}

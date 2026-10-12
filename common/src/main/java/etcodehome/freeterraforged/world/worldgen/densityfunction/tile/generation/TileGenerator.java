@@ -153,16 +153,12 @@ public class TileGenerator {
 				}
 			}
 			return CompletableFuture.allOf(futures).thenApply((v) -> {
-				this.filters.apply(tile, true);
+				this.filters.apply(tile);
 				return tile;
 			}).whenComplete((result, throwable) -> this.finishGeneration(tile, throwable));
 		} catch (RuntimeException | Error failure) {
 			return this.failAfterScheduledWork(tile, futures, submitted, failure);
 		}
-	}
-	
-	public CompletableFuture<Tile> generateZoomed(float centerX, float centerZ, float zoom, boolean applyOptionalFilters) {
-		return this.generateZoomed(centerX, centerZ, zoom, applyOptionalFilters, () -> false);
 	}
 
 	/** Generates a preview tile while allowing superseded UI requests to stop work promptly. */
@@ -170,11 +166,10 @@ public class TileGenerator {
 		float centerX,
 		float centerZ,
 		float zoom,
-		boolean applyOptionalFilters,
 		BooleanSupplier cancelled
 	) {
 		return this.submitGeneration(0, 0, cancelled, tile ->
-			this.generateZoomedTile(tile, centerX, centerZ, zoom, applyOptionalFilters, cancelled)
+			this.generateZoomedTile(tile, centerX, centerZ, zoom, cancelled)
 		);
 	}
 
@@ -183,7 +178,6 @@ public class TileGenerator {
 		float centerX,
 		float centerZ,
 		float zoom,
-		boolean applyOptionalFilters,
 		BooleanSupplier cancelled
 	) {
 		CompletableFuture<?>[] futures = new CompletableFuture<?>[this.batchCount * this.batchCount];
@@ -226,7 +220,7 @@ public class TileGenerator {
 			}
 			return CompletableFuture.allOf(futures).thenApply((v) -> {
 				checkCancelled(cancelled);
-				this.filters.apply(tile, applyOptionalFilters);
+				this.filters.apply(tile);
 				checkCancelled(cancelled);
 				return tile;
 			}).whenComplete((result, throwable) -> this.finishGeneration(tile, throwable));

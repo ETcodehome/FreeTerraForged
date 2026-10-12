@@ -16,7 +16,7 @@ public class PresetManager {
         public static RiverSettings riverSettings = RiverSettings.makeDefault();
         public static FlowSettings flowSettings = FlowSettings.makeDefault();
         public static IslandSettings islandSettings = IslandSettings.makeDefault();
-        public static FilterSettings filterSettings = FilterSettings.makeDefault();
+        public static ErosionFilterSettings erosionFilterSettings = ErosionFilterSettings.makeDefault();
         public static MiscellaneousSettings miscellaneousSettings = MiscellaneousSettings.makeDefault();
         public static PresentationSettings presentationSettings = PresentationSettings.makeDefault();
 
@@ -29,7 +29,7 @@ public class PresetManager {
             riverSettings = preset.rivers();
             flowSettings = preset.flow();
             islandSettings = preset.island();
-            filterSettings = preset.filters();
+            erosionFilterSettings = preset.erosionFilters();
             miscellaneousSettings = preset.miscellaneous();
             presentationSettings = preset.presentation();
             isLoaded = true;
