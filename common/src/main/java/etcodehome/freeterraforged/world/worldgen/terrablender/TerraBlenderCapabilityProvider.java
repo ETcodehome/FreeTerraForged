@@ -152,6 +152,8 @@ public final class TerraBlenderCapabilityProvider implements WorldgenCapabilityP
 		Set<ResourceLocation> ids = new HashSet<>();
 		List<WorldgenPlans.ProviderDomain> providers = new ArrayList<>(regions.size());
 		Holder<Biome> deferred = biomes.getHolderOrThrow(Region.DEFERRED_PLACEHOLDER);
+		String dimension = context.owner().dimension().location().toString();
+		int[] counts = new int[2];
 		for (int order = 0; order < regions.size(); order++) {
 			context.checkCancelled();
 			Region region = regions.get(order);
@@ -159,9 +161,15 @@ public final class TerraBlenderCapabilityProvider implements WorldgenCapabilityP
 				throw new IllegalStateException("Duplicate TerraBlender provider ID: " + region.getName());
 			}
 			List<Pair<Climate.ParameterPoint, Holder<Biome>>> registeredEntries = new ArrayList<>();
-			region.addBiomes(biomes, entry -> registeredEntries.add(Pair.of(
-				entry.getFirst(), biomes.getHolderOrThrow(entry.getSecond())
-			)));
+			region.addBiomes(biomes, entry -> {
+				Holder<Biome> biome = biomes.getHolderOrThrow(entry.getSecond());
+				Holder<Biome> candidate = BiomeReplacerCompat.replace(biome, dimension);
+				counts[0]++;
+				if (candidate != biome) {
+					counts[1]++;
+				}
+				registeredEntries.add(Pair.of(entry.getFirst(), candidate));
+			});
 			List<Pair<Climate.ParameterPoint, Holder<Biome>>> entries = deduplicateEntries(registeredEntries);
 			if (entries.isEmpty()) {
 				throw new IllegalStateException("TerraBlender provider has no public candidates: " + region.getName());
@@ -169,6 +177,11 @@ public final class TerraBlenderCapabilityProvider implements WorldgenCapabilityP
 			providers.add(new WorldgenPlans.ProviderDomain(
 				region.getName(), region.getWeight(), new Climate.ParameterList<>(entries), order
 			));
+		}
+		if (BiomeReplacerCompat.isActive()) {
+			FTFCommon.LOGGER.info(
+				"Biome Replacer rules replaced {} of {} TerraBlender candidates for {}", counts[1], counts[0], dimension
+			);
 		}
 		context.checkCancelled();
 		return new WorldgenPlans.ProviderSelection(
