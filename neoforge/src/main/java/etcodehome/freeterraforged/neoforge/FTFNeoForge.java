@@ -1,8 +1,7 @@
 package etcodehome.freeterraforged.neoforge;
 
 import com.mojang.brigadier.CommandDispatcher;
-import com.mojang.serialization.MapCodec;
-import etcodehome.freeterraforged.client.command.FtfCommands;
+import etcodehome.freeterraforged.client.command.FTFCommands;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.data.DataGenerator;
 import net.minecraft.data.PackOutput;
@@ -71,7 +70,7 @@ public class FTFNeoForge {
 	@SubscribeEvent
 	public void onRegisterCommands(RegisterCommandsEvent event) {
 		CommandDispatcher<CommandSourceStack> dispatcher = event.getDispatcher();
-		FtfCommands.register(dispatcher);
+		FTFCommands.register(dispatcher);
 	}
 
 
