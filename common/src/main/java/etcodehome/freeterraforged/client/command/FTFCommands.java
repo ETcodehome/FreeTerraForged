@@ -88,11 +88,14 @@ public class FTFCommands {
             return;
         }
 
+        context.getSource().sendSystemMessage(Component.literal("Heightmap generation started in background..."));
+
         CompletableFuture<Integer> future = CompletableFuture.supplyAsync(() -> {
             generateHeightmaps(context, level, x1, x2, z1, z2);
             return 0;
         }, execPool).exceptionallyAsync(throwable -> {
             throwable.printStackTrace();
+            context.getSource().sendFailure(Component.literal("Heightmap generation failed: " + throwable.getMessage()));
             heightmapTask.set(null);
             return 0;
         }).thenApplyAsync(integer -> {
@@ -130,7 +133,7 @@ public class FTFCommands {
             throw new RuntimeException(e);
         }
 
-        // Phase 1: Generate individual heightmap sections with optimized tile caching & progress messages
+        // Phase 1: Generate heightmap sections safely in the background thread (no thread starvation)
         for (int cx = 0; cx < chunksX; cx++) {
             for (int cz = 0; cz < chunksZ; cz++) {
                 int startX = minX + cx * CHUNK;
