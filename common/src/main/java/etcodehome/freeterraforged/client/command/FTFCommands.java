@@ -16,6 +16,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.levelgen.RandomState;
 
 import javax.imageio.ImageIO;
+import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.awt.image.WritableRaster;
 import java.io.File;
@@ -30,45 +31,44 @@ import java.util.concurrent.atomic.AtomicReference;
 public class FTFCommands {
 
     private static final ExecutorService execPool = Executors.newVirtualThreadPerTaskExecutor();
-
     private static final AtomicReference<CompletableFuture> heightmapTask = new AtomicReference<>();
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("ftf")
                 .requires(s -> s.hasPermission(2))
                 .then(Commands.literal("heightmap")
-                    .then(Commands.literal("area")
-                        .then(Commands.argument("x1", IntegerArgumentType.integer())
-                        .then(Commands.argument("z1", IntegerArgumentType.integer())
-                        .then(Commands.argument("x2", IntegerArgumentType.integer())
-                        .then(Commands.argument("z2", IntegerArgumentType.integer())
-                        .executes(context -> {
-                            int z1 = context.getArgument("z1", Integer.class);
-                            int x1 = context.getArgument("x1", Integer.class);
-                            int x2 = context.getArgument("x2", Integer.class);
-                            int z2 = context.getArgument("z2", Integer.class);
-                            ServerLevel serverLevel = deduceServerLevel(context.getSource());
-                            startHeightmapProcess(context, serverLevel, x1, z1, x2, z2);
-                            return 1;
-                        }))))))
-                    .then(Commands.literal("radius")
-                        .then(Commands.argument("blocks", IntegerArgumentType.integer())
-                        .executes(context -> {
-                            Integer blocks = context.getArgument("blocks", Integer.class);
+                        .then(Commands.literal("area")
+                                .then(Commands.argument("x1", IntegerArgumentType.integer())
+                                        .then(Commands.argument("z1", IntegerArgumentType.integer())
+                                                .then(Commands.argument("x2", IntegerArgumentType.integer())
+                                                        .then(Commands.argument("z2", IntegerArgumentType.integer())
+                                                                .executes(context -> {
+                                                                    int z1 = context.getArgument("z1", Integer.class);
+                                                                    int x1 = context.getArgument("x1", Integer.class);
+                                                                    int x2 = context.getArgument("x2", Integer.class);
+                                                                    int z2 = context.getArgument("z2", Integer.class);
+                                                                    ServerLevel serverLevel = deduceServerLevel(context.getSource());
+                                                                    startHeightmapProcess(context, serverLevel, x1, z1, x2, z2);
+                                                                    return 1;
+                                                                }))))))
+                        .then(Commands.literal("radius")
+                                .then(Commands.argument("blocks", IntegerArgumentType.integer())
+                                        .executes(context -> {
+                                            Integer blocks = context.getArgument("blocks", Integer.class);
 
-                            CommandSourceStack source = context.getSource();
-                            ServerPlayer player = source.getPlayer();
-                            ServerLevel serverLevel = deduceServerLevel(source);
+                                            CommandSourceStack source = context.getSource();
+                                            ServerPlayer player = source.getPlayer();
+                                            ServerLevel serverLevel = deduceServerLevel(source);
 
-                            int z1 = (player == null ? 0 : player.getBlockZ()) + blocks;
-                            int x1 = (player == null ? 0 : player.getBlockX()) + blocks;
-                            int x2 = (player == null ? 0 : player.getBlockX()) - blocks;
-                            int z2 = (player == null ? 0 : player.getBlockZ()) - blocks;
+                                            int z1 = (player == null ? 0 : player.getBlockZ()) + blocks;
+                                            int x1 = (player == null ? 0 : player.getBlockX()) + blocks;
+                                            int x2 = (player == null ? 0 : player.getBlockX()) - blocks;
+                                            int z2 = (player == null ? 0 : player.getBlockZ()) - blocks;
 
-                            startHeightmapProcess(context, serverLevel, x1, z1, x2, z2);
+                                            startHeightmapProcess(context, serverLevel, x1, z1, x2, z2);
 
-                            return 1;
-                        }))))
+                                            return 1;
+                                        }))))
         );
     }
 
@@ -104,10 +104,10 @@ public class FTFCommands {
 
     private static void generateHeightmaps(CommandContext<CommandSourceStack> context,
                                            ServerLevel serverLevel,
-                                           int x1,
-                                           int x2,
-                                           int z1,
-                                           int z2) {
+                                           int x1, int x2,
+                                           int z1, int z2) {
+        long startTime = System.currentTimeMillis();
+
         RandomState randomState = serverLevel.getChunkSource().randomState();
         FTFRandomState ftfRandomState = (FTFRandomState) (Object) randomState;
         GeneratorContext generatorContext = ftfRandomState.generatorContext();
@@ -123,7 +123,6 @@ public class FTFCommands {
         int chunksX = (totalW + CHUNK - 1) / CHUNK;
         int chunksZ = (totalH + CHUNK - 1) / CHUNK;
 
-
         Path outputDir = Path.of("heightmap_chunks");
         try {
             Files.createDirectories(outputDir);
@@ -131,7 +130,7 @@ public class FTFCommands {
             throw new RuntimeException(e);
         }
 
-
+        // Phase 1: Generate individual heightmap sections with optimized tile caching & progress messages
         for (int cx = 0; cx < chunksX; cx++) {
             for (int cz = 0; cz < chunksZ; cz++) {
                 int startX = minX + cx * CHUNK;
@@ -141,52 +140,105 @@ public class FTFCommands {
 
                 BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_USHORT_GRAY);
                 WritableRaster raster = img.getRaster();
-                for (int x = 0; x < w; x++) {
-                    for (int z = 0; z < h; z++) {
-                        int rx = generatorContext.cache.chunkToTile((startX + x) >> 4);
-                        int rz = generatorContext.cache.chunkToTile((startZ + z) >> 4);
-                        try (TileCache.Lease acquire = generatorContext.cache.acquire(rx, rz)) {
-                            Tile tile = acquire.tile();
-                            Cell cell = tile.lookup(startX + x, startZ + z);
+
+                int currentRx = Integer.MIN_VALUE;
+                int currentRz = Integer.MIN_VALUE;
+                TileCache.Lease currentLease = null;
+                Tile currentTile = null;
+
+                try {
+                    for (int x = 0; x < w; x++) {
+                        int worldX = startX + x;
+                        int chunkXCoord = worldX >> 4;
+                        int rx = generatorContext.cache.chunkToTile(chunkXCoord);
+
+                        for (int z = 0; z < h; z++) {
+                            int worldZ = startZ + z;
+                            int chunkZCoord = worldZ >> 4;
+                            int rz = generatorContext.cache.chunkToTile(chunkZCoord);
+
+                            if (rx != currentRx || rz != currentRz || currentLease == null) {
+                                if (currentLease != null) {
+                                    currentLease.close();
+                                }
+                                currentRx = rx;
+                                currentRz = rz;
+                                currentLease = generatorContext.cache.acquire(rx, rz);
+                                currentTile = currentLease.tile();
+                            }
+
+                            Cell cell = currentTile.lookup(worldX, worldZ);
                             float height = generatorContext.levels.getNormalizedElevation(cell.height);
-                            int gray = (int) (Math.clamp(height, 0, 1) * 65356);
-                            raster.setSample(x,z,0,gray);
+                            int gray = (int) (Math.clamp(height, 0f, 1f) * 65535);
+                            raster.setSample(x, z, 0, gray);
                         }
+                    }
+                } finally {
+                    if (currentLease != null) {
+                        currentLease.close();
                     }
                 }
 
                 try {
                     File tempFile = outputDir.resolve(String.format("chunk_%d_%d.png", cx, cz)).toFile();
-                    tempFile.deleteOnExit();
                     ImageIO.write(img, "png", tempFile);
-                    context.getSource().sendSystemMessage(Component.literal("Generated " + tempFile.getName()));
+                    context.getSource().sendSystemMessage(Component.literal("Generated heightmap " + cx + "," + cz));
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
             }
         }
 
+        // Phase 2: Stitch heightmap sections into a single final image
         BufferedImage full = new BufferedImage(totalW, totalH, BufferedImage.TYPE_USHORT_GRAY);
+        Graphics2D g2d = full.createGraphics();
 
-        for (int cx = 0; cx < chunksX; cx++) {
-            for (int cz = 0; cz < chunksZ; cz++) {
-                BufferedImage chunk = null;
-                try {
-                    chunk = ImageIO.read(outputDir.resolve(String.format("chunk_%d_%d.png", cx, cz)).toFile());
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
+        try {
+            for (int cx = 0; cx < chunksX; cx++) {
+                for (int cz = 0; cz < chunksZ; cz++) {
+                    File chunkFile = outputDir.resolve(String.format("chunk_%d_%d.png", cx, cz)).toFile();
+                    if (chunkFile.exists()) {
+                        BufferedImage chunkImg = ImageIO.read(chunkFile);
+                        if (chunkImg != null) {
+                            g2d.drawImage(chunkImg, cx * CHUNK, cz * CHUNK, null);
+                        }
+                    }
                 }
-                full.getGraphics().drawImage(chunk, cx * CHUNK, cz * CHUNK, null);
             }
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to stitch heightmap images", e);
+        } finally {
+            g2d.dispose();
         }
-        full.getGraphics().dispose();
+
+        // Phase 3: Save the final stitched image with timing report
+        long durationMs = System.currentTimeMillis() - startTime;
+        double durationSec = durationMs / 1000.0;
+
         try {
             SimpleDateFormat fmt = new SimpleDateFormat("ddMMyyyyhhmm");
-            File file = new File("heightmap_%s.png".formatted(fmt.format(new Date())));
-            ImageIO.write(full, "png", file);
-            context.getSource().sendSystemMessage(Component.literal("Generated " + file.getName()));
+            File finalFile = new File(String.format("heightmap_%s.png", fmt.format(new Date())));
+            ImageIO.write(full, "png", finalFile);
+            context.getSource().sendSystemMessage(Component.literal(
+                    String.format("Successfully generated %s in %.2f seconds", finalFile.getName(), durationSec)
+            ));
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Failed to write final heightmap", e);
+        }
+
+        // Phase 4: Clean up temporary files and directory
+        for (int cx = 0; cx < chunksX; cx++) {
+            for (int cz = 0; cz < chunksZ; cz++) {
+                Path chunkPath = outputDir.resolve(String.format("chunk_%d_%d.png", cx, cz));
+                try {
+                    Files.deleteIfExists(chunkPath);
+                } catch (IOException ignored) {
+                }
+            }
+        }
+        try {
+            Files.deleteIfExists(outputDir);
+        } catch (IOException ignored) {
         }
     }
 }
