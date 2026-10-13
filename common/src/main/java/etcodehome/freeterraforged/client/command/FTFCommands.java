@@ -27,7 +27,7 @@ import java.util.Date;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
 
-public class FtfCommands {
+public class FTFCommands {
 
     private static final ExecutorService execPool = Executors.newVirtualThreadPerTaskExecutor();
 
