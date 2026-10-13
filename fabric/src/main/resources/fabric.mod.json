@@ -20,7 +20,8 @@
   "environment": "*",
   "entrypoints": {
     "main": [
-      "etcodehome.freeterraforged.fabric.FTFFabric"
+      "etcodehome.freeterraforged.fabric.FTFFabric",
+      "etcodehome.freeterraforged.fabric.FTFFabricCommands"
     ],
     "client": [
       "etcodehome.freeterraforged.fabric.FTFFabricClient"
