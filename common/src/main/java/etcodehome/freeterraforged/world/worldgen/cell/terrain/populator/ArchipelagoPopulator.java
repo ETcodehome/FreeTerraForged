@@ -174,7 +174,6 @@ public class ArchipelagoPopulator implements CellPopulator {
         float originalContinentEdge = cell.continentEdge;
         float originalHeight = cell.height;
         float originalWeirdness = cell.weirdness;
-        float originalErosion = cell.erosion;
 
         float shape = this.rawShape(x, z);
 
