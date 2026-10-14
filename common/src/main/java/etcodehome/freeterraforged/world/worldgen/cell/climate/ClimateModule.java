@@ -83,13 +83,39 @@ public class ClimateModule {
 		this.macroBiomeNoise = macroBiomeNoise;
 	}
 
+	/** Pre-terrain regional climate in Minecraft's -1..1 units. No cell is retained. */
+	public record RawSample(float temperature, float moisture) {}
+
+	/**
+	 * Read the same regional noise graphs as apply(), before altitude/moisture shaping.
+	 * Coordinates are blocks after Climate's optional edge displacement. No terrain
+	 * lookup, region resolution, cell mutation, or global preset read is performed.
+	 */
+	public RawSample sampleRaw(float x, float z) {
+		float warpedX = this.warpXCoordinate(x, z);
+		float warpedZ = this.warpZCoordinate(x, z);
+		x = warpedX * this.biomeFreq;
+		z = warpedZ * this.biomeFreq;
+		float moisture = this.moisture.compute(x, z, 0);
+		float temperature = this.temperature.compute(x, z, 0);
+		return new RawSample(temperature * 2.0F - 1.0F, moisture * 2.0F - 1.0F);
+	}
+
+	private float warpXCoordinate(float x, float z) {
+		return x + this.warpX.compute(x, z, 0) * this.warpStrength;
+	}
+
+	private float warpZCoordinate(float x, float z) {
+		return z + this.warpZ.compute(x, z, 0) * this.warpStrength;
+	}
+
 	public void apply(Cell cell, float x, float z, float originalX, float originalZ) {
 		this.apply(cell, x, z, originalX, originalZ, true);
 	}
 
 	public void apply(Cell cell, float x, float z, float originalX, float originalZ, boolean mask) {
-		float warpedX = x + this.warpX.compute(x, z, 0) * this.warpStrength;
-		float warpedZ = z + this.warpZ.compute(x, z, 0) * this.warpStrength;
+		float warpedX = this.warpXCoordinate(x, z);
+		float warpedZ = this.warpZCoordinate(x, z);
 		x = warpedX * this.biomeFreq;
 		z = warpedZ * this.biomeFreq;
 		this.resolveRegion(cell, x, z, mask);
@@ -128,12 +154,8 @@ public class ClimateModule {
 		// getNormalizedInlandElevation returns 0.0 at sea level and 1.0 at maximum terrain height
 		float heightNorm = NoiseUtil.clamp(this.levels.getNormalizedInlandElevation(height), 0.0F, 1.0F);
 
-		// Calculate exponential warp factor (k ranges from 1.0 at sea level to 4.0 at peak height)
-		float exponent = (float) Math.pow(2.0, heightNorm * PresetManager.PM.climateSettings.altitudeCoolingStrength);
-
-		float tempNormalized = NoiseUtil.clamp(rawTemp, 0.0F, 1.0F);
-
-		return (float) Math.pow(tempNormalized, exponent);
+		return TemperatureShaping.applyAboveGround(rawTemp, heightNorm,
+			PresetManager.PM.climateSettings.altitudeCoolingStrength);
 	}
 
 	public float modifyMoisture(float height, float rawMoisture) {
@@ -163,8 +185,8 @@ public class ClimateModule {
 
 
 	public void applyRegion(Cell cell, float x, float z, boolean mask) {
-		float warpedX = x + this.warpX.compute(x, z, 0) * this.warpStrength;
-		float warpedZ = z + this.warpZ.compute(x, z, 0) * this.warpStrength;
+		float warpedX = this.warpXCoordinate(x, z);
+		float warpedZ = this.warpZCoordinate(x, z);
 		this.resolveRegion(
 			cell, warpedX * this.biomeFreq, warpedZ * this.biomeFreq, mask
 		);

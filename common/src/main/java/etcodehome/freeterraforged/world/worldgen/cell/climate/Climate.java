@@ -24,9 +24,35 @@ public record Climate(int randomSeed, Noise offsetX, Noise offsetZ, int offsetDi
 			if (cell.terrain == TerrainType.COAST) {
 				cell.terrain = TerrainType.SHALLOW_OCEAN;
 			}
-		} else if (cell.biomeRegionEdge < EDGE_BLEND || cell.terrain == TerrainType.MOUNTAIN_CHAIN) {
+		} else if (this.usesEdgeClimate(cell)) {
 			this.applyEdge(cell, x, z, false);
 		}
+	}
+
+	/**
+	 * Raw regional climate for an already populated cell at these block coordinates.
+	 * Reuses this owner's edge policy and noise graphs. The caller must supply a cell
+	 * from this Climate's terrain context and position. Does not mutate the cell,
+	 * acquire terrain, or retain mutable inputs; safe for a read-only snapshot.
+	 */
+	public ClimateModule.RawSample sampleRaw(Cell cell, float x, float z) {
+		if (cell.height > this.levels.water && this.usesEdgeClimate(cell)) {
+			float distance = this.edgeDistance(cell);
+			float dx = this.offsetX.compute(x, z, 0) * distance;
+			float dz = this.offsetZ.compute(x, z, 0) * distance;
+			x += dx;
+			z += dz;
+		}
+		return this.biomeNoise.sampleRaw(x, z);
+	}
+
+	private boolean usesEdgeClimate(Cell cell) {
+		return cell.biomeRegionEdge < EDGE_BLEND || cell.terrain == TerrainType.MOUNTAIN_CHAIN;
+	}
+
+	private float edgeDistance(Cell cell) {
+		float modifier = 1.0F - NoiseUtil.map(cell.biomeRegionEdge, 0.0F, EDGE_BLEND, EDGE_BLEND);
+		return this.offsetDistance * modifier;
 	}
 
 	public boolean applyInitialRegion(Cell cell, float x, float z) {
@@ -39,8 +65,7 @@ public record Climate(int randomSeed, Noise offsetX, Noise offsetZ, int offsetDi
 	}
 
 	private void applyEdge(Cell cell, float x, float z, boolean regionOnly) {
-		float modifier = 1.0F - NoiseUtil.map(cell.biomeRegionEdge, 0.0F, EDGE_BLEND, EDGE_BLEND);
-		float distance = this.offsetDistance * modifier;
+		float distance = this.edgeDistance(cell);
 		float dx = this.offsetX.compute(x, z, 0) * distance;
 		float dz = this.offsetZ.compute(x, z, 0) * distance;
 		if (regionOnly) {
