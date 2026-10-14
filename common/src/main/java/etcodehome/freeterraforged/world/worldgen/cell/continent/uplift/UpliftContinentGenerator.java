@@ -1,6 +1,5 @@
 package etcodehome.freeterraforged.world.worldgen.cell.continent.uplift;
 
-import etcodehome.freeterraforged.world.worldgen.biome.Continentalness;
 import etcodehome.freeterraforged.world.worldgen.cell.continent.advanced.AbstractContinent;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
@@ -110,30 +109,38 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
             }
         }
 
+        // We always resolve a stable continent centre even for continents that get skipped.
+        // RiverCache / getRivermap() / getNearestCenter() all rely on cell.continentX/continentZ so if we return early
+        // without setting them they keep whatever value this pooled Cell last held (often a leftover
+        // (0,0) from a previous tile), causing an unrelated continents rivers to be carved here instead.
         cell.continentX = Math.round(cellPointX / this.frequency);
         cell.continentZ = Math.round(cellPointY / this.frequency);
-        cell.continentDistance = NoiseUtil.sqrt(nearest);
-        cell.continentId = AbstractContinent.getCellValue(this.seed, cellX, cellY);
 
-        // If this continent cell is skipped, it represents open ocean space.
-        // Explicitly assign deep ocean continentalness instead of leaving it at 0.0F.
+        // early exit guard to avoid processing skipped continents
         if (this.shouldSkip(cellX, cellY)) {
-            cell.continentEdge = Continentalness.DEEP_OCEAN.min(); // -1.05F
             return;
         }
 
-        // Process active continent masks
+        // process regular continent masks
+        cell.continentDistance = NoiseUtil.sqrt(nearest);
         cell.continentEdge = this.getDistanceValue(x, y, cellX, cellY, nearest);
+        cell.continentId = AbstractContinent.getCellValue(this.seed, cellX, cellY);
 
+        // this updates continent centers to the voronoi centroid.
+        // we remap by the water level so the continent uplift is usefully placed above the water line
+        // then an additional 15ish percent insets from coastal boundaries
         float upliftGradient = getSmoothVoronoiGradient(cell, rawX, rawY);
         upliftGradient = shiftAndRemap(upliftGradient, levels.water);
         upliftGradient = shiftAndRemap(upliftGradient, 0.15F);
 
+        // rescale the uplift to handle continental variance
         cell.continentSizeModifier = getContinentSizeModifier(cellX, cellY);
         if (cell.continentSizeModifier != 1.0F) {
             upliftGradient = shiftAndRemap(upliftGradient, (1.0F - cell.continentSizeModifier));
         }
 
+        // use the continent edge values to guarantee we fall to the ocean near the ocean.
+        // sometimes this can look a little rough but havent found a more reliable way yet.
         float customPeak = shiftAndRemap(cell.continentEdge, levels.water);
         if (customPeak < 0.05F && customPeak < upliftGradient) {
             upliftGradient = customPeak;
@@ -275,41 +282,12 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
 
     protected float getDistanceValue(float x, float y, int cellX, int cellY, float distance) {
         distance = this.getVariedDistanceValue(cellX, cellY, distance);
-        distance = NoiseUtil.sqrt(distance); // 0.0 at the ocean border, increasing inward
+        distance = NoiseUtil.sqrt(distance); // 0.0 at ocean border, increasing inward to 1.0+ at core
         distance = NoiseUtil.map(distance, 0.05F, 0.25F, 0.2F);
         distance = this.getCoastalDistanceValue(x, y, distance);
 
-        // Retrieve user-tuned control points (ordered outward from border to center)
-        float cpDeepOcean = this.controlPoints.deepOcean;
-        float cpShallowOcean = this.controlPoints.shallowOcean;
-        float cpBeach = this.controlPoints.beach;
-        float cpCoast = this.controlPoints.coast;
-        float cpInland = this.controlPoints.inland;
-
-        // distance = 0.0 is at the ocean border, increasing inward to the continent core.
-        // We map distance upward from [0.0] to match the physical heightmap transition.
-
-        if (distance <= cpDeepOcean) {
-            float t = cpDeepOcean > 0.0F ? NoiseUtil.clamp(distance / cpDeepOcean, 0.0F, 1.0F) : 0.0F;
-            return NoiseUtil.lerp(Continentalness.DEEP_OCEAN.min(), Continentalness.DEEP_OCEAN.max(), t); // Deep Ocean band
-        } else if (distance <= cpShallowOcean) {
-            float t = NoiseUtil.clamp((distance - cpDeepOcean) / (cpShallowOcean - cpDeepOcean), 0.0F, 1.0F);
-            return NoiseUtil.lerp(Continentalness.DEEP_OCEAN.max(), Continentalness.OCEAN.max(), t); // Ocean band
-        } else if (distance <= cpBeach) {
-            float t = NoiseUtil.clamp((distance - cpShallowOcean) / (cpBeach - cpShallowOcean), 0.0F, 1.0F);
-            return NoiseUtil.lerp(Continentalness.OCEAN.max(), Continentalness.COAST.max(), t); // Coast band (Aligned with shoreline)
-        } else if (distance <= cpCoast) {
-            float t = NoiseUtil.clamp((distance - cpBeach) / (cpCoast - cpBeach), 0.0F, 1.0F);
-            return NoiseUtil.lerp(Continentalness.COAST.max(), Continentalness.NEAR_INLAND.max(), t); // Near-inland band
-        } else if (distance <= cpInland) {
-            float t = NoiseUtil.clamp((distance - cpCoast) / (cpInland - cpCoast), 0.0F, 1.0F);
-            return NoiseUtil.lerp(Continentalness.NEAR_INLAND.max(), Continentalness.MID_INLAND.max(), t); // Mid-inland band
-        } else {
-            // Core of the continent (beyond cpInland toward the center)
-            float maxExpected = Math.max(cpInland * 1.5F, 0.6F);
-            float t = NoiseUtil.clamp((distance - cpInland) / (maxExpected - cpInland), 0.0F, 1.0F);
-            return NoiseUtil.lerp(Continentalness.MID_INLAND.max(), Continentalness.FAR_INLAND.max(), t); // Far-inland band
-        }
+        // Return the raw normalized 0-1 distance metric expected by heightmaps and sliders
+        return NoiseUtil.clamp(distance, 0.0F, 1.0F);
     }
 
     protected float getVariedDistanceValue(int cellX, int cellY, float distance) {

@@ -363,19 +363,20 @@ public class ArchipelagoPopulator implements CellPopulator {
         }
     }
 
-    private static float continentEdge(float islandAlpha, float shelfEnd, float originalContinentEdge) {
-        float coastTransition = -1.05F; // Transition threshold where deep ocean/shelf meets coast
-        float deepInland = -1.2F;       // Deep inland value
+    private float continentEdge(float islandAlpha, float shelfEnd, float originalContinentEdge) {
+        // islandAlpha ranges from 0.0 (outer ocean edge) to 1.0 (island peak core).
+        // We map this into clean 0.0 to 1.0 control-point units so Field.CONTINENT
+        // and heightmap consumers can evaluate it correctly.
 
         if (islandAlpha < shelfEnd) {
+            // Subsea shelf / ocean approach: blend from the underlying ocean edge up to the beach control point
             float alpha = smoothStep(0.0F, shelfEnd, islandAlpha);
-            // Lerps from ambient ocean edge up to coastTransition (-1.05F) at the shelf edge
-            return NoiseUtil.lerp(originalContinentEdge, coastTransition, alpha);
+            return NoiseUtil.lerp(originalContinentEdge, this.controlPoints.beach, alpha);
+        } else {
+            // Island landmass: scale from the beach control point up to 1.0 (Far-Inland core)
+            float alpha = smoothStep(shelfEnd, 1.0F, islandAlpha);
+            return NoiseUtil.lerp(this.controlPoints.beach, 1.0F, alpha);
         }
-
-        float alpha = smoothStep(shelfEnd, 1.0F, islandAlpha);
-        // Lerps from coastTransition (-1.05F) at the shore down to deepInland (-1.2F) as it goes inland
-        return NoiseUtil.lerp(coastTransition, deepInland, alpha);
     }
 
     private static float beachWidth(float value) {

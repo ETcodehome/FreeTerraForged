@@ -2,9 +2,10 @@ package etcodehome.freeterraforged.client.gui.screen.presetconfig;
 
 import java.util.Locale;
 
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.ControlPoints;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
-import etcodehome.freeterraforged.world.worldgen.biome.Continentalness;
 import net.minecraft.network.chat.Component;
 import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
 
@@ -40,22 +41,28 @@ final class PreviewDetails {
     }
 
     private static String formatContinentEdge(float edge) {
+        ControlPoints cp = PresetManager.PM.worldSettings.controlPoints;
         String bandName;
-        if (edge <= Continentalness.MUSHROOM_FIELDS.max()) {
-            bandName = "Mushroom Fields (C0)";
-        } else if (edge <= Continentalness.DEEP_OCEAN.max()) {
-            bandName = "Deep Ocean (C1)";
-        } else if (edge <= Continentalness.OCEAN.max()) {
-            bandName = "Ocean (C2)";
-        } else if (edge <= Continentalness.COAST.max()) {
-            bandName = "Coast (C3)";
-        } else if (edge <= Continentalness.NEAR_INLAND.max()) {
-            bandName = "Near-Inland (C5)";
-        } else if (edge <= Continentalness.MID_INLAND.max()) {
-            bandName = "Mid-Inland (C6)";
+
+        // Compare against live user-tuned ControlPoints thresholds
+        if (edge <= cp.islandInland) {
+            bandName = "Island Inland (C0)";
+        } else if (edge <= cp.islandCoast) {
+            bandName = "Island Coast (C1)";
+        } else if (edge <= cp.deepOcean) {
+            bandName = "Deep Ocean (C2)";
+        } else if (edge <= cp.shallowOcean) {
+            bandName = "Shallow Ocean (C3)";
+        } else if (edge <= cp.beach) {
+            bandName = "Beach (C4)";
+        } else if (edge <= cp.coast) {
+            bandName = "Coast (C5)";
+        } else if (edge <= cp.inland) {
+            bandName = "Near-Inland (C6)";
         } else {
             bandName = "Far-Inland (C7)";
         }
+
         return String.format(Locale.ROOT, "%.4f (%s)", edge, bandName);
     }
 
