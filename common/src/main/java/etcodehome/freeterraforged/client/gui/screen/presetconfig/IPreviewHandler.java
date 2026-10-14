@@ -310,8 +310,7 @@ public interface IPreviewHandler {
                                 preGen.tileKey,
                                 cancellation::isCancelled,
                                 cacheCancelled -> preGen.context.generator.generateZoomed(
-                                        preGen.cx, preGen.cz, preGen.zoomLevel, biomePipeline,
-                                        cacheCancelled
+                                        preGen.cx, preGen.cz, preGen.zoomLevel, cacheCancelled
                                 )
                         );
                 return tileFuture.thenApply(lease -> {

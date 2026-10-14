@@ -28,7 +28,7 @@ import net.minecraft.world.level.levelgen.placement.RarityFilter;
 import etcodehome.freeterraforged.FTFCommon;
 
 public class PresetPlacedFeatures {
-	public static final ResourceKey<PlacedFeature> ERODE = createKey("erode");
+	public static final ResourceKey<PlacedFeature> SCREE = createKey("scree");
 	public static final ResourceKey<PlacedFeature> DECORATE_SNOW = createKey("decorate_snow");
 	public static final ResourceKey<PlacedFeature> SWAMP_SURFACE = createKey("swamp_surface");
 
@@ -91,8 +91,8 @@ public class PresetPlacedFeatures {
 
 		PlacementModifier blacklistOverworld = FTFPlacementModifiers.blacklistDimensions(LevelStem.OVERWORLD);
 
-		if(miscellaneous.erosionDecorator) {
-			PlacementUtils.register(ctx, ERODE, features.getOrThrow(PresetConfiguredFeatures.ERODE));
+		if(miscellaneous.screeDecorator) {
+			PlacementUtils.register(ctx, SCREE, features.getOrThrow(PresetConfiguredFeatures.ERODE));
 		}
 
 		if(miscellaneous.naturalSnowDecorator || miscellaneous.smoothLayerDecorator) {
