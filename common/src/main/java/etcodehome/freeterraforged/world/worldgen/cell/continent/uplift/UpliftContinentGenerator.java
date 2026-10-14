@@ -18,6 +18,12 @@ import etcodehome.freeterraforged.world.worldgen.cell.rivermap.Rivermap;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 
 public class UpliftContinentGenerator extends AbstractContinent implements SimpleContinent {
+    // --- continent bridging tuning (hard-coded starting point) ---
+    /** Chance that a border between two eligible continents is left dry. ~0.12-0.25 gives a few merged continents; ~0.45 percolates into giants. */
+    private static final float BRIDGE_CHANCE = 0.18F;
+    /** Distance (cell units) at which the coastline ramp saturates; matches the upper bound of the map(...) in getDistanceValue. */
+    private static final float BRIDGE_REACH = 0.25F;
+
     protected float frequency;
     protected float variance;
     protected int varianceSeed;
@@ -28,6 +34,17 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
     protected Levels levels;
 
     protected WorldSettings.Continent continentSettings;
+
+    private final int bridgeSeed;
+
+    private static final class BoundaryScratch {
+        final float[] nx = new float[8], ny = new float[8], mx = new float[8], my = new float[8], d = new float[8];
+        final float[] lo = new float[8], hi = new float[8];
+        final int[] cx = new int[8], cy = new int[8], loP = new int[8], hiP = new int[8];
+        final boolean[] eligible = new boolean[8], open = new boolean[8], real = new boolean[8];
+    }
+
+    private static final ThreadLocal<BoundaryScratch> SCRATCH = ThreadLocal.withInitial(BoundaryScratch::new);
 
     public UpliftContinentGenerator(Seed seed, GeneratorContext context) {
         super(seed, context);
@@ -61,6 +78,9 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         this.bayNoise = bayNoise;
 
         this.levels = context.levels;
+
+        // Must stay the LAST seed.next() so existing noise seeds above are not shifted.
+        this.bridgeSeed = seed.next();
     }
 
     @Override
@@ -93,22 +113,6 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
             }
         }
 
-        nearest = Float.MAX_VALUE;
-
-        for (int cy2 = cellY - 1; cy2 <= cellY + 1; ++cy2) {
-            for (int cx2 = cellX - 1; cx2 <= cellX + 1; ++cx2) {
-                if (cx2 != cellX || cy2 != cellY) {
-                    NoiseUtil.Vec2f vec2 = NoiseUtil.cell(this.seed, cx2, cy2);
-                    float px2 = cx2 + vec2.x() * this.jitter;
-                    float py2 = cy2 + vec2.y() * this.jitter;
-                    float dist3 = getDistance(x, y, cellPointX, cellPointY, px2, py2);
-                    if (dist3 < nearest) {
-                        nearest = dist3;
-                    }
-                }
-            }
-        }
-
         // We always resolve a stable continent centre even for continents that get skipped.
         // RiverCache / getRivermap() / getNearestCenter() all rely on cell.continentX/continentZ so if we return early
         // without setting them they keep whatever value this pooled Cell last held (often a leftover
@@ -120,6 +124,9 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         if (this.shouldSkip(cellX, cellY)) {
             return;
         }
+
+        // squared distance to the nearest CLOSED border (borders bridged to a neighbouring continent are ignored)
+        nearest = this.getBoundaryDistanceSq(x, y, cellX, cellY, cellPointX, cellPointY);
 
         // process regular continent masks
         cell.continentDistance = NoiseUtil.sqrt(nearest);
@@ -147,6 +154,152 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         }
         cell.waterTable = upliftGradient;
     }
+
+    // ------------------------------------------------------------------------------------------
+    // Continent bridging
+    // ------------------------------------------------------------------------------------------
+
+    /**
+     * Only continents that spawned (not skipped) and are full size may bridge. The full-size requirement matters:
+     * getVariedDistanceValue scales distance per cell, which would create a seam across an open border if the two
+     * cells had different modifiers.
+     */
+    private boolean canBridge(int cx, int cy) {
+        return !this.shouldSkip(cx, cy) && this.getContinentSizeModifier(cx, cy) >= 1.0F;
+    }
+
+    /** Symmetric per-border roll in [0,1]; identical when evaluated from either side of the border. */
+    private float bridgeRoll(int ax, int ay, int bx, int by) {
+        if (ax > bx || (ax == bx && ay > by)) {
+            int t = ax; ax = bx; bx = t;
+            t = ay; ay = by; by = t;
+        }
+        int s = this.bridgeSeed ^ (bx * 73856093) ^ (by * 19349663);
+        return 0.5F + NoiseUtil.valCoord2D(s, ax, ay) * 0.5F;
+    }
+
+    private static float distToSegment(float px, float py, float ax, float ay, float bx, float by) {
+        float dx = bx - ax, dy = by - ay;
+        float l2 = dx * dx + dy * dy;
+        float t = l2 < 1.0e-12F ? 0.0F : NoiseUtil.clamp(((px - ax) * dx + (py - ay) * dy) / l2, 0.0F, 1.0F);
+        float ex = px - (ax + t * dx), ey = py - (ay + t * dy);
+        return NoiseUtil.sqrt(ex * ex + ey * ey);
+    }
+
+    /**
+     * Squared distance (cell units) from (x,y) to the nearest closed border of the merged landmass.
+     * With no open borders nearby this is identical to the original min-over-neighbour-bisectors distance.
+     */
+    private float getBoundaryDistanceSq(float x, float y, int cellX, int cellY, float ax, float ay) {
+        BoundaryScratch s = SCRATCH.get();
+        boolean aEligible = this.canBridge(cellX, cellY);
+        boolean anyOpenNear = false;
+        float closedMin = Float.MAX_VALUE;
+        int n = 0;
+
+        for (int cy2 = cellY - 1; cy2 <= cellY + 1; ++cy2) {
+            for (int cx2 = cellX - 1; cx2 <= cellX + 1; ++cx2) {
+                if (cx2 == cellX && cy2 == cellY) {
+                    continue;
+                }
+                NoiseUtil.Vec2f vec = NoiseUtil.cell(this.seed, cx2, cy2);
+                float px = cx2 + vec.x() * this.jitter;
+                float py = cy2 + vec.y() * this.jitter;
+                float ux = px - ax, uy = py - ay;
+                float inv = 1.0F / NoiseUtil.sqrt(ux * ux + uy * uy);
+                s.nx[n] = ux * inv;
+                s.ny[n] = uy * inv;
+                s.mx[n] = (ax + px) * 0.5F;
+                s.my[n] = (ay + py) * 0.5F;
+                // perpendicular distance to the bisector line (same value the old getDistance() produced, unsquared)
+                s.d[n] = Math.max(0.0F, (s.mx[n] - x) * s.nx[n] + (s.my[n] - y) * s.ny[n]);
+                s.cx[n] = cx2;
+                s.cy[n] = cy2;
+                s.eligible[n] = aEligible && this.canBridge(cx2, cy2);
+                s.open[n] = s.eligible[n] && this.bridgeRoll(cellX, cellY, cx2, cy2) < BRIDGE_CHANCE;
+                if (s.open[n]) {
+                    if (s.d[n] < BRIDGE_REACH) {
+                        anyOpenNear = true;
+                    }
+                } else if (s.d[n] < closedMin) {
+                    closedMin = s.d[n];
+                }
+                n++;
+            }
+        }
+
+        // fast path: no open border can influence this point
+        if (!anyOpenNear) {
+            return closedMin == Float.MAX_VALUE ? 4.0F : closedMin * closedMin;
+        }
+
+        // slow path: clip every bisector by the other 7 to get this cell's true polygon edges
+        float best = Float.MAX_VALUE;
+        for (int k = 0; k < 8; k++) {
+            float tx = -s.ny[k], ty = s.nx[k];
+            float lo = -1.0e9F, hi = 1.0e9F;
+            int loP = -1, hiP = -1;
+            boolean ok = true;
+            for (int j = 0; j < 8 && ok; j++) {
+                if (j == k) {
+                    continue;
+                }
+                float a = tx * s.nx[j] + ty * s.ny[j];
+                float b = (s.mx[j] - s.mx[k]) * s.nx[j] + (s.my[j] - s.my[k]) * s.ny[j];
+                if (Math.abs(a) < 1.0e-6F) {
+                    if (b < 0.0F) {
+                        ok = false;
+                    }
+                    continue;
+                }
+                float t = b / a;
+                if (a > 0.0F) {
+                    if (t < hi) {
+                        hi = t;
+                        hiP = j;
+                    }
+                } else if (t > lo) {
+                    lo = t;
+                    loP = j;
+                }
+            }
+            s.real[k] = ok && lo < hi && lo > -1.0e8F && hi < 1.0e8F;
+            s.lo[k] = lo;
+            s.hi[k] = hi;
+            s.loP[k] = loP;
+            s.hiP[k] = hiP;
+            if (s.real[k] && !s.open[k]) {
+                best = Math.min(best, distToSegment(x, y,
+                        s.mx[k] + lo * tx, s.my[k] + lo * ty,
+                        s.mx[k] + hi * tx, s.my[k] + hi * ty));
+            }
+        }
+
+        // slit ends: a vertex shared by two OPEN edges whose far side (neighbour|neighbour) is closed
+        for (int k = 0; k < 8; k++) {
+            if (!s.real[k] || !s.open[k]) {
+                continue;
+            }
+            float tx = -s.ny[k], ty = s.nx[k];
+            for (int end = 0; end < 2; end++) {
+                int l = end == 0 ? s.loP[k] : s.hiP[k];
+                if (l < 0 || !s.real[l] || !s.open[l]) {
+                    continue;
+                }
+                // third border also open -> fully merged corner, no boundary here
+                if (s.eligible[k] && s.eligible[l]
+                        && this.bridgeRoll(s.cx[k], s.cy[k], s.cx[l], s.cy[l]) < BRIDGE_CHANCE) {
+                    continue;
+                }
+                float t = end == 0 ? s.lo[k] : s.hi[k];
+                float vx = x - (s.mx[k] + t * tx), vy = y - (s.my[k] + t * ty);
+                best = Math.min(best, NoiseUtil.sqrt(vx * vx + vy * vy));
+            }
+        }
+        return best == Float.MAX_VALUE ? 4.0F : best * best;
+    }
+
+    // ------------------------------------------------------------------------------------------
 
     public float shiftAndRemap(float value, float threshold) {
         if (value <= threshold) {
