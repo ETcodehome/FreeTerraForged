@@ -3,6 +3,7 @@ package etcodehome.freeterraforged.client.gui.screen.presetconfig;
 import java.awt.Color;
 
 import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
+import etcodehome.freeterraforged.world.worldgen.biome.Continentalness;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.river.RiverCarverSettings;
@@ -357,9 +358,57 @@ public enum RenderMode {
 
         @Override
         public int getColor(Cell cell, Levels levels, float scale, float bias) {
-            float hue = 0.0F;
-            float saturation = 0.0F;
-            float brightness = cell.continentEdge;
+            float edge = cell.continentEdge;
+
+            float hue;
+            float saturation;
+            float brightness;
+            float t;
+
+            if (edge <= Continentalness.MUSHROOM_FIELDS.max()) {
+                // Mushroom fields (-1.2 to -1.05) -> Purple/Magenta
+                hue = 0.82F;
+                saturation = 0.80F;
+                t = (edge - Continentalness.MUSHROOM_FIELDS.min()) / (Continentalness.MUSHROOM_FIELDS.max() - Continentalness.MUSHROOM_FIELDS.min());
+                brightness = NoiseUtil.lerp(0.50F, 0.90F, NoiseUtil.clamp(t, 0.0F, 1.0F));
+            } else if (edge <= Continentalness.DEEP_OCEAN.max()) {
+                // Deep ocean (-1.05 to -0.455) -> Deep Navy Blue
+                hue = 0.62F;
+                saturation = 0.90F;
+                t = (edge - Continentalness.DEEP_OCEAN.min()) / (Continentalness.DEEP_OCEAN.max() - Continentalness.DEEP_OCEAN.min());
+                brightness = NoiseUtil.lerp(0.20F, 0.50F, NoiseUtil.clamp(t, 0.0F, 1.0F));
+            } else if (edge <= Continentalness.OCEAN.max()) {
+                // Ocean (-0.455 to -0.19) -> Standard Blue
+                hue = 0.56F;
+                saturation = 0.75F;
+                t = (edge - Continentalness.OCEAN.min()) / (Continentalness.OCEAN.max() - Continentalness.OCEAN.min());
+                brightness = NoiseUtil.lerp(0.40F, 0.70F, NoiseUtil.clamp(t, 0.0F, 1.0F));
+            } else if (edge <= Continentalness.COAST.max()) {
+                // Coast (-0.19 to -0.11) -> Vibrant Yellow
+                hue = 0.14F;
+                saturation = 0.80F;
+                t = (edge - Continentalness.COAST.min()) / (Continentalness.COAST.max() - Continentalness.COAST.min());
+                brightness = NoiseUtil.lerp(0.70F, 0.98F, NoiseUtil.clamp(t, 0.0F, 1.0F));
+            } else if (edge <= Continentalness.NEAR_INLAND.max()) {
+                // Near-inland (-0.11 to 0.03) -> Light Green
+                hue = 0.26F;
+                saturation = 0.55F;
+                t = (edge - Continentalness.NEAR_INLAND.min()) / (Continentalness.NEAR_INLAND.max() - Continentalness.NEAR_INLAND.min());
+                brightness = NoiseUtil.lerp(0.60F, 0.85F, NoiseUtil.clamp(t, 0.0F, 1.0F));
+            } else if (edge <= Continentalness.MID_INLAND.max()) {
+                // Mid-inland (0.03 to 0.3) -> Forest Green
+                hue = 0.32F;
+                saturation = 0.70F;
+                t = (edge - Continentalness.MID_INLAND.min()) / (Continentalness.MID_INLAND.max() - Continentalness.MID_INLAND.min());
+                brightness = NoiseUtil.lerp(0.50F, 0.75F, NoiseUtil.clamp(t, 0.0F, 1.0F));
+            } else {
+                // Far-inland (0.3 to 1.0) -> Dark Highland Green
+                hue = 0.37F;
+                saturation = 0.85F;
+                t = (edge - Continentalness.FAR_INLAND.min()) / (Continentalness.FAR_INLAND.max() - Continentalness.FAR_INLAND.min());
+                brightness = NoiseUtil.lerp(0.35F, 0.70F, NoiseUtil.clamp(t, 0.0F, 1.0F));
+            }
+
             return rgba(hue, saturation, brightness);
         }
     },

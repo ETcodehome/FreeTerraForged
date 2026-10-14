@@ -119,7 +119,7 @@ public class ArchipelagoPopulator implements CellPopulator {
         // Angular and modulation noises for broken coastal/subsea falloff
         this.angularCoastalNoise = Noises.simplex(8821 + salt, Math.max(1, Math.round(size * 0.25F * hScale)), 2);
         this.coastalModulationNoise = Noises.simplex(4109 + salt, Math.max(1, Math.round(size * 1.5F)), 2);
-        this.shelfDetailNoise = Noises.simplex(6317 + salt, Math.max(1, Math.round(size * 0.12F * hScale)), 3);
+        this.shelfDetailNoise = Noises.simplex(6317 + salt, Math.max(1, Math.round(size * 0.12F * hScale)), 2);
 
         // Below-waterline surface detail
         this.oceanFloorRidge = Noises.perlinRidge(2718 + salt, Math.max(1, Math.round(size * 0.10F * hScale)), 3, 2.0F, 0.85F);
@@ -174,13 +174,14 @@ public class ArchipelagoPopulator implements CellPopulator {
         float originalContinentEdge = cell.continentEdge;
         float originalHeight = cell.height;
         float originalWeirdness = cell.weirdness;
+        float originalErosion = cell.erosion;
 
         float shape = this.rawShape(x, z);
 
         float continentFade = 1.0F - smoothStep(
-            this.controlPoints.islandCoast,
-            this.controlPoints.deepOcean,
-            originalContinentEdge
+                this.controlPoints.islandCoast,
+                this.controlPoints.deepOcean,
+                originalContinentEdge
         );
 
         float islandAlpha = shape * continentFade;
@@ -263,9 +264,9 @@ public class ArchipelagoPopulator implements CellPopulator {
         float detailFade = onsetFade * shoreFade;
 
         float detailAmplitudeBlocks = NoiseUtil.lerp(
-            MIN_OCEAN_FLOOR_DETAIL_BLOCKS,
-            MAX_OCEAN_FLOOR_DETAIL_BLOCKS,
-            regionVarianceValue
+                MIN_OCEAN_FLOOR_DETAIL_BLOCKS,
+                MAX_OCEAN_FLOOR_DETAIL_BLOCKS,
+                regionVarianceValue
         );
         float oceanFloorDetailBlocks = ridgeValue * detailAmplitudeBlocks * detailFade;
 
@@ -304,10 +305,8 @@ public class ArchipelagoPopulator implements CellPopulator {
 
         cell.height = beachHeight + inlandRelief;
 
-        cell.continentEdge = Math.max(
-            originalContinentEdge,
-            continentEdge(perturbedAlpha, shelfEnd, originalContinentEdge, this.controlPoints.islandCoast)
-        );
+        // Direct assignment without Math.max so negative continentalness values take effect
+        cell.continentEdge = continentEdge(perturbedAlpha, shelfEnd, originalContinentEdge);
 
         if (cell.height <= this.levels.water) {
             if (perturbedAlpha >= 0.01F) {
@@ -364,16 +363,19 @@ public class ArchipelagoPopulator implements CellPopulator {
         }
     }
 
-    private static float continentEdge(float islandAlpha, float shelfEnd, float originalContinentEdge, float islandCoast) {
+    private static float continentEdge(float islandAlpha, float shelfEnd, float originalContinentEdge) {
+        float coastTransition = -1.05F; // Transition threshold where deep ocean/shelf meets coast
+        float deepInland = -1.2F;       // Deep inland value
+
         if (islandAlpha < shelfEnd) {
             float alpha = smoothStep(0.0F, shelfEnd, islandAlpha);
-            // Lerps from ambient deep ocean (0.0 / originalContinentEdge) up to islandCoast at the waterline
-            return NoiseUtil.lerp(originalContinentEdge, islandCoast, alpha);
+            // Lerps from ambient ocean edge up to coastTransition (-1.05F) at the shelf edge
+            return NoiseUtil.lerp(originalContinentEdge, coastTransition, alpha);
         }
 
         float alpha = smoothStep(shelfEnd, 1.0F, islandAlpha);
-        // Lerps from islandCoast at the shore up to 1.0 deep inland
-        return NoiseUtil.lerp(islandCoast, 1.0F, alpha);
+        // Lerps from coastTransition (-1.05F) at the shore down to deepInland (-1.2F) as it goes inland
+        return NoiseUtil.lerp(coastTransition, deepInland, alpha);
     }
 
     private static float beachWidth(float value) {
