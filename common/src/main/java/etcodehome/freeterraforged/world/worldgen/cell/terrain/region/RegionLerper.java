@@ -27,16 +27,13 @@ public class RegionLerper implements CellPopulator {
         
         this.lower.apply(cell, x, y);
         float lowerHeight = cell.height;
-        float lowerErosion = cell.erosion;
         float lowerWeirdness = cell.weirdness;
         
         this.upper.apply(cell, x, y);
         float upperHeight = cell.height;
-        float upperErosion = cell.erosion;
         float upperWeirdness = cell.weirdness;
         
         cell.height = NoiseUtil.lerp(lowerHeight, upperHeight, alpha);
-        cell.erosion = NoiseUtil.lerp(lowerErosion, upperErosion, alpha);
         cell.weirdness = NoiseUtil.lerp(lowerWeirdness, upperWeirdness, alpha);
     }
 }

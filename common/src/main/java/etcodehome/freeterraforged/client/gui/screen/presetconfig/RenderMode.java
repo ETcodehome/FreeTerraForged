@@ -3,6 +3,8 @@ package etcodehome.freeterraforged.client.gui.screen.presetconfig;
 import java.awt.Color;
 
 import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
+import etcodehome.freeterraforged.world.worldgen.biome.Continentalness;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.river.RiverCarverSettings;
@@ -349,7 +351,6 @@ public enum RenderMode {
         }
     },
     CONTINENT_EDGE {
-
         @Override
         public boolean handlesWater() {
             return true;
@@ -357,9 +358,78 @@ public enum RenderMode {
 
         @Override
         public int getColor(Cell cell, Levels levels, float scale, float bias) {
-            float hue = 0.0F;
-            float saturation = 0.0F;
-            float brightness = cell.continentEdge;
+            float edge = cell.continentEdge;
+            WorldSettings.ControlPoints cp = PresetManager.PM.worldSettings.controlPoints;
+
+            float hue;
+            float saturation;
+            float brightness;
+            float t;
+
+            if (edge <= cp.islandInland) {
+                // Island Inland -> Magenta / Purple
+                hue = 0.82F;
+                saturation = 0.80F;
+                t = cp.islandInland > 0.0F ? NoiseUtil.clamp(edge / cp.islandInland, 0.0F, 1.0F) : 0.0F;
+                brightness = NoiseUtil.lerp(0.50F, 0.90F, t);
+            } else if (edge <= cp.islandCoast) {
+                // Island Coast -> Deep Navy Blue
+                hue = 0.62F;
+                saturation = 0.90F;
+                float minVal = cp.islandInland;
+                float maxVal = cp.islandCoast;
+                t = maxVal > minVal ? NoiseUtil.clamp((edge - minVal) / (maxVal - minVal), 0.0F, 1.0F) : 0.0F;
+                brightness = NoiseUtil.lerp(0.20F, 0.50F, t);
+            } else if (edge <= cp.deepOcean) {
+                // Deep Ocean -> Ocean Blue
+                hue = 0.56F;
+                saturation = 0.75F;
+                float minVal = cp.islandCoast;
+                float maxVal = cp.deepOcean;
+                t = maxVal > minVal ? NoiseUtil.clamp((edge - minVal) / (maxVal - minVal), 0.0F, 1.0F) : 0.0F;
+                brightness = NoiseUtil.lerp(0.40F, 0.70F, t);
+            } else if (edge <= cp.shallowOcean) {
+                // Shallow Ocean -> Light Blue / Teal
+                hue = 0.48F;
+                saturation = 0.65F;
+                float minVal = cp.deepOcean;
+                float maxVal = cp.shallowOcean;
+                t = maxVal > minVal ? NoiseUtil.clamp((edge - minVal) / (maxVal - minVal), 0.0F, 1.0F) : 0.0F;
+                brightness = NoiseUtil.lerp(0.50F, 0.80F, t);
+            } else if (edge <= cp.beach) {
+                // Beach -> Vibrant Yellow
+                hue = 0.14F;
+                saturation = 0.80F;
+                float minVal = cp.shallowOcean;
+                float maxVal = cp.beach;
+                t = maxVal > minVal ? NoiseUtil.clamp((edge - minVal) / (maxVal - minVal), 0.0F, 1.0F) : 0.0F;
+                brightness = NoiseUtil.lerp(0.70F, 0.98F, t);
+            } else if (edge <= cp.coast) {
+                // Coast -> Light Green
+                hue = 0.26F;
+                saturation = 0.55F;
+                float minVal = cp.beach;
+                float maxVal = cp.coast;
+                t = maxVal > minVal ? NoiseUtil.clamp((edge - minVal) / (maxVal - minVal), 0.0F, 1.0F) : 0.0F;
+                brightness = NoiseUtil.lerp(0.60F, 0.85F, t);
+            } else if (edge <= cp.inland) {
+                // Mid-Inland -> Forest Green
+                hue = 0.32F;
+                saturation = 0.70F;
+                float minVal = cp.coast;
+                float maxVal = cp.inland;
+                t = maxVal > minVal ? NoiseUtil.clamp((edge - minVal) / (maxVal - minVal), 0.0F, 1.0F) : 0.0F;
+                brightness = NoiseUtil.lerp(0.50F, 0.75F, t);
+            } else {
+                // Far-Inland Core -> Dark Highland Green
+                hue = 0.37F;
+                saturation = 0.85F;
+                float minVal = cp.inland;
+                float maxVal = 1.0F;
+                t = maxVal > minVal ? NoiseUtil.clamp((edge - minVal) / (maxVal - minVal), 0.0F, 1.0F) : 0.0F;
+                brightness = NoiseUtil.lerp(0.35F, 0.70F, t);
+            }
+
             return rgba(hue, saturation, brightness);
         }
     },

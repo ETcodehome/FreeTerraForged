@@ -282,13 +282,12 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
 
     protected float getDistanceValue(float x, float y, int cellX, int cellY, float distance) {
         distance = this.getVariedDistanceValue(cellX, cellY, distance);
-        distance = NoiseUtil.sqrt(distance);
+        distance = NoiseUtil.sqrt(distance); // 0.0 at ocean border, increasing inward to 1.0+ at core
         distance = NoiseUtil.map(distance, 0.05F, 0.25F, 0.2F);
         distance = this.getCoastalDistanceValue(x, y, distance);
-        if (distance < this.controlPoints.inland && distance >= this.controlPoints.shallowOcean) {
-            distance = this.getCoastalDistanceValue(x, y, distance);
-        }
-        return distance;
+
+        // Return the raw normalized 0-1 distance metric expected by heightmaps and sliders
+        return NoiseUtil.clamp(distance, 0.0F, 1.0F);
     }
 
     protected float getVariedDistanceValue(int cellX, int cellY, float distance) {
