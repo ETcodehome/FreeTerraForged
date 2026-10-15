@@ -219,7 +219,7 @@ public enum RenderMode {
         @Override
         public int getColor(Cell cell, Levels levels, float scale, float bias) {
 
-            float normalized = Math.min(1.0F, cell.gradient / PresetManager.PM.worldSettings.properties.terrainScaler());
+            float normalized = Math.min(1.0F, cell.gradient / PresetManager.PM.worldSettings.properties.terrainScaleFactor());
 
             float hue = 0.0F;
             float saturation = 0.0F;

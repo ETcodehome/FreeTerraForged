@@ -22,7 +22,7 @@ public class Levels {
     private float invElevationSpan;
 
     public Levels(WorldSettings.Properties properties) {
-        int terrainScaleFactor  = properties.terrainScaler();
+        int terrainScaleFactor  = properties.terrainScaleFactor();
         int height              = properties.worldHeight;
         int depth               = properties.worldDepth;
         int seaLevel            = properties.seaLevel;
