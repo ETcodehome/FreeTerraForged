@@ -54,6 +54,7 @@ public final class RegistryUtilImpl {
 		DATA_REGISTRIES.add(new DataRegistry<>(key, codec, synced));
 	}
 
+	@SuppressWarnings("unchecked") // The registry key fixes T; each key has exactly one DeferredRegister in this map.
 	private static <T> DeferredRegister<T> getRegister(ResourceKey<? extends Registry<T>> key) {
 		return (DeferredRegister<T>) REGISTERS.computeIfAbsent(key, (k) -> DeferredRegister.create(key, FTFCommon.MOD_ID));
 	}

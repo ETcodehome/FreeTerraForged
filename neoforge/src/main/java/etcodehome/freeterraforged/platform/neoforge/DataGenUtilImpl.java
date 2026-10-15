@@ -1,15 +1,17 @@
 package etcodehome.freeterraforged.platform.neoforge;
 
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
-import net.minecraft.core.HolderLookup;
+import etcodehome.freeterraforged.FTFCommon;
+import net.minecraft.core.RegistrySetBuilder;
 import net.minecraft.data.DataProvider;
 import net.minecraft.data.PackOutput;
-import net.minecraft.data.registries.RegistriesDatapackGenerator;
+import net.neoforged.neoforge.common.data.DatapackBuiltinEntriesProvider;
 
 public final class DataGenUtilImpl {
 
-	public static DataProvider createRegistryProvider(PackOutput output, CompletableFuture<HolderLookup.Provider> providerLookup) {
-		return new RegistriesDatapackGenerator(output, providerLookup);
+	public static DataProvider createRegistryProvider(PackOutput output, CompletableFuture<RegistrySetBuilder.PatchedRegistries> registries) {
+		return new DatapackBuiltinEntriesProvider(output, registries, Set.of(FTFCommon.MOD_ID, "minecraft"));
 	}
 }

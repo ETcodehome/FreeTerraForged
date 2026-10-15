@@ -7,9 +7,17 @@ import etcodehome.freeterraforged.platform.RegistryUtil;
 import etcodehome.freeterraforged.world.worldgen.feature.placement.poisson.FastPoissonModifier;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.util.random.SimpleWeightedRandomList;
+import net.minecraft.util.valueproviders.ConstantInt;
+import net.minecraft.util.valueproviders.IntProvider;
+import net.minecraft.util.valueproviders.WeightedListInt;
 import net.minecraft.world.level.dimension.LevelStem;
+import net.minecraft.world.level.levelgen.placement.CountPlacement;
 import net.minecraft.world.level.levelgen.placement.PlacementModifier;
 import net.minecraft.world.level.levelgen.placement.PlacementModifierType;
+
+import java.math.BigDecimal;
+import java.math.BigInteger;
 
 public class FTFPlacementModifiers {
 	public static final PlacementModifierType<BlacklistDimensionFilter> BLACKLIST_DIMENSION = register("blacklist_dimension", BlacklistDimensionFilter.CODEC);
@@ -20,7 +28,7 @@ public class FTFPlacementModifiers {
     }
     
     @SafeVarargs
-    @Deprecated(forRemoval = true) // use biome modifiers to remove features instead
+    // Biome modifiers cannot preserve this filter's dimension-specific behavior.
 	public static BlacklistDimensionFilter blacklistDimensions(ResourceKey<LevelStem>... levels) {
     	return new BlacklistDimensionFilter(ImmutableList.copyOf(levels));
     }
@@ -36,6 +44,35 @@ public class FTFPlacementModifiers {
     @Deprecated
     public static LegacyCountExtraModifier countExtra(int count, float extraChance, int extraCount) {
     	return new LegacyCountExtraModifier(count, extraChance, extraCount);
+    }
+
+    public static PlacementModifier countExtraPlacement(int count, float extraChance, int extraCount) {
+        if (!Float.isFinite(extraChance) || extraChance < 0.0F || extraChance > 1.0F) {
+            throw new IllegalArgumentException("extraChance must be between 0 and 1");
+        }
+        if (count < 0 || extraCount < 0) {
+            throw new IllegalArgumentException("count and extraCount must be non-negative");
+        }
+        if (extraChance == 0.0F || extraCount == 0) {
+            return CountPlacement.of(count);
+        }
+        if (extraChance == 1.0F) {
+            return CountPlacement.of(Math.addExact(count, extraCount));
+        }
+
+        BigDecimal probability = new BigDecimal(Float.toString(extraChance)).stripTrailingZeros();
+        int scale = Math.max(0, probability.scale());
+        BigInteger extraWeight = probability.unscaledValue();
+        BigInteger totalWeight = BigInteger.TEN.pow(scale);
+        BigInteger divisor = extraWeight.gcd(totalWeight);
+        int extraWeightInt = extraWeight.divide(divisor).intValueExact();
+        int baseWeightInt = totalWeight.divide(divisor).intValueExact() - extraWeightInt;
+
+        IntProvider distribution = new WeightedListInt(SimpleWeightedRandomList.<IntProvider>builder()
+            .add(ConstantInt.of(count), baseWeightInt)
+            .add(ConstantInt.of(Math.addExact(count, extraCount)), extraWeightInt)
+            .build());
+        return CountPlacement.of(distribution);
     }
     
     private static <P extends PlacementModifier> PlacementModifierType<P> register(String name, MapCodec<P> codec) {

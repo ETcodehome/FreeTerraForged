@@ -1,5 +1,5 @@
 plugins {
-    id "com.github.johnrengelman.shadow" version "7.1.2"
+    id "com.gradleup.shadow" version "9.2.2"
 }
 
 architectury {
@@ -66,6 +66,10 @@ shadowJar {
     archiveClassifier.set("dev-shadow")
 }
 
+shadow {
+    addShadowVariantIntoJavaComponent = false
+}
+
 remapJar {
     injectAccessWidener = true
     input.set shadowJar.archiveFile
@@ -81,10 +85,4 @@ sourcesJar {
     def commonSources = project(":common").sourcesJar
     dependsOn commonSources
     from commonSources.archiveFile.map { zipTree(it) }
-}
-
-components.java {
-    withVariantsFromConfiguration(project.configurations.shadowRuntimeElements) {
-        skip()
-    }
 }

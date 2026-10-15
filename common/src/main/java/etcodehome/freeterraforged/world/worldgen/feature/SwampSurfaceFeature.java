@@ -1,5 +1,6 @@
 package etcodehome.freeterraforged.world.worldgen.feature;
 
+import com.google.common.collect.ImmutableList;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
@@ -8,18 +9,21 @@ import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.WorldGenLevel;
-import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.levelgen.LegacyRandomSource;
+import net.minecraft.world.level.levelgen.WorldgenRandom;
 import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
 import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfiguration;
+import net.minecraft.world.level.levelgen.synth.PerlinSimplexNoise;
 import etcodehome.freeterraforged.world.worldgen.feature.SwampSurfaceFeature.Config;
 
 public class SwampSurfaceFeature extends Feature<Config> {
 	private static final Noise MATERIAL_NOISE = makeMaterialNoise();
+	private static final PerlinSimplexNoise SWAMP_MATERIAL_NOISE = makeSwampMaterialNoise();
 	
 	public SwampSurfaceFeature(Codec<Config> codec) {
 		super(codec);
@@ -44,7 +48,7 @@ public class SwampSurfaceFeature extends Feature<Config> {
 
 				// Level.getHeight uses absolute coordinates safely
 				int surfaceY = level.getHeight(Heightmap.Types.WORLD_SURFACE, worldX, worldZ);
-				double noise = Biome.BIOME_INFO_NOISE.getValue(worldX * 0.25D, worldZ * 0.25D, false);
+				double noise = SWAMP_MATERIAL_NOISE.getValue(worldX * 0.25D, worldZ * 0.25D, false);
 				BlockState filler = getMaterial(worldX, waterY, worldZ, waterY, config);
 
 				// Set our mutable pos to the absolute world coordinate before checking biome
@@ -92,6 +96,10 @@ public class SwampSurfaceFeature extends Feature<Config> {
     	Noise base = Noises.simplex(23, 40, 2);
     	return Noises.warpWhite(base, 213, 2, 4);    	
     }
+
+	private static PerlinSimplexNoise makeSwampMaterialNoise() {
+		return new PerlinSimplexNoise(new WorldgenRandom(new LegacyRandomSource(2345L)), ImmutableList.of(0));
+	}
     
     public record Config(BlockState clayMaterial, BlockState gravelMaterial, BlockState dirtMaterial) implements FeatureConfiguration {
     	public static final Codec<Config> CODEC = RecordCodecBuilder.create(instance -> instance.group(
