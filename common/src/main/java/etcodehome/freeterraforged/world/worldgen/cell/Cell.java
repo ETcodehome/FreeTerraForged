@@ -11,7 +11,7 @@ public class Cell {
     private static final Cell DEFAULTS = new Cell();
     private static final Cell EMPTY = new Cell() {
 
-    	@Override
+        @Override
         public boolean isAbsent() {
             return true;
         }
@@ -21,17 +21,27 @@ public class Cell {
         return new SimpleResource<>(new Cell(), Cell::reset);
     });
 
-    /**
-     * THIS IS NOT A NORMALIZED 0-1 RANGED VALUE - MAX IS PRESET WORLD HEIGHT / 256
-     */
+    /// Surface height represented as a terrainScaler factor.
+    /// Range -X.XF to +X.XF
     public float height;
+
+    /// Surface height change caused by erosion filter pass represented as a terrainscaler factor
+    /// Range -X.XF to +X.XF
     public float heightErosion;
+
+    /// Surface height before the erosion pass runs (pre-filter) represented as a terrainScaler factor
+    /// Range -X.XF to +X.XF
     public float preErosionHeight;
     public float sediment;
     public float gradient;
     public float continentId;
     public float continentSizeModifier;
+
+    /// Relative position inside the presets control point bands.
+    /// Control point preset band values alter what the empirical value conceptually maps to.
+    /// Range | 0.0F to 1.0F (Normalized)
     public float continentEdge;
+
     public float waterTable;
     public float continentDistance;
     public float terrainRegionId;
@@ -53,7 +63,6 @@ public class Cell {
     public boolean erosionMask;
     public Terrain terrain;
     public float erosion;
-    public boolean forceErosion;
     public float weirdness;
     // Terrain-selected erosion before rivers and climate apply biome-specific overrides.
     public float terrainErosion;
@@ -73,7 +82,7 @@ public class Cell {
         this.waterTable = 0.0F;
         this.continentSizeModifier = 1.0F;
     }
-    
+
     public void copyFrom(Cell other) {
         this.height = other.height;
         this.heightErosion = other.heightErosion;
@@ -133,7 +142,7 @@ public class Cell {
         }
         return resource;
     }
-    
+
     public interface Visitor {
         void visit(Cell cell, int x, int z);
     }
