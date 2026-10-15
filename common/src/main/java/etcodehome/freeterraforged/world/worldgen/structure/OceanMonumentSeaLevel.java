@@ -26,8 +26,6 @@ public final class OceanMonumentSeaLevel {
 
 	public static int effective(WorldGenLevel level) {
 		int configured = configured(level);
-		return configured == NOT_FTF
-			? level.getLevel().getChunkSource().getGenerator().getSeaLevel()
-			: configured;
+		return configured == NOT_FTF ? level.getSeaLevel() : configured;
 	}
 }
