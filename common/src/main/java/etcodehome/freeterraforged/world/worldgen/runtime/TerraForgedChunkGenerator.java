@@ -396,20 +396,6 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 	}
 
 	@Override
-	@SuppressWarnings("deprecation")
-	public BiomeGenerationSettings getBiomeGenerationSettings(Holder<Biome> biome) {
-		WorldgenRuntimeBinding current = this.runtime;
-		if (current == null) {
-			return biome.value().getGenerationSettings();
-		}
-		return current.current().biomeDecorationPlan().generationSettings(biome);
-	}
-
-	BiomeGenerationSettings realizedBiomeGenerationSettings(Holder<Biome> biome) {
-		return biome.value().getGenerationSettings();
-	}
-
-	@Override
 	public java.util.concurrent.CompletableFuture<ChunkAccess> fillFromNoise(
 			Blender blender,
 			RandomState randomState,

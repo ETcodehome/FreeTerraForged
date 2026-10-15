@@ -1096,8 +1096,8 @@ public final class MinecraftWorldgenPlanCompiler {
 		ChunkGenerator generator,
 		Holder<Biome> biome
 	) {
-		if (generator instanceof TerraForgedChunkGenerator terraForged) {
-			return terraForged.realizedBiomeGenerationSettings(biome);
+		if (generator instanceof TerraForgedChunkGenerator) {
+			return biome.value().getGenerationSettings();
 		}
 		return generator.getBiomeGenerationSettings(biome);
 	}

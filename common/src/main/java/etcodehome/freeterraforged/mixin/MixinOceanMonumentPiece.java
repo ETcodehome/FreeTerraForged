@@ -7,7 +7,6 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 
 import net.minecraft.world.level.WorldGenLevel;
 
-@SuppressWarnings("public-target")
 @Mixin(targets = "net.minecraft.world.level.levelgen.structure.structures.OceanMonumentPieces$OceanMonumentPiece")
 abstract class MixinOceanMonumentPiece {
 	@Redirect(

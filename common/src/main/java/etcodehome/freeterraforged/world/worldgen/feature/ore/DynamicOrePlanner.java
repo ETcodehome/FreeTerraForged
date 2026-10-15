@@ -1,7 +1,6 @@
 package etcodehome.freeterraforged.world.worldgen.feature.ore;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -10,12 +9,6 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 import net.minecraft.core.Holder;
-import net.minecraft.core.Registry;
-import net.minecraft.core.RegistryAccess;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.level.biome.Biome;
-import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import etcodehome.freeterraforged.world.worldgen.feature.ore.DynamicOrePlan.VerticalFrame;
 import etcodehome.freeterraforged.world.worldgen.feature.ore.DynamicOrePlan.VerticalTransform;
@@ -30,23 +23,6 @@ public final class DynamicOrePlanner {
 
 	private DynamicOrePlanner(OreContractClassifier classifier) {
 		this.classifier = classifier;
-	}
-
-	public DynamicOrePlan build(
-		RegistryAccess registries,
-		ChunkGenerator generator,
-		Collection<Holder<Biome>> possibleBiomes,
-		VerticalFrame verticalFrame
-	) {
-		Registry<PlacedFeature> placedFeatures = registries.registryOrThrow(Registries.PLACED_FEATURE);
-		List<BiomeInput> biomes = possibleBiomes.stream().map(biome -> new BiomeInput(
-			generator.getBiomeGenerationSettings(biome).features().stream()
-				.map(step -> step.stream()
-					.map(holder -> new FeatureInput(featureId(holder, holder.value(), placedFeatures), holder.value()))
-					.toList())
-				.toList()
-		)).toList();
-		return new DynamicOrePlanner(new OreContractClassifier(registries)).build(biomes, verticalFrame);
 	}
 
 	public DynamicOrePlan build(
@@ -141,15 +117,6 @@ public final class DynamicOrePlanner {
 
 	private static void increment(Map<String, Integer> counts, String reason) {
 		counts.merge(reason, 1, Integer::sum);
-	}
-
-	private static String featureId(Holder<PlacedFeature> holder, PlacedFeature feature, Registry<PlacedFeature> registry) {
-		return holder.unwrapKey()
-			.map(key -> key.location().toString())
-			.orElseGet(() -> {
-				ResourceLocation id = registry.getKey(feature);
-				return id == null ? "<direct>" : id.toString();
-			});
 	}
 
 	record FeatureInput(String id, PlacedFeature feature) {
