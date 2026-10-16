@@ -39,4 +39,4 @@ jobs:
           name: build-${{ github.sha }}
           path: |
             neoforge/build/libs/*.jar
-	    !neoforge/build/libs/*shadow*
+            !neoforge/build/libs/*shadow*
