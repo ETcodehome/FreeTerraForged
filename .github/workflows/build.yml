@@ -14,15 +14,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Project uses Java 21 (see gradle.properties / toolchain in root build.gradle)
       - name: Set up JDK 21
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
 
-      # Minecraft/loom dependencies are large — cache the Gradle dependency store.
-      # Key changes when any build file or the wrapper version changes, so stale caches never go stale.
       - name: Cache Gradle dependencies
         uses: actions/cache@v4
         with:
@@ -36,27 +33,10 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew build
 
-      # upload-artifact does not support exclusion patterns, so stage the jars we want.
-      # Production artifacts only (no dev/shadow/sources):
-      #   fabric  -> remapped jar with classifier "fabric-${minecraft_version}"
-      #             e.g. freeterraforged-1.0.0010-fabric-1.21.1.jar
-      #   neoforge-> remapJar output, no classifier (the only jar without a dev/shadow/sources suffix)
-      - name: Stage production jars
-        run: |
-          set -euo pipefail
-          mkdir -p dist/fabric dist/neoforge
-
-          cp fabric/build/libs/*-fabric*.jar dist/fabric/
-          find neoforge/build/libs -maxdepth 1 \( \
-            ! -name '*-dev.jar' \
-            ! -name '*-shadow.jar' \
-            ! -name '*.sources.jar' \
-          \) -print0 | xargs -0 cp dist/neoforge/
-
       - name: Upload jars artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          # One unique artifact per commit so builds from different commits don't overwrite each other.
-          name: production-jars-${{ github.sha }}
-          path: dist/
+          name: build-${{ github.sha }}
+          path: neoforge/build/libs/*.jar
+	  !neoforge/build/libs/*shadow*
           if-no-files-found: error
