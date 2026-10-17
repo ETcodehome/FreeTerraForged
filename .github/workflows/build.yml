@@ -47,8 +47,8 @@ jobs:
 
       - name: Upload Fabric jar
         uses: actions/upload-artifact@v7
-        archive: false
         with:
           name: fabric-${{ steps.read_mod_version.outputs.mod_version }}-${{ github.sha}}
+          archive: false
           path: |
             fabric/build/libs/*.jar
