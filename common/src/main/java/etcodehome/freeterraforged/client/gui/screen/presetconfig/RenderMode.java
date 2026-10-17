@@ -230,12 +230,9 @@ public enum RenderMode {
     SEDIMENT {
         @Override
         public int getColor(Cell cell, Levels levels, float scale, float bias) {
-
-            float normalized = NoiseUtil.clamp((cell.sediment + 1.0F) * 0.5F, 0.0F, 1.0F);
-
             float hue = 0.0F;
             float saturation = 0.0F;
-            float brightness = normalized;
+            float brightness = cell.sediment;
             return rgba(hue, saturation, brightness);
         }
     },
