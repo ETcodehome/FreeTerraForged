@@ -60,7 +60,7 @@ public class PresetNoiseRouterData {
         ctx.register(NoiseRouterData.RIDGES, FTFDensityFunctions.cell(CellSampler.Field.WEIRDNESS));
 
         DensityFunction height = NoiseRouterData.registerAndWrap(ctx, HEIGHT, FTFDensityFunctions.cell(CellSampler.Field.HEIGHT));
-        DensityFunction offset = NoiseRouterData.registerAndWrap(ctx, NoiseRouterData.OFFSET, DensityFunctions.add(DensityFunctions.constant(NoiseRouterData.GLOBAL_OFFSET - 0.5F), DensityFunctions.mul(FTFDensityFunctions.clampToNearestUnit(height, properties.terrainScaler()), DensityFunctions.constant(2.0D))));
+        DensityFunction offset = NoiseRouterData.registerAndWrap(ctx, NoiseRouterData.OFFSET, DensityFunctions.add(DensityFunctions.constant(NoiseRouterData.GLOBAL_OFFSET - 0.5F), DensityFunctions.mul(FTFDensityFunctions.clampToNearestUnit(height, properties.terrainScaleFactor()), DensityFunctions.constant(2.0D))));
         ctx.register(NoiseRouterData.DEPTH, DensityFunctions.add(DensityFunctions.yClampedGradient(-worldDepth, worldHeight, yGradientRange(-worldDepth), yGradientRange(worldHeight)), offset));
         ctx.register(NoiseRouterData.BASE_3D_NOISE_OVERWORLD, DensityFunctions.zero());
         ctx.register(NoiseRouterData.JAGGEDNESS, jaggednessPerformanceHack());
