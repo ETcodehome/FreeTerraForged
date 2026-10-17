@@ -1,4 +1,4 @@
-name: Build Mod
+name: Build FreeTerraForged Mod
 
 on:
   push:
@@ -30,11 +30,23 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew build
 
-      - name: Upload jars artifact
+      - name: Read Mod Version
+        id: read_mod_version
+        run: |
+          MOD_VERSION=$(grep "^mod_version=" gradle.properties | cut -d'=' -f2-)
+          echo "mod_version=$MOD_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Upload Neoforge jar
         uses: actions/upload-artifact@v7
         with:
-          name: build-${{ github.sha}}
+          name: neoforge-${{ steps.read_mod_version.outputs.mod_version }}-${{ github.sha}}
           path: |
             neoforge/build/libs/*.jar
-            fabric/build/libs/*.jar
             !neoforge/build/libs/*shadow*
+
+      - name: Upload Fabric jar
+        uses: actions/upload-artifact@v7
+        with:
+          name: fabric-${{ steps.read_mod_version.outputs.mod_version }}-${{ github.sha}}
+          path: |
+            fabric/build/libs/*.jar
