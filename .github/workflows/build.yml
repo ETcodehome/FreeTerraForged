@@ -52,3 +52,4 @@ jobs:
           archive: false
           path: |
             fabric/build/libs/*.jar
+            !fabric/build/libs/*shadow*
