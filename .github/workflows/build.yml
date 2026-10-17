@@ -1,11 +1,8 @@
-name: Build
+name: Build Mod
 
 on:
   push:
-    # All commits to any branch (and tags)
   pull_request:
-    # PRs from any source/target branch
-
 jobs:
   build:
     name: Build & upload production jars
@@ -24,8 +21,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ~/.gradle/caches
+            ~/.gradle/caches/modules-2
             ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/build.gradle', 'settings.gradle', 'gradle.properties', 'gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
 
       - name: Build with Gradle
         run: ./gradlew build
@@ -33,7 +33,7 @@ jobs:
       - name: Upload jars artifact
         uses: actions/upload-artifact@v7
         with:
-          name: build-${{ github.sha }}
+          name: build-${{ github.sha}}
           path: |
             neoforge/build/libs/*.jar
             fabric/build/libs/*.jar
