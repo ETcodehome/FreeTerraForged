@@ -5,7 +5,7 @@ on:
   pull_request:
 jobs:
   build:
-    name: Build & upload production jars
+    name: Build & upload jars
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
