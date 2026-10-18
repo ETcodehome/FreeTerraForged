@@ -49,6 +49,8 @@ public class WorldFilters {
         Erosion erosion = this.erosion.get(size);
         erosion.apply(map, seedX, seedZ, 1);
 
+        relaxation.apply(map, seedX, seedZ, 1);
+
         this.beach.apply(map, seedX, seedZ, 1);
         this.steepness.apply(map, seedX, seedZ, 1);
     }
