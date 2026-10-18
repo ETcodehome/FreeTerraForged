@@ -10,14 +10,13 @@ import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 
 /**
  * Double-buffered (Jacobi) cliff relaxation pre-pass. Smooths spikes, pits and sheer cliff faces so the
- * Erosion filter that runs after it operates on already-smoothed terrain.
+ * Erosion filter that runs after it reads already-smoothed terrain.
  *
  * Uses local relief (max - min over the cell and its 4 neighbors) for the mask so spikes and pits are
  * detected, and a smoothstep ramp so the mask has no hard kinks. Heights are committed to the cells once,
  * after all passes.
  *
- * This filter must run BEFORE {@link Erosion}. It also records {@code Cell.preErosionHeight} (the height
- * before any relaxation or erosion), which Erosion uses for its waterline check.
+ * Self-contained: it only reads and writes cell heights. Run it BEFORE {@link Erosion}.
  *
  * Units: relief thresholds are in BLOCKS and converted to normalized height using worldHeight, so the
  * result is independent of world height.
@@ -31,7 +30,6 @@ public class CliffRelaxation implements Filter {
     private static final float MAX_CLIFF_BLOCKS = 8.0f;
 
     // Relaxation fades in from ground level up to ground + this many levels (see Modifier.range / Modifier.modify).
-    // Kept separate from Erosion's ramp so the two can be tuned independently; defaults match.
     private static final int RELAX_RAMP_LEVELS = 15;
 
     // Per thread scratch buffers, allocated once and reused across apply() calls.
@@ -63,18 +61,13 @@ public class CliffRelaxation implements Filter {
         final int total = tileSize * tileSize;
 
         final Scratch scratch = SCRATCH.get();
-        scratch.reserve(cells.length);
+        scratch.reserve(total);
         final float[] heights = scratch.heights;
         final float[] next = scratch.next;
         final float[] mods = scratch.mods;
 
-        // Store the pre-erosion heights (before relaxation), used by Erosion's waterline check.
-        for (Cell cell : cells) {
-            cell.preErosionHeight = cell.height;
-        }
-
         // Pre-extract initial height state into a flat primitive array.
-        for (int i = 0; i < cells.length; ++i) {
+        for (int i = 0; i < total; ++i) {
             heights[i] = cells[i].height;
         }
 
@@ -83,7 +76,7 @@ public class CliffRelaxation implements Filter {
         final float invRange = 1.0f / Math.max(1e-5f, maxRelief - minRelief);
 
         // Modifier.modify depends only on per-cell state, and cell.height is not committed until after all
-        // passes, so its factor is identical in every pass. Evaluate it once here instead of once per pass.
+        // passes, so its factor is identical in every pass. Evaluate it once here.
         // 0 marks cells that are masked, non-finite, or have a zero factor: they never change, so the passes
         // skip them without reading their neighbors.
         for (int i = 0; i < total; ++i) {
@@ -145,7 +138,7 @@ public class CliffRelaxation implements Filter {
     private static final class Scratch {
         float[] heights = new float[0];
         float[] next = new float[0];  // Jacobi back-buffer
-        float[] mods = new float[0];  // Modifier factor per cell, constant across relaxation passes
+        float[] mods = new float[0];  // Modifier factor per cell, constant across passes
 
         /** Grow-only: reallocates only when a larger map than any previously seen arrives on this thread. */
         void reserve(final int n) {

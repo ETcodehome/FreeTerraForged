@@ -15,23 +15,36 @@ import etcodehome.freeterraforged.world.worldgen.util.Seed;
  * Single-pass procedural erosion filter based on Runevision's Phacelle Noise algorithm.
  * Replaces iterative hydraulic droplet simulations with direct analytical evaluation.
  *
- * This filter expects to run AFTER {@link CliffRelaxation}, which smooths the terrain and records
- * {@code Cell.preErosionHeight}. Erosion itself reads the (already relaxed) cell heights.
+ * Intended to run AFTER {@link CliffRelaxation}. Erosion has no hard dependency on it: it only reads cell
+ * heights, and records its own {@code Cell.preErosionHeight} snapshot of the terrain it received.
  *
  * The erosion pass is purely ADDITIVE: each octave contributes (noise * mask * strength), so a zero
  * mask means zero change. The current cell height is used only to modulate masks, never as a height
  * offset, so there is no contrast-stretching around a midpoint.
  *
- * Flat terrain is protected by a slope gate: below FLAT_SLOPE_START the cell is skipped entirely, and
- * the final delta is capped by what the local slope can physically support. There is no mask floor,
- * so a low slope really does mean zero erosion.
+ * Flat terrain is protected by a slope gate: cells whose RAW slope is below FLAT_SLOPE_START are skipped
+ * entirely, and the final delta is capped by what the local slope can physically support. There is no mask
+ * floor, so a low slope really does mean zero erosion.
+ *
+ * Slopes are a minmod of the one-sided differences rather than a central difference, so the flat rim of a
+ * cliff top does not inherit half the cliff's slope (which used to put full-amplitude noise on the rim).
+ *
+ * SMOOTHED AMPLITUDE SLOPE: minmod reads exactly 0 on a crest, rim or valley floor, but the cells right next
+ * to it read the full flank slope. Used directly, the carve amplitude jumps from closed to fully open in a
+ * single cell, so the delta field jumps by tens of blocks between neighbors. That jump is the spike above a
+ * ridgeline / pit below a base. To make amplitude continuous, the carve gate and depth cap read a smoothed
+ * copy of the slope: a small window-MIN (spreads the crest's "zero" outward) followed by a box blur (turns
+ * the edge of that quiet zone into a ramp).
+ *
+ * Division of labor between the two slope fields:
+ *  - RAW slope: decides whether a cell is processed at all, and drives the noise SHAPE (masks, gully
+ *    direction). Because it decides processing, sediment coverage is identical to the unsmoothed filter.
+ *  - SMOOTHED slope: drives only the carve AMPLITUDE (gate and depth cap). A cell can be processed (and have
+ *    its sediment updated) while receiving no carve because the smoothed gate is closed.
  *
  * The depth cap uses a SATURATED slope (MAX_SLOPE_FOR_CAP). Without saturation the cap grows without
  * bound on cliffs (where slopes are 10-50 blocks/block), which lets full-amplitude noise through exactly
  * where it produces spikes. The cap is also applied AFTER the sediment multiplier, which can be up to 2x.
- *
- * Slopes are a minmod of the one-sided differences rather than a central difference, so the flat rim of a
- * cliff top does not inherit half the cliff's slope (which used to put full-amplitude noise on the rim).
  *
  * Units: the erosion math runs entirely in BLOCKS.
  *  - Wavelength: s.scale * BASE_WAVELENGTH_BLOCKS blocks (octave n: divided by lacunarity^n).
@@ -50,9 +63,19 @@ public class Erosion implements Filter {
     /**
      * Slope (blocks/block) below which erosion is fully off, and above which the gate is fully open.
      * Smoothstep in between. START should sit just above the slope your flat and rolling terrain produces.
+     * The raw slope is tested against START only (to decide whether to process the cell); the smoothed
+     * slope uses the full START..FULL smoothstep to scale the carve.
      */
     private static final float FLAT_SLOPE_START = 0.15f;
     private static final float FLAT_SLOPE_FULL  = 0.60f;
+
+    /**
+     * Radius (cells) of both the window-min and the box blur applied to the amplitude slope. Carve amplitude
+     * fades out over roughly 2 * this many cells around any crest, rim or valley floor.
+     * Raise it if spikes still show next to sharp ridgelines; lower it if erosion detail is dying out on
+     * terrain that oscillates quickly. 0 disables the smoothing (raw minmod slope, as before).
+     */
+    private static final int GATE_SMOOTH_RADIUS = 2;
 
     /**
      * Max |delta| as a multiple of (slope * base wavelength): a gully can't be deeper than the slope
@@ -158,9 +181,16 @@ public class Erosion implements Filter {
         final float[] heights = scratch.heights;
         final float[] slopeX = scratch.slopeX;
         final float[] slopeZ = scratch.slopeZ;
+        final float[] gateSlope = scratch.gateSlope;
+        final float[] gateTmp = scratch.gateTmp;
         final float[] phacelleOut = scratch.phacelleOut;
 
-        // Step 1: Pre-extract the current (already relaxed, see CliffRelaxation) heights into a flat primitive array
+        // Store the pre-erosion heights (the terrain as this filter received it).
+        for (Cell cell : cells) {
+            cell.preErosionHeight = cell.height;
+        }
+
+        // Step 1: Pre-extract initial height state into flat primitive array
         for (int i = 0; i < cells.length; ++i) {
             heights[i] = cells[i].height;
         }
@@ -207,6 +237,20 @@ public class Erosion implements Filter {
             }
         }
 
+        // Step 2b: Build the smoothed slope field used ONLY for carve amplitude (gate and depth cap).
+        // Non-finite slopes are treated as 0 so they can't poison their neighbors through the blur.
+        final int total = tileSize * tileSize;
+        for (int i = 0; i < total; ++i) {
+            final float sx = slopeX[i];
+            final float sz = slopeZ[i];
+            final float len = (float) Math.sqrt(sx * sx + sz * sz + 1e-10f);
+            gateSlope[i] = Float.isFinite(len) ? len : 0.0f;
+        }
+        if (GATE_SMOOTH_RADIUS > 0) {
+            windowMin(gateSlope, gateTmp, tileSize, GATE_SMOOTH_RADIUS);
+            boxBlur(gateSlope, gateTmp, tileSize, GATE_SMOOTH_RADIUS);
+        }
+
         final int worldBlockX = map.getBlockX();
         final int worldBlockZ = map.getBlockZ();
 
@@ -232,16 +276,25 @@ public class Erosion implements Filter {
 
                 final float curSlopeX = slopeX[idx];
                 final float curSlopeZ = slopeZ[idx];
+
+                // Raw slope: drives the noise SHAPE (masks, gully direction) and decides whether this cell is
+                // processed at all. Using the raw slope here keeps sediment coverage identical to the
+                // unsmoothed filter.
                 final float slopeLen = (float) Math.sqrt(curSlopeX * curSlopeX + curSlopeZ * curSlopeZ + 1e-10f);
 
-                // Flat gate: smoothstep on slope. Flat cells skip all noise sampling (big perf win too).
-                final float slopeT = NoiseUtil.clamp((slopeLen - FLAT_SLOPE_START) / slopeGateRange, 0.0f, 1.0f);
-                final float flatGate = slopeT * slopeT * (3.0f - 2.0f * slopeT);
-                if (flatGate <= 0.0f) {
-                    continue;
+                final float rawT = NoiseUtil.clamp((slopeLen - FLAT_SLOPE_START) / slopeGateRange, 0.0f, 1.0f);
+                if (rawT <= 0.0f) {
+                    continue; // genuinely flat: skip all noise sampling
                 }
 
-                // Modifier is linear in its value argument and depends only on the cell (its relaxed height,
+                // Smoothed slope: drives the carve AMPLITUDE only (gate and depth cap), so it is continuous
+                // across crests, rims and valley floors. It may be 0 here even though the raw gate is open;
+                // in that case the cell still updates sediment below but receives no carve.
+                final float smoothSlope = gateSlope[idx];
+                final float ampT = NoiseUtil.clamp((smoothSlope - FLAT_SLOPE_START) / slopeGateRange, 0.0f, 1.0f);
+                final float flatGate = ampT * ampT * (3.0f - 2.0f * ampT);
+
+                // Modifier is linear in its value argument and depends only on the cell (its height,
                 // terrain, river mask), so evaluate it once. A factor of exactly 0 (below ground, river
                 // centers) means the result is exactly 0, so skip all noise work. Note: skipped cells do not
                 // update cell.sediment, because that update depends on the octave loop below.
@@ -338,12 +391,20 @@ public class Erosion implements Filter {
                 }
 
                 cell.sediment = NoiseUtil.clamp(cell.sediment + ridgeMapFadeTarget * (1.0f - ridgeMapCombiMask), -1.0f, 1.0f);
+
+                // The smoothed gate can be closed while the raw gate is open. Sediment is already recorded
+                // above, so there is nothing left to do for this cell.
+                if (flatGate <= 0.0f) {
+                    continue;
+                }
+
                 // Up to 2.0 when sediment == -1, so the depth cap below must be applied AFTER this.
                 final float sedimentModifier = Math.max(MIN_SEDIMENT_MODIFIER, 1.0F - cell.sediment);
 
-                // Gate by slope, apply sediment, then cap by what the (saturated) slope can physically support.
-                // Saturating the slope keeps the cap finite on cliffs, where raw slope is 10-50 blocks/block.
-                final float capSlope = Math.min(slopeLen, MAX_SLOPE_FOR_CAP);
+                // Gate by slope, apply sediment, then cap by what the (saturated, smoothed) slope can
+                // physically support. Saturating keeps the cap finite on cliffs, and smoothing keeps it
+                // continuous from cell to cell.
+                final float capSlope = Math.min(smoothSlope, MAX_SLOPE_FOR_CAP);
                 final float maxDepth = MAX_DEPTH_PER_SLOPE * capSlope * this.scaleBlocks;
                 final float gatedBlocks = NoiseUtil.clamp(
                         accumulatedHeightDelta * flatGate * sedimentModifier,
@@ -359,13 +420,86 @@ public class Erosion implements Filter {
         }
 
         // Keep land that was carved below the waterline at ground level, and keep heightErosion consistent.
-        // preErosionHeight is recorded by CliffRelaxation, before relaxation ran.
         for (Cell cell : cells) {
             boolean wasLand = cell.preErosionHeight > this.levels.water;
             boolean afterIsWater = cell.height <= this.levels.water;
             if (wasLand && afterIsWater) {
                 cell.heightErosion += this.levels.ground - cell.height;
                 cell.height = this.levels.ground;
+            }
+        }
+    }
+
+    /**
+     * Separable square-window minimum (radius r, clamped at the tile edges). Result is written back into
+     * {@code buf}; {@code tmp} is scratch. Spreads zeros (crests, rims, valley floors) outward by r cells.
+     */
+    private static void windowMin(final float[] buf, final float[] tmp, final int size, final int r) {
+        final int last = size - 1;
+
+        // Horizontal: buf -> tmp
+        for (int z = 0; z < size; ++z) {
+            final int row = z * size;
+            for (int x = 0; x < size; ++x) {
+                final int lo = Math.max(0, x - r);
+                final int hi = Math.min(last, x + r);
+                float m = buf[row + lo];
+                for (int k = lo + 1; k <= hi; ++k) {
+                    final float v = buf[row + k];
+                    if (v < m) m = v;
+                }
+                tmp[row + x] = m;
+            }
+        }
+
+        // Vertical: tmp -> buf
+        for (int z = 0; z < size; ++z) {
+            final int lo = Math.max(0, z - r);
+            final int hi = Math.min(last, z + r);
+            for (int x = 0; x < size; ++x) {
+                float m = tmp[lo * size + x];
+                for (int k = lo + 1; k <= hi; ++k) {
+                    final float v = tmp[k * size + x];
+                    if (v < m) m = v;
+                }
+                buf[z * size + x] = m;
+            }
+        }
+    }
+
+    /**
+     * Separable box blur (radius r), averaging only over in-bounds cells at the tile edges. Result is
+     * written back into {@code buf}; {@code tmp} is scratch. Turns the hard edge of the quiet zone left by
+     * {@link #windowMin} into a ramp.
+     */
+    private static void boxBlur(final float[] buf, final float[] tmp, final int size, final int r) {
+        final int last = size - 1;
+
+        // Horizontal: buf -> tmp
+        for (int z = 0; z < size; ++z) {
+            final int row = z * size;
+            for (int x = 0; x < size; ++x) {
+                final int lo = Math.max(0, x - r);
+                final int hi = Math.min(last, x + r);
+                float sum = 0.0f;
+                for (int k = lo; k <= hi; ++k) {
+                    sum += buf[row + k];
+                }
+                tmp[row + x] = sum / (hi - lo + 1);
+            }
+        }
+
+        // Vertical: tmp -> buf
+        for (int z = 0; z < size; ++z) {
+            final int lo = Math.max(0, z - r);
+            final int hi = Math.min(last, z + r);
+            final float inv = 1.0f / (hi - lo + 1);
+            for (int x = 0; x < size; ++x) {
+                float sum = 0.0f;
+                for (int k = lo; k <= hi; ++k) {
+                    sum += tmp[k * size + x];
+                }
+                buf[z * size + x] = sum * inv;
             }
         }
     }
@@ -469,6 +603,8 @@ public class Erosion implements Filter {
         float[] heights = new float[0];
         float[] slopeX = new float[0];
         float[] slopeZ = new float[0];
+        float[] gateSlope = new float[0]; // Smoothed slope magnitude used for the carve gate and depth cap
+        float[] gateTmp = new float[0];   // Temp buffer for the separable min / blur passes
         final float[] phacelleOut = new float[4];
 
         /** Grow-only: reallocates only when a larger map than any previously seen arrives on this thread. */
@@ -477,6 +613,8 @@ public class Erosion implements Filter {
                 this.heights = new float[n];
                 this.slopeX = new float[n];
                 this.slopeZ = new float[n];
+                this.gateSlope = new float[n];
+                this.gateTmp = new float[n];
             }
         }
     }
