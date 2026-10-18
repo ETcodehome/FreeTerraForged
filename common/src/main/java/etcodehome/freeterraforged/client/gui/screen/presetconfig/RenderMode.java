@@ -243,11 +243,11 @@ public enum RenderMode {
 
             float val = cell.sediment; // Ranges from -1.0 to +1.0
 
-            // Distance from 0.0 drives the grayscale intensity:
-            // 0.0 at the center = Black (0)
-            // ±1.0 at the extremes = White (255)
-            float intensity = Math.min(1.0f, Math.abs(val));
-            int c = (int) (intensity * 255.0f);
+            // Map from [-1.0, +1.0] to [0.0, 1.0]:
+            // -1.0 = Black (0)
+            // +1.0 = White (255)
+            float normalized = (Math.max(-1.0f, Math.min(1.0f, val)) + 1.0f) * 0.5f;
+            int c = (int) (normalized * 255.0f);
 
             return rgba(c, c, c);
         }

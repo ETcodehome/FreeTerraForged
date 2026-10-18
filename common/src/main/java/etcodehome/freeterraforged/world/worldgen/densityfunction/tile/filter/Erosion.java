@@ -42,6 +42,15 @@ import etcodehome.freeterraforged.world.worldgen.util.Seed;
  *  - SMOOTHED slope: drives only the carve AMPLITUDE (gate and depth cap). A cell can run the octave loop
  *    (and have its sediment updated) while receiving no carve because the smoothed gate is closed.
  *
+ * HEADROOM LIMIT: the noise is signed, so on a narrow spire the cells a few blocks from the peak (where the
+ * slope reads steep and the gate is open) can be raised ABOVE the original crest, making pillars taller and
+ * thinner. Positive carve is therefore softly limited by the headroom above the highest ORIGINAL terrain in
+ * a small window (ENVELOPE_RADIUS): c -> c * h / (c + h), where h = (envMax - height) in blocks plus
+ * ENVELOPE_MARGIN_BLOCKS. Small raises pass almost unchanged and large ones saturate smoothly at h, so there
+ * are no flat shelves. At a peak h is just the margin; on a slope it is roughly slope * radius. Negative
+ * carve (gullies) is not limited. The envelope is built from the pre-erosion heights, which this filter never
+ * modifies during the pass, so results do not depend on cell iteration order.
+ *
  * SEDIMENT COVERAGE: every cell that is not erosion-masked and not non-finite gets a sediment update.
  *  - Raw-flat cells take a closed-form shortcut (no noise sampling): with no carve mask the octave loop
  *    would reduce to the height fade, so that value is written directly.
@@ -83,6 +92,16 @@ public class Erosion implements Filter {
      * terrain that oscillates quickly. 0 disables the smoothing (raw minmod slope, as before).
      */
     private static final int GATE_SMOOTH_RADIUS = 2;
+
+    /** Radius (cells) of the window used to find the highest original terrain near a cell. */
+    private static final int ENVELOPE_RADIUS = 3;
+
+    /**
+     * Extra blocks a cell may rise even when it is already the local maximum. Lower = flatter crests,
+     * higher = more ridge relief survives. Raise ENVELOPE_RADIUS or this value if ridges look too tame.
+     * Must be > 0 (it is the floor of the headroom, which is used as a divisor).
+     */
+    private static final float ENVELOPE_MARGIN_BLOCKS = 0.5f;
 
     /**
      * Max |delta| as a multiple of (slope * base wavelength): a gully can't be deeper than the slope
@@ -194,6 +213,7 @@ public class Erosion implements Filter {
         final Scratch scratch = SCRATCH.get();
         scratch.reserve(cells.length);
         final float[] heights = scratch.heights;
+        final float[] envHi = scratch.envHi;
         final float[] slopeX = scratch.slopeX;
         final float[] slopeZ = scratch.slopeZ;
         final float[] gateSlope = scratch.gateSlope;
@@ -209,6 +229,14 @@ public class Erosion implements Filter {
         for (int i = 0; i < cells.length; ++i) {
             heights[i] = cells[i].height;
         }
+
+        // Step 1b: Envelope of the highest original terrain near each cell (used by the headroom limit).
+        // gateTmp is free until step 2b, so it doubles as the temp buffer here.
+        for (int i = 0; i < cells.length; ++i) {
+            final float h = heights[i];
+            envHi[i] = Float.isFinite(h) ? h : Float.NEGATIVE_INFINITY; // non-finite cells can't raise the envelope
+        }
+        windowMax(envHi, gateTmp, tileSize, ENVELOPE_RADIUS);
 
         // Step 2: Compute slopes with clamped boundary checks.
         // Multiplying by worldHeight gives blocks of rise per block of run.
@@ -434,8 +462,16 @@ public class Erosion implements Filter {
                         accumulatedHeightDelta * flatGate * sedimentModifier,
                         -maxDepth, maxDepth);
 
+                // Soft headroom limit: positive carve may not push the cell meaningfully above the highest
+                // original terrain nearby. headroom >= ENVELOPE_MARGIN_BLOCKS > 0, so the division is safe.
+                float limitedBlocks = gatedBlocks;
+                if (limitedBlocks > 0.0f) {
+                    final float headroom = (envHi[idx] - baseHeight) * wh + ENVELOPE_MARGIN_BLOCKS;
+                    limitedBlocks = limitedBlocks * headroom / (limitedBlocks + headroom);
+                }
+
                 // Blocks -> this world's normalized height units.
-                final float deltaNormalized = gatedBlocks / this.worldHeight;
+                final float deltaNormalized = limitedBlocks / this.worldHeight;
 
                 final float change = erosionFactor * deltaNormalized;
                 cell.heightErosion += change;
@@ -450,6 +486,43 @@ public class Erosion implements Filter {
             if (wasLand && afterIsWater) {
                 cell.heightErosion += this.levels.ground - cell.height;
                 cell.height = this.levels.ground;
+            }
+        }
+    }
+
+    /**
+     * Separable square-window maximum (radius r, clamped at the tile edges). Result is written back into
+     * {@code buf}; {@code tmp} is scratch. Used to find the highest original terrain near each cell.
+     */
+    private static void windowMax(final float[] buf, final float[] tmp, final int size, final int r) {
+        final int last = size - 1;
+
+        // Horizontal: buf -> tmp
+        for (int z = 0; z < size; ++z) {
+            final int row = z * size;
+            for (int x = 0; x < size; ++x) {
+                final int lo = Math.max(0, x - r);
+                final int hi = Math.min(last, x + r);
+                float m = buf[row + lo];
+                for (int k = lo + 1; k <= hi; ++k) {
+                    final float v = buf[row + k];
+                    if (v > m) m = v;
+                }
+                tmp[row + x] = m;
+            }
+        }
+
+        // Vertical: tmp -> buf
+        for (int z = 0; z < size; ++z) {
+            final int lo = Math.max(0, z - r);
+            final int hi = Math.min(last, z + r);
+            for (int x = 0; x < size; ++x) {
+                float m = tmp[lo * size + x];
+                for (int k = lo + 1; k <= hi; ++k) {
+                    final float v = tmp[k * size + x];
+                    if (v > m) m = v;
+                }
+                buf[z * size + x] = m;
             }
         }
     }
@@ -625,16 +698,18 @@ public class Erosion implements Filter {
     // Per thread scratch storage.
     private static final class Scratch {
         float[] heights = new float[0];
+        float[] envHi = new float[0];     // Highest original terrain within ENVELOPE_RADIUS of each cell
         float[] slopeX = new float[0];
         float[] slopeZ = new float[0];
         float[] gateSlope = new float[0]; // Smoothed slope magnitude used for the carve gate and depth cap
-        float[] gateTmp = new float[0];   // Temp buffer for the separable min / blur passes
+        float[] gateTmp = new float[0];   // Temp buffer for the separable max / min / blur passes
         final float[] phacelleOut = new float[4];
 
         /** Grow-only: reallocates only when a larger map than any previously seen arrives on this thread. */
         void reserve(final int n) {
             if (this.heights.length < n) {
                 this.heights = new float[n];
+                this.envHi = new float[n];
                 this.slopeX = new float[n];
                 this.slopeZ = new float[n];
                 this.gateSlope = new float[n];
