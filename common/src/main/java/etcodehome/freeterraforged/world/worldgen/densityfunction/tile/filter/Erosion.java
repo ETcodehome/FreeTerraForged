@@ -15,6 +15,9 @@ import etcodehome.freeterraforged.world.worldgen.util.Seed;
  * Single-pass procedural erosion filter based on Runevision's Phacelle Noise algorithm.
  * Replaces iterative hydraulic droplet simulations with direct analytical evaluation.
  *
+ * This filter expects to run AFTER {@link CliffRelaxation}, which smooths the terrain and records
+ * {@code Cell.preErosionHeight}. Erosion itself reads the (already relaxed) cell heights.
+ *
  * The erosion pass is purely ADDITIVE: each octave contributes (noise * mask * strength), so a zero
  * mask means zero change. The current cell height is used only to modulate masks, never as a height
  * offset, so there is no contrast-stretching around a midpoint.
@@ -29,9 +32,6 @@ import etcodehome.freeterraforged.world.worldgen.util.Seed;
  *
  * Slopes are a minmod of the one-sided differences rather than a central difference, so the flat rim of a
  * cliff top does not inherit half the cliff's slope (which used to put full-amplitude noise on the rim).
- *
- * Cliff relaxation runs as a separate double-buffered pre-pass, so the erosion pass
- * operates on the already-smoothed terrain.
  *
  * Units: the erosion math runs entirely in BLOCKS.
  *  - Wavelength: s.scale * BASE_WAVELENGTH_BLOCKS blocks (octave n: divided by lacunarity^n).
@@ -92,12 +92,6 @@ public class Erosion implements Filter {
      * which is intentional: rounding only shapes the first (coarsest) octave.
      */
     private static final float ROUNDING_DECAY_PER_OCTAVE = 0.001f;
-
-    // Cliff relaxation tuning. RATE must stay < 0.5 or the filter can oscillate/amplify noise.
-    private static final int   CLIFF_PASSES     = 3;
-    private static final float CLIFF_RELAX_RATE = 0.4f;
-    private static final float MIN_CLIFF_BLOCKS = 3.0f;
-    private static final float MAX_CLIFF_BLOCKS = 8.0f;
 
     // Prevents sediment from fully zeroing the carve.
     private static final float MIN_SEDIMENT_MODIFIER = 0.2f;
@@ -162,26 +156,16 @@ public class Erosion implements Filter {
         final Scratch scratch = SCRATCH.get();
         scratch.reserve(cells.length);
         final float[] heights = scratch.heights;
-        final float[] relaxed = scratch.relaxed;
-        final float[] relaxMod = scratch.relaxMod;
         final float[] slopeX = scratch.slopeX;
         final float[] slopeZ = scratch.slopeZ;
         final float[] phacelleOut = scratch.phacelleOut;
 
-        // Store the pre-erosion heights
-        for (Cell cell : cells) {
-            cell.preErosionHeight = cell.height;
-        }
-
-        // Step 1: Pre-extract initial height state into flat primitive array
+        // Step 1: Pre-extract the current (already relaxed, see CliffRelaxation) heights into a flat primitive array
         for (int i = 0; i < cells.length; ++i) {
             heights[i] = cells[i].height;
         }
 
-        // Step 1b: Relax cliffs BEFORE computing slopes, so erosion sees the smoothed terrain
-        relaxCliffs(cells, heights, relaxed, relaxMod, tileSize);
-
-        // Step 2: Compute slopes (from relaxed heights) with clamped boundary checks.
+        // Step 2: Compute slopes with clamped boundary checks.
         // Multiplying by worldHeight gives blocks of rise per block of run.
         //
         // Slopes use a minmod of the one-sided differences (not a central difference), so a plateau rim
@@ -375,6 +359,7 @@ public class Erosion implements Filter {
         }
 
         // Keep land that was carved below the waterline at ground level, and keep heightErosion consistent.
+        // preErosionHeight is recorded by CliffRelaxation, before relaxation ran.
         for (Cell cell : cells) {
             boolean wasLand = cell.preErosionHeight > this.levels.water;
             boolean afterIsWater = cell.height <= this.levels.water;
@@ -382,76 +367,6 @@ public class Erosion implements Filter {
                 cell.heightErosion += this.levels.ground - cell.height;
                 cell.height = this.levels.ground;
             }
-        }
-    }
-
-    /**
-     * Double-buffered (Jacobi) cliff relaxation. Uses local relief (max - min over the cell and its
-     * 4 neighbors) for the mask so spikes and pits are detected, and a smoothstep ramp so the
-     * mask has no hard kinks. Commits to the cells once after all passes.
-     */
-    private void relaxCliffs(final Cell[] cells, final float[] heights, final float[] next, final float[] mods, final int mapSize) {
-        final float minRelief = MIN_CLIFF_BLOCKS / this.worldHeight;
-        final float maxRelief = MAX_CLIFF_BLOCKS / this.worldHeight;
-        final float invRange = 1.0f / Math.max(1e-5f, maxRelief - minRelief);
-        final int total = mapSize * mapSize;
-
-        // Modifier.modify depends only on per-cell state, and cell.height is not committed until after all
-        // passes, so its factor is identical in every pass. Evaluate it once here instead of once per pass.
-        // 0 marks cells that are masked, non-finite, or have a zero factor: they never change, so the passes
-        // skip them without reading their neighbors.
-        for (int i = 0; i < total; ++i) {
-            final Cell cell = cells[i];
-            mods[i] = (cell.erosionMask || !Float.isFinite(heights[i])) ? 0.0f : this.modifier.modify(cell, 1.0F);
-        }
-
-        for (int pass = 0; pass < CLIFF_PASSES; ++pass) {
-            for (int z = 0; z < mapSize; ++z) {
-                final int row = z * mapSize;
-                final int zPrevRow = Math.max(0, z - 1) * mapSize;
-                final int zNextRow = Math.min(mapSize - 1, z + 1) * mapSize;
-
-                for (int x = 0; x < mapSize; ++x) {
-                    final int idx = row + x;
-                    final float c = heights[idx];
-                    final float m = mods[idx];
-
-                    if (m == 0.0f) {
-                        next[idx] = c;
-                        continue;
-                    }
-
-                    final float l = heights[row + Math.max(0, x - 1)];
-                    final float r = heights[row + Math.min(mapSize - 1, x + 1)];
-                    final float d = heights[zPrevRow + x];
-                    final float u = heights[zNextRow + x];
-
-                    final float avg = 0.25f * (l + r + d + u);
-
-                    // Symmetric local relief: includes the center, so spikes and pits are detected too.
-                    final float hi = Math.max(Math.max(c, l), Math.max(Math.max(r, d), u));
-                    final float lo = Math.min(Math.min(c, l), Math.min(Math.min(r, d), u));
-
-                    final float t = NoiseUtil.clamp((hi - lo - minRelief) * invRange, 0.0f, 1.0f);
-                    final float mask = t * t * (3.0f - 2.0f * t); // smoothstep, no hard kinks
-
-                    final float delta = (avg - c) * mask * CLIFF_RELAX_RATE;
-                    next[idx] = c + m * delta;
-                }
-            }
-            System.arraycopy(next, 0, heights, 0, total);
-        }
-
-        // Commit to cells once, after all passes.
-        // Cells with a 0 factor were never changed, so there is nothing to commit for them.
-        for (int i = 0; i < total; ++i) {
-            final float h = heights[i];
-            if (mods[i] == 0.0f || !Float.isFinite(h)) {
-                continue;
-            }
-            final Cell cell = cells[i];
-            cell.heightErosion += (h - cell.height);
-            cell.height = h;
         }
     }
 
@@ -552,8 +467,6 @@ public class Erosion implements Filter {
     // Per thread scratch storage.
     private static final class Scratch {
         float[] heights = new float[0];
-        float[] relaxed = new float[0];   // Jacobi back-buffer for cliff relaxation
-        float[] relaxMod = new float[0];  // Modifier factor per cell, constant across relaxation passes
         float[] slopeX = new float[0];
         float[] slopeZ = new float[0];
         final float[] phacelleOut = new float[4];
@@ -562,8 +475,6 @@ public class Erosion implements Filter {
         void reserve(final int n) {
             if (this.heights.length < n) {
                 this.heights = new float[n];
-                this.relaxed = new float[n];
-                this.relaxMod = new float[n];
                 this.slopeX = new float[n];
                 this.slopeZ = new float[n];
             }
