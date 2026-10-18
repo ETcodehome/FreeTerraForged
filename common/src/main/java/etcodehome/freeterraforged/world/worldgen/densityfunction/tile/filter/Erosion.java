@@ -22,9 +22,9 @@ import etcodehome.freeterraforged.world.worldgen.util.Seed;
  * mask means zero change. The current cell height is used only to modulate masks, never as a height
  * offset, so there is no contrast-stretching around a midpoint.
  *
- * Flat terrain is protected by a slope gate: cells whose RAW slope is below FLAT_SLOPE_START are skipped
- * entirely, and the final delta is capped by what the local slope can physically support. There is no mask
- * floor, so a low slope really does mean zero erosion.
+ * Flat terrain is protected by a slope gate: cells whose RAW slope is below FLAT_SLOPE_START are not carved
+ * and skip all noise sampling, and the final delta is capped by what the local slope can physically support.
+ * There is no mask floor, so a low slope really does mean zero erosion.
  *
  * Slopes are a minmod of the one-sided differences rather than a central difference, so the flat rim of a
  * cliff top does not inherit half the cliff's slope (which used to put full-amplitude noise on the rim).
@@ -37,10 +37,17 @@ import etcodehome.freeterraforged.world.worldgen.util.Seed;
  * the edge of that quiet zone into a ramp).
  *
  * Division of labor between the two slope fields:
- *  - RAW slope: decides whether a cell is processed at all, and drives the noise SHAPE (masks, gully
- *    direction). Because it decides processing, sediment coverage is identical to the unsmoothed filter.
- *  - SMOOTHED slope: drives only the carve AMPLITUDE (gate and depth cap). A cell can be processed (and have
- *    its sediment updated) while receiving no carve because the smoothed gate is closed.
+ *  - RAW slope: decides whether a cell runs the octave loop, and drives the noise SHAPE (masks, gully
+ *    direction).
+ *  - SMOOTHED slope: drives only the carve AMPLITUDE (gate and depth cap). A cell can run the octave loop
+ *    (and have its sediment updated) while receiving no carve because the smoothed gate is closed.
+ *
+ * SEDIMENT COVERAGE: every cell that is not erosion-masked and not non-finite gets a sediment update.
+ *  - Raw-flat cells take a closed-form shortcut (no noise sampling): with no carve mask the octave loop
+ *    would reduce to the height fade, so that value is written directly.
+ *  - The ridge mask is capped at RIDGE_MASK_MAX so it can never saturate to exactly 1.0, which would make
+ *    the update add exactly 0 on steep cells and gully walls.
+ *  - Cells with a zero modifier factor (below ground, river centers) are still skipped, as in the original.
  *
  * The depth cap uses a SATURATED slope (MAX_SLOPE_FOR_CAP). Without saturation the cap grows without
  * bound on cliffs (where slopes are 10-50 blocks/block), which lets full-amplitude noise through exactly
@@ -63,7 +70,7 @@ public class Erosion implements Filter {
     /**
      * Slope (blocks/block) below which erosion is fully off, and above which the gate is fully open.
      * Smoothstep in between. START should sit just above the slope your flat and rolling terrain produces.
-     * The raw slope is tested against START only (to decide whether to process the cell); the smoothed
+     * The raw slope is tested against START only (to decide whether to run the octave loop); the smoothed
      * slope uses the full START..FULL smoothstep to scale the carve.
      */
     private static final float FLAT_SLOPE_START = 0.15f;
@@ -96,6 +103,14 @@ public class Erosion implements Filter {
      * This rescales the ridge mask input so it doesn't saturate at 1. Tune this before the slider.
      */
     private static final float RIDGE_SLOPE_SCALE = 0.01f;
+
+    /**
+     * Upper bound for the ridge mask. easeOut() returns exactly 1.0 once its input reaches 1, and the
+     * sediment update adds ridgeMapFadeTarget * (1 - mask), so a saturated mask adds exactly 0 and leaves
+     * sediment at its default. Capping below 1 keeps a small signal on every cell. Lower = stronger signal
+     * on steep cells, at the cost of drifting further from the uncapped behaviour.
+     */
+    private static final float RIDGE_MASK_MAX = 0.98f;
 
     /**
      * Normalized height treated as the "midpoint" when deriving the height fade used for masking
@@ -277,14 +292,25 @@ public class Erosion implements Filter {
                 final float curSlopeX = slopeX[idx];
                 final float curSlopeZ = slopeZ[idx];
 
-                // Raw slope: drives the noise SHAPE (masks, gully direction) and decides whether this cell is
-                // processed at all. Using the raw slope here keeps sediment coverage identical to the
-                // unsmoothed filter.
+                // Raw slope: drives the noise SHAPE (masks, gully direction) and decides whether this cell
+                // runs the octave loop.
                 final float slopeLen = (float) Math.sqrt(curSlopeX * curSlopeX + curSlopeZ * curSlopeZ + 1e-10f);
+
+                // Used ONLY for masking / sediment seeding, never as a height offset.
+                final float heightFade = NoiseUtil.clamp((baseHeight - HEIGHT_MIDPOINT) * 2.0f, -1.0f, 1.0f);
+
+                // Initial ridge mask, capped so it can't saturate (see RIDGE_MASK_MAX).
+                float ridgeMapCombiMask = Math.min(RIDGE_MASK_MAX,
+                        easeOut(slopeLen * RIDGE_SLOPE_SCALE * s.slopeOnsetRidge));
 
                 final float rawT = NoiseUtil.clamp((slopeLen - FLAT_SLOPE_START) / slopeGateRange, 0.0f, 1.0f);
                 if (rawT <= 0.0f) {
-                    continue; // genuinely flat: skip all noise sampling
+                    // Genuinely flat: skip all noise sampling and the carve, but still record sediment.
+                    // With no carve mask the octave loop would leave ridgeMapFadeTarget at heightFade and
+                    // the mask at its initial value, so the same update is written directly.
+                    cell.sediment = NoiseUtil.clamp(
+                            cell.sediment + heightFade * (1.0f - ridgeMapCombiMask), -1.0f, 1.0f);
+                    continue;
                 }
 
                 // Smoothed slope: drives the carve AMPLITUDE only (gate and depth cap), so it is continuous
@@ -296,17 +322,14 @@ public class Erosion implements Filter {
 
                 // Modifier is linear in its value argument and depends only on the cell (its height,
                 // terrain, river mask), so evaluate it once. A factor of exactly 0 (below ground, river
-                // centers) means the result is exactly 0, so skip all noise work. Note: skipped cells do not
-                // update cell.sediment, because that update depends on the octave loop below.
+                // centers) means the result is exactly 0, so skip all noise work. Note: those cells do not
+                // update cell.sediment.
                 final float erosionFactor = this.modifier.modify(cell, 1.0F);
                 if (erosionFactor == 0.0F) {
                     continue;
                 }
 
                 final float worldX = (float) (worldBlockX + x);
-
-                // Used ONLY for masking / sediment seeding, never as a height offset.
-                final float heightFade = NoiseUtil.clamp((baseHeight - HEIGHT_MIDPOINT) * 2.0f, -1.0f, 1.0f);
 
                 // Depth in BLOCKS, wavelength in blocks: the ratio stays constant at any world height.
                 float currentStrength = this.strength * this.scaleBlocks;
@@ -322,7 +345,6 @@ public class Erosion implements Filter {
                         slopeLen * s.slopeOnsetBase,
                         roundingForInput * s.slopeOnsetBase));
 
-                float ridgeMapCombiMask = easeOut(slopeLen * RIDGE_SLOPE_SCALE * s.slopeOnsetRidge);
                 float ridgeMapFadeTarget = heightFade;
 
                 float gullySlopeX = curSlopeX;
@@ -379,7 +401,9 @@ public class Erosion implements Filter {
                     combiMask = powInv(combiMask, this.detail) * newMask; // no floor
 
                     ridgeMapFadeTarget = lerp(ridgeMapFadeTarget, phacelleX, ridgeMapCombiMask);
-                    ridgeMapCombiMask *= easeOut(sloping * s.slopeOnsetOctave);
+                    // Capped so the mask can't pin at exactly 1.0 through every octave.
+                    ridgeMapCombiMask = Math.min(RIDGE_MASK_MAX,
+                            ridgeMapCombiMask * easeOut(sloping * s.slopeOnsetOctave));
 
                     currentStrength *= this.gain;
                     freq *= this.lacunarity;
