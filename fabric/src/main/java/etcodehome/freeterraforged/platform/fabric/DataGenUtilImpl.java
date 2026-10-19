@@ -21,6 +21,7 @@ import net.fabricmc.fabric.api.event.registry.DynamicRegistries;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.Registry;
+import net.minecraft.core.RegistrySetBuilder;
 import net.minecraft.data.CachedOutput;
 import net.minecraft.data.DataProvider;
 import net.minecraft.data.PackOutput;
@@ -32,8 +33,8 @@ import etcodehome.freeterraforged.mixin.MixinRegistrySetBuilder$EmptyTagLookup;
 
 public class DataGenUtilImpl {
 
-	public static DataProvider createRegistryProvider(PackOutput output, CompletableFuture<HolderLookup.Provider> providerLookup) {
-		return new Provider(output, providerLookup);
+	public static DataProvider createRegistryProvider(PackOutput output, CompletableFuture<RegistrySetBuilder.PatchedRegistries> registries) {
+		return new Provider(output, registries.thenApply(RegistrySetBuilder.PatchedRegistries::patches));
 	}
 
 	// a port of the forge patches to RegistriesDatapackGenerator

@@ -14,7 +14,6 @@ import etcodehome.freeterraforged.client.gui.widget.Label;
 import etcodehome.freeterraforged.client.gui.widget.WidgetList;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetManager.PM;
 import etcodehome.freeterraforged.platform.ConfigUtil;
-import org.apache.commons.compress.utils.FileNameUtils;
 import org.jetbrains.annotations.Nullable;
 import com.google.gson.JsonParser;
 import com.google.gson.stream.JsonWriter;
@@ -450,7 +449,8 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 						.toList()
 				) {
 					try(Reader reader = Files.newBufferedReader(presetPath)) {
-						String base = FileNameUtils.getBaseName(presetPath.toString());
+						String fileName = presetPath.getFileName().toString();
+						String base = fileName.substring(0, fileName.length() - ".json".length());
 						DataResult<Preset> result = Preset.DIRECT_CODEC.parse(JsonOps.INSTANCE, JsonParser.parseReader(reader));
 						Preset preset = result.resultOrPartial(err -> {}).orElse(null);
 						if(preset != null) {

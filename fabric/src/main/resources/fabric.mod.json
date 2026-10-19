@@ -11,7 +11,9 @@
     "psiber",
     "squinch"
   ],
-  "credits":"The wider TerraForged community, in all its past and present iterations.",
+  "contributors": [
+    "The wider TerraForged community, in all its past and present iterations."
+  ],
   "contact": {
     "repo": "https://github.com/etcodehome/freeterraforged/",
     "issues": "https://github.com/etcodehome/freeterraforged/issues"
