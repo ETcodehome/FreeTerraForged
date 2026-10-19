@@ -228,15 +228,28 @@ public enum RenderMode {
         }
     },
     SEDIMENT {
+
+        @Override
+        public boolean handlesWater() {
+            return true;
+        }
+
         @Override
         public int getColor(Cell cell, Levels levels, float scale, float bias) {
 
-            float normalized = NoiseUtil.clamp((cell.sediment + 1.0F) * 0.5F, 0.0F, 1.0F);
+            if (cell.erosionMask){
+                return rgba(255, 32, 32);
+            }
 
-            float hue = 0.0F;
-            float saturation = 0.0F;
-            float brightness = normalized;
-            return rgba(hue, saturation, brightness);
+            float val = cell.sediment; // Ranges from -1.0 to +1.0
+
+            // Map from [-1.0, +1.0] to [0.0, 1.0]:
+            // -1.0 = Black (0)
+            // +1.0 = White (255)
+            float normalized = (Math.max(-1.0f, Math.min(1.0f, val)) + 1.0f) * 0.5f;
+            int c = (int) (normalized * 255.0f);
+
+            return rgba(c, c, c);
         }
     },
     WEIRDNESS{
