@@ -5,7 +5,7 @@ on:
     types:
       - completed
     workflows:
-      - 'Build'
+      - 'Build FreeTerraForged Mod'
 
 jobs:
   comment:
