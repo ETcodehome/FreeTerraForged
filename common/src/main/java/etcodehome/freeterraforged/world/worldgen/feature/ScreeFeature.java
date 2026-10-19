@@ -52,6 +52,13 @@ public class ScreeFeature extends Feature<Config> {
     private static final float WARP_SCALE = 0.04F;
     private static final float WARP_STRENGTH = 22.0F;
 
+    private static final boolean SNOWLINE_ROCK_ENABLED = true;
+    private static final float SNOW_FREEZE_TEMPERATURE = 0.15F;
+    private static final int SNOWLINE_COOLING_START_Y = 80;
+    private static final float SNOWLINE_ROCK_MARGIN = 0.025F;
+    private static final float SNOWLINE_ROCK_MARGIN_VARIANCE = 0.0125F;
+    private static final float SNOWLINE_MIN_BASE_TEMPERATURE = 0.25F;
+
     // Internal Mixture Matrices
     private static final WeightedBlockSelector SCREE_MATERIALS = new WeightedBlockSelector(List.of(
             new WeightedBlockEntry(Blocks.GRAVEL.defaultBlockState(), 1),
@@ -117,7 +124,7 @@ public class ScreeFeature extends Feature<Config> {
                     }
 
                     if(surfaceY <= scaledY && surfaceY >= generator.getSeaLevel() - 1 && !biome.is(Biomes.WOODED_BADLANDS) && !biome.is(Biomes.BADLANDS)) {
-                        erodeColumn(config, levels, rand, clusterNoise, warpX, warpZ, generator, chunk, cell, pos, surfaceY);
+                        erodeColumn(config, levels, rand, clusterNoise, warpX, warpZ, generator, chunk, cell, pos, surfaceY, biome.value());
                         // remove any foliage that may have generated above
                         pos.setY(surfaceY);
                         while(!level.getBlockState(pos.setY(pos.getY() + 1)).canSurvive(level, pos)) {
@@ -173,7 +180,7 @@ public class ScreeFeature extends Feature<Config> {
         }
     }
 
-    private static void erodeColumn(Config config, Levels levels, Noise rand, Noise clusterNoise, Noise warpX, Noise warpZ, ChunkGenerator generator, ChunkAccess chunk, Cell cell, BlockPos.MutableBlockPos pos, int surfaceY) {
+    private static void erodeColumn(Config config, Levels levels, Noise rand, Noise clusterNoise, Noise warpX, Noise warpZ, ChunkGenerator generator, ChunkAccess chunk, Cell cell, BlockPos.MutableBlockPos pos, int surfaceY, Biome biome) {
         if (cell.terrain.isRiver() || cell.terrain.isWetland()) {
             return;
         }
@@ -184,11 +191,14 @@ public class ScreeFeature extends Feature<Config> {
 
         BlockState top = chunk.getBlockState(pos);
         if(top.is(FTFBlockTags.ERODIBLE)) {
-            BlockState material = getMaterial(config, levels, rand, clusterNoise, warpX, warpZ, generator, cell, pos, surfaceY, top, generator instanceof NoiseBasedChunkGenerator noiseChunkGenerator ? noiseChunkGenerator.generatorSettings().value().defaultBlock() : Blocks.STONE.defaultBlockState());
+            BlockState material = getMaterial(config, levels, rand, clusterNoise, warpX, warpZ, generator, cell, pos, surfaceY, top, generator instanceof NoiseBasedChunkGenerator noiseChunkGenerator ? noiseChunkGenerator.generatorSettings().value().defaultBlock() : Blocks.STONE.defaultBlockState(), biome);
             if (material != top) {
                 // Treat TUFF as a decorative band (like Mossy Cobble) rather than running erodeRock on it
                 if (material.is(FTFBlockTags.ROCK) && !material.is(Blocks.TUFF)) {
-                    erodeRock(chunk, cell, pos, surfaceY);
+                    boolean snowTop = top.is(Blocks.SNOW_BLOCK) || top.is(Blocks.POWDER_SNOW);
+                    float steepness = cell.gradient + rand.compute(pos.getX(), pos.getZ(), 1) * config.slopeModifier();
+                    boolean steepRock = steepness > config.rockSteepness();
+                    erodeRock(chunk, cell, pos, surfaceY, snowTop && !steepRock);
                     return;
                 } else {
                     ColumnDecorator.fillDownSolid(chunk, pos, surfaceY, surfaceY - 4, material);
@@ -198,7 +208,7 @@ public class ScreeFeature extends Feature<Config> {
         }
     }
 
-    private static void erodeRock(ChunkAccess chunk, Cell cell, BlockPos.MutableBlockPos pos, int y) {
+    private static void erodeRock(ChunkAccess chunk, Cell cell, BlockPos.MutableBlockPos pos, int y, boolean keepTop) {
         int depth = 32;
         BlockState material = Blocks.GRAVEL.defaultBlockState();
         for (int dy = 3; dy < 32; dy++) {
@@ -211,7 +221,7 @@ public class ScreeFeature extends Feature<Config> {
             }
         }
 
-        for (int dy = 0; dy < depth; dy++) {
+        for (int dy = keepTop ? 1 : 0; dy < depth; dy++) {
             ColumnDecorator.replaceSolid(chunk, pos.setY(y - dy), material);
         }
     }
@@ -232,7 +242,7 @@ public class ScreeFeature extends Feature<Config> {
         }
     }
 
-    private static BlockState getMaterial(Config config, Levels levels, Noise rand, Noise clusterNoise, Noise warpX, Noise warpZ, ChunkGenerator generator, Cell cell, BlockPos.MutableBlockPos pos, int surfaceY, BlockState top, BlockState middle) {
+    private static BlockState getMaterial(Config config, Levels levels, Noise rand, Noise clusterNoise, Noise warpX, Noise warpZ, ChunkGenerator generator, Cell cell, BlockPos.MutableBlockPos pos, int surfaceY, BlockState top, BlockState middle, Biome biome) {
         int x = pos.getX();
         int z = pos.getZ();
         float height = cell.height + rand.compute(x, z, 0) * config.heightModifier();
@@ -260,7 +270,7 @@ public class ScreeFeature extends Feature<Config> {
         float dirtThreshold = ColumnDecorator.sampleNoise(x, z, dirtVarFloat, effectiveDirtBias);
 
         // Compare normalized 'height' (0.0 - 1.0) against normalized thresholds
-        if (steepness > config.rockSteepness() || height > rockThreshold) {
+        if (steepness > config.rockSteepness() || height > rockThreshold || isAboveSnowlineRock(biome, pos, surfaceY)) {
             return rock(middle);
         }
 
@@ -273,6 +283,26 @@ public class ScreeFeature extends Feature<Config> {
         }
 
         return top;
+    }
+
+    private static boolean isAboveSnowlineRock(Biome biome, BlockPos.MutableBlockPos pos, int surfaceY) {
+        if (!SNOWLINE_ROCK_ENABLED) {
+            return false;
+        }
+
+        int x = pos.getX();
+        int z = pos.getZ();
+
+        float baseTemperature = biome.getTemperature(pos.setY(SNOWLINE_COOLING_START_Y));
+        boolean above = false;
+        if (baseTemperature >= SNOWLINE_MIN_BASE_TEMPERATURE) {
+            float surfaceTemperature = biome.getTemperature(pos.setY(surfaceY));
+            float margin = ColumnDecorator.sampleNoise(x, z, SNOWLINE_ROCK_MARGIN_VARIANCE, SNOWLINE_ROCK_MARGIN);
+            above = surfaceTemperature < SNOW_FREEZE_TEMPERATURE + margin;
+        }
+
+        pos.setY(surfaceY);
+        return above;
     }
 
     private static BlockState rock(BlockState state) {
