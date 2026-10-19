@@ -363,9 +363,15 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 
 		Cell cell = SCRATCH_CELL.get();
 
-		// Safe non-blocking check: use cached lookups where available to mitigate thread starvation/deadlocks
-		boolean allowAccurate = !Thread.currentThread().getName().contains("sampler");
-		ctx.lookup.applyCell(cell, x, z, allowAccurate, false);
+		try {
+			// Attempt standard accurate sampling. If a cache closure race condition
+			// occurs anywhere in this call stack, catch it cleanly instead of crashing.
+			ctx.lookup.applyCell(cell, x, z, true, false);
+		} catch (IllegalStateException e) {
+			// Gracefully fallback to safe/approximate sampling if the underlying
+			// cache closed during a background transition or teleport race.
+			ctx.lookup.applyCell(cell, x, z, false, true);
+		}
 
 		// Convert normalized height (0.0F - 1.0F) to world Y block coordinate
 		return ctx.levels.scale(cell.height);
