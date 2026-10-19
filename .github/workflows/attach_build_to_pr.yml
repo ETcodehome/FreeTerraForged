@@ -4,8 +4,7 @@ on:
   workflow_run:
     types:
       - completed
-    workflows:
-      - 'Build FreeTerraForged Mod'
+    workflows: [Build FreeTerraForged Mod]
 
 jobs:
   comment:
