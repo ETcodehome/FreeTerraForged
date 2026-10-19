@@ -33,16 +33,12 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: neoforge-${{ steps.read_mod_version.outputs.mod_version }}-${{ github.sha}}
-          archive: false
           path: |
             neoforge/build/libs/*.jar
-            !neoforge/build/libs/*shadow*
 
       - name: Upload Fabric jar
         uses: actions/upload-artifact@v7
         with:
           name: fabric-${{ steps.read_mod_version.outputs.mod_version }}-${{ github.sha}}
-          archive: false
           path: |
             fabric/build/libs/*.jar
-            !fabric/build/libs/*shadow*
