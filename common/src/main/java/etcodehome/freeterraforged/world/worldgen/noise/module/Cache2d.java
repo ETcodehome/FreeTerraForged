@@ -3,7 +3,6 @@ package etcodehome.freeterraforged.world.worldgen.noise.module;
 import com.mojang.serialization.MapCodec;
 import etcodehome.freeterraforged.world.worldgen.util.PosUtil;
 
-@Deprecated
 public record Cache2d(Noise noise, ThreadLocal<Cached> cache) implements Noise {
 	public static final MapCodec<Cache2d> CODEC = HOLDER_HELPER_CODEC.xmap(Cache2d::new, Cache2d::noise).fieldOf("value");
 	

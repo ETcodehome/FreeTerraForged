@@ -189,10 +189,17 @@ public final class DynamicHeightRangePlacement {
 
 	private static long extensionSeed(PlacementContext context, ResourceLocation featureId, BlockPos origin, int baseY) {
 		long seed = context.getLevel().getSeed();
-		seed ^= Mth.getSeed(origin.getX(), baseY, origin.getZ());
+		seed ^= legacyPositionSeed(origin.getX(), baseY, origin.getZ());
 		seed ^= (long)featureId.getNamespace().hashCode() << 32;
 		seed ^= Integer.toUnsignedLong(featureId.getPath().hashCode());
 		return mix64(seed);
+	}
+
+	private static long legacyPositionSeed(int x, int y, int z) {
+		// Preserve vanilla's deprecated positional hash so existing placement results stay deterministic.
+		long seed = (long) (x * 3129871) ^ (long) z * 116129781L ^ y;
+		seed = seed * seed * 42317861L + seed * 11L;
+		return seed >> 16;
 	}
 
 	private static long mix64(long value) {

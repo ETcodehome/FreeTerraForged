@@ -401,10 +401,12 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 		if (current == null) {
 			return super.getBiomeGenerationSettings(biome);
 		}
+		// BiomeFilter and other callers must see the same settings as decoration.
 		return current.current().biomeDecorationPlan().generationSettings(biome);
 	}
 
 	BiomeGenerationSettings realizedBiomeGenerationSettings(Holder<Biome> biome) {
+		// Compilation consumes loader-realized inputs, never the previous compiled plan.
 		return super.getBiomeGenerationSettings(biome);
 	}
 
