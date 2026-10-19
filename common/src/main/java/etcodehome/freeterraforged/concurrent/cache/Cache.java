@@ -24,24 +24,24 @@ public class Cache<V extends ExpiringEntry> implements AutoCloseable {
 		scheduler.setRemoveOnCancelPolicy(true);
 		return scheduler;
 	}
-	
-    private LongMap<V> map;
-    private long lifetimeMS;
-    private volatile long timeout;
-    private ScheduledFuture<?> poll;
+
+	private LongMap<V> map;
+	private long lifetimeMS;
+	private volatile long timeout;
+	private ScheduledFuture<?> poll;
 	private final AtomicBoolean closed = new AtomicBoolean();
 	private final ReentrantReadWriteLock lifecycle = new ReentrantReadWriteLock();
-    
-    public Cache(int capacity, long expireTime, long pollInterval, TimeUnit unit, IntFunction<LongMap<V>> mapFunc) {
-        this.timeout = 0L;
-        this.map = mapFunc.apply(capacity);
-        this.lifetimeMS = unit.toMillis(expireTime);
-        
-        long intervalMillis = unit.toMillis(pollInterval);
-        this.poll = SCHEDULER.scheduleAtFixedRate(this::poll, intervalMillis, intervalMillis, TimeUnit.MILLISECONDS);
-    }
-    
-    public void remove(long key) {
+
+	public Cache(int capacity, long expireTime, long pollInterval, TimeUnit unit, IntFunction<LongMap<V>> mapFunc) {
+		this.timeout = 0L;
+		this.map = mapFunc.apply(capacity);
+		this.lifetimeMS = unit.toMillis(expireTime);
+
+		long intervalMillis = unit.toMillis(pollInterval);
+		this.poll = SCHEDULER.scheduleAtFixedRate(this::poll, intervalMillis, intervalMillis, TimeUnit.MILLISECONDS);
+	}
+
+	public void remove(long key) {
 		this.lifecycle.readLock().lock();
 		try {
 			this.requireOpen();
@@ -49,9 +49,9 @@ public class Cache<V extends ExpiringEntry> implements AutoCloseable {
 		} finally {
 			this.lifecycle.readLock().unlock();
 		}
-    }
-    
-    public V get(long key) {
+	}
+
+	public V get(long key) {
 		this.lifecycle.readLock().lock();
 		try {
 			this.requireOpen();
@@ -59,7 +59,7 @@ public class Cache<V extends ExpiringEntry> implements AutoCloseable {
 		} finally {
 			this.lifecycle.readLock().unlock();
 		}
-    }
+	}
 
 	public V getIfOpen(long key) {
 		this.lifecycle.readLock().lock();
@@ -81,19 +81,37 @@ public class Cache<V extends ExpiringEntry> implements AutoCloseable {
 			this.lifecycle.readLock().unlock();
 		}
 	}
-    
-    public V computeIfAbsent(long key, LongFunction<V> func) {
+
+	public V computeIfAbsent(long key, LongFunction<V> func) {
 		this.lifecycle.readLock().lock();
 		try {
 			this.requireOpen();
 			return this.map.computeIfAbsent(
-				key, func, ExpiringEntry::canEvict, ExpiringEntry::close
+					key, func, ExpiringEntry::canEvict, ExpiringEntry::close
 			);
 		} finally {
 			this.lifecycle.readLock().unlock();
 		}
-    }
-    
+	}
+
+	/**
+	 * Safely computes or gets an entry if the cache is open, returning null instead
+	 * of throwing an exception if closed, preventing background thread interruptions.
+	 */
+	public V computeIfAbsentIfOpen(long key, LongFunction<V> func) {
+		this.lifecycle.readLock().lock();
+		try {
+			if (this.closed.get()) {
+				return null;
+			}
+			return this.map.computeIfAbsent(
+					key, func, ExpiringEntry::canEvict, ExpiringEntry::close
+			);
+		} finally {
+			this.lifecycle.readLock().unlock();
+		}
+	}
+
 	public void poll() {
 		this.lifecycle.readLock().lock();
 		try {
@@ -110,7 +128,7 @@ public class Cache<V extends ExpiringEntry> implements AutoCloseable {
 		} finally {
 			this.lifecycle.readLock().unlock();
 		}
-    }
+	}
 
 	@Override
 	public void close() {
@@ -119,7 +137,9 @@ public class Cache<V extends ExpiringEntry> implements AutoCloseable {
 			if (!this.closed.compareAndSet(false, true)) {
 				return;
 			}
-			this.poll.cancel(false);
+			if (this.poll != null) {
+				this.poll.cancel(false);
+			}
 			this.map.removeIf(entry -> true, ExpiringEntry::close);
 		} finally {
 			this.lifecycle.writeLock().unlock();

@@ -363,8 +363,15 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 
 		Cell cell = SCRATCH_CELL.get();
 
-		// load = true -> triggers computeAccurate() -> TileCache.acquire() -> WorldFilters/Erosion
-		ctx.lookup.applyCell(cell, x, z, true, false);
+		try {
+			// Attempt standard accurate sampling. If a cache closure race condition
+			// occurs anywhere in this call stack, catch it cleanly instead of crashing.
+			ctx.lookup.applyCell(cell, x, z, true, false);
+		} catch (IllegalStateException e) {
+			// Gracefully fallback to safe/approximate sampling if the underlying
+			// cache closed during a background transition or teleport race.
+			ctx.lookup.applyCell(cell, x, z, false, true);
+		}
 
 		// Convert normalized height (0.0F - 1.0F) to world Y block coordinate
 		return ctx.levels.scale(cell.height);
@@ -401,12 +408,10 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 		if (current == null) {
 			return super.getBiomeGenerationSettings(biome);
 		}
-		// BiomeFilter and other callers must see the same settings as decoration.
 		return current.current().biomeDecorationPlan().generationSettings(biome);
 	}
 
 	BiomeGenerationSettings realizedBiomeGenerationSettings(Holder<Biome> biome) {
-		// Compilation consumes loader-realized inputs, never the previous compiled plan.
 		return super.getBiomeGenerationSettings(biome);
 	}
 
@@ -650,8 +655,6 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 					() -> new IllegalStateException("Selected biome has no registry identity")
 			));
 		}
-		// freeze_top_layer is gated by a BiomeFilter evaluated at the chunk's min corner, so
-		// every possible biome must carry it or whole chunks lose snow.
 		Holder<PlacedFeature> freezeTopLayer = findFeature(plan, biomes);
 		for (net.minecraft.resources.ResourceKey<Biome> biome : biomes) {
 			BiomeGenerationSettings.PlainBuilder builder = new BiomeGenerationSettings.PlainBuilder();
