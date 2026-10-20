@@ -1,6 +1,0 @@
-{
-  "type": "freeterraforged:add",
-  "features": "freeterraforged:scree",
-  "order": "prepend",
-  "step": "raw_generation"
-}

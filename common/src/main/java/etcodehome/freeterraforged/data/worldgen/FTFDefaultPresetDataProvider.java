@@ -38,7 +38,7 @@ public final class FTFDefaultPresetDataProvider implements DataProvider {
 			RegistrySetBuilder.PatchedRegistries::patches
 		);
 
-		return CompletableFuture.allOf(
+		CompletableFuture<Void> generated = CompletableFuture.allOf(
 			DataGenUtil.createRegistryProvider(this.output, patchedRegistries).run(cache),
 			new FTFDensityFunctionTagsProvider(this.output, patchedLookups).run(cache),
 			new FTFBlockTagsProvider(preset, this.output, patchedLookups).run(cache),
@@ -47,6 +47,11 @@ public final class FTFDefaultPresetDataProvider implements DataProvider {
 				Component.translatable(FTFTranslationKeys.DEFAULT_PRESET_PACK_DESCRIPTION)
 			).run(cache)
 		);
+		if (Boolean.getBoolean("freeterraforged.datagen.exit")) {
+			// The Fabric server launcher leaves non-daemon executors alive after cancellable datagen returns.
+			generated.whenComplete((ignored, failure) -> System.exit(failure == null ? 0 : 1));
+		}
+		return generated;
 	}
 
 	@Override

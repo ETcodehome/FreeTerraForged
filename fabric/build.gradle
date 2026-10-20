@@ -7,12 +7,24 @@ architectury {
     fabric()
 }
 
+def defaultPresetDatagenOutput = layout.buildDirectory.dir("generated/default-preset-datagen")
+def defaultPresetResourceOutput = layout.buildDirectory.dir("resources/main/ftf_default_preset")
+
 loom {
     accessWidenerPath = project(":common").loom.accessWidenerPath
     runs {
         server {
             // Remove "nogui" so the vanilla Swing interface opens
             programArgs.remove("nogui")
+        }
+        defaultPresetData {
+            server()
+            name "Generate Default Preset Data"
+            runDir = layout.buildDirectory.dir("default-preset-datagen-run").get().asFile.absolutePath
+            vmArg "-Dfabric-api.datagen"
+            vmArg "-Dfabric-api.datagen.output-dir=${defaultPresetDatagenOutput.get().asFile.absolutePath}"
+            vmArg "-Dfabric-api.datagen.modid=freeterraforged"
+            vmArg "-Dfreeterraforged.datagen.exit=true"
         }
     }
 }
@@ -51,11 +63,33 @@ repositories {
     maven { url "https://api.modrinth.com/maven" }
 }
 
-processResources {
-    inputs.property "version", project.version
-    from(project(":common").file("src/main/resources/ftf_default_preset")) {
-        into "ftf_default_preset"
+tasks.register("cleanStaleDefaultPresetResources", Delete) {
+    delete(layout.buildDirectory.dir("resources/main/ftf_default_preset"))
+}
+
+tasks.register("syncDefaultPresetPack", Sync) {
+    group = "build"
+    description = "Generates and stages the built-in pack from Presets.makeFTFDefault()"
+    dependsOn tasks.named("runDefaultPresetData")
+    from(defaultPresetDatagenOutput.map { it.dir("ftf_default_preset") })
+    into(defaultPresetResourceOutput)
+    // Sync must run even when sources are unchanged so files removed by datagen are deleted.
+    outputs.upToDateWhen { false }
+}
+
+tasks.named("runDefaultPresetData").configure {
+    doFirst {
+        delete(defaultPresetDatagenOutput.get().asFile)
     }
+}
+
+tasks.matching { ["runClient", "runServer", "runClientRenderDoc", "jar", "shadowJar"].contains(it.name) }.configureEach {
+    dependsOn tasks.named("syncDefaultPresetPack")
+}
+
+processResources {
+    dependsOn tasks.named("cleanStaleDefaultPresetResources")
+    inputs.property "version", project.version
 
     filesMatching("fabric.mod.json") {
         expand "version": project.version

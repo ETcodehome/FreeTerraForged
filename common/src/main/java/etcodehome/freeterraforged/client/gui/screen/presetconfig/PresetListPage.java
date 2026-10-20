@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
+import etcodehome.freeterraforged.client.data.DefaultPresetArchive;
 import etcodehome.freeterraforged.client.gui.widget.Label;
 import etcodehome.freeterraforged.client.gui.widget.WidgetList;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetManager.PM;
@@ -59,6 +60,7 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 	private Button openPresetFolder;
 	private Button openExportFolder;
 	private Button exportAsDatapack;
+	private Button setAsDefaultPreset;
 
 	private WrappedLabel selectionDetails;
 
@@ -215,6 +217,17 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 			}
 		});
 
+		this.setAsDefaultPreset = PresetWidgets.createThrowingButton(FTFTranslationKeys.GUI_BUTTON_SET_AS_DEFAULT_PRESET, () -> {
+			if (this.left.getSelected() != null && this.left.getSelected().getWidget() instanceof PresetEntry preset) {
+				this.screen.exportAsDatapack(DefaultPresetArchive.path(), preset);
+				Toasts.notify(
+					FTFTranslationKeys.GUI_DEFAULT_PRESET_SAVED,
+					Component.literal(preset.getRawName()),
+					SystemToastId.WORLD_BACKUP
+				);
+			}
+		});
+
 		// Information & Description Labels (At bottom of right panel)
 		this.selectionDetails = new WrappedLabel(this.screen.font);
 
@@ -227,6 +240,7 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 		this.right.addWidget(this.openPresetFolder);
 		this.right.addWidget(this.openExportFolder);
 		this.right.addWidget(this.exportAsDatapack);
+		this.right.addWidget(this.setAsDefaultPreset);
 		this.right.addWidget(this.selectionDetails);
 
 		this.left.setRenderSelected(true);
@@ -315,6 +329,7 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 		this.screen.nextButton.active = active;
 		this.copyPreset.active = active;
 		this.exportAsDatapack.active = active;
+		this.setAsDefaultPreset.active = active;
 		this.deletePreset.active = isCustom;
 
 		// Populate input box with selected preset name for fast editing/renaming

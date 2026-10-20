@@ -31,6 +31,7 @@ import etcodehome.freeterraforged.client.gui.Toasts;
 import etcodehome.freeterraforged.client.gui.screen.page.LinkedPageScreen;
 import etcodehome.freeterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
 import etcodehome.freeterraforged.data.worldgen.Datapacks;
+import etcodehome.freeterraforged.data.worldgen.preset.FTFWorldPresets;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 
 public class PresetConfigScreen extends LinkedPageScreen {
@@ -116,11 +117,11 @@ public class PresetConfigScreen extends LinkedPageScreen {
 		if(path == null) {
 			throw new IOException("Unable to create the temporary datapack repository");
 		}
-		Path exportPath = path.getFirst().resolve("freeterraforged-preset.zip");
+		Path exportPath = path.getFirst().resolve(FTFWorldPresets.GENERATED_PRESET_PACK_FILE_NAME);
 		this.exportAsDatapack(exportPath, preset);
 		PackRepository repository = path.getSecond();
 		repository.reload();
-		if(!repository.addPack("file/" + exportPath.getFileName())) {
+		if(!repository.addPack(FTFWorldPresets.GENERATED_PRESET_PACK_ID)) {
 			throw new IOException("The generated ReTerraForged datapack was not discovered by Minecraft");
 		}
 		// Publish the seed before reload captures WorldOptions.

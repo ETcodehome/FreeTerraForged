@@ -1,6 +1,0 @@
-{
-  "type": "freeterraforged:add",
-  "features": "freeterraforged:decorate_snow",
-  "order": "append",
-  "step": "top_layer_modification"
-}

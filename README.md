@@ -29,6 +29,7 @@ For a dedicated server, set `level-type=freeterraforged` in `server.properties` 
 - Use template settings directly by clicking [Done]
 - Customize the selected preset settings by clicking [Edit]
 - Manage preset modifications using the right hand menu options.
+- Select a preset and click **Set as Default** to use it automatically in future FreeTerraForged worlds created from this client, even when you skip Customize. Dedicated servers continue to use their configured data packs.
 
 ---
 

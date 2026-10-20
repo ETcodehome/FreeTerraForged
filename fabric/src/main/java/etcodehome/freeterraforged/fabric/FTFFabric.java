@@ -29,17 +29,19 @@ public class FTFFabric implements ModInitializer, DataGeneratorEntrypoint {
 	public void onInitialize() {
 		FTFCommon.bootstrap();
 		FTFFabricNetworking.init();
-		FabricLoader.getInstance().getModContainer(FTFCommon.MOD_ID).ifPresentOrElse(container -> {
-			boolean registered = ResourceManagerHelper.registerBuiltinResourcePack(
-				FTFWorldPresets.DEFAULT_PRESET_PACK_ID,
-				FTFWorldPresets.DEFAULT_PRESET_PACK_RESOURCE_PATH,
-				container,
-				false
-			);
-			if (!registered) {
-				FTFCommon.LOGGER.error("Failed to register the built-in FreeTerraForged default preset data pack");
-			}
-		}, () -> FTFCommon.LOGGER.error("Could not find the FreeTerraForged mod container to register its default preset data pack"));
+		if (System.getProperty("fabric-api.datagen") == null) {
+			FabricLoader.getInstance().getModContainer(FTFCommon.MOD_ID).ifPresentOrElse(container -> {
+				boolean registered = ResourceManagerHelper.registerBuiltinResourcePack(
+					FTFWorldPresets.DEFAULT_PRESET_PACK_ID,
+					FTFWorldPresets.DEFAULT_PRESET_PACK_RESOURCE_PATH,
+					container,
+					false
+				);
+				if (!registered) {
+					FTFCommon.LOGGER.error("Failed to register the built-in FreeTerraForged default preset data pack");
+				}
+			}, () -> FTFCommon.LOGGER.error("Could not find the FreeTerraForged mod container to register its default preset data pack"));
+		}
 		ServerLifecycleEvents.END_DATA_PACK_RELOAD.register((server, resources, success) -> {
 			if (!success) {
 				return;

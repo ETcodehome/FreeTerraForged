@@ -53,6 +53,8 @@ public final class FTFLanguageProvider {
 			this.add(FTFTranslationKeys.GUI_BUTTON_OPEN_EXPORT_FOLDER, "Open Export Folder");
 			this.add(FTFTranslationKeys.GUI_BUTTON_EXPORT_AS_DATAPACK, "Export As Datapack");
 			this.add(FTFTranslationKeys.GUI_BUTTON_EXPORT_SUCCESS, "Exported Preset");
+			this.add(FTFTranslationKeys.GUI_BUTTON_SET_AS_DEFAULT_PRESET, "Set as Default");
+			this.add(FTFTranslationKeys.GUI_DEFAULT_PRESET_SAVED, "Default Preset Saved");
 			this.add(FTFTranslationKeys.GUI_BUTTON_SEED, "Seed");
 			this.add(FTFTranslationKeys.GUI_BUTTON_CONTINENT_TYPE, "Continent Type");
 			this.add(FTFTranslationKeys.GUI_BUTTON_CONTINENT_SHAPE, "Continent Shape");
@@ -215,6 +217,7 @@ public final class FTFLanguageProvider {
 			this.add(Tooltips.failTranslationKey(FTFTranslationKeys.GUI_BUTTON_COPY), "Failed to copy preset");
 			this.add(Tooltips.failTranslationKey(FTFTranslationKeys.GUI_BUTTON_DELETE), "Failed to delete preset");
 			this.add(Tooltips.failTranslationKey(FTFTranslationKeys.GUI_BUTTON_EXPORT_AS_DATAPACK), "Failed to export preset");
+			this.add(Tooltips.failTranslationKey(FTFTranslationKeys.GUI_BUTTON_SET_AS_DEFAULT_PRESET), "Failed to set the default preset");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_BUTTON_SEED), "Controls the world seed");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_BUTTON_CONTINENT_TYPE), "Controls the continent generator type");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_BUTTON_CONTINENT_SHAPE), "Controls how continent shapes are calculated. You may also need to adjust the transition points to ensure beaches etc still form.");

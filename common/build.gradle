@@ -41,7 +41,16 @@ subprojects {
     }
 }
 
+tasks.register("cleanStaleDefaultPresetResources", Delete) {
+    delete(layout.buildDirectory.dir("resources/main/ftf_default_preset"))
+}
+
+tasks.withType(Jar).configureEach {
+    exclude("ftf_default_preset/**")
+}
+
 processResources {
+    dependsOn tasks.named("cleanStaleDefaultPresetResources")
     filesMatching("pack.mcmeta") {
         expand project.properties
     }

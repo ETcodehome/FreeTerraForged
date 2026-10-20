@@ -1,5 +1,6 @@
 package etcodehome.freeterraforged.mixin;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
@@ -27,6 +28,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import etcodehome.freeterraforged.FTFCommon;
+import etcodehome.freeterraforged.client.data.DefaultPresetArchive;
 import etcodehome.freeterraforged.data.worldgen.preset.FTFWorldPresetDataPacks;
 import etcodehome.freeterraforged.data.worldgen.preset.FTFWorldPresets;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenDimensionInputs;
@@ -95,6 +97,22 @@ public abstract class MixinCreateWorldScreen {
 		this.uiState.addListener(this::freeterraforged$syncPresetPackWithWorldType);
 	}
 
+	@Inject(method = "openFresh", at = @At("TAIL"))
+	private static void freeterraforged$applySavedDefaultPreset(
+		Minecraft minecraft,
+		Screen lastScreen,
+		CallbackInfo callback
+	) {
+		if (minecraft.screen instanceof CreateWorldScreen screen) {
+			((MixinCreateWorldScreen) (Object) screen).freeterraforged$initializeDefaultPreset();
+		}
+	}
+
+	@Unique
+	private void freeterraforged$initializeDefaultPreset() {
+		this.freeterraforged$syncPresetPackWithWorldType(this.uiState);
+	}
+
 	@Unique
 	private void freeterraforged$syncPresetPackWithWorldType(WorldCreationUiState state) {
 		if (this.freeterraforged$syncingPresetPack) {
@@ -118,7 +136,12 @@ public abstract class MixinCreateWorldScreen {
 			this.freeterraforged$customPresetWasEnabled = true;
 		}
 
-		boolean shouldEnableCustomPack = ftfSelected && this.freeterraforged$customPresetWasEnabled;
+		boolean applySavedDefaultPreset = ftfSelected
+			&& !customPackEnabled
+			&& !this.freeterraforged$customPresetWasEnabled
+			&& DefaultPresetArchive.exists();
+		boolean shouldEnableCustomPack = ftfSelected
+			&& (this.freeterraforged$customPresetWasEnabled || applySavedDefaultPreset);
 		boolean needsSync = ftfSelected
 			? !defaultPackEnabled || (shouldEnableCustomPack && !customPackEnabled)
 			: defaultPackEnabled || customPackEnabled;
@@ -140,10 +163,22 @@ public abstract class MixinCreateWorldScreen {
 				FTFCommon.LOGGER.error("The built-in FreeTerraForged default preset pack is unavailable");
 				return;
 			}
-			if (shouldEnableCustomPack
-				&& !repository.getSelectedIds().contains(customPackId)
-				&& !repository.addPack(customPackId)) {
-				FTFCommon.LOGGER.warn("The previously selected FreeTerraForged preset pack is unavailable");
+			if (applySavedDefaultPreset) {
+				try {
+					DefaultPresetArchive.copyTo(selection.getFirst());
+				} catch (IOException exception) {
+					FTFCommon.LOGGER.error("Could not stage the saved FreeTerraForged default preset", exception);
+					return;
+				}
+				repository.reload();
+				repository.setSelected(enabledPacks);
+			}
+			if (shouldEnableCustomPack && !repository.getSelectedIds().contains(customPackId)) {
+				if (!repository.addPack(customPackId)) {
+					FTFCommon.LOGGER.warn("The saved or previously selected FreeTerraForged preset pack is unavailable");
+				} else {
+					this.freeterraforged$customPresetWasEnabled = true;
+				}
 			}
 		} else {
 			repository.removePack(defaultPackId);
