@@ -22,6 +22,10 @@ public class BiomeModifiersImpl {
 	public static void bootstrap() {
 		register("add", AddModifier.CODEC);
 		register("replace", ReplaceModifier.CODEC);
+		// NeoForge compatibility: mods ported from NeoForge may ship biome modifiers
+		// using the platform-provided "neoforge:add_features" serializer, which has
+		// no equivalent registered on Fabric. See issue #287.
+		register("neoforge:add_features", NeoForgeAddFeaturesModifier.CODEC);
 	}
 
 	public static BiomeModifier add(Order order, GenerationStep.Decoration step, Optional<Pair<Filter.Behavior, HolderSet<Biome>>> biomes, HolderSet<PlacedFeature> features) {
