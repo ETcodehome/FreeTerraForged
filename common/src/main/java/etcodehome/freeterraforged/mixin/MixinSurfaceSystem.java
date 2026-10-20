@@ -7,6 +7,7 @@ import java.util.function.Function;
 
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
+import etcodehome.freeterraforged.world.worldgen.IChunkCellsHolder;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.river.RiverCarverSettings;
@@ -111,11 +112,12 @@ class MixinSurfaceSystem {
 		int minBlockX = chunkPos.getMinBlockX();
 		int minBlockZ = chunkPos.getMinBlockZ();
 		Cell[][] chunkCells = new Cell[16][16];
+		IChunkCellsHolder holder = chunk instanceof IChunkCellsHolder h ? h : null;
 		for (int x = 0; x < 16; x++) {
 			for (int z = 0; z < 16; z++) {
-				Cell c = new Cell();
-				genCtx.lookup.applyCell(c, minBlockX + x, minBlockZ + z, false, false);
-				chunkCells[x][z] = c;
+				chunkCells[x][z] = holder != null
+					? holder.freeterraforged$getCell(x, z, genCtx)
+					: genCtx.lookup.lookup(minBlockX + x, minBlockZ + z);
 			}
 		}
 

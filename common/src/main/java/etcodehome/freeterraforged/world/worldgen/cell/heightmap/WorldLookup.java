@@ -6,6 +6,8 @@ import etcodehome.freeterraforged.world.worldgen.cell.CellLookup;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
 
 public class WorldLookup implements CellLookup {
+	private static final ThreadLocal<Cell> SCRATCH_NEIGHBOR = ThreadLocal.withInitial(Cell::new);
+
 	private final float waterLevel;
 	private final float beachLevel;
 	private final Heightmap heightmap;
@@ -26,6 +28,7 @@ public class WorldLookup implements CellLookup {
 	public Cell lookup(int blockX, int blockZ) {
 		Cell cell = new Cell();
 		this.applyCell(cell, blockX, blockZ, false, false);
+		this.computeSteepness(cell, blockX, blockZ);
 		return cell;
 	}
 
@@ -34,7 +37,11 @@ public class WorldLookup implements CellLookup {
 	}
 
 	public boolean applyCell(Cell cell, int x, int z, boolean load, boolean applyClimate) {
-		return this.compute(cell, x, z, applyClimate);
+		boolean res = this.compute(cell, x, z, applyClimate);
+		if (load) {
+			this.computeSteepness(cell, x, z);
+		}
+		return res;
 	}
 
 	public void applyBiomeRegion(Cell cell, int x, int z) {
@@ -43,13 +50,13 @@ public class WorldLookup implements CellLookup {
 
 	public void computeSteepness(Cell cell, int cx, int cz) {
 		float totalHeightDif = 0.0F;
-		Cell neighbour = new Cell();
+		Cell neighbour = SCRATCH_NEIGHBOR.get();
 		for (int dz = -1; dz <= 1; ++dz) {
 			for (int dx = -1; dx <= 1; ++dx) {
 				if (dx != 0 || dz != 0) {
 					int x = cx + dx;
 					int z = cz + dz;
-					this.compute(neighbour, x, z, false);
+					this.compute(neighbour.reset(), x, z, false);
 					float height = Math.max(neighbour.height, this.waterLevel);
 					totalHeightDif += Math.abs(cell.height - height);
 				}

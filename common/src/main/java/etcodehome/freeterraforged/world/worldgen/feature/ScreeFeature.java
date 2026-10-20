@@ -26,6 +26,7 @@ import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfigur
 import etcodehome.freeterraforged.tags.FTFBlockTags;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
+import etcodehome.freeterraforged.world.worldgen.IChunkCellsHolder;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
@@ -100,8 +101,8 @@ public class ScreeFeature extends Feature<Config> {
                     int worldX = chunkPos.getBlockX(x);
                     int worldZ = chunkPos.getBlockZ(z);
 
-                    Cell cell = new Cell();
-                    generatorContext.lookup.applyCell(cell, worldX, worldZ, false, false);
+
+                    Cell cell = chunk instanceof IChunkCellsHolder holder ? holder.freeterraforged$getCell(x, z, generatorContext) : generatorContext.lookup.lookup(worldX, worldZ);
                     int scaledY = levels.scale(cell.height);
                     int surfaceY = chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, x, z);
                     Holder<Biome> biome = level.getBiome(pos.set(worldX, surfaceY, worldZ));

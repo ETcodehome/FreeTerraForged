@@ -311,6 +311,7 @@ public interface IPreviewHandler {
                                 cancellation::isCancelled,
                                 cacheCancelled -> PreviewGrid.generateZoomed(
                                         preGen.context.heightmap,
+                                        preGen.context.filters,
                                         preGen.cx, preGen.cz, preGen.zoomLevel, SIZE, cacheCancelled
                                 )
                         );

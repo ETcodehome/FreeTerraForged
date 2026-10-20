@@ -28,19 +28,23 @@ import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
+import etcodehome.freeterraforged.world.worldgen.IChunkCellsHolder;
 import etcodehome.freeterraforged.world.worldgen.biome.FTFClimateSampler;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
+import etcodehome.freeterraforged.world.worldgen.cell.filter.ChunkFilterGrid;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPlan;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPlans;
 
 @Mixin(NoiseChunk.class)
-class MixinNoiseChunk {
+class MixinNoiseChunk implements IChunkCellsHolder {
 	private RandomState randomState;
 	private int chunkX, chunkZ;
 	@Nullable
 	private Aquifer.FluidPicker freeterraforged$fluidPicker;
 	private CellSampler.Cache2d cache2d;
+	@Nullable
+	private Cell[] freeterraforged$chunkCells;
 
 	@Inject(
 		method = "<init>",
@@ -74,6 +78,7 @@ class MixinNoiseChunk {
 				);
 				if (cellCountXZ > 1) {
 					this.cache2d = new CellSampler.Cache2d();
+					this.freeterraforged$chunkCells = ChunkFilterGrid.generateChunkCells(this.chunkX, this.chunkZ, generatorContext);
 				}
 			}
 		}
@@ -190,7 +195,32 @@ class MixinNoiseChunk {
 	)
 	private void wrapNew(DensityFunction function, CallbackInfoReturnable<DensityFunction> callback) {
 		if((Object) this.randomState instanceof FTFRandomState randomState && function instanceof CellSampler mapped) {
-			callback.setReturnValue(mapped.new CacheChunk(this.cache2d));
+			callback.setReturnValue(mapped.new CacheChunk(this.freeterraforged$chunkCells, this.chunkX << 4, this.chunkZ << 4, this.cache2d));
 		}
+	}
+
+	@Override
+	@Nullable
+	public Cell[] freeterraforged$getChunkCells() {
+		return this.freeterraforged$chunkCells;
+	}
+
+	@Override
+	public void freeterraforged$setChunkCells(Cell[] cells) {
+		this.freeterraforged$chunkCells = cells;
+	}
+
+	@Override
+	public Cell[] freeterraforged$getOrCreateChunkCells(GeneratorContext context) {
+		if (this.freeterraforged$chunkCells == null) {
+			this.freeterraforged$chunkCells = ChunkFilterGrid.generateChunkCells(this.chunkX, this.chunkZ, context);
+		}
+		return this.freeterraforged$chunkCells;
+	}
+
+	@Override
+	public Cell freeterraforged$getCell(int localX, int localZ, GeneratorContext context) {
+		Cell[] cells = this.freeterraforged$getOrCreateChunkCells(context);
+		return cells[(localZ & 15) * 16 + (localX & 15)];
 	}
 }

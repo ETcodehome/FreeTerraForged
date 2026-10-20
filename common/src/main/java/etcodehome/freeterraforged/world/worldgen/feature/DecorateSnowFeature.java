@@ -25,6 +25,7 @@ import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
 import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfiguration;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
+import etcodehome.freeterraforged.world.worldgen.IChunkCellsHolder;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
@@ -68,7 +69,11 @@ public class DecorateSnowFeature extends Feature<Config> {
 				for(int z = 0; z < 16; z++) {
 					int worldX = chunkPos.getBlockX(x);
 					int worldZ = chunkPos.getBlockZ(z);
-					generatorContext.lookup.applyCell(cell.reset(), worldX, worldZ, false, false);
+					if (chunk instanceof IChunkCellsHolder holder) {
+						cell = holder.freeterraforged$getCell(x, z, generatorContext);
+					} else {
+						generatorContext.lookup.applyCell(cell.reset(), worldX, worldZ, false, false);
+					}
 					int scaledY = levels.scale(cell.height);
 			        int surfaceY = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
 			        if(scaledY == surfaceY && scaledY >= generator.getSeaLevel()) {

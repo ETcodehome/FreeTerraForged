@@ -61,9 +61,6 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 		private Cell cell = new Cell();
 		
 		public Cell getAndUpdate(WorldLookup lookup, int blockX, int blockZ, boolean sampleClimate) {
-			blockX = QuartPos.toBlock(QuartPos.fromBlock(blockX));
-			blockZ = QuartPos.toBlock(QuartPos.fromBlock(blockZ));
-			
 			long packedPos = PosUtil.pack(blockX, blockZ);
 			boolean sameOwner = this.lastLookup.get() == lookup;
 			if(!this.valid || !sameOwner || this.lastPos != packedPos || this.lastSampleClimate != sampleClimate) {
@@ -81,16 +78,36 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 	}
 	
 	public class CacheChunk implements MarkerFunction.Mapped {
+		@Nullable
+		private final Cell[] chunkCells;
+		private final int minBlockX;
+		private final int minBlockZ;
 		private final Cache2d cache2d;
 		
-		public CacheChunk(@Nullable Cache2d cache2d) {
+		public CacheChunk(@Nullable Cell[] chunkCells, int minBlockX, int minBlockZ, @Nullable Cache2d cache2d) {
+			this.chunkCells = chunkCells;
+			this.minBlockX = minBlockX;
+			this.minBlockZ = minBlockZ;
 			this.cache2d = cache2d != null ? cache2d : new Cache2d();
+		}
+
+		public CacheChunk(@Nullable Cache2d cache2d) {
+			this(null, 0, 0, cache2d);
 		}
 
 		@Override
 		public double compute(FunctionContext ctx) {
+			int bx = ctx.blockX();
+			int bz = ctx.blockZ();
 			WorldLookup worldLookup = CellSampler.this.deferredLookup.get();
-			Cell cell = this.cache2d.getAndUpdate(worldLookup, ctx.blockX(), ctx.blockZ(), false);
+			Cell cell;
+			int relX = bx - this.minBlockX;
+			int relZ = bz - this.minBlockZ;
+			if (this.chunkCells != null && relX >= 0 && relX < 16 && relZ >= 0 && relZ < 16) {
+				cell = this.chunkCells[relZ * 16 + relX];
+			} else {
+				cell = this.cache2d.getAndUpdate(worldLookup, bx, bz, false);
+			}
 			return CellSampler.this.field.readFinite(cell, worldLookup.getHeightmap());
 		}
 

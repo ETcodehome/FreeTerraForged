@@ -4,13 +4,19 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BooleanSupplier;
 
+import org.jetbrains.annotations.Nullable;
+
 import etcodehome.freeterraforged.concurrent.ThreadPools;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
+import etcodehome.freeterraforged.world.worldgen.cell.filter.FilterGrid;
+import etcodehome.freeterraforged.world.worldgen.cell.filter.TerrainFilters;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.Rivermap;
 
-public final class PreviewGrid {
+public final class PreviewGrid implements FilterGrid {
     private final int size;
     private final Cell[] cells;
+    private int blockX;
+    private int blockZ;
 
     public PreviewGrid(int size) {
         this.size = size;
@@ -22,6 +28,41 @@ public final class PreviewGrid {
 
     public int size() {
         return this.size;
+    }
+
+    @Override
+    public int getBlockX() {
+        return this.blockX;
+    }
+
+    @Override
+    public int getBlockZ() {
+        return this.blockZ;
+    }
+
+    @Override
+    public int getSize() {
+        return this.size;
+    }
+
+    @Override
+    public int getBorder() {
+        return 0;
+    }
+
+    @Override
+    public int getTotalSize() {
+        return this.size;
+    }
+
+    @Override
+    public Cell[] getBacking() {
+        return this.cells;
+    }
+
+    @Override
+    public Cell getCellRaw(int x, int z) {
+        return getCell(x, z);
     }
 
     public Cell getCell(int x, int z) {
@@ -51,9 +92,23 @@ public final class PreviewGrid {
         int size,
         BooleanSupplier cancelled
     ) {
+        return generateZoomed(heightmap, null, centerX, centerZ, zoom, size, cancelled);
+    }
+
+    public static CompletableFuture<PreviewGrid> generateZoomed(
+        Heightmap heightmap,
+        @Nullable TerrainFilters filters,
+        float centerX,
+        float centerZ,
+        float zoom,
+        int size,
+        BooleanSupplier cancelled
+    ) {
         PreviewGrid grid = new PreviewGrid(size);
         float translateX = centerX - size * zoom / 2.0F;
         float translateZ = centerZ - size * zoom / 2.0F;
+        grid.blockX = (int) translateX;
+        grid.blockZ = (int) translateZ;
 
         int batchCount = 4;
         int batchSize = (size + batchCount - 1) / batchCount;
@@ -89,6 +144,10 @@ public final class PreviewGrid {
         }
 
         return CompletableFuture.allOf(futures).thenApply(v -> {
+            checkCancelled(cancelled);
+            if (filters != null) {
+                filters.apply(grid);
+            }
             checkCancelled(cancelled);
             return grid;
         });

@@ -18,12 +18,15 @@ import net.minecraft.world.level.biome.BiomeResolver;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
+import net.minecraft.world.level.levelgen.NoiseChunk;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.blending.Blender;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.IFlowFieldHolder;
+import etcodehome.freeterraforged.world.worldgen.IChunkCellsHolder;
 import etcodehome.freeterraforged.world.worldgen.ChunkFlowField;
 import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
 
@@ -52,16 +55,30 @@ abstract class MixinNoiseBasedChunkGenerator extends ChunkGenerator {
 		this.freeterraforged$bakeFlowField(chunk, generatorContext);
 	}
 
+	@Inject(
+		method = "createNoiseChunk",
+		at = @At("RETURN")
+	)
+	private void freeterraforged$bindChunkCells(ChunkAccess chunk, StructureManager sm, Blender blender, RandomState rs, CallbackInfoReturnable<NoiseChunk> cir) {
+		if ((Object) rs instanceof FTFRandomState rtfRs && rtfRs.generatorContext() != null) {
+			if (cir.getReturnValue() instanceof IChunkCellsHolder noiseChunkHolder && chunk instanceof IChunkCellsHolder chunkHolder) {
+				Cell[] cells = noiseChunkHolder.freeterraforged$getChunkCells();
+				if (cells != null) {
+					chunkHolder.freeterraforged$setChunkCells(cells);
+				}
+			}
+		}
+	}
+
 	private void freeterraforged$bakeFlowField(ChunkAccess chunk, GeneratorContext generatorContext) {
 		IFlowFieldHolder holder = (IFlowFieldHolder) chunk;
 		ChunkFlowField flowField = holder.freeterraforged$getFlowField();
-		var chunkPos = chunk.getPos();
-		Cell cell = new Cell();
+		IChunkCellsHolder cellsHolder = chunk instanceof IChunkCellsHolder ch ? ch : null;
 		for(int x = 0; x < 16; x++) {
 			for(int z = 0; z < 16; z++) {
-				int blockX = chunkPos.getBlockX(x);
-				int blockZ = chunkPos.getBlockZ(z);
-				generatorContext.lookup.applyCell(cell.reset(), blockX, blockZ, false, true);
+				Cell cell = cellsHolder != null
+					? cellsHolder.freeterraforged$getCell(x, z, generatorContext)
+					: generatorContext.lookup.lookup(chunk.getPos().getBlockX(x), chunk.getPos().getBlockZ(z));
 				if (cell.hasFlow) {
 					if (flowField == null) {
 						flowField = holder.freeterraforged$getOrCreateFlowField();
