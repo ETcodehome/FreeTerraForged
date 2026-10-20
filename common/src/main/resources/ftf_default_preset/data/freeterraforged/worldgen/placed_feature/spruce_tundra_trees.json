@@ -1,0 +1,16 @@
+{
+  "feature": "freeterraforged:pine",
+  "placement": [
+    {
+      "type": "minecraft:rarity_filter",
+      "chance": 80
+    },
+    {
+      "type": "minecraft:heightmap",
+      "heightmap": "WORLD_SURFACE"
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "type": "freeterraforged:add",
+  "biomes": {
+    "behavior": "whitelist",
+    "biomes": [
+      "minecraft:birch_forest",
+      "minecraft:old_growth_birch_forest",
+      "minecraft:plains",
+      "minecraft:sunflower_plains",
+      "minecraft:windswept_hills",
+      "minecraft:meadow"
+    ]
+  },
+  "features": "freeterraforged:shrubs/plains_bush",
+  "order": "prepend",
+  "step": "vegetal_decoration"
+}

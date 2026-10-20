@@ -406,5 +406,9 @@
   "freeterraforged.gui.worldSettings.title": "World Settings",
   "freeterraforged.metadata.description": "FreeTerraForged resources",
   "freeterraforged.mudSwamps.metadata.description": "Changes the swamp material to mud",
-  "freeterraforged.preset.metadata.description": "FreeTerraForged preset"
+  "freeterraforged.preset.default_pack.description": "FreeTerraForged default world preset",
+  "freeterraforged.preset.default_pack.name": "FreeTerraForged Default Preset",
+  "resourcePack.ftf_default_preset.name": "FreeTerraForged Default Preset",
+  "freeterraforged.preset.metadata.description": "FreeTerraForged preset",
+  "generator.freeterraforged.freeterraforged": "FreeTerraForged"
 }

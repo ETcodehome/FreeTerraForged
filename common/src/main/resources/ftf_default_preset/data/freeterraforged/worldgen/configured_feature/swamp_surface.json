@@ -1,0 +1,14 @@
+{
+  "type": "freeterraforged:swamp_surface",
+  "config": {
+    "clay_material": {
+      "Name": "minecraft:clay"
+    },
+    "dirt_material": {
+      "Name": "minecraft:dirt"
+    },
+    "gravel_material": {
+      "Name": "minecraft:gravel"
+    }
+  }
+}

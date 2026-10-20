@@ -1,0 +1,11 @@
+{
+  "feature": "minecraft:spring_lava_overworld",
+  "placement": [
+    {
+      "type": "freeterraforged:blacklist_dimension",
+      "blacklist": [
+        "minecraft:overworld"
+      ]
+    }
+  ]
+}

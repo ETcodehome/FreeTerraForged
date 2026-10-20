@@ -1,0 +1,31 @@
+{
+  "type": "freeterraforged:chance",
+  "config": {
+    "entries": [
+      {
+        "chance": 0.1,
+        "feature": "freeterraforged:spruce/small",
+        "modifiers": [
+          {
+            "type": "freeterraforged:elevation",
+            "exclusive": false,
+            "from": 0.55,
+            "to": 0.2
+          }
+        ]
+      },
+      {
+        "chance": 0.25,
+        "feature": "freeterraforged:spruce/large",
+        "modifiers": [
+          {
+            "type": "freeterraforged:elevation",
+            "exclusive": false,
+            "from": 0.3,
+            "to": 0.0
+          }
+        ]
+      }
+    ]
+  }
+}

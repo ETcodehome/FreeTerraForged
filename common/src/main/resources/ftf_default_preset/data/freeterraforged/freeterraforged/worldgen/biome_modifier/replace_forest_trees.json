@@ -1,0 +1,8 @@
+{
+  "type": "freeterraforged:replace",
+  "biomes": "minecraft:forest",
+  "replacements": {
+    "minecraft:trees_birch_and_oak": "freeterraforged:forest_trees"
+  },
+  "step": "vegetal_decoration"
+}

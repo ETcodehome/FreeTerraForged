@@ -1,0 +1,11 @@
+{
+  "type": "freeterraforged:replace",
+  "biomes": [
+    "minecraft:savanna",
+    "minecraft:savanna_plateau"
+  ],
+  "replacements": {
+    "minecraft:trees_savanna": "freeterraforged:savanna_trees"
+  },
+  "step": "vegetal_decoration"
+}

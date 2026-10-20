@@ -1,0 +1,67 @@
+{
+  "type": "freeterraforged:chance",
+  "config": {
+    "entries": [
+      {
+        "chance": 0.4,
+        "feature": "freeterraforged:redwood/huge",
+        "modifiers": [
+          {
+            "type": "freeterraforged:elevation",
+            "exclusive": false,
+            "from": 0.15,
+            "to": 0.0
+          },
+          {
+            "type": "freeterraforged:biome_edge",
+            "exclusive": false,
+            "from": 0.1,
+            "to": 0.3
+          }
+        ]
+      },
+      {
+        "chance": 0.2,
+        "feature": "freeterraforged:redwood/large",
+        "modifiers": [
+          {
+            "type": "freeterraforged:elevation",
+            "exclusive": false,
+            "from": 0.25,
+            "to": 0.0
+          },
+          {
+            "type": "freeterraforged:biome_edge",
+            "exclusive": false,
+            "from": 0.05,
+            "to": 0.25
+          }
+        ]
+      },
+      {
+        "chance": 0.4,
+        "feature": "freeterraforged:spruce/large",
+        "modifiers": [
+          {
+            "type": "freeterraforged:elevation",
+            "exclusive": false,
+            "from": 0.35,
+            "to": 0.15
+          }
+        ]
+      },
+      {
+        "chance": 0.2,
+        "feature": "freeterraforged:spruce/small",
+        "modifiers": [
+          {
+            "type": "freeterraforged:elevation",
+            "exclusive": false,
+            "from": 0.5,
+            "to": 0.2
+          }
+        ]
+      }
+    ]
+  }
+}

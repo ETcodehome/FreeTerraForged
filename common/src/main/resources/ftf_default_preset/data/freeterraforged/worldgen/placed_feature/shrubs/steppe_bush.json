@@ -1,0 +1,18 @@
+{
+  "feature": "freeterraforged:shrubs/steppe_bush",
+  "placement": [
+    {
+      "type": "freeterraforged:legacy_count_extra",
+      "count": 0,
+      "extra_chance": 0.125,
+      "extra_count": 1
+    },
+    {
+      "type": "minecraft:heightmap",
+      "heightmap": "WORLD_SURFACE"
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

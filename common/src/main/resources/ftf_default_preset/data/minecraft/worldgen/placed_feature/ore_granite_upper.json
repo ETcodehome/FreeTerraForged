@@ -1,0 +1,11 @@
+{
+  "feature": "minecraft:ore_granite",
+  "placement": [
+    {
+      "type": "freeterraforged:blacklist_dimension",
+      "blacklist": [
+        "minecraft:overworld"
+      ]
+    }
+  ]
+}

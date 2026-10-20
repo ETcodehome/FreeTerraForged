@@ -1,0 +1,8 @@
+{
+  "type": "freeterraforged:replace",
+  "biomes": "minecraft:snowy_taiga",
+  "replacements": {
+    "minecraft:trees_taiga": "freeterraforged:spruce_trees"
+  },
+  "step": "vegetal_decoration"
+}

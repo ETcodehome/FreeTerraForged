@@ -1,0 +1,22 @@
+{
+  "type": "freeterraforged:template",
+  "config": {
+    "decorator": {
+      "biome_decorators": {},
+      "default_decorator": []
+    },
+    "paste": {
+      "base_depth": 3,
+      "check_bounds": true
+    },
+    "placement": {
+      "type": "freeterraforged:tree"
+    },
+    "templates": [
+      "freeterraforged:structures/trees/birch/forest/forest_birch_1.nbt",
+      "freeterraforged:structures/trees/birch/forest/forest_birch_2.nbt",
+      "freeterraforged:structures/trees/birch/forest/forest_birch_3.nbt",
+      "freeterraforged:structures/trees/birch/forest/forest_birch_4.nbt"
+    ]
+  }
+}

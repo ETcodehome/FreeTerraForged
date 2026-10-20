@@ -1,0 +1,8 @@
+{
+  "type": "freeterraforged:replace",
+  "biomes": "minecraft:meadow",
+  "replacements": {
+    "minecraft:trees_meadow": "freeterraforged:meadow_trees"
+  },
+  "step": "vegetal_decoration"
+}

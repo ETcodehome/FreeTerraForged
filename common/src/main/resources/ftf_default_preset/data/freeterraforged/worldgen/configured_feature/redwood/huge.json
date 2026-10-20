@@ -1,0 +1,24 @@
+{
+  "type": "freeterraforged:template",
+  "config": {
+    "decorator": {
+      "biome_decorators": {},
+      "default_decorator": []
+    },
+    "paste": {
+      "base_depth": 3,
+      "check_bounds": true
+    },
+    "placement": {
+      "type": "freeterraforged:tree"
+    },
+    "templates": [
+      "freeterraforged:structures/trees/redwood/huge/redwood_massive_1.nbt",
+      "freeterraforged:structures/trees/redwood/huge/redwood_massive_2.nbt",
+      "freeterraforged:structures/trees/redwood/huge/redwood_massive_3.nbt",
+      "freeterraforged:structures/trees/redwood/huge/redwood_massive_4.nbt",
+      "freeterraforged:structures/trees/redwood/huge/redwood_massive_5.nbt",
+      "freeterraforged:structures/trees/redwood/huge/redwood_massive_6.nbt"
+    ]
+  }
+}

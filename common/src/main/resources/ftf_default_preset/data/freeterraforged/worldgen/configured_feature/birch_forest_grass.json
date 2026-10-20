@@ -1,0 +1,235 @@
+{
+  "type": "minecraft:random_selector",
+  "config": {
+    "default": {
+      "feature": {
+        "type": "minecraft:random_patch",
+        "config": {
+          "feature": {
+            "feature": {
+              "type": "minecraft:simple_block",
+              "config": {
+                "to_place": {
+                  "type": "minecraft:simple_state_provider",
+                  "state": {
+                    "Name": "minecraft:tall_grass",
+                    "Properties": {
+                      "half": "lower"
+                    }
+                  }
+                }
+              }
+            },
+            "placement": [
+              {
+                "type": "minecraft:block_predicate_filter",
+                "predicate": {
+                  "type": "minecraft:matching_blocks",
+                  "blocks": "minecraft:air"
+                }
+              }
+            ]
+          },
+          "tries": 48,
+          "xz_spread": 7,
+          "y_spread": 3
+        }
+      },
+      "placement": []
+    },
+    "features": [
+      {
+        "chance": 0.8,
+        "feature": {
+          "feature": {
+            "type": "minecraft:random_patch",
+            "config": {
+              "feature": {
+                "feature": {
+                  "type": "minecraft:simple_block",
+                  "config": {
+                    "to_place": {
+                      "type": "minecraft:simple_state_provider",
+                      "state": {
+                        "Name": "minecraft:tall_grass",
+                        "Properties": {
+                          "half": "lower"
+                        }
+                      }
+                    }
+                  }
+                },
+                "placement": [
+                  {
+                    "type": "minecraft:block_predicate_filter",
+                    "predicate": {
+                      "type": "minecraft:matching_blocks",
+                      "blocks": "minecraft:air"
+                    }
+                  }
+                ]
+              },
+              "tries": 56,
+              "xz_spread": 7,
+              "y_spread": 3
+            }
+          },
+          "placement": []
+        }
+      },
+      {
+        "chance": 0.5,
+        "feature": {
+          "feature": {
+            "type": "minecraft:random_patch",
+            "config": {
+              "feature": {
+                "feature": {
+                  "type": "minecraft:simple_block",
+                  "config": {
+                    "to_place": {
+                      "type": "minecraft:simple_state_provider",
+                      "state": {
+                        "Name": "minecraft:lilac",
+                        "Properties": {
+                          "half": "lower"
+                        }
+                      }
+                    }
+                  }
+                },
+                "placement": [
+                  {
+                    "type": "minecraft:block_predicate_filter",
+                    "predicate": {
+                      "type": "minecraft:matching_blocks",
+                      "blocks": "minecraft:air"
+                    }
+                  }
+                ]
+              },
+              "tries": 64,
+              "xz_spread": 7,
+              "y_spread": 3
+            }
+          },
+          "placement": []
+        }
+      },
+      {
+        "chance": 0.3,
+        "feature": {
+          "feature": {
+            "type": "minecraft:random_patch",
+            "config": {
+              "feature": {
+                "feature": {
+                  "type": "minecraft:simple_block",
+                  "config": {
+                    "to_place": {
+                      "type": "minecraft:simple_state_provider",
+                      "state": {
+                        "Name": "minecraft:large_fern",
+                        "Properties": {
+                          "half": "lower"
+                        }
+                      }
+                    }
+                  }
+                },
+                "placement": [
+                  {
+                    "type": "minecraft:block_predicate_filter",
+                    "predicate": {
+                      "type": "minecraft:matching_blocks",
+                      "blocks": "minecraft:air"
+                    }
+                  }
+                ]
+              },
+              "tries": 48,
+              "xz_spread": 7,
+              "y_spread": 3
+            }
+          },
+          "placement": []
+        }
+      },
+      {
+        "chance": 0.2,
+        "feature": {
+          "feature": {
+            "type": "minecraft:random_patch",
+            "config": {
+              "feature": {
+                "feature": {
+                  "type": "minecraft:simple_block",
+                  "config": {
+                    "to_place": {
+                      "type": "minecraft:simple_state_provider",
+                      "state": {
+                        "Name": "minecraft:fern"
+                      }
+                    }
+                  }
+                },
+                "placement": [
+                  {
+                    "type": "minecraft:block_predicate_filter",
+                    "predicate": {
+                      "type": "minecraft:matching_blocks",
+                      "blocks": "minecraft:air"
+                    }
+                  }
+                ]
+              },
+              "tries": 24,
+              "xz_spread": 7,
+              "y_spread": 3
+            }
+          },
+          "placement": []
+        }
+      },
+      {
+        "chance": 0.1,
+        "feature": {
+          "feature": {
+            "type": "minecraft:random_patch",
+            "config": {
+              "feature": {
+                "feature": {
+                  "type": "minecraft:simple_block",
+                  "config": {
+                    "to_place": {
+                      "type": "minecraft:simple_state_provider",
+                      "state": {
+                        "Name": "minecraft:peony",
+                        "Properties": {
+                          "half": "lower"
+                        }
+                      }
+                    }
+                  }
+                },
+                "placement": [
+                  {
+                    "type": "minecraft:block_predicate_filter",
+                    "predicate": {
+                      "type": "minecraft:matching_blocks",
+                      "blocks": "minecraft:air"
+                    }
+                  }
+                ]
+              },
+              "tries": 32,
+              "xz_spread": 7,
+              "y_spread": 3
+            }
+          },
+          "placement": []
+        }
+      }
+    ]
+  }
+}

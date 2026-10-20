@@ -1,0 +1,10 @@
+{
+  "type": "freeterraforged:add",
+  "biomes": {
+    "behavior": "whitelist",
+    "biomes": "minecraft:swamp"
+  },
+  "features": "freeterraforged:swamp_surface",
+  "order": "prepend",
+  "step": "raw_generation"
+}

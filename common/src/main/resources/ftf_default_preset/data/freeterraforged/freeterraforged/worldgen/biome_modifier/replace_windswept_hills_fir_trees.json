@@ -1,0 +1,11 @@
+{
+  "type": "freeterraforged:replace",
+  "biomes": [
+    "minecraft:windswept_hills",
+    "minecraft:windswept_gravelly_hills"
+  ],
+  "replacements": {
+    "minecraft:trees_windswept_hills": "freeterraforged:windswept_hills_fir_trees"
+  },
+  "step": "vegetal_decoration"
+}

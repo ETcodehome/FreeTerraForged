@@ -1,0 +1,12 @@
+{
+  "type": "freeterraforged:replace",
+  "biomes": [
+    "minecraft:birch_forest",
+    "minecraft:old_growth_birch_forest"
+  ],
+  "replacements": {
+    "minecraft:birch_tall": "freeterraforged:birch_trees",
+    "minecraft:trees_birch": "freeterraforged:birch_trees"
+  },
+  "step": "vegetal_decoration"
+}

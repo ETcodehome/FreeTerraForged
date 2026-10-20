@@ -1,0 +1,70 @@
+{
+  "type": "freeterraforged:warp",
+  "domain": {
+    "type": "freeterraforged:domain",
+    "distance": 30.0,
+    "x": {
+      "type": "freeterraforged:perlin",
+      "frequency": 0.06666667,
+      "gain": 0.5,
+      "interpolation": {
+        "value": "CURVE3"
+      },
+      "lacunarity": 2.0,
+      "octaves": 2,
+      "seed": 1234155
+    },
+    "z": {
+      "type": "freeterraforged:perlin",
+      "frequency": 0.06666667,
+      "gain": 0.5,
+      "interpolation": {
+        "value": "CURVE3"
+      },
+      "lacunarity": 2.0,
+      "octaves": 2,
+      "seed": 1234156
+    }
+  },
+  "input": {
+    "type": "freeterraforged:warp",
+    "domain": {
+      "type": "freeterraforged:domain",
+      "distance": 444.5,
+      "x": {
+        "type": "freeterraforged:perlin",
+        "frequency": 0.0045045046,
+        "gain": 0.5,
+        "interpolation": {
+          "value": "CURVE3"
+        },
+        "lacunarity": 2.0,
+        "octaves": 2,
+        "seed": 1234154
+      },
+      "z": {
+        "type": "freeterraforged:perlin",
+        "frequency": 0.0045045046,
+        "gain": 0.5,
+        "interpolation": {
+          "value": "CURVE3"
+        },
+        "lacunarity": 2.0,
+        "octaves": 2,
+        "seed": 1234155
+      }
+    },
+    "input": {
+      "type": "freeterraforged:shift",
+      "input": {
+        "type": "freeterraforged:worley",
+        "cell_function": "CELL_VALUE",
+        "distance": 1.0,
+        "distance_function": "EUCLIDEAN",
+        "frequency": 0.0011248594,
+        "lookup": 0.0
+      },
+      "shift": 1234153
+    }
+  }
+}

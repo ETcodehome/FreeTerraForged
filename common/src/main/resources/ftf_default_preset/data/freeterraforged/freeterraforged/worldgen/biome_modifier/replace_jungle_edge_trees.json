@@ -1,0 +1,8 @@
+{
+  "type": "freeterraforged:replace",
+  "biomes": "minecraft:sparse_jungle",
+  "replacements": {
+    "minecraft:trees_sparse_jungle": "freeterraforged:jungle_edge_trees"
+  },
+  "step": "vegetal_decoration"
+}

@@ -125,6 +125,9 @@ jar {
 
 processResources {
     duplicatesStrategy "exclude"
+    from(project(":common").file("src/main/resources/ftf_default_preset")) {
+        into "ftf_default_preset"
+    }
 }
 
 sourcesJar {

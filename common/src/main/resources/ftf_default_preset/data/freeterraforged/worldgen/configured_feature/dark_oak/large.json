@@ -1,0 +1,23 @@
+{
+  "type": "freeterraforged:template",
+  "config": {
+    "decorator": {
+      "biome_decorators": {},
+      "default_decorator": []
+    },
+    "paste": {
+      "base_depth": 3,
+      "check_bounds": true
+    },
+    "placement": {
+      "type": "freeterraforged:tree"
+    },
+    "templates": [
+      "freeterraforged:structures/trees/dark_oak/large/dark_oak_tall_1.nbt",
+      "freeterraforged:structures/trees/dark_oak/large/dark_oak_tall_2.nbt",
+      "freeterraforged:structures/trees/dark_oak/large/dark_oak_tall_3.nbt",
+      "freeterraforged:structures/trees/dark_oak/large/dark_oak_tall_4.nbt",
+      "freeterraforged:structures/trees/dark_oak/large/dark_oak_tall_5.nbt"
+    ]
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "type": "freeterraforged:threshold",
+  "input": "freeterraforged:surface/iceberg/deep/shape",
+  "lower": 0.0,
+  "threshold": 0.6,
+  "upper": 1.0
+}

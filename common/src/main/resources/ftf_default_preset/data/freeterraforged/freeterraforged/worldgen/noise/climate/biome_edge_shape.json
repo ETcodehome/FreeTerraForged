@@ -1,0 +1,18 @@
+{
+  "type": "freeterraforged:add",
+  "input1": {
+    "type": "freeterraforged:shift",
+    "input": {
+      "type": "freeterraforged:simplex",
+      "frequency": 0.00729927,
+      "gain": 1.601,
+      "interpolation": {
+        "value": "CURVE3"
+      },
+      "lacunarity": 10.5,
+      "octaves": 5
+    },
+    "shift": 0
+  },
+  "input2": -0.5
+}

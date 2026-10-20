@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:add",
+  "argument1": -1.0037500858306885,
+  "argument2": {
+    "type": "minecraft:mul",
+    "argument1": 2.0,
+    "argument2": {
+      "type": "freeterraforged:clamp_to_nearest_unit",
+      "function": "freeterraforged:height",
+      "resolution": 256
+    }
+  }
+}

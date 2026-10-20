@@ -16,6 +16,8 @@
     "MixinSurfaceSystem",
     "MixinStructure",
     "MixinMinecraftServer",
+    "MixinDedicatedServerProperties",
+    "MixinDedicatedServerWorldDimensionData",
     "MixinRegistrySetBuilder$EmptyTagLookup",
     "MixinSpawnFinder",
     "MixinClimateSampler",

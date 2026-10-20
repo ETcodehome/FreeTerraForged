@@ -1,0 +1,22 @@
+{
+  "type": "freeterraforged:add",
+  "input1": {
+    "type": "freeterraforged:multiply",
+    "input1": {
+      "type": "freeterraforged:shift",
+      "input": {
+        "type": "freeterraforged:perlin_ridge",
+        "frequency": 0.04,
+        "gain": 0.975,
+        "interpolation": {
+          "value": "CURVE3"
+        },
+        "lacunarity": 2.0,
+        "octaves": 2
+      },
+      "shift": 746382638
+    },
+    "input2": 0.01171875
+  },
+  "input2": 0.0078125
+}

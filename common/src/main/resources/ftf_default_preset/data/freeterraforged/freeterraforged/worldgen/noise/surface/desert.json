@@ -1,0 +1,19 @@
+{
+  "type": "freeterraforged:shift",
+  "input": {
+    "type": "freeterraforged:multiply",
+    "input1": {
+      "type": "freeterraforged:perlin",
+      "frequency": 0.125,
+      "gain": 0.5,
+      "interpolation": {
+        "value": "CURVE3"
+      },
+      "lacunarity": 2.0,
+      "octaves": 1,
+      "seed": 12
+    },
+    "input2": 0.0625
+  },
+  "shift": 746382634
+}

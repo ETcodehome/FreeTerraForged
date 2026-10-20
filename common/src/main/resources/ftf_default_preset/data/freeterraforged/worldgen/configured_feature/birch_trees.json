@@ -1,0 +1,67 @@
+{
+  "type": "freeterraforged:chance",
+  "config": {
+    "entries": [
+      {
+        "chance": 0.2,
+        "feature": "freeterraforged:birch/large",
+        "modifiers": [
+          {
+            "type": "freeterraforged:elevation",
+            "exclusive": false,
+            "from": 0.25,
+            "to": 0.0
+          },
+          {
+            "type": "freeterraforged:biome_edge",
+            "exclusive": false,
+            "from": 0.1,
+            "to": 0.3
+          }
+        ]
+      },
+      {
+        "chance": 0.2,
+        "feature": "freeterraforged:birch/forest",
+        "modifiers": [
+          {
+            "type": "freeterraforged:elevation",
+            "exclusive": false,
+            "from": 0.3,
+            "to": 0.0
+          },
+          {
+            "type": "freeterraforged:biome_edge",
+            "exclusive": false,
+            "from": 0.05,
+            "to": 0.2
+          }
+        ]
+      },
+      {
+        "chance": 0.1,
+        "feature": "freeterraforged:birch/small",
+        "modifiers": [
+          {
+            "type": "freeterraforged:biome_edge",
+            "exclusive": false,
+            "from": 0.25,
+            "to": 0.0
+          }
+        ]
+      },
+      {
+        "chance": 0.1,
+        "feature": "freeterraforged:birch/small",
+        "modifiers": [
+          {
+            "type": "freeterraforged:elevation",
+            "exclusive": false,
+            "from": 0.25,
+            "to": 0.65
+          }
+        ]
+      }
+    ]
+  }
+}

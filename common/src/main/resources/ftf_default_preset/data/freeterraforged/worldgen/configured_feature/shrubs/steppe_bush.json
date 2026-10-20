@@ -1,0 +1,22 @@
+{
+  "type": "freeterraforged:bush",
+  "config": {
+    "air_chance": 0.06,
+    "leaf_chance": 0.08,
+    "leaves": {
+      "Name": "minecraft:acacia_leaves",
+      "Properties": {
+        "distance": "7",
+        "persistent": "false",
+        "waterlogged": "false"
+      }
+    },
+    "size_chance": 0.7,
+    "trunk": {
+      "Name": "minecraft:acacia_log",
+      "Properties": {
+        "axis": "y"
+      }
+    }
+  }
+}

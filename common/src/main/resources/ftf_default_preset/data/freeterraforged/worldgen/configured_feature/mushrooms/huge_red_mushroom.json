@@ -1,0 +1,23 @@
+{
+  "type": "freeterraforged:template",
+  "config": {
+    "decorator": {
+      "biome_decorators": {},
+      "default_decorator": []
+    },
+    "paste": {
+      "base_depth": 3,
+      "check_bounds": true
+    },
+    "placement": {
+      "type": "freeterraforged:tree"
+    },
+    "templates": [
+      "freeterraforged:structures/mushrooms/red/red_mushroom_1.nbt",
+      "freeterraforged:structures/mushrooms/red/red_mushroom_2.nbt",
+      "freeterraforged:structures/mushrooms/red/red_mushroom_3.nbt",
+      "freeterraforged:structures/mushrooms/red/red_mushroom_4.nbt",
+      "freeterraforged:structures/mushrooms/red/red_mushroom_5.nbt"
+    ]
+  }
+}

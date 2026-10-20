@@ -1,0 +1,21 @@
+{
+  "type": "freeterraforged:bush",
+  "config": {
+    "air_chance": 0.05,
+    "leaves": {
+      "Name": "minecraft:oak_leaves",
+      "Properties": {
+        "distance": "7",
+        "persistent": "false",
+        "waterlogged": "false"
+      }
+    },
+    "size_chance": 0.6,
+    "trunk": {
+      "Name": "minecraft:spruce_log",
+      "Properties": {
+        "axis": "y"
+      }
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "type": "freeterraforged:add",
+  "features": "freeterraforged:river_gasket",
+  "order": "prepend",
+  "step": "raw_generation"
+}

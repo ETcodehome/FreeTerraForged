@@ -1,0 +1,24 @@
+{
+  "type": "freeterraforged:template",
+  "config": {
+    "decorator": {
+      "biome_decorators": {},
+      "default_decorator": []
+    },
+    "paste": {
+      "check_bounds": true
+    },
+    "placement": {
+      "type": "freeterraforged:tree"
+    },
+    "templates": [
+      "freeterraforged:structures/mushrooms/brown/brown_mushroom_1.nbt",
+      "freeterraforged:structures/mushrooms/brown/brown_mushroom_2.nbt",
+      "freeterraforged:structures/mushrooms/brown/brown_mushroom_3.nbt",
+      "freeterraforged:structures/mushrooms/brown/brown_mushroom_4.nbt",
+      "freeterraforged:structures/mushrooms/brown/brown_mushroom_5.nbt",
+      "freeterraforged:structures/mushrooms/brown/brown_mushroom_6.nbt",
+      "freeterraforged:structures/mushrooms/brown/brown_mushroom_7.nbt"
+    ]
+  }
+}

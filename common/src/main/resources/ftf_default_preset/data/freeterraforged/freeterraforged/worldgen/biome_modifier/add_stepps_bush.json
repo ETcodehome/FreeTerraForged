@@ -1,0 +1,14 @@
+{
+  "type": "freeterraforged:add",
+  "biomes": {
+    "behavior": "whitelist",
+    "biomes": [
+      "minecraft:savanna",
+      "minecraft:windswept_savanna",
+      "minecraft:savanna_plateau"
+    ]
+  },
+  "features": "freeterraforged:shrubs/steppe_bush",
+  "order": "prepend",
+  "step": "vegetal_decoration"
+}

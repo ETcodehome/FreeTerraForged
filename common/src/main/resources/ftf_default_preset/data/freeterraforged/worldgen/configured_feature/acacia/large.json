@@ -1,0 +1,20 @@
+{
+  "type": "freeterraforged:template",
+  "config": {
+    "decorator": {
+      "biome_decorators": {},
+      "default_decorator": []
+    },
+    "paste": {
+      "base_depth": 3,
+      "check_bounds": true
+    },
+    "placement": {
+      "type": "freeterraforged:tree"
+    },
+    "templates": [
+      "freeterraforged:structures/trees/acacia/large/acacia_1.nbt",
+      "freeterraforged:structures/trees/acacia/large/acacia_2.nbt"
+    ]
+  }
+}

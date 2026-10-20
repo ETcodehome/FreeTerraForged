@@ -1,0 +1,13 @@
+{
+  "type": "freeterraforged:add",
+  "biomes": {
+    "behavior": "whitelist",
+    "biomes": [
+      "minecraft:forest",
+      "minecraft:dark_forest"
+    ]
+  },
+  "features": "freeterraforged:forest_grass",
+  "order": "prepend",
+  "step": "vegetal_decoration"
+}

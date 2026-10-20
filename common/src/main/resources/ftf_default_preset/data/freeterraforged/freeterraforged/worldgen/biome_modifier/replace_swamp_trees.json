@@ -1,0 +1,8 @@
+{
+  "type": "freeterraforged:replace",
+  "biomes": "minecraft:swamp",
+  "replacements": {
+    "minecraft:trees_swamp": "freeterraforged:swamp_trees"
+  },
+  "step": "vegetal_decoration"
+}

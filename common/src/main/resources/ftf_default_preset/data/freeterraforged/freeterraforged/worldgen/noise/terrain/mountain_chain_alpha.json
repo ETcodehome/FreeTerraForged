@@ -1,0 +1,57 @@
+{
+  "type": "freeterraforged:map",
+  "alpha": {
+    "type": "freeterraforged:clamp",
+    "input": {
+      "type": "freeterraforged:curve",
+      "curve_function": {
+        "type": "freeterraforged:interpolation",
+        "value": "CURVE3"
+      },
+      "input": {
+        "type": "freeterraforged:warp",
+        "domain": {
+          "type": "freeterraforged:domain",
+          "distance": 250.0,
+          "x": {
+            "type": "freeterraforged:perlin",
+            "frequency": 0.003003003,
+            "gain": 0.5,
+            "interpolation": {
+              "value": "CURVE3"
+            },
+            "lacunarity": 2.0,
+            "octaves": 2,
+            "seed": 1
+          },
+          "z": {
+            "type": "freeterraforged:perlin",
+            "frequency": 0.003003003,
+            "gain": 0.5,
+            "interpolation": {
+              "value": "CURVE3"
+            },
+            "lacunarity": 2.0,
+            "octaves": 2,
+            "seed": 2
+          }
+        },
+        "input": {
+          "type": "freeterraforged:shift",
+          "input": {
+            "type": "freeterraforged:worley_edge",
+            "distance": 1.0,
+            "distance_function": "EUCLIDEAN",
+            "edge_function": "DISTANCE_2_ADD",
+            "frequency": 0.001
+          },
+          "shift": 0
+        }
+      }
+    },
+    "max": 0.9,
+    "min": 0.0
+  },
+  "from": 0.0,
+  "to": 1.0
+}

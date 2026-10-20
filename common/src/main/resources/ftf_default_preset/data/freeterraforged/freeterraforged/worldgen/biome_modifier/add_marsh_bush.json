@@ -1,0 +1,10 @@
+{
+  "type": "freeterraforged:add",
+  "biomes": {
+    "behavior": "whitelist",
+    "biomes": []
+  },
+  "features": "freeterraforged:shrubs/marsh_bush",
+  "order": "prepend",
+  "step": "vegetal_decoration"
+}

@@ -1,0 +1,11 @@
+{
+  "type": "freeterraforged:replace",
+  "biomes": [
+    "minecraft:forest",
+    "minecraft:flower_forest"
+  ],
+  "replacements": {
+    "minecraft:trees_flower_forest": "freeterraforged:flower_forest_trees"
+  },
+  "step": "vegetal_decoration"
+}

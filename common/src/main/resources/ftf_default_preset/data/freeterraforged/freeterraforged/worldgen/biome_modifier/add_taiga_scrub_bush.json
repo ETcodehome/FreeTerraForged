@@ -1,0 +1,15 @@
+{
+  "type": "freeterraforged:add",
+  "biomes": {
+    "behavior": "whitelist",
+    "biomes": [
+      "minecraft:snowy_plains",
+      "minecraft:taiga",
+      "minecraft:windswept_forest",
+      "minecraft:windswept_gravelly_hills"
+    ]
+  },
+  "features": "freeterraforged:shrubs/taiga_scrub_bush",
+  "order": "prepend",
+  "step": "vegetal_decoration"
+}

@@ -1,0 +1,12 @@
+{
+  "type": "freeterraforged:replace",
+  "biomes": [
+    "minecraft:taiga",
+    "minecraft:old_growth_spruce_taiga"
+  ],
+  "replacements": {
+    "minecraft:trees_old_growth_spruce_taiga": "freeterraforged:pine_trees",
+    "minecraft:trees_taiga": "freeterraforged:pine_trees"
+  },
+  "step": "vegetal_decoration"
+}

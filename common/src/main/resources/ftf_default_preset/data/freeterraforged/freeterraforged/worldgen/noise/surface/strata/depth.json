@@ -1,0 +1,11 @@
+{
+  "type": "freeterraforged:perlin",
+  "frequency": 0.0078125,
+  "gain": 0.5,
+  "interpolation": {
+    "value": "CURVE3"
+  },
+  "lacunarity": 2.0,
+  "octaves": 3,
+  "seed": 0
+}

@@ -1,0 +1,11 @@
+{
+  "feature": "minecraft:lake_lava",
+  "placement": [
+    {
+      "type": "freeterraforged:blacklist_dimension",
+      "blacklist": [
+        "minecraft:overworld"
+      ]
+    }
+  ]
+}

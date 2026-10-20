@@ -1,0 +1,13 @@
+{
+  "type": "freeterraforged:add",
+  "biomes": {
+    "behavior": "whitelist",
+    "biomes": [
+      "minecraft:birch_forest",
+      "minecraft:old_growth_birch_forest"
+    ]
+  },
+  "features": "freeterraforged:birch_forest_grass",
+  "order": "prepend",
+  "step": "vegetal_decoration"
+}

@@ -1,0 +1,18 @@
+{
+  "feature": "freeterraforged:plains_trees",
+  "placement": [
+    {
+      "type": "minecraft:heightmap",
+      "heightmap": "MOTION_BLOCKING"
+    },
+    {
+      "type": "freeterraforged:legacy_count_extra",
+      "count": 0,
+      "extra_chance": 0.02,
+      "extra_count": 1
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "feature": "freeterraforged:birch_trees",
+  "placement": [
+    {
+      "type": "freeterraforged:fast_poission",
+      "biome_fade": 0.25,
+      "density_variance_scale": 175,
+      "density_variation": 0.9,
+      "jitter": 0.8,
+      "radius": 6,
+      "scale": 0.25
+    },
+    {
+      "type": "minecraft:heightmap",
+      "heightmap": "WORLD_SURFACE"
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

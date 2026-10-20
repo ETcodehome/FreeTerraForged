@@ -1,0 +1,43 @@
+{
+  "type": "freeterraforged:cache",
+  "value": {
+    "type": "freeterraforged:warp",
+    "domain": {
+      "type": "freeterraforged:domain",
+      "distance": 10.0,
+      "x": {
+        "type": "freeterraforged:perlin",
+        "frequency": 0.06666667,
+        "gain": 0.5,
+        "interpolation": {
+          "value": "CURVE3"
+        },
+        "lacunarity": 2.0,
+        "octaves": 1,
+        "seed": 746382635
+      },
+      "z": {
+        "type": "freeterraforged:perlin",
+        "frequency": 0.06666667,
+        "gain": 0.5,
+        "interpolation": {
+          "value": "CURVE3"
+        },
+        "lacunarity": 2.0,
+        "octaves": 1,
+        "seed": 746382636
+      }
+    },
+    "input": {
+      "type": "freeterraforged:perlin",
+      "frequency": 0.015384615,
+      "gain": 0.5,
+      "interpolation": {
+        "value": "CURVE3"
+      },
+      "lacunarity": 2.0,
+      "octaves": 3,
+      "seed": 746382634
+    }
+  }
+}

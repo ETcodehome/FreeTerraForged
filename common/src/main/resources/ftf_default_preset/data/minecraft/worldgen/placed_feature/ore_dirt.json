@@ -1,0 +1,11 @@
+{
+  "feature": "minecraft:ore_dirt",
+  "placement": [
+    {
+      "type": "freeterraforged:blacklist_dimension",
+      "blacklist": [
+        "minecraft:overworld"
+      ]
+    }
+  ]
+}

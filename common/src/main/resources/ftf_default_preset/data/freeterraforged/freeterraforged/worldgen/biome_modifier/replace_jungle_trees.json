@@ -1,0 +1,12 @@
+{
+  "type": "freeterraforged:replace",
+  "biomes": [
+    "minecraft:jungle",
+    "minecraft:bamboo_jungle"
+  ],
+  "replacements": {
+    "minecraft:bamboo_vegetation": "freeterraforged:jungle_trees",
+    "minecraft:trees_jungle": "freeterraforged:jungle_trees"
+  },
+  "step": "vegetal_decoration"
+}

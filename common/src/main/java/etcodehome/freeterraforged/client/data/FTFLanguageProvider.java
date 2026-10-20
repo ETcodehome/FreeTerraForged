@@ -17,6 +17,10 @@ public final class FTFLanguageProvider {
 		protected void addTranslations() {
 			this.add(FTFTranslationKeys.METADATA_DESCRIPTION, "FreeTerraForged resources");
 			this.add(FTFTranslationKeys.PRESET_METADATA_DESCRIPTION, "FreeTerraForged preset");
+			this.add(FTFTranslationKeys.DEFAULT_PRESET_PACK_DESCRIPTION, "FreeTerraForged default world preset");
+			this.add(FTFTranslationKeys.DEFAULT_PRESET_PACK_NAME, "FreeTerraForged Default Preset");
+			this.add("resourcePack.ftf_default_preset.name", "FreeTerraForged Default Preset");
+			this.add("generator.freeterraforged.freeterraforged", "FreeTerraForged");
 			this.add(FTFTranslationKeys.MUD_SWAMPS_METADATA_DESCRIPTION, "Changes the swamp material to mud");
 			this.add(FTFTranslationKeys.NO_ERROR_MESSAGE, "{No error message}");
 

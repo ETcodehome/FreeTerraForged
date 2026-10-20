@@ -1,0 +1,20 @@
+{
+  "type": "minecraft:random_selector",
+  "config": {
+    "default": "freeterraforged:jungle/small",
+    "features": [
+      {
+        "chance": 0.2,
+        "feature": "freeterraforged:jungle/small"
+      },
+      {
+        "chance": 0.3,
+        "feature": "freeterraforged:jungle/large"
+      },
+      {
+        "chance": 0.4,
+        "feature": "minecraft:jungle_bush"
+      }
+    ]
+  }
+}

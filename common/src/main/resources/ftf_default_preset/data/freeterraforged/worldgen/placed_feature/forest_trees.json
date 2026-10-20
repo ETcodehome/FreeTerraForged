@@ -1,0 +1,21 @@
+{
+  "feature": "freeterraforged:forest_trees",
+  "placement": [
+    {
+      "type": "freeterraforged:fast_poission",
+      "biome_fade": 0.3,
+      "density_variance_scale": 150,
+      "density_variation": 0.75,
+      "jitter": 0.8,
+      "radius": 7,
+      "scale": 0.25
+    },
+    {
+      "type": "minecraft:heightmap",
+      "heightmap": "WORLD_SURFACE"
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

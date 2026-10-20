@@ -1,0 +1,8 @@
+{
+  "type": "freeterraforged:replace",
+  "biomes": "minecraft:dark_forest",
+  "replacements": {
+    "minecraft:dark_forest_vegetation": "freeterraforged:dark_forest_trees"
+  },
+  "step": "vegetal_decoration"
+}

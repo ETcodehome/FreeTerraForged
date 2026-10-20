@@ -5,6 +5,9 @@ import etcodehome.freeterraforged.client.command.FTFCommands;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.data.DataGenerator;
 import net.minecraft.data.PackOutput;
+import net.minecraft.server.packs.PackType;
+import net.minecraft.server.packs.repository.Pack;
+import net.minecraft.server.packs.repository.PackSource;
 import net.minecraft.data.metadata.PackMetadataGenerator;
 import net.minecraft.network.chat.Component;
 import net.neoforged.api.distmarker.Dist;
@@ -15,11 +18,14 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.data.event.GatherDataEvent;
+import net.neoforged.neoforge.event.AddPackFindersEvent;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.TagsUpdatedEvent;
 import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.client.data.FTFLanguageProvider;
 import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
+import etcodehome.freeterraforged.data.worldgen.FTFDefaultPresetDataProvider;
+import etcodehome.freeterraforged.data.worldgen.preset.FTFWorldPresets;
 import etcodehome.freeterraforged.platform.neoforge.RegistryUtilImpl;
 import etcodehome.freeterraforged.server.FTFMinecraftServer;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenLifecycle;
@@ -38,9 +44,23 @@ public class FTFNeoForge {
 		}
 
 		modEventBus.addListener(FTFNeoForge::gatherData);
+		modEventBus.addListener(FTFNeoForge::addBuiltinPresetPack);
 		RegistryUtilImpl.register(modEventBus);
 		NeoForge.EVENT_BUS.addListener(FTFNeoForge::tagsUpdated);
 		NeoForge.EVENT_BUS.register(this);
+	}
+
+	private static void addBuiltinPresetPack(AddPackFindersEvent event) {
+		if (event.getPackType() == PackType.SERVER_DATA) {
+			event.addPackFinders(
+				FTFWorldPresets.DEFAULT_PRESET_PACK_ID,
+				PackType.SERVER_DATA,
+				Component.translatable(FTFTranslationKeys.DEFAULT_PRESET_PACK_NAME),
+				PackSource.BUILT_IN,
+				false,
+				Pack.Position.TOP
+			);
+		}
 	}
 
 	private static void tagsUpdated(TagsUpdatedEvent event) {
@@ -65,6 +85,12 @@ public class FTFNeoForge {
 		generator.addProvider(includeClient, new FTFLanguageProvider.EnglishUS(output));
 		generator.addProvider(includeClient, PackMetadataGenerator.forFeaturePack(
 				output, Component.translatable(FTFTranslationKeys.METADATA_DESCRIPTION)));
+		if (event.includeServer()) {
+			generator.addProvider(true, new FTFDefaultPresetDataProvider(
+				new PackOutput(output.getOutputFolder().resolve(FTFWorldPresets.DEFAULT_PRESET_PACK_RESOURCE_PATH)),
+				event.getLookupProvider()
+			));
+		}
 	}
 
 	@SubscribeEvent

@@ -1,0 +1,41 @@
+{
+  "type": "freeterraforged:shift",
+  "input": {
+    "type": "freeterraforged:warp",
+    "domain": {
+      "type": "freeterraforged:domain",
+      "distance": 3.0,
+      "x": {
+        "type": "freeterraforged:shift",
+        "input": {
+          "type": "freeterraforged:white",
+          "frequency": 0.5
+        },
+        "shift": 16
+      },
+      "z": {
+        "type": "freeterraforged:shift",
+        "input": {
+          "type": "freeterraforged:white",
+          "frequency": 0.5
+        },
+        "shift": 17
+      }
+    },
+    "input": {
+      "type": "freeterraforged:shift",
+      "input": {
+        "type": "freeterraforged:simplex",
+        "frequency": 0.02,
+        "gain": 0.5,
+        "interpolation": {
+          "value": "CURVE3"
+        },
+        "lacunarity": 2.0,
+        "octaves": 2
+      },
+      "shift": 15
+    }
+  },
+  "shift": 746382634
+}

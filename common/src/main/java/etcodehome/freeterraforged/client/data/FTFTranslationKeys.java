@@ -18,6 +18,8 @@ public final class FTFTranslationKeys {
 	public static final String GUI_LABEL_LEGACY_USER_PRESET = resolve("gui.label.legacy_user_preset");
 	public static final String METADATA_DESCRIPTION = resolve("metadata.description");
 	public static final String PRESET_METADATA_DESCRIPTION = resolve("preset.metadata.description");
+	public static final String DEFAULT_PRESET_PACK_DESCRIPTION = resolve("preset.default_pack.description");
+	public static final String DEFAULT_PRESET_PACK_NAME = resolve("preset.default_pack.name");
 	public static final String MUD_SWAMPS_METADATA_DESCRIPTION = resolve("mudSwamps.metadata.description");
 	public static final String NO_ERROR_MESSAGE = resolve("error.noMessage");
 

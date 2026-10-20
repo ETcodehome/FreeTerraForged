@@ -1,0 +1,8 @@
+{
+  "type": "freeterraforged:replace",
+  "biomes": "minecraft:wooded_badlands",
+  "replacements": {
+    "minecraft:trees_badlands": "freeterraforged:wooded_badlands_trees"
+  },
+  "step": "vegetal_decoration"
+}

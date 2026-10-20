@@ -53,6 +53,9 @@ repositories {
 
 processResources {
     inputs.property "version", project.version
+    from(project(":common").file("src/main/resources/ftf_default_preset")) {
+        into "ftf_default_preset"
+    }
 
     filesMatching("fabric.mod.json") {
         expand "version": project.version

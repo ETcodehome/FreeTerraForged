@@ -1,0 +1,9 @@
+{
+  "type": "freeterraforged:replace",
+  "biomes": "minecraft:windswept_savanna",
+  "replacements": {
+    "minecraft:trees_badlands": "freeterraforged:badlands_trees",
+    "minecraft:trees_windswept_savanna": "freeterraforged:badlands_trees"
+  },
+  "step": "vegetal_decoration"
+}

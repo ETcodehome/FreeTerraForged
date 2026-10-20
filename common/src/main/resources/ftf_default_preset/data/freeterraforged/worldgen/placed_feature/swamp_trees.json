@@ -1,0 +1,21 @@
+{
+  "feature": "freeterraforged:swamp_trees",
+  "placement": [
+    {
+      "type": "minecraft:in_square"
+    },
+    {
+      "type": "minecraft:heightmap",
+      "heightmap": "MOTION_BLOCKING"
+    },
+    {
+      "type": "freeterraforged:legacy_count_extra",
+      "count": 5,
+      "extra_chance": 0.25,
+      "extra_count": 1
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}
