@@ -24,7 +24,10 @@ public class BiomeModifiersImpl {
 		register("replace", ReplaceModifier.CODEC);
 		// NeoForge compatibility: mods ported from NeoForge may ship biome modifiers
 		// using the platform-provided "neoforge:add_features" serializer, which has
-		// no equivalent registered on Fabric. See issue #287.
+		// no equivalent registered on Fabric. Without this, FTF fails to parse those
+		// datapack files and world creation crashes (issue #287). The shim parses but
+		// applies nothing, since the owning mods already register the features via
+		// the Fabric BiomeModifications API.
 		register("neoforge:add_features", NeoForgeAddFeaturesModifier.CODEC);
 	}
 
