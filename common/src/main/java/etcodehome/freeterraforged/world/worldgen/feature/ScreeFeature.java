@@ -30,8 +30,6 @@ import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.TileCache;
 import etcodehome.freeterraforged.world.worldgen.feature.ScreeFeature.Config;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
@@ -84,9 +82,7 @@ public class ScreeFeature extends Feature<Config> {
             int chunkZ = chunkPos.z;
             ChunkGenerator generator = placeContext.chunkGenerator();
             ChunkAccess chunk = level.getChunk(chunkX, chunkZ);
-			try (TileCache.Lease lease = generatorContext.cache.acquireAtChunk(chunkX, chunkZ)) {
-				Tile.Chunk tileChunk = lease.tile().getChunkReader(chunkX, chunkZ);
-            etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap heightmap = generatorContext.generator.getHeightmap();
+            etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap heightmap = generatorContext.heightmap;
             Levels levels = heightmap.levels();
 
             long worldSeed = heightmap.climate().randomSeed();
@@ -104,7 +100,8 @@ public class ScreeFeature extends Feature<Config> {
                     int worldX = chunkPos.getBlockX(x);
                     int worldZ = chunkPos.getBlockZ(z);
 
-                    Cell cell = tileChunk.getCell(x, z);
+                    Cell cell = new Cell();
+                    generatorContext.lookup.applyCell(cell, worldX, worldZ, false, false);
                     int scaledY = levels.scale(cell.height);
                     int surfaceY = chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, x, z);
                     Holder<Biome> biome = level.getBiome(pos.set(worldX, surfaceY, worldZ));
@@ -117,6 +114,7 @@ public class ScreeFeature extends Feature<Config> {
                     }
 
                     if(surfaceY <= scaledY && surfaceY >= generator.getSeaLevel() - 1 && !biome.is(Biomes.WOODED_BADLANDS) && !biome.is(Biomes.BADLANDS)) {
+                        generatorContext.lookup.computeSteepness(cell, worldX, worldZ);
                         erodeColumn(config, levels, rand, clusterNoise, warpX, warpZ, generator, chunk, cell, pos, surfaceY);
                         // remove any foliage that may have generated above
                         pos.setY(surfaceY);
@@ -127,7 +125,6 @@ public class ScreeFeature extends Feature<Config> {
                 }
             }
 				return true;
-			}
         } else {
             return false;
         }

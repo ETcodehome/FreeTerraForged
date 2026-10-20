@@ -24,7 +24,6 @@ import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.WorldLookup;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainCategory;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.util.PosUtil;
 
@@ -82,28 +81,16 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 	}
 	
 	public class CacheChunk implements MarkerFunction.Mapped {
-		private Supplier<@Nullable Tile.Chunk> chunk;
-		private Cache2d cache2d;
-		private int chunkX, chunkZ;
+		private final Cache2d cache2d;
 		
-		public CacheChunk(Supplier<@Nullable Tile.Chunk> chunk, @Nullable Cache2d cache2d, int chunkX, int chunkZ) {
-			this.chunk = chunk;
+		public CacheChunk(@Nullable Cache2d cache2d) {
 			this.cache2d = cache2d != null ? cache2d : new Cache2d();
-			this.chunkX = chunkX;
-			this.chunkZ = chunkZ;
 		}
 
 		@Override
 		public double compute(FunctionContext ctx) {
-			int blockX = ctx.blockX();
-			int blockZ = ctx.blockZ();
-			int chunkX = SectionPos.blockToSectionCoord(blockX);
-			int chunkZ = SectionPos.blockToSectionCoord(blockZ);
 			WorldLookup worldLookup = CellSampler.this.deferredLookup.get();
-			Tile.Chunk current = this.chunk.get();
-			Cell cell = (current != null && this.chunkX == chunkX && this.chunkZ == chunkZ) ?
-				current.getCell(blockX, blockZ) :
-				this.cache2d.getAndUpdate(worldLookup, blockX, blockZ, false);
+			Cell cell = this.cache2d.getAndUpdate(worldLookup, ctx.blockX(), ctx.blockZ(), false);
 			return CellSampler.this.field.readFinite(cell, worldLookup.getHeightmap());
 		}
 

@@ -2,19 +2,17 @@ package etcodehome.freeterraforged.world.worldgen.cell.heightmap;
 
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
+import etcodehome.freeterraforged.world.worldgen.cell.CellLookup;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.TileCache;
 
-public class WorldLookup {
-	private float waterLevel;
-	private float beachLevel;
-	private TileCache cache;
-	private Heightmap heightmap;
-	private Levels levels;
+public class WorldLookup implements CellLookup {
+	private final float waterLevel;
+	private final float beachLevel;
+	private final Heightmap heightmap;
+	private final Levels levels;
 	
 	public WorldLookup(GeneratorContext context) {
-		this.cache = context.cache;
-		this.heightmap = context.generator.getHeightmap();
+		this.heightmap = context.heightmap;
 		this.waterLevel = context.levels.water;
 		this.beachLevel = context.levels.water(5);
 		this.levels = context.levels;
@@ -24,58 +22,40 @@ public class WorldLookup {
 		return this.heightmap;
 	}
 
+	@Override
+	public Cell lookup(int blockX, int blockZ) {
+		Cell cell = new Cell();
+		this.applyCell(cell, blockX, blockZ, false, false);
+		return cell;
+	}
+
 	public boolean applyCell(Cell cell, int x, int z, boolean applyClimate) {
 		return this.applyCell(cell, x, z, false, applyClimate);
 	}
 
 	public boolean applyCell(Cell cell, int x, int z, boolean load, boolean applyClimate) {
-		if (load && this.computeAccurate(cell, x, z)) {
-			return true;
-		}
-		if (this.computeCached(cell, x, z)) {
-			return true;
-		}
 		return this.compute(cell, x, z, applyClimate);
 	}
 
 	public void applyBiomeRegion(Cell cell, int x, int z) {
-		if (!this.computeCached(cell, x, z)) {
-			this.heightmap.applyBiomeRegion(cell, x, z);
-		}
+		this.heightmap.applyBiomeRegion(cell, x, z);
 	}
 
-	private boolean computeAccurate(Cell cell, int x, int z) {
-		if (this.cache == null) {
-			return false;
-		}
-		int rx = this.cache.chunkToTile(x >> 4);
-		int rz = this.cache.chunkToTile(z >> 4);
-		try (TileCache.Lease lease = this.cache.acquire(rx, rz)) {
-			Cell c = lease.tile().lookup(x, z);
-			if (c != null) {
-				cell.copyFrom(c);
-			}
-		}
-		return cell.terrain != null;
-	}
-
-	private boolean computeCached(Cell cell, int x, int z) {
-		if (this.cache == null) {
-			return false;
-		}
-		int rx = this.cache.chunkToTile(x >> 4);
-		int rz = this.cache.chunkToTile(z >> 4);
-		TileCache.Lease lease = this.cache.acquireIfPresent(rx, rz);
-		if (lease != null) {
-			try (lease) {
-				Cell c = lease.tile().lookup(x, z);
-				if (c != null) {
-					cell.copyFrom(c);
+	public void computeSteepness(Cell cell, int cx, int cz) {
+		float totalHeightDif = 0.0F;
+		Cell neighbour = new Cell();
+		for (int dz = -1; dz <= 1; ++dz) {
+			for (int dx = -1; dx <= 1; ++dx) {
+				if (dx != 0 || dz != 0) {
+					int x = cx + dx;
+					int z = cz + dz;
+					this.compute(neighbour, x, z, false);
+					float height = Math.max(neighbour.height, this.waterLevel);
+					totalHeightDif += Math.abs(cell.height - height);
 				}
-				return cell.terrain != null;
 			}
 		}
-		return false;
+		cell.gradient = totalHeightDif * (10.0F * 15.0F / 8.0F);
 	}
 
 	private boolean compute(Cell cell, int x, int z, boolean applyClimate) {

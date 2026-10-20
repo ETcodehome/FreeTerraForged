@@ -1,7 +1,8 @@
 package etcodehome.freeterraforged.world.worldgen.cell.heightmap;
 
-import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.ControlPoints;
+import org.jetbrains.annotations.Nullable;
 
+import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.ControlPoints;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetNoiseData;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetTerrainTypeNoise;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
@@ -39,7 +40,17 @@ import etcodehome.freeterraforged.world.worldgen.util.Seed;
 import net.minecraft.core.HolderGetter;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 
-public record Heightmap(CellPopulator terrain, CellPopulator region, Continent continent, Climate climate, Levels levels, ControlPoints controlPoints, float terrainFrequency, Noise beachNoise) implements AutoCloseable {
+public record Heightmap(
+    CellPopulator terrain,
+    CellPopulator region,
+    Continent continent,
+    Climate climate,
+    Levels levels,
+    ControlPoints controlPoints,
+    float terrainFrequency,
+    Noise beachNoise,
+    @Nullable TerrainCeiling terrainCeiling
+) implements AutoCloseable {
 	
 	public void apply(Cell cell, float x, float z, boolean applyClimate) {
 		this.applyTerrain(cell, x, z);
@@ -56,6 +67,9 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
         this.continent.apply(cell, x, z);
         this.region.apply(cell, x, z);
         this.terrain.apply(cell, x * this.terrainFrequency, z * this.terrainFrequency);
+        if (this.terrainCeiling != null) {
+            cell.height = this.terrainCeiling.apply(cell.height);
+        }
 	}
 	
 	public void applyRivers(Cell cell, float x, float z, Rivermap rivermap) {
@@ -192,7 +206,10 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
 
         Noise beachNoise = Noises.perlin2(ctx.seed.next(), 20, 1);
         beachNoise = Noises.mul(beachNoise, ctx.levels.scale(5));
-        return new Heightmap(terrain, region, continent, climate, levels, controlPoints, terrainFrequency, beachNoise);
+        TerrainCeiling terrainCeiling = TerrainCeiling.isEnabled(preset)
+            ? TerrainCeiling.make(world.properties)
+            : null;
+        return new Heightmap(terrain, region, continent, climate, levels, controlPoints, terrainFrequency, beachNoise, terrainCeiling);
 	}
 
 	@Override

@@ -6,8 +6,6 @@ import com.mojang.brigadier.context.CommandContext;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.TileCache;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
@@ -134,6 +132,7 @@ public class FTFCommands {
         }
 
         // Phase 1: Generate heightmap sections safely in the background thread (no thread starvation)
+        Cell cell = new Cell();
         for (int cx = 0; cx < chunksX; cx++) {
             for (int cz = 0; cz < chunksZ; cz++) {
                 int startX = minX + cx * CHUNK;
@@ -144,41 +143,14 @@ public class FTFCommands {
                 BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_USHORT_GRAY);
                 WritableRaster raster = img.getRaster();
 
-                int currentRx = Integer.MIN_VALUE;
-                int currentRz = Integer.MIN_VALUE;
-                TileCache.Lease currentLease = null;
-                Tile currentTile = null;
-
-                try {
-                    for (int x = 0; x < w; x++) {
-                        int worldX = startX + x;
-                        int chunkXCoord = worldX >> 4;
-                        int rx = generatorContext.cache.chunkToTile(chunkXCoord);
-
-                        for (int z = 0; z < h; z++) {
-                            int worldZ = startZ + z;
-                            int chunkZCoord = worldZ >> 4;
-                            int rz = generatorContext.cache.chunkToTile(chunkZCoord);
-
-                            if (rx != currentRx || rz != currentRz || currentLease == null) {
-                                if (currentLease != null) {
-                                    currentLease.close();
-                                }
-                                currentRx = rx;
-                                currentRz = rz;
-                                currentLease = generatorContext.cache.acquire(rx, rz);
-                                currentTile = currentLease.tile();
-                            }
-
-                            Cell cell = currentTile.lookup(worldX, worldZ);
-                            float height = generatorContext.levels.getNormalizedElevation(cell.height);
-                            int gray = (int) (Math.clamp(height, 0f, 1f) * 65535);
-                            raster.setSample(x, z, 0, gray);
-                        }
-                    }
-                } finally {
-                    if (currentLease != null) {
-                        currentLease.close();
+                for (int x = 0; x < w; x++) {
+                    int worldX = startX + x;
+                    for (int z = 0; z < h; z++) {
+                        int worldZ = startZ + z;
+                        generatorContext.lookup.applyCell(cell.reset(), worldX, worldZ, false, false);
+                        float height = generatorContext.levels.getNormalizedElevation(cell.height);
+                        int gray = (int) (Math.clamp(height, 0f, 1f) * 65535);
+                        raster.setSample(x, z, 0, gray);
                     }
                 }
 

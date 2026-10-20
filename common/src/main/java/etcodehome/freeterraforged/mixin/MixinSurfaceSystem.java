@@ -2,7 +2,6 @@ package etcodehome.freeterraforged.mixin;
 
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
@@ -40,8 +39,6 @@ import net.minecraft.world.level.levelgen.SurfaceRules;
 import net.minecraft.world.level.levelgen.SurfaceSystem;
 import net.minecraft.world.level.levelgen.WorldGenerationContext;
 import etcodehome.freeterraforged.FTFCommon;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.TileCache;
 
 @Mixin(SurfaceSystem.class)
 @Implements(@Interface(iface = FTFSurfaceSystem.class, prefix = FTFCommon.MOD_ID + "$FTFSurfaceSystem$"))
@@ -111,14 +108,29 @@ class MixinSurfaceSystem {
 	@Unique
 	private void freeterraforged$placeRiverWater(ChunkAccess chunk, BiomeManager biomeManager, GeneratorContext genCtx, NoiseChunk noiseChunk) {
 		var chunkPos = chunk.getPos();
-		TileCache cache = java.util.Objects.requireNonNull(genCtx.cache, "FTF surface tile cache");
-		Tile.Chunk ownedChunk = noiseChunk instanceof etcodehome.freeterraforged.world.worldgen.densityfunction.tile.NoiseChunkTileOwner owner
-			? owner.freeterraforged$currentTileChunk()
-			: null;
-		try (SurfaceTiles tiles = new SurfaceTiles(cache, chunkPos.x, chunkPos.z, ownedChunk)) {
-		var reader = tiles.reader(chunkPos.x, chunkPos.z);
-		var levels = genCtx.generator.getHeightmap().levels();
+		int minBlockX = chunkPos.getMinBlockX();
+		int minBlockZ = chunkPos.getMinBlockZ();
+		Cell[][] chunkCells = new Cell[16][16];
+		for (int x = 0; x < 16; x++) {
+			for (int z = 0; z < 16; z++) {
+				Cell c = new Cell();
+				genCtx.lookup.applyCell(c, minBlockX + x, minBlockZ + z, false, false);
+				chunkCells[x][z] = c;
+			}
+		}
 
+		Cell neighborScratch = new Cell();
+		java.util.function.BiFunction<Integer, Integer, Cell> cellGetter = (gx, gz) -> {
+			int lx = gx - minBlockX;
+			int lz = gz - minBlockZ;
+			if (lx >= 0 && lx < 16 && lz >= 0 && lz < 16) {
+				return chunkCells[lx][lz];
+			}
+			genCtx.lookup.applyCell(neighborScratch.reset(), gx, gz, false, false);
+			return neighborScratch;
+		};
+
+		var levels = genCtx.heightmap.levels();
 		float oceanLevel = levels.water;
 		int oceanY = levels.scale(oceanLevel);
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
@@ -129,10 +141,10 @@ class MixinSurfaceSystem {
 		// Iterate over the 16x16 chunk exactly once
 		for (int localX = 0; localX < 16; localX++) {
 			for (int localZ = 0; localZ < 16; localZ++) {
-				int globalX = chunkPos.getMinBlockX() + localX;
-				int globalZ = chunkPos.getMinBlockZ() + localZ;
+				int globalX = minBlockX + localX;
+				int globalZ = minBlockZ + localZ;
 
-				Cell cell = reader.getCell(localX, localZ);
+				Cell cell = chunkCells[localX][localZ];
 				// Wetland basins always hold water. Their riverWaterLevel is the continental uplift offset,
 				// which is exactly 0 on the lowest water table step, so it can't double as the "has water" flag.
 				boolean isWaterCell = cell.terrain.isWetland()
@@ -160,8 +172,7 @@ class MixinSurfaceSystem {
 							int nx = globalX + NEIGHBOR_X[i];
 							int nz = globalZ + NEIGHBOR_Z[i];
 
-							var neighborReader = tiles.reader(nx >> 4, nz >> 4);
-							var neighborCell = neighborReader.getCell(nx & 0xF, nz & 0xF);
+							var neighborCell = cellGetter.apply(nx, nz);
 
 							// Only consider the neighbor's water height if it is actually a water cell
 							boolean nIsWaterCell = neighborCell.terrain.isWetland()
@@ -239,8 +250,7 @@ class MixinSurfaceSystem {
 						for (int i = 0; i < 4; i++) {
 							int nx = globalX + NEIGHBOR_X[i];
 							int nz = globalZ + NEIGHBOR_Z[i];
-							var neighborReader = tiles.reader(nx >> 4, nz >> 4);
-							var neighborCell = neighborReader.getCell(nx & 0xF, nz & 0xF);
+							var neighborCell = cellGetter.apply(nx, nz);
 
 							if ((neighborCell.terrain.isRiver() || neighborCell.terrain.isLake())) {
 								int nWaterY = levels.scale(
@@ -288,61 +298,6 @@ class MixinSurfaceSystem {
 						}
 					}
 				}
-			}
-		}
-		}
-	}
-
-	@Unique
-	private static final class SurfaceTiles implements AutoCloseable {
-		private final TileCache cache;
-		private final int ownedChunkX;
-		private final int ownedChunkZ;
-		private final Tile.Chunk ownedChunk;
-		private final Map<Long, TileCache.Lease> leases = new HashMap<>(4);
-
-		private SurfaceTiles(TileCache cache, int ownedChunkX, int ownedChunkZ, Tile.Chunk ownedChunk) {
-			this.cache = cache;
-			this.ownedChunkX = ownedChunkX;
-			this.ownedChunkZ = ownedChunkZ;
-			this.ownedChunk = ownedChunk;
-		}
-
-		private Tile.Chunk reader(int chunkX, int chunkZ) {
-			if (this.ownedChunk != null && chunkX == this.ownedChunkX && chunkZ == this.ownedChunkZ) {
-				return this.ownedChunk;
-			}
-			int tileX = this.cache.chunkToTile(chunkX);
-			int tileZ = this.cache.chunkToTile(chunkZ);
-			long key = ChunkPos.asLong(tileX, tileZ);
-			TileCache.Lease lease = this.leases.get(key);
-			if (lease == null) {
-				lease = this.cache.acquire(tileX, tileZ);
-				this.leases.put(key, lease);
-			}
-			return lease.tile().getChunkReader(chunkX, chunkZ);
-		}
-
-		@Override
-		public void close() {
-			Throwable failure = null;
-			for (TileCache.Lease lease : this.leases.values()) {
-				try {
-					lease.close();
-				} catch (RuntimeException | Error cleanupFailure) {
-					if (failure == null) {
-						failure = cleanupFailure;
-					} else {
-						failure.addSuppressed(cleanupFailure);
-					}
-				}
-			}
-			this.leases.clear();
-			if (failure instanceof RuntimeException runtimeFailure) {
-				throw runtimeFailure;
-			}
-			if (failure instanceof Error error) {
-				throw error;
 			}
 		}
 	}

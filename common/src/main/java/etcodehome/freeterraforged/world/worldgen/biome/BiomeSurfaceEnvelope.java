@@ -7,7 +7,6 @@ import net.minecraft.core.QuartPos;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.WorldLookup;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.TileCache;
 import etcodehome.freeterraforged.world.worldgen.runtime.OwnerThreadCache;
 
 public final class BiomeSurfaceEnvelope {
@@ -20,28 +19,11 @@ public final class BiomeSurfaceEnvelope {
 	private final OwnerThreadCache<Entry> values = new OwnerThreadCache<>(1024);
 
 	public int minimumSurfaceY(GeneratorContext context, int quartX, int quartZ) {
-		int baseX = QuartPos.toBlock(quartX), baseZ = QuartPos.toBlock(quartZ);
-		TileCache.Lease local = context.cache == null ? null : context.cache.acquireIfPresent(
-			context.cache.chunkToTile(baseX >> 4), context.cache.chunkToTile(baseZ >> 4));
-		try (local) {
-			// Generation already owns this tile. Its filter halo covers the sampling
-			// footprint without consulting neighbors whose residency is scheduler-dependent.
-			var tile = local == null ? null : local.tile();
-			boolean accurate = tile != null && tile.getBlockSize().border() >= MAX_OFFSET;
-			Cell cell = new Cell();
-			return this.minimumSurfaceY(context.lookup, accurate, quartX, quartZ, (x, z) -> {
-				if (accurate) {
-					int border = tile.getBlockSize().border();
-					return Math.min(context.levels.worldHeight - 1,
-						context.levels.scale(tile.getCellRaw(x - tile.getBlockX() + border,
-							z - tile.getBlockZ() + border).height));
-				}
-				// Distant prediction/locate must not create terrain tiles. Use one coherent
-				// unfiltered estimate, never a mixture dependent on partial tile residency.
-				context.lookup.getHeightmap().apply(cell.reset(), x, z, false);
-				return Math.min(context.levels.worldHeight - 1, context.levels.scale(cell.height));
-			});
-		}
+		Cell cell = new Cell();
+		return this.minimumSurfaceY(context.lookup, true, quartX, quartZ, (x, z) -> {
+			context.lookup.getHeightmap().apply(cell.reset(), x, z, false);
+			return Math.min(context.levels.worldHeight - 1, context.levels.scale(cell.height));
+		});
 	}
 
 	int minimumSurfaceY(WorldLookup lookup, boolean accurate, int quartX, int quartZ, IntBinaryOperator surface) {
