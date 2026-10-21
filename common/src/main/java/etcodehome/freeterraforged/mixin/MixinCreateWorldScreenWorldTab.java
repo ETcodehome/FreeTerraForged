@@ -10,7 +10,6 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import etcodehome.freeterraforged.data.worldgen.preset.FTFWorldPresets;
 
@@ -23,20 +22,6 @@ public abstract class MixinCreateWorldScreenWorldTab {
 	@Shadow
 	@Final
 	private Button customizeTypeButton;
-
-	@ModifyArg(
-		method = "<init>",
-		at = @At(
-			value = "INVOKE",
-			target = "Lnet/minecraft/client/gui/components/CycleButton$Builder;create(IIIILnet/minecraft/network/chat/Component;Lnet/minecraft/client/gui/components/CycleButton$OnValueChange;)Lnet/minecraft/client/gui/components/CycleButton;"
-		),
-		index = 2,
-		require = 1,
-		allow = 1
-	)
-	private int ftf$widenWorldTypeButton(int width) {
-		return Math.max(width, 200);
-	}
 
 	@Inject(method = "<init>", at = @At("TAIL"))
 	private void ftf$syncSeedEditWithUiState(CreateWorldScreen screen, CallbackInfo callbackInfo) {
@@ -56,11 +41,11 @@ public abstract class MixinCreateWorldScreenWorldTab {
 	@Unique
 	private void ftf$syncCustomizeButton(CreateWorldScreen screen, WorldCreationUiState uiState) {
 		WorldCreationUiState.WorldTypeEntry worldType = uiState.getWorldType();
-		this.customizeTypeButton.visible = !uiState.isDebug()
-			&& worldType != null
+		boolean ftfSelected = worldType != null
 			&& worldType.preset() != null
 			&& worldType.preset().unwrapKey().filter(FTFWorldPresets.FREETERRAFORGED::equals).isPresent();
-		this.customizeTypeButton.active = this.customizeTypeButton.visible
-			&& !((CreateWorldScreenAccessor) (Object) screen).freeterraforged$isRecreated();
+		if (ftfSelected) {
+			this.customizeTypeButton.active = !((CreateWorldScreenAccessor) (Object) screen).freeterraforged$isRecreated();
+		}
 	}
 }
