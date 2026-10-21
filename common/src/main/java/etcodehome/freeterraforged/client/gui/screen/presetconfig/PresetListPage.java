@@ -241,10 +241,10 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 		this.right.addWidget(this.renamePreset);
 		this.right.addWidget(this.copyPreset);
 		this.right.addWidget(this.deletePreset);
+		this.right.addWidget(this.setAsDefaultPreset);
 		this.right.addWidget(this.openPresetFolder);
 		this.right.addWidget(this.openExportFolder);
 		this.right.addWidget(this.exportAsDatapack);
-		this.right.addWidget(this.setAsDefaultPreset);
 		this.right.addWidget(this.selectionDetails);
 
 		this.left.setRenderSelected(true);
