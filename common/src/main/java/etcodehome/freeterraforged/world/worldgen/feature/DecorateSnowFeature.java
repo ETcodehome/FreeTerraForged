@@ -63,16 +63,20 @@ public class DecorateSnowFeature extends Feature<Config> {
 			BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 			Config config = placeContext.config();
 			ScreeFeature.Config erodeConfig = config.erodeConfig();
-			Cell cell = new Cell();
+			Cell fallbackCell = new Cell();
+			IChunkCellsHolder cellsHolder = chunk instanceof IChunkCellsHolder h ? h : null;
+			Cell[] chunkCells = cellsHolder != null ? cellsHolder.freeterraforged$getOrCreateChunkCells(generatorContext) : null;
 
-			for(int x = 0; x < 16; x++) {
-				for(int z = 0; z < 16; z++) {
+			for(int z = 0; z < 16; z++) {
+				for(int x = 0; x < 16; x++) {
 					int worldX = chunkPos.getBlockX(x);
 					int worldZ = chunkPos.getBlockZ(z);
-					if (chunk instanceof IChunkCellsHolder holder) {
-						cell = holder.freeterraforged$getCell(x, z, generatorContext);
+					Cell cell;
+					if (chunkCells != null) {
+						cell = chunkCells[z * 16 + x];
 					} else {
-						generatorContext.lookup.applyCell(cell.reset(), worldX, worldZ, false, false);
+						cell = fallbackCell.reset();
+						generatorContext.lookup.applyCell(cell, worldX, worldZ, false, false);
 					}
 					int scaledY = levels.scale(cell.height);
 			        int surfaceY = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
@@ -81,7 +85,9 @@ public class DecorateSnowFeature extends Feature<Config> {
 				        
 				        if(config.erode) {
 				        	if(level.getBiome(pos).value().getTemperature(pos) <= 0.25) {
-					            generatorContext.lookup.computeSteepness(cell, worldX, worldZ);
+					            if (cell.gradient == 0.0F) {
+					                generatorContext.lookup.computeSteepness(cell, worldX, worldZ);
+					            }
 					            float var = -ColumnDecorator.sampleNoise(worldX, worldZ, 16, 0);
 					            float hNoise = rand.compute(worldX, worldZ, 4) * erodeConfig.heightModifier();
 					            float sNoise = rand.compute(worldX, worldZ, 5) * erodeConfig.slopeModifier();

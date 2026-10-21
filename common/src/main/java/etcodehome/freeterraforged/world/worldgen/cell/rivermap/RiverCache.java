@@ -7,6 +7,13 @@ import etcodehome.freeterraforged.concurrent.cache.map.StampedLongMap;
 import etcodehome.freeterraforged.world.worldgen.util.PosUtil;
 
 public class RiverCache implements AutoCloseable {
+    private static final class ThreadLocalCache {
+        long lastKey = Long.MIN_VALUE;
+        Rivermap lastRivermap;
+    }
+
+    private static final ThreadLocal<ThreadLocalCache> THREAD_CACHE = ThreadLocal.withInitial(ThreadLocalCache::new);
+
     protected RiverGenerator generator;
     protected Cache<Rivermap> cache;
     
@@ -16,9 +23,17 @@ public class RiverCache implements AutoCloseable {
     }
     
     public Rivermap getRivers(int x, int z) {
-        return this.cache.computeIfAbsent(PosUtil.pack(x, z), id -> {
+        long key = PosUtil.pack(x, z);
+        ThreadLocalCache tc = THREAD_CACHE.get();
+        if (tc.lastRivermap != null && tc.lastKey == key) {
+            return tc.lastRivermap;
+        }
+        Rivermap rivermap = this.cache.computeIfAbsent(key, id -> {
         	return this.generator.generateRivers(PosUtil.unpackLeft(id), PosUtil.unpackRight(id), id);
         });
+        tc.lastKey = key;
+        tc.lastRivermap = rivermap;
+        return rivermap;
     }
 
 	@Override

@@ -3,6 +3,7 @@ package etcodehome.freeterraforged.mixin;
 import java.util.function.Function;
 
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
@@ -24,6 +25,7 @@ import net.minecraft.world.level.levelgen.blending.Blender;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
+import etcodehome.freeterraforged.world.worldgen.biome.BiomeColumnCache;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.IFlowFieldHolder;
 import etcodehome.freeterraforged.world.worldgen.IChunkCellsHolder;
@@ -76,10 +78,11 @@ abstract class MixinNoiseBasedChunkGenerator extends ChunkGenerator {
 		IFlowFieldHolder holder = (IFlowFieldHolder) chunk;
 		ChunkFlowField flowField = holder.freeterraforged$getFlowField();
 		IChunkCellsHolder cellsHolder = chunk instanceof IChunkCellsHolder ch ? ch : null;
-		for(int x = 0; x < 16; x++) {
-			for(int z = 0; z < 16; z++) {
-				Cell cell = cellsHolder != null
-					? cellsHolder.freeterraforged$getCell(x, z, generatorContext)
+		Cell[] cells = cellsHolder != null ? cellsHolder.freeterraforged$getOrCreateChunkCells(generatorContext) : null;
+		for(int z = 0; z < 16; z++) {
+			for(int x = 0; x < 16; x++) {
+				Cell cell = cells != null
+					? cells[z * 16 + x]
 					: generatorContext.lookup.lookup(chunk.getPos().getBlockX(x), chunk.getPos().getBlockZ(z));
 				if (cell.hasFlow) {
 					if (flowField == null) {
@@ -110,14 +113,58 @@ abstract class MixinNoiseBasedChunkGenerator extends ChunkGenerator {
 			&& (Object) randomState instanceof FTFRandomState rtfRandomState
 			&& rtfRandomState.generatorContext() != null) {
 			GeneratorContext generatorContext = rtfRandomState.generatorContext();
-			ThreadLocal<Cell> scratch = ThreadLocal.withInitial(Cell::new);
+			final int chunkQuartX = chunk.getPos().x << 2;
+			final int chunkQuartZ = chunk.getPos().z << 2;
+			final long[] internalRegionX = new long[16];
+			final long[] internalRegionZ = new long[16];
+			final boolean hasInternalCells;
+			if (chunk instanceof IChunkCellsHolder holder) {
+				Cell[] chunkCells = holder.freeterraforged$getOrCreateChunkCells(generatorContext);
+				if (chunkCells != null) {
+					for (int qz = 0; qz < 4; qz++) {
+						for (int qx = 0; qx < 4; qx++) {
+							Cell cell = chunkCells[(qz * 4) * 16 + (qx * 4)];
+							int idx = qz * 4 + qx;
+							internalRegionX[idx] = cell.biomeRegionX;
+							internalRegionZ[idx] = cell.biomeRegionZ;
+						}
+					}
+					hasInternalCells = true;
+				} else {
+					hasInternalCells = false;
+				}
+			} else {
+				hasInternalCells = false;
+			}
+
 			return blender.getBiomeResolver((quartX, quartY, quartZ, sampler) -> {
-				int blockX = QuartPos.toBlock(quartX);
-				int blockZ = QuartPos.toBlock(quartZ);
-				Cell cell = scratch.get();
-				generatorContext.lookup.applyBiomeRegion(cell.reset(), blockX, blockZ);
+				int localQx = quartX - chunkQuartX;
+				int localQz = quartZ - chunkQuartZ;
+				long regionX;
+				long regionZ;
+				if (hasInternalCells && localQx >= 0 && localQx < 4 && localQz >= 0 && localQz < 4) {
+					int idx = localQz * 4 + localQx;
+					regionX = internalRegionX[idx];
+					regionZ = internalRegionZ[idx];
+				} else {
+					BiomeColumnCache colCache = BiomeColumnCache.get();
+					if (colCache.quartX == quartX && colCache.quartZ == quartZ) {
+						regionX = colCache.regionX;
+						regionZ = colCache.regionZ;
+					} else {
+						int blockX = QuartPos.toBlock(quartX);
+						int blockZ = QuartPos.toBlock(quartZ);
+						generatorContext.lookup.applyBiomeRegion(colCache.scratch.reset(), blockX, blockZ);
+						colCache.quartX = quartX;
+						colCache.quartZ = quartZ;
+						colCache.regionX = colCache.scratch.biomeRegionX;
+						colCache.regionZ = colCache.scratch.biomeRegionZ;
+						regionX = colCache.regionX;
+						regionZ = colCache.regionZ;
+					}
+				}
 				return generator.resolveBiomeInCell(
-					quartX, quartY, quartZ, sampler, cell.biomeRegionX, cell.biomeRegionZ
+					quartX, quartY, quartZ, sampler, regionX, regionZ
 				);
 			});
 		}

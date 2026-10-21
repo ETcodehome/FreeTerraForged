@@ -111,22 +111,15 @@ class MixinSurfaceSystem {
 		var chunkPos = chunk.getPos();
 		int minBlockX = chunkPos.getMinBlockX();
 		int minBlockZ = chunkPos.getMinBlockZ();
-		Cell[][] chunkCells = new Cell[16][16];
 		IChunkCellsHolder holder = chunk instanceof IChunkCellsHolder h ? h : null;
-		for (int x = 0; x < 16; x++) {
-			for (int z = 0; z < 16; z++) {
-				chunkCells[x][z] = holder != null
-					? holder.freeterraforged$getCell(x, z, genCtx)
-					: genCtx.lookup.lookup(minBlockX + x, minBlockZ + z);
-			}
-		}
+		Cell[] chunkCells = holder != null ? holder.freeterraforged$getOrCreateChunkCells(genCtx) : null;
 
 		Cell neighborScratch = new Cell();
 		java.util.function.BiFunction<Integer, Integer, Cell> cellGetter = (gx, gz) -> {
 			int lx = gx - minBlockX;
 			int lz = gz - minBlockZ;
-			if (lx >= 0 && lx < 16 && lz >= 0 && lz < 16) {
-				return chunkCells[lx][lz];
+			if (chunkCells != null && lx >= 0 && lx < 16 && lz >= 0 && lz < 16) {
+				return chunkCells[lz * 16 + lx];
 			}
 			genCtx.lookup.applyCell(neighborScratch.reset(), gx, gz, false, false);
 			return neighborScratch;
@@ -146,7 +139,9 @@ class MixinSurfaceSystem {
 				int globalX = minBlockX + localX;
 				int globalZ = minBlockZ + localZ;
 
-				Cell cell = chunkCells[localX][localZ];
+				Cell cell = chunkCells != null
+					? chunkCells[localZ * 16 + localX]
+					: genCtx.lookup.lookup(globalX, globalZ);
 				// Wetland basins always hold water. Their riverWaterLevel is the continental uplift offset,
 				// which is exactly 0 on the lowest water table step, so it can't double as the "has water" flag.
 				boolean isWaterCell = cell.terrain.isWetland()

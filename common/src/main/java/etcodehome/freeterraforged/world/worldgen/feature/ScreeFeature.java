@@ -96,13 +96,14 @@ public class ScreeFeature extends Feature<Config> {
             Noise desertErosionVariance = makeDesertErosionVariance(levels);
             BlockPos.MutableBlockPos pos = new MutableBlockPos();
             Config config = placeContext.config();
-            for(int x = 0; x < 16; x++) {
-                for(int z = 0; z < 16; z++) {
+            IChunkCellsHolder cellsHolder = chunk instanceof IChunkCellsHolder h ? h : null;
+            Cell[] chunkCells = cellsHolder != null ? cellsHolder.freeterraforged$getOrCreateChunkCells(generatorContext) : null;
+            for(int z = 0; z < 16; z++) {
+                for(int x = 0; x < 16; x++) {
                     int worldX = chunkPos.getBlockX(x);
                     int worldZ = chunkPos.getBlockZ(z);
 
-
-                    Cell cell = chunk instanceof IChunkCellsHolder holder ? holder.freeterraforged$getCell(x, z, generatorContext) : generatorContext.lookup.lookup(worldX, worldZ);
+                    Cell cell = chunkCells != null ? chunkCells[z * 16 + x] : generatorContext.lookup.lookup(worldX, worldZ);
                     int scaledY = levels.scale(cell.height);
                     int surfaceY = chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, x, z);
                     Holder<Biome> biome = level.getBiome(pos.set(worldX, surfaceY, worldZ));
@@ -115,7 +116,9 @@ public class ScreeFeature extends Feature<Config> {
                     }
 
                     if(surfaceY <= scaledY && surfaceY >= generator.getSeaLevel() - 1 && !biome.is(Biomes.WOODED_BADLANDS) && !biome.is(Biomes.BADLANDS)) {
-                        generatorContext.lookup.computeSteepness(cell, worldX, worldZ);
+                        if (cell.gradient == 0.0F) {
+                            generatorContext.lookup.computeSteepness(cell, worldX, worldZ);
+                        }
                         erodeColumn(config, levels, rand, clusterNoise, warpX, warpZ, generator, chunk, cell, pos, surfaceY);
                         // remove any foliage that may have generated above
                         pos.setY(surfaceY);
