@@ -51,6 +51,7 @@
     "compat.MixinLithostitchedEvent"
   ],
   "client": [
+    "CreateWorldScreenAccessor",
     "MixinCreateWorldScreen",
     "MixinCreateWorldScreenWorldTab",
     "MixinWorldCreationUiState",

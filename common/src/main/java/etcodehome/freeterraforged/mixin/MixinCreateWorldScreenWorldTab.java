@@ -40,9 +40,9 @@ public abstract class MixinCreateWorldScreenWorldTab {
 
 	@Inject(method = "<init>", at = @At("TAIL"))
 	private void ftf$syncSeedEditWithUiState(CreateWorldScreen screen, CallbackInfo callbackInfo) {
-		this.ftf$syncCustomizeButton(screen.getUiState());
+		this.ftf$syncCustomizeButton(screen, screen.getUiState());
 		screen.getUiState().addListener((uiState) -> {
-			this.ftf$syncCustomizeButton(uiState);
+			this.ftf$syncCustomizeButton(screen, uiState);
 			String seed = uiState.getSeed();
 			if (seed == null) {
 				seed = "";
@@ -54,11 +54,13 @@ public abstract class MixinCreateWorldScreenWorldTab {
 	}
 
 	@Unique
-	private void ftf$syncCustomizeButton(WorldCreationUiState uiState) {
+	private void ftf$syncCustomizeButton(CreateWorldScreen screen, WorldCreationUiState uiState) {
 		WorldCreationUiState.WorldTypeEntry worldType = uiState.getWorldType();
 		this.customizeTypeButton.visible = !uiState.isDebug()
 			&& worldType != null
 			&& worldType.preset() != null
 			&& worldType.preset().unwrapKey().filter(FTFWorldPresets.FREETERRAFORGED::equals).isPresent();
+		this.customizeTypeButton.active = this.customizeTypeButton.visible
+			&& !((CreateWorldScreenAccessor) (Object) screen).freeterraforged$isRecreated();
 	}
 }

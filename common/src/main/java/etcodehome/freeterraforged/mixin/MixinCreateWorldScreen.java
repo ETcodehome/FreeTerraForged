@@ -17,8 +17,10 @@ import net.minecraft.core.Holder;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.packs.repository.PackRepository;
 import net.minecraft.world.level.WorldDataConfiguration;
+import net.minecraft.world.level.dimension.LevelStem;
 import net.minecraft.world.level.levelgen.WorldDimensions;
 import net.minecraft.world.level.levelgen.presets.WorldPreset;
+import net.minecraft.world.level.levelgen.presets.WorldPresets;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -26,11 +28,13 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.client.data.DefaultPresetArchive;
 import etcodehome.freeterraforged.data.worldgen.preset.FTFWorldPresetDataPacks;
 import etcodehome.freeterraforged.data.worldgen.preset.FTFWorldPresets;
+import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenDimensionInputs;
 
 @Mixin(CreateWorldScreen.class)
@@ -38,6 +42,9 @@ public abstract class MixinCreateWorldScreen {
 	@Shadow
 	@Final
 	WorldCreationUiState uiState;
+
+	@Shadow
+	private boolean recreated;
 
 	@Shadow
 	private Pair<Path, PackRepository> getDataPackSelectionSettings(WorldDataConfiguration configuration) {
@@ -58,6 +65,26 @@ public abstract class MixinCreateWorldScreen {
 
 	@Unique
 	private boolean freeterraforged$customPresetWasEnabled;
+
+	@Unique
+	private boolean freeterraforged$pendingPresetPackSync;
+
+	// Vanilla maps every NoiseBasedChunkGenerator to NORMAL, so recognize FTF's generator explicitly.
+	@Redirect(
+		method = "createFromExisting",
+		at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/levelgen/presets/WorldPresets;fromSettings(Lnet/minecraft/world/level/levelgen/WorldDimensions;)Ljava/util/Optional;"),
+		require = 1,
+		allow = 1
+	)
+	private static Optional<ResourceKey<WorldPreset>> freeterraforged$restoreFtfWorldType(WorldDimensions dimensions) {
+		boolean ftfWorld = dimensions.get(LevelStem.OVERWORLD)
+			.map(LevelStem::generator)
+			.filter(TerraForgedChunkGenerator.class::isInstance)
+			.isPresent();
+		return ftfWorld
+			? Optional.of(FTFWorldPresets.FREETERRAFORGED)
+			: WorldPresets.fromSettings(dimensions);
+	}
 
 	@ModifyArg(
 		method = "openFresh",
@@ -113,8 +140,20 @@ public abstract class MixinCreateWorldScreen {
 		this.freeterraforged$syncPresetPackWithWorldType(this.uiState);
 	}
 
+	@Inject(method = "init", at = @At("TAIL"))
+	private void freeterraforged$syncPresetPackAfterRecreate(CallbackInfo callback) {
+		if (this.freeterraforged$pendingPresetPackSync) {
+			this.freeterraforged$pendingPresetPackSync = false;
+			this.freeterraforged$syncPresetPackWithWorldType(this.uiState);
+		}
+	}
+
 	@Unique
 	private void freeterraforged$syncPresetPackWithWorldType(WorldCreationUiState state) {
+		if (this.recreated && Minecraft.getInstance().screen != (Object) this) {
+			this.freeterraforged$pendingPresetPackSync = true;
+			return;
+		}
 		if (this.freeterraforged$syncingPresetPack) {
 			return;
 		}
@@ -136,7 +175,8 @@ public abstract class MixinCreateWorldScreen {
 			this.freeterraforged$customPresetWasEnabled = true;
 		}
 
-		boolean applySavedDefaultPreset = ftfSelected
+		boolean applySavedDefaultPreset = !this.recreated
+			&& ftfSelected
 			&& !customPackEnabled
 			&& !this.freeterraforged$customPresetWasEnabled
 			&& DefaultPresetArchive.exists();
