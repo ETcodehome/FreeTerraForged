@@ -65,6 +65,8 @@ abstract class MixinNoiseBasedChunkGenerator extends ChunkGenerator {
 				Cell[] cells = noiseChunkHolder.freeterraforged$getChunkCells();
 				if (cells != null) {
 					chunkHolder.freeterraforged$setChunkCells(cells);
+				} else if (chunkHolder.freeterraforged$getChunkCells() != null) {
+					noiseChunkHolder.freeterraforged$setChunkCells(chunkHolder.freeterraforged$getChunkCells());
 				}
 			}
 		}

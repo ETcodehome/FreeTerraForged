@@ -6,9 +6,9 @@ import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap;
 
 public class ChunkFilterGrid implements FilterGrid {
     public static final int CHUNK_SIZE = 16;
-    public static final int BORDER = 16;
-    public static final int TOTAL_SIZE = CHUNK_SIZE + BORDER * 2; // 48
-    public static final int TOTAL_CELLS = TOTAL_SIZE * TOTAL_SIZE; // 2304
+    public static final int BORDER = 12;
+    public static final int TOTAL_SIZE = CHUNK_SIZE + BORDER * 2; // 40
+    public static final int TOTAL_CELLS = TOTAL_SIZE * TOTAL_SIZE; // 1600
 
     private static final ThreadLocal<ChunkFilterGrid> THREAD_LOCAL = ThreadLocal.withInitial(ChunkFilterGrid::new);
 
@@ -32,11 +32,13 @@ public class ChunkFilterGrid implements FilterGrid {
         for (int z = 0; z < TOTAL_SIZE; z++) {
             int worldZ = this.blockZ + z;
             int rowOffset = z * TOTAL_SIZE;
+            boolean zInChunk = z >= BORDER && z < BORDER + CHUNK_SIZE;
             for (int x = 0; x < TOTAL_SIZE; x++) {
                 int worldX = this.blockX + x;
+                boolean inChunk = zInChunk && x >= BORDER && x < BORDER + CHUNK_SIZE;
                 Cell cell = this.cells[rowOffset + x];
                 cell.reset();
-                heightmap.apply(cell, worldX, worldZ, false);
+                heightmap.apply(cell, worldX, worldZ, inChunk);
             }
         }
     }

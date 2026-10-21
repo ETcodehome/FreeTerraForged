@@ -84,10 +84,14 @@ public class ClimateModule {
 	}
 
 	public void apply(Cell cell, float x, float z, float originalX, float originalZ) {
-		this.apply(cell, x, z, originalX, originalZ, true);
+		this.apply(cell, x, z, originalX, originalZ, true, true);
 	}
 
 	public void apply(Cell cell, float x, float z, float originalX, float originalZ, boolean mask) {
+		this.apply(cell, x, z, originalX, originalZ, mask, true);
+	}
+
+	public void apply(Cell cell, float x, float z, float originalX, float originalZ, boolean mask, boolean sampleClimate) {
 		float warpedX = x + this.warpX.compute(x, z, 0) * this.warpStrength;
 		float warpedZ = z + this.warpZ.compute(x, z, 0) * this.warpStrength;
 		x = warpedX * this.biomeFreq;
@@ -98,7 +102,6 @@ public class ClimateModule {
 		int cellX = (int) cell.biomeRegionX;
 		int cellZ = (int) cell.biomeRegionZ;
 		cell.biomeRegionId = this.cellValue(this.seed, cellX, cellZ);
-		cell.macroBiomeId = this.macroBiomeNoise.compute(centerX, centerZ, 0);
 		int posX = NoiseUtil.floor(centerX / this.biomeFreq);
 		int posZ = NoiseUtil.floor(centerZ / this.biomeFreq);
 
@@ -108,15 +111,19 @@ public class ClimateModule {
 			this.modifyTerrain(cell, regionEdge);
 		}
 
-		float rawMoist = this.moisture.compute(x, z, 0);
-		float moist = this.modifyMoisture(cell.height, rawMoist);
+		if (sampleClimate) {
+			cell.macroBiomeId = this.macroBiomeNoise.compute(centerX, centerZ, 0);
 
-		float rawTemp = this.temperature.compute(x, z, 0);
-		float temp = this.modifyTemp(cell.height, rawTemp);
+			float rawMoist = this.moisture.compute(x, z, 0);
+			float moist = this.modifyMoisture(cell.height, rawMoist);
 
-		// convert from normalised 0-1 range to -1 to 1 range
-		cell.temperature = temp * 2.0F - 1.0F;
-		cell.moisture = moist * 2.0F - 1.0F;
+			float rawTemp = this.temperature.compute(x, z, 0);
+			float temp = this.modifyTemp(cell.height, rawTemp);
+
+			// convert from normalised 0-1 range to -1 to 1 range
+			cell.temperature = temp * 2.0F - 1.0F;
+			cell.moisture = moist * 2.0F - 1.0F;
+		}
 	}
 
 	private float modifyTemp(float height, float rawTemp) {

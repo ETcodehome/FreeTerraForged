@@ -16,7 +16,9 @@ import net.minecraft.core.SectionPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.levelgen.Aquifer;
+import net.minecraft.world.level.levelgen.blending.Blender;
 import net.minecraft.world.level.levelgen.DensityFunction;
 import net.minecraft.world.level.levelgen.DensityFunctions;
 import net.minecraft.world.level.levelgen.NoiseChunk;
@@ -38,6 +40,9 @@ import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPlans;
 
 @Mixin(NoiseChunk.class)
 class MixinNoiseChunk implements IChunkCellsHolder {
+	@Unique
+	private static final ThreadLocal<ChunkAccess> freeterraforged$ACTIVE_CHUNK = new ThreadLocal<>();
+
 	private RandomState randomState;
 	private int chunkX, chunkZ;
 	@Nullable
@@ -45,6 +50,38 @@ class MixinNoiseChunk implements IChunkCellsHolder {
 	private CellSampler.Cache2d cache2d;
 	@Nullable
 	private Cell[] freeterraforged$chunkCells;
+
+	@Inject(
+		method = "forChunk",
+		at = @At("HEAD")
+	)
+	private static void freeterraforged$onForChunkHead(
+		ChunkAccess chunk,
+		RandomState randomState,
+		DensityFunctions.BeardifierOrMarker beardifierOrMarker,
+		NoiseGeneratorSettings noiseGeneratorSettings,
+		Aquifer.FluidPicker fluidPicker,
+		Blender blender,
+		CallbackInfoReturnable<NoiseChunk> cir
+	) {
+		freeterraforged$ACTIVE_CHUNK.set(chunk);
+	}
+
+	@Inject(
+		method = "forChunk",
+		at = @At("RETURN")
+	)
+	private static void freeterraforged$onForChunkReturn(
+		ChunkAccess chunk,
+		RandomState randomState,
+		DensityFunctions.BeardifierOrMarker beardifierOrMarker,
+		NoiseGeneratorSettings noiseGeneratorSettings,
+		Aquifer.FluidPicker fluidPicker,
+		Blender blender,
+		CallbackInfoReturnable<NoiseChunk> cir
+	) {
+		freeterraforged$ACTIVE_CHUNK.remove();
+	}
 
 	@Inject(
 		method = "<init>",
@@ -63,7 +100,7 @@ class MixinNoiseChunk implements IChunkCellsHolder {
 		DensityFunctions.BeardifierOrMarker beardifierOrMarker,
 		NoiseGeneratorSettings generatorSettings,
 		Aquifer.FluidPicker fluidPicker,
-		net.minecraft.world.level.levelgen.blending.Blender blender,
+		Blender blender,
 		CallbackInfo callback
 	) {
 		this.randomState = randomState;
@@ -78,7 +115,14 @@ class MixinNoiseChunk implements IChunkCellsHolder {
 				);
 				if (cellCountXZ > 1) {
 					this.cache2d = new CellSampler.Cache2d();
-					this.freeterraforged$chunkCells = ChunkFilterGrid.generateChunkCells(this.chunkX, this.chunkZ, generatorContext);
+					ChunkAccess activeChunk = freeterraforged$ACTIVE_CHUNK.get();
+					if (activeChunk instanceof IChunkCellsHolder holder
+							&& activeChunk.getPos().x == this.chunkX
+							&& activeChunk.getPos().z == this.chunkZ) {
+						this.freeterraforged$chunkCells = holder.freeterraforged$getOrCreateChunkCells(generatorContext);
+					} else {
+						this.freeterraforged$chunkCells = ChunkFilterGrid.generateChunkCells(this.chunkX, this.chunkZ, generatorContext);
+					}
 				}
 			}
 		}
