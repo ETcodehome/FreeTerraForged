@@ -40,6 +40,9 @@
   "freeterraforged.gui.button.export": "Export As Datapack",
   "freeterraforged.gui.button.export.success": "Exported Preset",
   "freeterraforged.gui.button.export.tooltip.fail": "Failed to export preset",
+  "freeterraforged.gui.button.set_as_default": "Set as Default",
+  "freeterraforged.gui.button.set_as_default.success": "Default Preset Saved",
+  "freeterraforged.gui.button.set_as_default.tooltip.fail": "Failed to set the default preset",
   "freeterraforged.gui.button.false": "false",
   "freeterraforged.gui.button.fancyMountains": "Fancy Mountains",
   "freeterraforged.gui.button.fancyMountains.tooltip": "Carries out extra processing on mountains to make them look even nicer. Can be disabled to improve performance slightly.",
@@ -406,5 +409,9 @@
   "freeterraforged.gui.worldSettings.title": "World Settings",
   "freeterraforged.metadata.description": "FreeTerraForged resources",
   "freeterraforged.mudSwamps.metadata.description": "Changes the swamp material to mud",
-  "freeterraforged.preset.metadata.description": "FreeTerraForged preset"
+  "freeterraforged.preset.default_pack.description": "FreeTerraForged default world preset",
+  "freeterraforged.preset.default_pack.name": "FreeTerraForged Default Preset",
+  "resourcePack.ftf_default_preset.name": "FreeTerraForged Default Preset",
+  "freeterraforged.preset.metadata.description": "FreeTerraForged preset",
+  "generator.freeterraforged.freeterraforged": "FTF Enhanced"
 }

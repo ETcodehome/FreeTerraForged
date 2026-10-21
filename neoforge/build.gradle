@@ -7,6 +7,27 @@ architectury {
     neoForge()
 }
 
+def defaultPresetDatagenOutput = project(":fabric").layout.buildDirectory.dir("generated/default-preset-datagen")
+def defaultPresetResourceOutput = layout.buildDirectory.dir("resources/main/ftf_default_preset")
+
+tasks.register("cleanStaleDefaultPresetResources", Delete) {
+    delete(layout.buildDirectory.dir("resources/main/ftf_default_preset"))
+}
+
+tasks.register("syncDefaultPresetPack", Sync) {
+    group = "build"
+    description = "Stages the generated built-in FreeTerraForged preset pack"
+    dependsOn(":fabric:runDefaultPresetData", tasks.named("processResources"))
+    from(defaultPresetDatagenOutput.map { it.dir("ftf_default_preset") })
+    into(defaultPresetResourceOutput)
+    // Sync must run even when sources are unchanged so files removed by datagen are deleted.
+    outputs.upToDateWhen { false }
+}
+
+tasks.matching { ["runClient", "runServer", "runClientRenderDoc", "jar", "shadowJar"].contains(it.name) }.configureEach {
+    dependsOn tasks.named("syncDefaultPresetPack")
+}
+
 loom {
     accessWidenerPath = project(":common").loom.accessWidenerPath
     
@@ -89,6 +110,7 @@ repositories {
 evaluationDependsOn(':common')
 
 processResources {
+    dependsOn tasks.named("cleanStaleDefaultPresetResources")
 	inputs.property "neoforgeVersion", rootProject.neoforge_version
     inputs.property "version", project.version
 

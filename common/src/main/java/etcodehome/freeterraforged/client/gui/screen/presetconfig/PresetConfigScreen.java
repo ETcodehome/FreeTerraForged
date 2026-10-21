@@ -27,10 +27,12 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.packs.repository.PackRepository;
 import net.minecraft.world.level.levelgen.WorldOptions;
 import etcodehome.freeterraforged.FTFCommon;
+import etcodehome.freeterraforged.client.data.DefaultPresetArchive;
 import etcodehome.freeterraforged.client.gui.Toasts;
 import etcodehome.freeterraforged.client.gui.screen.page.LinkedPageScreen;
 import etcodehome.freeterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
 import etcodehome.freeterraforged.data.worldgen.Datapacks;
+import etcodehome.freeterraforged.data.worldgen.preset.FTFWorldPresets;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 
 public class PresetConfigScreen extends LinkedPageScreen {
@@ -116,12 +118,16 @@ public class PresetConfigScreen extends LinkedPageScreen {
 		if(path == null) {
 			throw new IOException("Unable to create the temporary datapack repository");
 		}
-		Path exportPath = path.getFirst().resolve("freeterraforged-preset.zip");
+		Path exportPath = path.getFirst().resolve(FTFWorldPresets.GENERATED_PRESET_PACK_FILE_NAME);
 		this.exportAsDatapack(exportPath, preset);
 		PackRepository repository = path.getSecond();
 		repository.reload();
-		if(!repository.addPack("file/" + exportPath.getFileName())) {
-			throw new IOException("The generated ReTerraForged datapack was not discovered by Minecraft");
+		String generatedPackId = FTFWorldPresets.GENERATED_PRESET_PACK_ID;
+		if (!repository.isAvailable(generatedPackId)) {
+			throw new IOException("The generated FreeTerraForged preset datapack was not discovered by Minecraft");
+		}
+		if (!repository.getSelectedIds().contains(generatedPackId) && !repository.addPack(generatedPackId)) {
+			throw new IOException("The generated FreeTerraForged preset datapack could not be selected");
 		}
 		// Publish the seed before reload captures WorldOptions.
 		this.applySeedToParent();
@@ -131,10 +137,16 @@ public class PresetConfigScreen extends LinkedPageScreen {
 	}
 
 	public SaveResult reportPresetApplyFailure(IOException exception) {
-		FTFCommon.LOGGER.error("Failed to stage the ReTerraForged preset datapack", exception);
+		FTFCommon.LOGGER.error("Failed to stage the FreeTerraForged preset datapack", exception);
 		Component message = exception.getMessage() == null ? Component.literal(exception.getClass().getSimpleName()) : Component.literal(exception.getMessage());
 		Toasts.notify("dataPack.validation.failed", message, SystemToastId.PACK_LOAD_FAILURE);
 		return SaveResult.STAY_OPEN;
+	}
+
+	public void updateDefaultPresetIfSource(PresetListPage.PresetEntry presetEntry) throws IOException {
+		if (DefaultPresetArchive.isSource(presetEntry.getPath())) {
+			this.exportAsDatapack(DefaultPresetArchive.path(), presetEntry);
+		}
 	}
 
 	public void exportAsDatapack(Path outputPath, PresetListPage.PresetEntry presetEntry) throws IOException {
