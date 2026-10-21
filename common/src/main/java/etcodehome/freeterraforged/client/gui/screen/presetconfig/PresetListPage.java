@@ -136,11 +136,16 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 				String newName = this.input.getValue().trim();
 				if (this.isValidPresetName(newName)) {
 					Path oldPath = entry.getPath();
+					boolean wasDefaultPreset = DefaultPresetArchive.isSource(oldPath);
 					Preset preset = entry.getPreset();
 					preset.presentation().updateLastModified();
 
 					PresetEntry renamedEntry = new PresetEntry(newName, Component.literal(newName).withStyle(ChatFormatting.GOLD), preset, false, this);
 					renamedEntry.save();
+					if (wasDefaultPreset) {
+						this.screen.exportAsDatapack(DefaultPresetArchive.path(), renamedEntry);
+						DefaultPresetArchive.updateSource(oldPath, renamedEntry.getPath());
+					}
 
 					if (Files.exists(oldPath) && !Files.isSameFile(oldPath, renamedEntry.getPath())) {
 						Files.delete(oldPath);
@@ -190,6 +195,7 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 					}
 				}
 
+				DefaultPresetArchive.clearSourceIfMatches(preset.getPath());
 				Files.deleteIfExists(preset.getPath());
 				this.rebuildPresets(nextSelectedName);
 			}
@@ -224,6 +230,7 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 		this.setAsDefaultPreset = PresetWidgets.createThrowingButton(FTFTranslationKeys.GUI_BUTTON_SET_AS_DEFAULT_PRESET, () -> {
 			if (this.left.getSelected() != null && this.left.getSelected().getWidget() instanceof PresetEntry preset) {
 				this.screen.exportAsDatapack(DefaultPresetArchive.path(), preset);
+				DefaultPresetArchive.setSource(preset.isBuiltin() ? null : preset.getPath());
 				Toasts.notify(
 					FTFTranslationKeys.GUI_DEFAULT_PRESET_SAVED,
 					Component.literal(preset.getRawName()),
