@@ -101,11 +101,7 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 			final int darkGray = 0x7E7E7E;
 
 			if (this.createPreset != null) this.createPreset.active = isValid;
-			if (this.renamePreset != null) {
-				this.renamePreset.active = selectedEntry != null
-					&& !selectedEntry.isBuiltin()
-					&& (isSameName || isValid);
-			}
+			if (this.renamePreset != null) this.renamePreset.active = selectedEntry != null && !selectedEntry.isBuiltin() && isValid;
 
 			if (text.isEmpty() || isValid) {
 				this.input.setTextColor(white);
@@ -350,9 +346,8 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 
 		String inputText = this.input != null ? this.input.getValue().trim() : "";
 		boolean validName = !inputText.isEmpty() && this.isValidPresetName(inputText);
-		boolean unchangedName = entry != null && entry.getRawName().equalsIgnoreCase(inputText);
 		if(this.createPreset != null) this.createPreset.active = validName;
-		if(this.renamePreset != null) this.renamePreset.active = isCustom && (unchangedName || validName);
+		if(this.renamePreset != null) this.renamePreset.active = isCustom && validName;
 
 		if(this.selectionDetails != null) {
 			if(entry == null) {
