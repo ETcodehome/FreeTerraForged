@@ -14,11 +14,7 @@ Additional feature contributions are welcomed via forking and raising a merge PR
 
 # Getting started
 
-### Create a FreeTerraForged world
-The new-world screen defaults to the FreeTerraForged world type, so you can create an FTF world immediately without opening Customize. Customize is available only while the FreeTerraForged type is selected; vanilla world types remain available and use their own generators.
-
-For a dedicated server, set `level-type=freeterraforged` in `server.properties` to select FreeTerraForged terrain. The value is case-insensitive. If another world type is selected, the server keeps that generator and logs that FTF terrain generation is inactive.
-
+### Customize a new world
 <img width="856" height="526" alt="image" src="https://github.com/user-attachments/assets/941bc4b1-9334-4c08-9197-9ff729876369" />
 
 ---
@@ -29,7 +25,6 @@ For a dedicated server, set `level-type=freeterraforged` in `server.properties` 
 - Use template settings directly by clicking [Done]
 - Customize the selected preset settings by clicking [Edit]
 - Manage preset modifications using the right hand menu options.
-- Select a preset and click **Set as Default** to use it automatically in future FreeTerraForged worlds created from this client, even when you skip Customize. When a custom preset is set as default here, saving edits or renaming it updates the default; setting another preset as default switches the link. Built-in presets remain snapshots. Dedicated servers continue to use their configured data packs.
 
 ---
 
