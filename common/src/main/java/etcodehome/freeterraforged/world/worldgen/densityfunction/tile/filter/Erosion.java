@@ -1,3 +1,18 @@
+/*
+ * Copyright (c) Rune Skovbo Johansen (runevision)
+ * Copyright (c) 2026 FreeTerraForged Contributors
+ * SPDX-License-Identifier: MPL-2.0
+ *
+ * Source: https://www.shadertoy.com/view/wXcfWn
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ *
+ * Mozilla Public License 2.0 Full Text:
+ * https://www.mozilla.org/MPL/2.0/
+ */
+
 package etcodehome.freeterraforged.world.worldgen.densityfunction.tile.filter;
 
 import java.util.function.IntFunction;
@@ -12,7 +27,7 @@ import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.util.Seed;
 
 /**
- * Single-pass procedural erosion filter based on Runevision's Phacelle Noise algorithm.
+ * Single-pass procedural erosion filter based on Runevision's Phacelle Noise algorithm (https://www.shadertoy.com/view/wXcfWn).
  * Replaces iterative hydraulic droplet simulations with direct analytical evaluation.
  *
  * Intended to run AFTER {@link CliffRelaxation}. Erosion has no hard dependency on it: it only reads cell
