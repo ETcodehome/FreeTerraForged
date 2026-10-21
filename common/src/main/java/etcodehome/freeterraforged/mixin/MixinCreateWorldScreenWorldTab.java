@@ -1,7 +1,9 @@
 package etcodehome.freeterraforged.mixin;
 
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.tabs.Tab;
 import net.minecraft.client.gui.screens.worldselection.CreateWorldScreen;
 import net.minecraft.client.gui.screens.worldselection.WorldCreationUiState;
 import org.spongepowered.asm.mixin.Final;
@@ -23,11 +25,16 @@ public abstract class MixinCreateWorldScreenWorldTab {
 	@Final
 	private Button customizeTypeButton;
 
+	@Unique
+	private boolean ftf$recreatingFtfWorld;
+
 	@Inject(method = "<init>", at = @At("TAIL"))
 	private void ftf$syncSeedEditWithUiState(CreateWorldScreen screen, CallbackInfo callbackInfo) {
-		this.ftf$syncCustomizeButton(screen, screen.getUiState());
+		this.ftf$recreatingFtfWorld = ((CreateWorldScreenAccessor) (Object) screen).freeterraforged$isRecreated()
+			&& this.ftf$isFtfWorldType(screen.getUiState().getWorldType());
+		this.ftf$syncFtfWorldControls(screen, screen.getUiState());
 		screen.getUiState().addListener((uiState) -> {
-			this.ftf$syncCustomizeButton(screen, uiState);
+			this.ftf$syncFtfWorldControls(screen, uiState);
 			String seed = uiState.getSeed();
 			if (seed == null) {
 				seed = "";
@@ -39,13 +46,26 @@ public abstract class MixinCreateWorldScreenWorldTab {
 	}
 
 	@Unique
-	private void ftf$syncCustomizeButton(CreateWorldScreen screen, WorldCreationUiState uiState) {
-		WorldCreationUiState.WorldTypeEntry worldType = uiState.getWorldType();
-		boolean ftfSelected = worldType != null
-			&& worldType.preset() != null
-			&& worldType.preset().unwrapKey().filter(FTFWorldPresets.FREETERRAFORGED::equals).isPresent();
+	private void ftf$syncFtfWorldControls(CreateWorldScreen screen, WorldCreationUiState uiState) {
+		boolean ftfSelected = this.ftf$isFtfWorldType(uiState.getWorldType());
 		if (ftfSelected) {
 			this.customizeTypeButton.active = !((CreateWorldScreenAccessor) (Object) screen).freeterraforged$isRecreated();
 		}
+		// Changing world types replaces selected dimensions, so keep a recreated FTF preset intact.
+		if (this.ftf$recreatingFtfWorld) {
+			((Tab) (Object) this).visitChildren(widget -> {
+				if (widget instanceof CycleButton<?> cycleButton
+					&& cycleButton.getValue() instanceof WorldCreationUiState.WorldTypeEntry) {
+					cycleButton.active = false;
+				}
+			});
+		}
+	}
+
+	@Unique
+	private boolean ftf$isFtfWorldType(WorldCreationUiState.WorldTypeEntry worldType) {
+		return worldType != null
+			&& worldType.preset() != null
+			&& worldType.preset().unwrapKey().filter(FTFWorldPresets.FREETERRAFORGED::equals).isPresent();
 	}
 }
