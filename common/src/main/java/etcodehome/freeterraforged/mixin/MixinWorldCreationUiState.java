@@ -24,21 +24,14 @@ public class MixinWorldCreationUiState {
 
 	@Inject(method = "<init>", at = @At("TAIL"))
 	private void freeterraforged$finalizeInitialDimensions(CallbackInfo callback) {
+		this.freeterraforged$ensureSelectedGeneratorRoot();
 		this.freeterraforged$finalizePreServerGraph();
 	}
 
 	@Inject(method = "setSettings", at = @At(value = "INVOKE",
 		target = "Lnet/minecraft/client/gui/screens/worldselection/WorldCreationUiState;onChanged()V"))
-	private void freeterraforged$selectOwnedGeneratorRoot(WorldCreationContext context, CallbackInfo callback) {
-		Holder<WorldPreset> preset = this.worldType.preset();
-		if (preset != null
-			&& preset.value().overworld().isPresent()
-			&& preset.value().overworld().orElseThrow().generator() instanceof TerraForgedChunkGenerator
-			&& !(this.settings.selectedDimensions().overworld() instanceof TerraForgedChunkGenerator)) {
-			this.settings = this.settings.withDimensions(
-				(registries, dimensions) -> preset.value().createWorldDimensions()
-			);
-		}
+	private void freeterraforged$selectOwnedGeneratorRootAfterSettings(WorldCreationContext context, CallbackInfo callback) {
+		this.freeterraforged$ensureSelectedGeneratorRoot();
 		this.freeterraforged$finalizePreServerGraph();
 	}
 
@@ -49,6 +42,19 @@ public class MixinWorldCreationUiState {
 		CallbackInfo callback
 	) {
 		this.freeterraforged$finalizePreServerGraph();
+	}
+
+	// The constructor can select an FTF preset without updating the context's initial dimensions.
+	private void freeterraforged$ensureSelectedGeneratorRoot() {
+		Holder<WorldPreset> preset = this.worldType.preset();
+		if (preset != null
+			&& preset.value().overworld().isPresent()
+			&& preset.value().overworld().orElseThrow().generator() instanceof TerraForgedChunkGenerator
+			&& !(this.settings.selectedDimensions().overworld() instanceof TerraForgedChunkGenerator)) {
+			this.settings = this.settings.withDimensions(
+				(registries, dimensions) -> preset.value().createWorldDimensions()
+			);
+		}
 	}
 
 	private void freeterraforged$finalizePreServerGraph() {

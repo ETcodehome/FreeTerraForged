@@ -16,6 +16,8 @@
     "MixinSurfaceSystem",
     "MixinStructure",
     "MixinMinecraftServer",
+    "MixinDedicatedServerProperties",
+    "MixinDedicatedServerWorldDimensionData",
     "MixinRegistrySetBuilder$EmptyTagLookup",
     "MixinSpawnFinder",
     "MixinClimateSampler",
@@ -49,6 +51,7 @@
     "compat.MixinLithostitchedEvent"
   ],
   "client": [
+    "CreateWorldScreenAccessor",
     "MixinCreateWorldScreen",
     "MixinCreateWorldScreenWorldTab",
     "MixinWorldCreationUiState",
