@@ -13,6 +13,7 @@ public final class FTFWorldPresetDataPacks {
 	public static boolean selectsFreeTerraForged(String levelType) {
 		return levelType != null && (
 			levelType.equalsIgnoreCase(FTFWorldPresets.SERVER_LEVEL_TYPE)
+				|| levelType.equalsIgnoreCase(FTFWorldPresets.LEGACY_SERVER_LEVEL_TYPE)
 				|| levelType.equalsIgnoreCase(FTFWorldPresets.FREETERRAFORGED.location().toString())
 		);
 	}

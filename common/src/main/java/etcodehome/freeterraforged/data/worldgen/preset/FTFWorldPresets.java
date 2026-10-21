@@ -12,7 +12,8 @@ public final class FTFWorldPresets {
 		Registries.WORLD_PRESET,
 		FTFCommon.location("freeterraforged")
 	);
-	public static final String SERVER_LEVEL_TYPE = "freeterraforged";
+	public static final String SERVER_LEVEL_TYPE = "ftf";
+	public static final String LEGACY_SERVER_LEVEL_TYPE = "freeterraforged";
 	public static final ResourceLocation DEFAULT_PRESET_PACK_ID = FTFCommon.location("ftf_default_preset");
 	public static final String DEFAULT_PRESET_PACK_RESOURCE_PATH = "ftf_default_preset";
 	public static final String GENERATED_PRESET_PACK_FILE_NAME = "freeterraforged-preset.zip";
