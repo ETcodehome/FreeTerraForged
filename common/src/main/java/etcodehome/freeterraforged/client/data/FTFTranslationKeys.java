@@ -56,6 +56,7 @@ public final class FTFTranslationKeys {
 	public static final String GUI_BUTTON_EXPORT_SUCCESS = resolve("gui.button.export.success");
 	public static final String GUI_BUTTON_SET_AS_DEFAULT_PRESET = resolve("gui.button.set_as_default");
 	public static final String GUI_DEFAULT_PRESET_SAVED = resolve("gui.button.set_as_default.success");
+	public static final String GUI_DEFAULT_PRESET_INDICATOR_TOOLTIP = resolve("gui.preset.default_indicator.tooltip");
 	public static final String GUI_BUTTON_SEED = resolve("gui.button.seed");
 	public static final String GUI_BUTTON_RANDOMIZE_SEED = resolve("gui.button.randomize.seed.tooltip");
 	public static final String GUI_BUTTON_CONTINENT_TYPE = resolve("gui.button.continentType");

@@ -42,6 +42,7 @@
   "freeterraforged.gui.button.export.tooltip.fail": "Failed to export preset",
   "freeterraforged.gui.button.set_as_default": "Set as Default",
   "freeterraforged.gui.button.set_as_default.success": "Default Preset Saved",
+  "freeterraforged.gui.preset.default_indicator.tooltip": "This is the preset used by default for new FTF worlds.",
   "freeterraforged.gui.button.set_as_default.tooltip.fail": "Failed to set the default preset",
   "freeterraforged.gui.button.false": "false",
   "freeterraforged.gui.button.fancyMountains": "Fancy Mountains",

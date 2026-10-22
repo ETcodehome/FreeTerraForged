@@ -55,6 +55,7 @@ public final class FTFLanguageProvider {
 			this.add(FTFTranslationKeys.GUI_BUTTON_EXPORT_SUCCESS, "Exported Preset");
 			this.add(FTFTranslationKeys.GUI_BUTTON_SET_AS_DEFAULT_PRESET, "Set as Default");
 			this.add(FTFTranslationKeys.GUI_DEFAULT_PRESET_SAVED, "Default Preset Saved");
+			this.add(FTFTranslationKeys.GUI_DEFAULT_PRESET_INDICATOR_TOOLTIP, "This is the preset used by default for new FTF worlds.");
 			this.add(FTFTranslationKeys.GUI_BUTTON_SEED, "Seed");
 			this.add(FTFTranslationKeys.GUI_BUTTON_CONTINENT_TYPE, "Continent Type");
 			this.add(FTFTranslationKeys.GUI_BUTTON_CONTINENT_SHAPE, "Continent Shape");
