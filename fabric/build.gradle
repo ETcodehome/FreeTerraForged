@@ -17,6 +17,13 @@ loom {
     }
 }
 
+sourceSets {
+    c2meStubs {
+        java.srcDirs = ["src/c2meStubs/java"]
+        runtimeClasspath = files()
+    }
+}
+
 configurations {
     common
     shadowCommon
@@ -37,6 +44,16 @@ dependencies {
     common(project(path: ":common", configuration: "namedElements")) { transitive false }
     shadowCommon(project(path: ":common", configuration: "transformProductionFabric")) { transitive false }
     compileOnly "dev.architectury:architectury-injectables:1.0.13"
+    compileOnly files(new File(project.buildDir, "classes/java/c2meStubs"))
+    compileOnly "org.ow2.asm:asm-commons:9.10.1"
+}
+
+tasks.named("compileC2meStubsJava") {
+    classpath = sourceSets.main.compileClasspath
+}
+
+tasks.named("compileJava") {
+    dependsOn tasks.named("compileC2meStubsJava")
 }
 
 repositories {

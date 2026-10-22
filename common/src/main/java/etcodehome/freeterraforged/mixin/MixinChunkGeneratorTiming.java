@@ -18,6 +18,8 @@ public abstract class MixinChunkGeneratorTiming {
 
     private static final ThreadLocal<Long> ftf$structureStart = ThreadLocal.withInitial(() -> 0L);
     private static final ThreadLocal<Long> ftf$featureStart = ThreadLocal.withInitial(() -> 0L);
+    private static final ThreadLocal<Long> ftf$structureCpuStart = ThreadLocal.withInitial(() -> 0L);
+    private static final ThreadLocal<Long> ftf$featureCpuStart = ThreadLocal.withInitial(() -> 0L);
 
     // 1. Track Structure Logic Generation
     @Inject(
@@ -28,6 +30,7 @@ public abstract class MixinChunkGeneratorTiming {
                                     StructureManager structureManager, ChunkAccess chunk,
                                     StructureTemplateManager templateManager, CallbackInfo ci) {
         ftf$structureStart.set(System.nanoTime());
+        ftf$structureCpuStart.set(WorldGenTracker.cpuNanos());
         int active = WorldGenTracker.ACTIVE_THREADS.incrementAndGet();
         WorldGenTracker.PEAK_CONCURRENCY.updateAndGet(peak -> Math.max(peak, active));
     }
@@ -42,6 +45,10 @@ public abstract class MixinChunkGeneratorTiming {
         long start = ftf$structureStart.get();
         if (start != 0) {
             WorldGenTracker.TOTAL_NANOS.add(System.nanoTime() - start);
+            long cpuStart = ftf$structureCpuStart.get();
+            if (cpuStart != 0) {
+                WorldGenTracker.TOTAL_CPU_NANOS.add(Math.max(0L, WorldGenTracker.cpuNanos() - cpuStart));
+            }
         }
         WorldGenTracker.ACTIVE_THREADS.decrementAndGet();
     }
@@ -53,6 +60,7 @@ public abstract class MixinChunkGeneratorTiming {
     )
     private void ftf$featureStart(WorldGenLevel level, ChunkAccess chunk, StructureManager structureManager, CallbackInfo ci) {
         ftf$featureStart.set(System.nanoTime());
+        ftf$featureCpuStart.set(WorldGenTracker.cpuNanos());
         int active = WorldGenTracker.ACTIVE_THREADS.incrementAndGet();
         WorldGenTracker.PEAK_CONCURRENCY.updateAndGet(peak -> Math.max(peak, active));
     }
@@ -66,6 +74,10 @@ public abstract class MixinChunkGeneratorTiming {
         long now = System.nanoTime();
         if (start != 0) {
             WorldGenTracker.TOTAL_NANOS.add(now - start);
+            long cpuStart = ftf$featureCpuStart.get();
+            if (cpuStart != 0) {
+                WorldGenTracker.TOTAL_CPU_NANOS.add(Math.max(0L, WorldGenTracker.cpuNanos() - cpuStart));
+            }
         }
         WorldGenTracker.LAST_END_NANOS.set(now);
         WorldGenTracker.ACTIVE_THREADS.decrementAndGet();
