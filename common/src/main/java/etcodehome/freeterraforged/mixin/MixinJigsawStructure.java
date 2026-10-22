@@ -37,9 +37,11 @@ import net.minecraft.world.level.levelgen.structure.pools.alias.PoolAliasLookup;
 import net.minecraft.world.level.levelgen.structure.structures.JigsawStructure;
 import net.minecraft.world.level.levelgen.structure.templatesystem.LiquidSettings;
 
-import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
+import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
+import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPlans.StructureAdaptation;
 
@@ -183,32 +185,48 @@ public class MixinJigsawStructure {
 		StructurePiecesBuilder builder,
 		GeneratorContext generatorContext
 	) {
-		Cell cell = new Cell();
 		int maxSuspension = Integer.MIN_VALUE;
-		for (var piece : builder.build().pieces()) {
-			if (!(piece instanceof PoolElementStructurePiece poolPiece)) {
-				continue;
-			}
-			if (poolPiece.getElement().getProjection() != StructureTemplatePool.Projection.RIGID) {
-				continue;
-			}
+		WorldgenPerfTracker.ApplyCellCaller prevCaller = null;
+		WorldgenPerfTracker.ThreadStats ts = null;
+		if (WorldgenPerfTracker.ACTIVE) {
+			ts = WorldgenPerfTracker.stats();
+			prevCaller = ts.currentCaller;
+			ts.currentCaller = WorldgenPerfTracker.ApplyCellCaller.STRUCTURES;
+		}
+		try {
+			for (var piece : builder.build().pieces()) {
+				if (!(piece instanceof PoolElementStructurePiece poolPiece)) {
+					continue;
+				}
+				if (poolPiece.getElement().getProjection() != StructureTemplatePool.Projection.RIGID) {
+					continue;
+				}
 
-			BoundingBox box = poolPiece.getBoundingBox();
-			int groundPlane = box.minY() + poolPiece.getGroundLevelDelta();
-			for (int x = box.minX() - ftf$BURY_RADIUS + 1; x <= box.maxX() + ftf$BURY_RADIUS - 1; x++) {
-				for (int z = box.minZ() - ftf$BURY_RADIUS + 1; z <= box.maxZ() + ftf$BURY_RADIUS - 1; z++) {
-					if (!ftf$isInsideBurySupport(box, x, z)) {
-						continue;
+				BoundingBox box = poolPiece.getBoundingBox();
+				int groundPlane = box.minY() + poolPiece.getGroundLevelDelta();
+				int minX = box.minX() - ftf$BURY_RADIUS + 1;
+				int maxX = box.maxX() + ftf$BURY_RADIUS - 1;
+				int minZ = box.minZ() - ftf$BURY_RADIUS + 1;
+				int maxZ = box.maxZ() + ftf$BURY_RADIUS - 1;
+				for (int x = minX; x <= maxX; x += 2) {
+					for (int z = minZ; z <= maxZ; z += 2) {
+						if (!ftf$isInsideBurySupport(box, x, z)) {
+							continue;
+						}
+						Cell cell = CellSampler.getCachedOrLookup(generatorContext.lookup, x, z, false);
+						maxSuspension = Math.max(
+							maxSuspension,
+							groundPlane - generatorContext.levels.scale(cell.height)
+						);
 					}
-					generatorContext.lookup.applyCell(cell.reset(), x, z, false, false);
-					maxSuspension = Math.max(
-						maxSuspension,
-						groundPlane - generatorContext.levels.scale(cell.height)
-					);
 				}
 			}
+			return maxSuspension == Integer.MIN_VALUE ? 0 : maxSuspension;
+		} finally {
+			if (ts != null) {
+				ts.currentCaller = prevCaller;
+			}
 		}
-		return maxSuspension == Integer.MIN_VALUE ? 0 : maxSuspension;
 	}
 
 	@Unique
@@ -362,19 +380,55 @@ public class MixinJigsawStructure {
 			return false;
 		}
 		GeneratorContext context = rtfRandomState.generatorContext();
-		Cell cell = new Cell();
-		for (var piece : builder.build().pieces()) {
-			BoundingBox box = piece.getBoundingBox();
-			for (int x = box.minX(); x <= box.maxX(); x++) {
-				for (int z = box.minZ(); z <= box.maxZ(); z++) {
-					context.lookup.applyCell(cell.reset(), x, z, false, false);
-					if (cell.terrain.isRiver()) {
-						return true;
+		WorldgenPerfTracker.ApplyCellCaller prevCaller = null;
+		WorldgenPerfTracker.ThreadStats ts = null;
+		if (WorldgenPerfTracker.ACTIVE) {
+			ts = WorldgenPerfTracker.stats();
+			prevCaller = ts.currentCaller;
+			ts.currentCaller = WorldgenPerfTracker.ApplyCellCaller.STRUCTURES;
+		}
+		try {
+			for (var piece : builder.build().pieces()) {
+				BoundingBox box = piece.getBoundingBox();
+				int minX = box.minX();
+				int maxX = box.maxX();
+				int minZ = box.minZ();
+				int maxZ = box.maxZ();
+				for (int x = minX; x <= maxX; x += 4) {
+					for (int z = minZ; z <= maxZ; z += 4) {
+						Cell cell = CellSampler.getCachedOrLookup(context.lookup, x, z, false);
+						if (cell.terrain.isRiver()) {
+							return true;
+						}
+					}
+					if ((maxZ - minZ) % 4 != 0) {
+						Cell cell = CellSampler.getCachedOrLookup(context.lookup, x, maxZ, false);
+						if (cell.terrain.isRiver()) {
+							return true;
+						}
+					}
+				}
+				if ((maxX - minX) % 4 != 0) {
+					for (int z = minZ; z <= maxZ; z += 4) {
+						Cell cell = CellSampler.getCachedOrLookup(context.lookup, maxX, z, false);
+						if (cell.terrain.isRiver()) {
+							return true;
+						}
+					}
+					if ((maxZ - minZ) % 4 != 0) {
+						Cell cell = CellSampler.getCachedOrLookup(context.lookup, maxX, maxZ, false);
+						if (cell.terrain.isRiver()) {
+							return true;
+						}
 					}
 				}
 			}
+			return false;
+		} finally {
+			if (ts != null) {
+				ts.currentCaller = prevCaller;
+			}
 		}
-		return false;
 	}
 
 	@Unique
@@ -387,9 +441,21 @@ public class MixinJigsawStructure {
 			return false;
 		}
 
-		Cell cell = new Cell();
-		generatorContext.lookup.applyCell(cell, x, z, false, false);
-		return cell.terrain.isRiver();
+		WorldgenPerfTracker.ApplyCellCaller prevCaller = null;
+		WorldgenPerfTracker.ThreadStats ts = null;
+		if (WorldgenPerfTracker.ACTIVE) {
+			ts = WorldgenPerfTracker.stats();
+			prevCaller = ts.currentCaller;
+			ts.currentCaller = WorldgenPerfTracker.ApplyCellCaller.STRUCTURES;
+		}
+		try {
+			Cell cell = CellSampler.getCachedOrLookup(generatorContext.lookup, x, z, false);
+			return cell.terrain.isRiver();
+		} finally {
+			if (ts != null) {
+				ts.currentCaller = prevCaller;
+			}
+		}
 	}
 
 	@Unique

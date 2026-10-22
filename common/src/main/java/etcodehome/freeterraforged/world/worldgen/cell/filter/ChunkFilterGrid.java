@@ -3,6 +3,7 @@ package etcodehome.freeterraforged.world.worldgen.cell.filter;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap;
+import etcodehome.freeterraforged.world.worldgen.cell.heightmap.RawChunkCache;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
 import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 
@@ -28,7 +29,52 @@ public class ChunkFilterGrid implements FilterGrid {
         }
     }
 
+    public void init(int chunkX, int chunkZ, GeneratorContext context) {
+        int minBlockX = chunkX << 4;
+        int minBlockZ = chunkZ << 4;
+        this.blockX = minBlockX - BORDER;
+        this.blockZ = minBlockZ - BORDER;
+
+        RawChunkCache rawCache = context != null ? context.rawChunkCache : null;
+        if (rawCache == null) {
+            this.initDirect(chunkX, chunkZ, context != null ? context.heightmap : null);
+            return;
+        }
+
+        for (int dz = -1; dz <= 1; dz++) {
+            int nz = chunkZ + dz;
+            int startLz = (dz == -1) ? 4 : 0;
+            int endLz = (dz == 1) ? 11 : 15;
+            int startGz = (dz == -1) ? 0 : (dz == 0 ? 12 : 28);
+            int lenZ = endLz - startLz + 1;
+
+            for (int dx = -1; dx <= 1; dx++) {
+                int nx = chunkX + dx;
+                int startLx = (dx == -1) ? 4 : 0;
+                int endLx = (dx == 1) ? 11 : 15;
+                int startGx = (dx == -1) ? 0 : (dx == 0 ? 12 : 28);
+                int lenX = endLx - startLx + 1;
+
+                Cell[] raw = rawCache.getRawChunk(nx, nz);
+
+                for (int z = 0; z < lenZ; z++) {
+                    int lz = startLz + z;
+                    int gz = startGz + z;
+                    int srcRow = lz * CHUNK_SIZE + startLx;
+                    int dstRow = gz * TOTAL_SIZE + startGx;
+                    for (int x = 0; x < lenX; x++) {
+                        this.cells[dstRow + x].copyFrom(raw[srcRow + x]);
+                    }
+                }
+            }
+        }
+    }
+
     public void init(int chunkX, int chunkZ, Heightmap heightmap) {
+        this.initDirect(chunkX, chunkZ, heightmap);
+    }
+
+    private void initDirect(int chunkX, int chunkZ, Heightmap heightmap) {
         int minBlockX = chunkX << 4;
         int minBlockZ = chunkZ << 4;
         this.blockX = minBlockX - BORDER;
@@ -44,7 +90,9 @@ public class ChunkFilterGrid implements FilterGrid {
                 boolean applyClimate = (zInChunk && x >= BORDER && x < BORDER + CHUNK_SIZE) || (zQuart && (x & 3) == 0);
                 Cell cell = this.cells[rowOffset + x];
                 cell.reset();
-                heightmap.apply(cell, worldX, worldZ, applyClimate);
+                if (heightmap != null) {
+                    heightmap.apply(cell, worldX, worldZ, applyClimate);
+                }
             }
         }
     }
@@ -138,7 +186,7 @@ public class ChunkFilterGrid implements FilterGrid {
     public static Cell[] generateChunkCells(int chunkX, int chunkZ, GeneratorContext context) {
         ChunkFilterGrid grid = THREAD_LOCAL.get();
         if (!WorldgenPerfTracker.ACTIVE) {
-            grid.init(chunkX, chunkZ, context.heightmap);
+            grid.init(chunkX, chunkZ, context);
             context.biomeSurfaceEnvelope.prepopulateFromChunkGrid(
                 context, chunkX, chunkZ, grid.cells, TOTAL_SIZE, BORDER
             );
@@ -158,7 +206,7 @@ public class ChunkFilterGrid implements FilterGrid {
         boolean prevInside = ts.insideGridInit;
         ts.insideGridInit = true;
         try {
-            grid.init(chunkX, chunkZ, context.heightmap);
+            grid.init(chunkX, chunkZ, context);
             context.biomeSurfaceEnvelope.prepopulateFromChunkGrid(
                 context, chunkX, chunkZ, grid.cells, TOTAL_SIZE, BORDER
             );

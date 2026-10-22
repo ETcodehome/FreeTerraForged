@@ -18,7 +18,11 @@ import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.util.PosUtil;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ChunkResult;
 import net.minecraft.server.level.ServerChunkCache;
@@ -276,21 +280,28 @@ public final class WorldgenBenchmarkRunner {
             }
         }
 
-        // Send concise summary lines to command source (player chat if in-game)
-        if (current.source.getPlayer() != null) {
-            for (String line : report.split("\n")) {
-                if (!line.isBlank()) {
-                    current.source.sendSystemMessage(Component.literal(line));
-                }
-            }
+        // Send concise highlight summary to command source (player chat if in-game)
+        for (String highlightLine : WorldgenPerfTracker.buildHighlightLines(total, total)) {
+            current.source.sendSystemMessage(Component.literal(highlightLine));
         }
 
         // Write report to disk under perf-reports/
         Path reportPath = writeReportFile(report);
         if (reportPath != null) {
-            String savedMsg = "[FTF-Perf] Saved full report to: " + reportPath.toAbsolutePath();
+            String absPath = reportPath.toAbsolutePath().toString();
+            String savedMsg = "[FTF-Perf] Saved full report to: " + absPath;
             FTFCommon.LOGGER.info(savedMsg);
-            current.source.sendSystemMessage(Component.literal(savedMsg));
+
+            MutableComponent linkComponent = Component.literal(absPath)
+                .withStyle(style -> style
+                    .withColor(ChatFormatting.AQUA)
+                    .withUnderlined(true)
+                    .withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_FILE, absPath))
+                    .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal("Click to open report file")))
+                );
+            current.source.sendSystemMessage(
+                Component.literal("[FTF-Perf] Full Report: ").withStyle(ChatFormatting.GREEN).append(linkComponent)
+            );
         }
 
         if (current.shutdownOnComplete) {

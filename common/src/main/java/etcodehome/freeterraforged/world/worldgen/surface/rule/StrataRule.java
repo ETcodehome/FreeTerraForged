@@ -1,6 +1,7 @@
 package etcodehome.freeterraforged.world.worldgen.surface.rule;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import com.mojang.serialization.MapCodec;
@@ -108,12 +109,20 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
 	}
 
 	private class Source implements SurfaceRules.SurfaceRule {
-		private Context surfaceContext;
-		private Noise selector;
-		private List<List<Layer>> strata;
+		private final Context surfaceContext;
+		private final Noise selector;
+		private final List<List<Layer>> strata;
 		private List<Layer> layers;
 		private float[] depthBuffer;
 		private long lastUpdateXZ;
+
+		// Chunk-quart ratio cache: 16 quarts in a chunk (4x4)
+		private int currentChunkOriginX = Integer.MIN_VALUE;
+		private int currentChunkOriginZ = Integer.MIN_VALUE;
+		@SuppressWarnings("unchecked")
+		private final List<Layer>[] quartLayers = new List[16];
+		private final float[][] quartRatios = new float[16][];
+		private int currentLayerIndex = 0;
 
 		public Source(Context surfaceContext, Noise selector, List<List<Layer>> strata) {
 			this.surfaceContext = surfaceContext;
@@ -125,52 +134,88 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
 		@Nullable
 		@Override
 		public BlockState tryApply(int x, int y, int z) {
-			if(this.lastUpdateXZ != this.surfaceContext.lastUpdateXZ) {
+			if (this.lastUpdateXZ != this.surfaceContext.lastUpdateXZ) {
 				this.initBuffer(x, z);
 				this.lastUpdateXZ = this.surfaceContext.lastUpdateXZ;
 			}
 
-			Layer last = null;
-			for(int i = 0; i < this.layers.size(); i++) {
-				Layer layer = last = this.layers.get(i);
-				if(y > this.depthBuffer[i]) {
-					return layer.material();
-				}
+			int layerCount = this.layers.size();
+			if (layerCount == 0) {
+				return null;
 			}
 
-			return last != null ? last.material() : null;
+			// Surface building scans down monotonically. If y was called out of order, reset.
+			if (this.currentLayerIndex > 0 && y > this.depthBuffer[this.currentLayerIndex - 1]) {
+				this.currentLayerIndex = 0;
+			}
+
+			while (this.currentLayerIndex < layerCount - 1 && y <= this.depthBuffer[this.currentLayerIndex]) {
+				this.currentLayerIndex++;
+			}
+
+			return this.layers.get(this.currentLayerIndex).material();
 		}
 
 		private void initBuffer(int x, int z) {
-			this.layers = this.selectLayers(x, z);
-			int layerCount = this.layers.size();
-
-			if (this.depthBuffer == null || this.depthBuffer.length < layerCount) {
-				this.depthBuffer = new float[layerCount];
+			int chunkOriginX = x & ~0xF;
+			int chunkOriginZ = z & ~0xF;
+			if (chunkOriginX != this.currentChunkOriginX || chunkOriginZ != this.currentChunkOriginZ) {
+				this.currentChunkOriginX = chunkOriginX;
+				this.currentChunkOriginZ = chunkOriginZ;
+				Arrays.fill(this.quartRatios, null);
+				Arrays.fill(this.quartLayers, null);
 			}
 
 			int localX = this.surfaceContext.blockX & 0xF;
 			int localZ = this.surfaceContext.blockZ & 0xF;
+			int qx = localX >> 2;
+			int qz = localZ >> 2;
+			int qIndex = (qz << 2) | qx;
+
+			float[] ratios = this.quartRatios[qIndex];
+			List<Layer> selectedLayers = this.quartLayers[qIndex];
+			if (ratios == null) {
+				int sampleX = chunkOriginX + (qx << 2) + 2;
+				int sampleZ = chunkOriginZ + (qz << 2) + 2;
+				selectedLayers = this.selectLayers(sampleX, sampleZ);
+				this.quartLayers[qIndex] = selectedLayers;
+				int count = selectedLayers.size();
+				ratios = new float[count];
+				float sum = 0.0F;
+				for (int i = 0; i < count; i++) {
+					float depth = selectedLayers.get(i).computeDepth(sampleX, sampleZ);
+					sum += depth;
+					ratios[i] = depth;
+				}
+				if (sum > 0.0F) {
+					float invSum = 1.0F / sum;
+					for (int i = 0; i < count; i++) {
+						ratios[i] *= invSum;
+					}
+				} else if (count > 0) {
+					Arrays.fill(ratios, 1.0F / count);
+				}
+				this.quartRatios[qIndex] = ratios;
+			}
+
+			this.layers = selectedLayers;
+			int layerCount = selectedLayers.size();
+			if (this.depthBuffer == null || this.depthBuffer.length < layerCount) {
+				this.depthBuffer = new float[layerCount];
+			}
+
 			int height = this.surfaceContext.chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, localX, localZ);
-
-			float sum = 0.0F;
-			for(int i = 0; i < layerCount; i++) {
-				Layer layer = this.layers.get(i);
-				float depth = layer.computeDepth(x, z);
-				sum += depth;
-				this.depthBuffer[i] = depth;
-			}
-
 			int y = height;
-			for(int i = 0; i < layerCount; i++) {
-				this.depthBuffer[i] = y -= Math.round((this.depthBuffer[i] / sum) * height);
+			for (int i = 0; i < layerCount; i++) {
+				this.depthBuffer[i] = y -= Math.round(ratios[i] * height);
 			}
+			this.currentLayerIndex = 0;
 		}
 
 		private List<Layer> selectLayers(int x, int z) {
 			float selector = this.selector.compute(x, z, 0);
 			int index = (int) (selector * this.strata.size());
-			index = Math.min(this.strata.size() - 1, index);
+			index = Math.min(this.strata.size() - 1, Math.max(0, index));
 			return this.strata.get(index);
 		}
 	}

@@ -44,7 +44,8 @@ public final class WorldgenPerfTracker {
 		BIOME_ENVELOPE,
 		TERRAIN_ROLE_RIVER,
 		AQUIFER,
-		SURFACE_RIVER
+		SURFACE_RIVER,
+		STRUCTURES
 	}
 
 	public static final class ThreadStats {
@@ -76,6 +77,15 @@ public final class WorldgenPerfTracker {
 		public long cellClimateNanos; // climate & biome region Voronoi
 		public long rivermapGenerateCount;
 		public long rivermapGenerateNanos;
+
+		// Surface & Rivers sub-systems
+		public long surfaceRiverWaterNanos;
+		public long surfaceRulesNanos;
+		public long surfaceColumnsNanos;
+
+		// RawChunkCache
+		public long rawChunkCacheHits;
+		public long rawChunkCacheMisses;
 
 		// Standalone applyCell (outside ChunkFilterGrid.init)
 		public long standaloneApplyCellCount;
@@ -130,6 +140,11 @@ public final class WorldgenPerfTracker {
 			this.cellClimateNanos = 0L;
 			this.rivermapGenerateCount = 0L;
 			this.rivermapGenerateNanos = 0L;
+			this.surfaceRiverWaterNanos = 0L;
+			this.surfaceRulesNanos = 0L;
+			this.surfaceColumnsNanos = 0L;
+			this.rawChunkCacheHits = 0L;
+			this.rawChunkCacheMisses = 0L;
 			this.standaloneApplyCellCount = 0L;
 			this.standaloneApplyCellNanos = 0L;
 			Arrays.fill(this.callerCounts, 0L);
@@ -265,6 +280,73 @@ public final class WorldgenPerfTracker {
 		return buildReport(contextHeader, 0, 0);
 	}
 
+	public static List<String> buildHighlightLines(int targetChunksRequested, int targetChunksCompleted) {
+		long endNanos = stopWallNanos != 0L ? stopWallNanos : System.nanoTime();
+		long wallNanos = Math.max(1L, endNanos - startWallNanos);
+		double wallSec = wallNanos / 1_000_000_000.0;
+
+		List<Long> completedChunkTotals = new ArrayList<>();
+		for (ChunkStageTimings ct : CHUNK_TIMINGS.values()) {
+			if (ct.reachedFullFeatures) {
+				completedChunkTotals.add(ct.totalNanos());
+			}
+		}
+		completedChunkTotals.sort(Long::compareTo);
+		int fullChunksCount = completedChunkTotals.size();
+		int effectiveChunks = targetChunksCompleted > 0 ? targetChunksCompleted : Math.max(1, fullChunksCount);
+		double chunksPerSec = effectiveChunks / wallSec;
+		double wallMsPerChunk = (wallNanos / 1_000_000.0) / effectiveChunks;
+
+		long surfaceRulesNanos = 0;
+		long totalSurfaceCount = 0;
+		long gridGenerateCount = 0;
+		long gridGenerateNanos = 0;
+		long filterErosionNanos = 0;
+		for (ThreadStats s : ALL_STATS) {
+			surfaceRulesNanos += s.surfaceRulesNanos;
+			totalSurfaceCount += s.stageCounts[Stage.SURFACE.ordinal()];
+			gridGenerateCount += s.gridGenerateCount;
+			gridGenerateNanos += s.gridGenerateNanos;
+			filterErosionNanos += s.filterErosionNanos;
+		}
+
+		List<String> highlights = new ArrayList<>();
+		highlights.add(String.format(Locale.ROOT,
+			"[FTF-Perf] Benchmark Complete: %d FULL chunks in %.2f s (%.2f chunks/s | %.2f ms/chunk wall)",
+			effectiveChunks, wallSec, chunksPerSec, wallMsPerChunk));
+
+		if (!completedChunkTotals.isEmpty()) {
+			double sumNanos = 0;
+			for (long n : completedChunkTotals) sumNanos += n;
+			double avgMs = (sumNanos / completedChunkTotals.size()) / 1_000_000.0;
+			double p50Ms = percentile(completedChunkTotals, 0.50) / 1_000_000.0;
+			double p99Ms = percentile(completedChunkTotals, 0.99) / 1_000_000.0;
+			highlights.add(String.format(Locale.ROOT,
+				"[FTF-Perf] CPU Cost: avg %.1f ms | p50: %.1f ms | p99: %.1f ms",
+				avgMs, p50Ms, p99Ms));
+		}
+
+		StringBuilder stageSummary = new StringBuilder("[FTF-Perf] Highlights: ");
+		boolean hasStage = false;
+		if (totalSurfaceCount > 0) {
+			double srMsPerChunk = (surfaceRulesNanos / 1_000_000.0) / totalSurfaceCount;
+			stageSummary.append(String.format(Locale.ROOT, "Surface Rules: %.1f ms/ch", srMsPerChunk));
+			hasStage = true;
+		}
+		if (gridGenerateCount > 0) {
+			double gridMs = (gridGenerateNanos / 1_000_000.0) / gridGenerateCount;
+			double erosionMs = (filterErosionNanos / 1_000_000.0) / gridGenerateCount;
+			if (hasStage) stageSummary.append(" | ");
+			stageSummary.append(String.format(Locale.ROOT, "Grid: %.1f ms (Erosion: %.1f ms)", gridMs, erosionMs));
+			hasStage = true;
+		}
+		if (hasStage) {
+			highlights.add(stageSummary.toString());
+		}
+
+		return highlights;
+	}
+
 	public static String buildReport(String contextHeader, int targetChunksRequested, int targetChunksCompleted) {
 		if (contextHeader != null && !contextHeader.isBlank()) {
 			activeContextLabel = contextHeader;
@@ -287,6 +369,8 @@ public final class WorldgenPerfTracker {
 		long heightmapApplyCount = 0, heightmapApplyNanos = 0;
 		long cellTerrainNanos = 0, cellRiverNanos = 0, cellClimateNanos = 0;
 		long rivermapGenCount = 0, rivermapGenNanos = 0;
+		long surfaceRiverWaterNanos = 0, surfaceRulesNanos = 0, surfaceColumnsNanos = 0;
+		long rawChunkCacheHits = 0, rawChunkCacheMisses = 0;
 		long standaloneApplyCount = 0, standaloneApplyNanos = 0;
 		long[] callerCounts = new long[ApplyCellCaller.values().length];
 		long[] callerNanos = new long[ApplyCellCaller.values().length];
@@ -324,6 +408,11 @@ public final class WorldgenPerfTracker {
 			cellClimateNanos += s.cellClimateNanos;
 			rivermapGenCount += s.rivermapGenerateCount;
 			rivermapGenNanos += s.rivermapGenerateNanos;
+			surfaceRiverWaterNanos += s.surfaceRiverWaterNanos;
+			surfaceRulesNanos += s.surfaceRulesNanos;
+			surfaceColumnsNanos += s.surfaceColumnsNanos;
+			rawChunkCacheHits += s.rawChunkCacheHits;
+			rawChunkCacheMisses += s.rawChunkCacheMisses;
 			standaloneApplyCount += s.standaloneApplyCellCount;
 			standaloneApplyNanos += s.standaloneApplyCellNanos;
 			for (int i = 0; i < ApplyCellCaller.values().length; i++) {
@@ -415,6 +504,17 @@ public final class WorldgenPerfTracker {
 			lines.add(String.format(Locale.ROOT,
 				"   %-34s : %8.1f ms (%5.1f%%) | %4d chunks | %6.2f ms/chunk",
 				stage.label, totalMs, pct, count, avgMs));
+			if (stage == Stage.SURFACE && totalMs > 0) {
+				lines.add(String.format(Locale.ROOT,
+					"     - Surface Rules (super.buildSurface)   : %8.1f ms (%5.1f%% of surface)",
+					surfaceRulesNanos / 1_000_000.0, pct(surfaceRulesNanos, totalStageNanos[i])));
+				lines.add(String.format(Locale.ROOT,
+					"     - River & Lake (placeRiverWater)       : %8.1f ms (%5.1f%% of surface)",
+					surfaceRiverWaterNanos / 1_000_000.0, pct(surfaceRiverWaterNanos, totalStageNanos[i])));
+				lines.add(String.format(Locale.ROOT,
+					"     - Surface Columns (ScreeFeature)       : %8.1f ms (%5.1f%% of surface)",
+					surfaceColumnsNanos / 1_000_000.0, pct(surfaceColumnsNanos, totalStageNanos[i])));
+			}
 		}
 
 		lines.add("--------------------------------------------------------------------------------");
@@ -426,9 +526,13 @@ public final class WorldgenPerfTracker {
 			gridTotalMs, gridGenerateCount, gridAvgMs));
 		if (gridGenerateCount > 0) {
 			lines.add(String.format(Locale.ROOT,
-				"     - Grid Init (1600x Heightmap)    : %8.1f ms (%5.1f%%) | %6.2f ms/grid",
+				"     - Grid Init (1600x Sliced/Heightmap): %8.1f ms (%5.1f%%) | %6.2f ms/grid",
 				gridInitNanos / 1_000_000.0, pct(gridInitNanos, gridGenerateNanos),
 				(gridInitNanos / 1_000_000.0) / gridGenerateCount));
+			lines.add(String.format(Locale.ROOT,
+				"       * RawChunkCache                  : %d hits, %d misses (%5.1f%% hit rate)",
+				rawChunkCacheHits, rawChunkCacheMisses,
+				pct(rawChunkCacheHits, rawChunkCacheHits + rawChunkCacheMisses)));
 			lines.add(String.format(Locale.ROOT,
 				"     - Filter 1: CliffRelaxation (Pre): %8.1f ms (%5.1f%%) | %6.2f ms/grid",
 				filterCliff1Nanos / 1_000_000.0, pct(filterCliff1Nanos, gridGenerateNanos),

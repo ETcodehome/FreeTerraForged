@@ -122,11 +122,18 @@ public final class BiomeSurfaceEnvelope {
 		int baseX = QuartPos.toBlock(quartX);
 		int baseZ = QuartPos.toBlock(quartZ);
 		int minimum = Integer.MAX_VALUE;
-		for (int dz = MIN_OFFSET; dz <= MAX_OFFSET; dz++) {
-			for (int dx = MIN_OFFSET; dx <= MAX_OFFSET; dx++) {
+		for (int dz = MIN_OFFSET; dz <= MAX_OFFSET; dz += 2) {
+			for (int dx = MIN_OFFSET; dx <= MAX_OFFSET; dx += 2) {
 				minimum = Math.min(minimum, surface.applyAsInt(baseX + dx, baseZ + dz));
 			}
 		}
+		for (int dz = MIN_OFFSET; dz <= MAX_OFFSET; dz += 2) {
+			minimum = Math.min(minimum, surface.applyAsInt(baseX + MAX_OFFSET, baseZ + dz));
+		}
+		for (int dx = MIN_OFFSET; dx <= MAX_OFFSET; dx += 2) {
+			minimum = Math.min(minimum, surface.applyAsInt(baseX + dx, baseZ + MAX_OFFSET));
+		}
+		minimum = Math.min(minimum, surface.applyAsInt(baseX + MAX_OFFSET, baseZ + MAX_OFFSET));
 		return minimum;
 	}
 

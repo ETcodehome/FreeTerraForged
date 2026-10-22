@@ -652,12 +652,18 @@ public class Erosion implements Filter {
                 float vecZ = pFracZ - j - hashZ;
 
                 float sqrDist = vecX * vecX + vecZ * vecZ;
-                float weight = Math.max(0.0f, (float) Math.exp(-sqrDist * 2.0f) - 0.01111f);
+                if (sqrDist >= 2.25f) {
+                    continue;
+                }
+                float weight = (float) Math.exp(-sqrDist * 2.0f) - 0.01111f;
+                if (weight <= 0.0f) {
+                    continue;
+                }
 
                 weightSum += weight;
                 float waveInput = vecX * sideDirX + vecZ * sideDirZ + offset;
-                phaseDirX += (float) Math.cos(waveInput) * weight;
-                phaseDirZ += (float) Math.sin(waveInput) * weight;
+                phaseDirX += NoiseUtil.cos(waveInput) * weight;
+                phaseDirZ += NoiseUtil.sin(waveInput) * weight;
             }
         }
 

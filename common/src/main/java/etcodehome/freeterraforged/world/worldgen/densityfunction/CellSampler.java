@@ -178,7 +178,13 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 			}
 			this.valid = false;
 			this.tableValid[slot] = false;
-			if (!WorldgenPerfTracker.ACTIVE) {
+			etcodehome.freeterraforged.world.worldgen.GeneratorContext genCtx = lookup.getContext();
+			Cell rawCell = (genCtx != null && genCtx.rawChunkCache != null)
+				? genCtx.rawChunkCache.getExistingRawCell(blockX, blockZ)
+				: null;
+			if (rawCell != null) {
+				slotCell.copyFrom(rawCell);
+			} else if (!WorldgenPerfTracker.ACTIVE) {
 				lookup.applyCell(slotCell.reset(), blockX, blockZ, false, sampleClimate);
 			} else {
 				WorldgenPerfTracker.ThreadStats ts = WorldgenPerfTracker.stats();

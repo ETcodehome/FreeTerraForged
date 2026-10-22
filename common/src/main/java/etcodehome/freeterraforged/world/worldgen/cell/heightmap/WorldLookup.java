@@ -9,16 +9,22 @@ import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 public class WorldLookup implements CellLookup {
 	private static final ThreadLocal<Cell> SCRATCH_NEIGHBOR = ThreadLocal.withInitial(Cell::new);
 
+	private final GeneratorContext context;
 	private final float waterLevel;
 	private final float beachLevel;
 	private final Heightmap heightmap;
 	private final Levels levels;
 	
 	public WorldLookup(GeneratorContext context) {
+		this.context = context;
 		this.heightmap = context.heightmap;
 		this.waterLevel = context.levels.water;
 		this.beachLevel = context.levels.water(5);
 		this.levels = context.levels;
+	}
+
+	public GeneratorContext getContext() {
+		return this.context;
 	}
 	
 	public Heightmap getHeightmap() {

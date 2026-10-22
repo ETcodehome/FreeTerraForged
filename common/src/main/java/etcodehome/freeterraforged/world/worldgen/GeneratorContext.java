@@ -7,7 +7,9 @@ import net.minecraft.core.HolderGetter;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.world.worldgen.cell.filter.TerrainFilters;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap;
+import etcodehome.freeterraforged.world.worldgen.cell.heightmap.RawChunkCache;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.WorldLookup;
+import etcodehome.freeterraforged.world.worldgen.feature.ScreeNoises;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 
 public class GeneratorContext implements AutoCloseable {
@@ -18,6 +20,8 @@ public class GeneratorContext implements AutoCloseable {
     public Preset preset;
     public HolderGetter<Noise> noiseLookup;
     public Heightmap heightmap;
+    public RawChunkCache rawChunkCache;
+    public ScreeNoises screeNoises;
     public TerrainFilters filters;
     public WorldLookup lookup;
     
@@ -27,6 +31,8 @@ public class GeneratorContext implements AutoCloseable {
         this.noiseLookup = noiseLookup;
         this.seed = new Seed(seed);
         this.heightmap = Heightmap.make(this);
+        this.rawChunkCache = new RawChunkCache(this);
+        this.screeNoises = new ScreeNoises(this.heightmap.climate().randomSeed(), this.levels);
         this.filters = new TerrainFilters(this);
         this.lookup = new WorldLookup(this);
     }
@@ -50,6 +56,9 @@ public class GeneratorContext implements AutoCloseable {
 	@Override
 	public void close() {
 		this.biomeSurfaceEnvelope.clear();
+		if (this.rawChunkCache != null) {
+			this.rawChunkCache.clear();
+		}
 		this.heightmap.close();
 	}
 }

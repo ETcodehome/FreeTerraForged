@@ -478,8 +478,16 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 		long t0 = perfActive ? System.nanoTime() : 0L;
 		try {
 			WorldgenRuntimeBinding.State stage = this.requireState(WorldgenFacet.SURFACE);
+			long tRules0 = perfActive ? System.nanoTime() : 0L;
 			super.buildSurface(region, structureManager, randomState, chunk);
+			long tRules1 = perfActive ? System.nanoTime() : 0L;
 			stage.surfaceColumns().apply(region, this, chunk, stage.possibleBiomes());
+			long tCols1 = perfActive ? System.nanoTime() : 0L;
+			if (perfActive) {
+				WorldgenPerfTracker.ThreadStats ts = WorldgenPerfTracker.stats();
+				ts.surfaceRulesNanos += (tRules1 - tRules0);
+				ts.surfaceColumnsNanos += (tCols1 - tRules1);
+			}
 		} finally {
 			if (perfActive) {
 				WorldgenPerfTracker.recordStage(

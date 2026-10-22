@@ -80,7 +80,13 @@ class MixinSurfaceSystem {
 		if ((Object) randomState instanceof FTFRandomState ftfRandomState) {
 			GeneratorContext genCtx = ftfRandomState.generatorContext();
 			if (genCtx != null) {
-				this.freeterraforged$placeRiverWater(chunk, biomeManager, genCtx, noiseChunk);
+				if (!WorldgenPerfTracker.ACTIVE) {
+					this.freeterraforged$placeRiverWater(chunk, biomeManager, genCtx, noiseChunk);
+				} else {
+					long t0 = System.nanoTime();
+					this.freeterraforged$placeRiverWater(chunk, biomeManager, genCtx, noiseChunk);
+					WorldgenPerfTracker.stats().surfaceRiverWaterNanos += (System.nanoTime() - t0);
+				}
 			}
 		}
 	}

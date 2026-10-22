@@ -86,14 +86,12 @@ public class ScreeFeature extends Feature<Config> {
             etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap heightmap = generatorContext.heightmap;
             Levels levels = heightmap.levels();
 
-            long worldSeed = heightmap.climate().randomSeed();
-            Noise rand = Noises.white((int) worldSeed, 1);
-
-            Noise clusterNoise = Noises.perlin((int) (worldSeed + 7777), 2, 1);
-            Noise warpX = Noises.perlin((int) (worldSeed + 1001), 2, 1);
-            Noise warpZ = Noises.perlin((int) (worldSeed + 2002), 2, 1);
-
-            Noise desertErosionVariance = makeDesertErosionVariance(levels);
+            ScreeNoises noises = generatorContext.screeNoises;
+            Noise rand = noises != null ? noises.rand : Noises.white((int) heightmap.climate().randomSeed(), 1);
+            Noise clusterNoise = noises != null ? noises.clusterNoise : Noises.perlin((int) (heightmap.climate().randomSeed() + 7777), 2, 1);
+            Noise warpX = noises != null ? noises.warpX : Noises.perlin((int) (heightmap.climate().randomSeed() + 1001), 2, 1);
+            Noise warpZ = noises != null ? noises.warpZ : Noises.perlin((int) (heightmap.climate().randomSeed() + 2002), 2, 1);
+            Noise desertErosionVariance = noises != null ? noises.desertErosionVariance : makeDesertErosionVariance(levels);
             BlockPos.MutableBlockPos pos = new MutableBlockPos();
             Config config = placeContext.config();
             IChunkCellsHolder cellsHolder = chunk instanceof IChunkCellsHolder h ? h : null;
@@ -116,7 +114,7 @@ public class ScreeFeature extends Feature<Config> {
                     }
 
                     if(surfaceY <= scaledY && surfaceY >= generator.getSeaLevel() - 1 && !biome.is(Biomes.WOODED_BADLANDS) && !biome.is(Biomes.BADLANDS)) {
-                        if (cell.gradient == 0.0F) {
+                        if (chunkCells == null && cell.gradient == 0.0F) {
                             generatorContext.lookup.computeSteepness(cell, worldX, worldZ);
                         }
                         erodeColumn(config, levels, rand, clusterNoise, warpX, warpZ, generator, chunk, cell, pos, surfaceY);
