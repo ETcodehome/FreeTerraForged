@@ -21,12 +21,6 @@ import net.minecraft.world.level.levelgen.Noises;
 import net.minecraft.world.level.levelgen.OreVeinifier;
 import net.minecraft.world.level.levelgen.synth.NormalNoise;
 import etcodehome.freeterraforged.FTFCommon;
-import etcodehome.freeterraforged.data.worldgen.preset.settings.CaveSettings;
-import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
-import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
-import etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeBanding;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.FTFDensityFunctions;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 
 public class PresetNoiseRouterData {
@@ -34,14 +28,9 @@ public class PresetNoiseRouterData {
 	public static final ResourceKey<DensityFunction> GRADIENT = createKey("gradient");
 	public static final ResourceKey<DensityFunction> HEIGHT_EROSION = createKey("erosion");
 	public static final ResourceKey<DensityFunction> SEDIMENT = createKey("sediment");
-	private static final ResourceKey<DensityFunction> VANILLA_SHIFT_X = createMinecraftKey("shift_x");
-	private static final ResourceKey<DensityFunction> VANILLA_SHIFT_Z = createMinecraftKey("shift_z");
 	
 	private static final float SCALER = 128.0F;
 	private static final float UNIT = 1.0F / SCALER;
-	private static final double SURFACE_CLIMATE_DEPTH = 0.03D;
-	private static final double UNDERGROUND_CLIMATE_DEPTH = 0.125D;
-	private static final double UNDERGROUND_EROSION_VARIATION = 0.25D;
 	
     public static void bootstrap(Preset preset, BootstrapContext<DensityFunction> ctx) {
         HolderGetter<DensityFunction> densityFunctions = ctx.lookup(Registries.DENSITY_FUNCTION);
@@ -94,10 +83,6 @@ public class PresetNoiseRouterData {
         DensityFunction ridges = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.RIDGES);
         DensityFunction initialDensity = NoiseRouterData.noiseGradientDensity(DensityFunctions.cache2d(factor), depth);
         DensityFunction slopedCheese = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.SLOPED_CHEESE);
-//        DensityFunction entrances = DensityFunctions.min(slopedCheese, DensityFunctions.mul(DensityFunctions.constant(5.0), NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.ENTRANCES)));
-//        DensityFunction slopedCheeseCaves = DensityFunctions.rangeChoice(slopedCheese, -1000000.0, 1.5625, entrances, NoiseRouterData.underground(densityFunctions, noiseParams, slopedCheese));
-//        DensityFunction finalDensity = DensityFunctions.min(NoiseRouterData.postProcess(slideOverworld(slopedCheeseCaves, -worldDepth)), NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.NOODLE));
-
         DensityFunction entrances = caves.entranceCaveProbability > 0.0F ? DensityFunctions.min(slopedCheese, DensityFunctions.mul(DensityFunctions.constant(5.0D), DensityFunctions.interpolated(NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.ENTRANCES)))) : slopedCheese;
 
         DensityFunction slopedCheeseRange = DensityFunctions.mul(DensityFunctions.rangeChoice(slopedCheese, -1000000.0D, cheeseCaveDepthOffset, entrances, DensityFunctions.interpolated(slideOverworld(underground(caves.cheeseCaveProbability, densityFunctions, noiseParams, slopedCheese), -worldDepth))), DensityFunctions.constant(0.64)).squeeze();
@@ -112,65 +97,6 @@ public class PresetNoiseRouterData {
         DensityFunction oreGap = DensityFunctions.noise(noiseParams.getOrThrow(Noises.ORE_GAP));
         return new NoiseRouter(aquiferBarrier, aquiferFluidLevelFloodedness, aquiferFluidLevelSpread, aquiferLava, temperature, vegetation, continents, erosion, depth, ridges, slideOverworld(DensityFunctions.add(initialDensity, DensityFunctions.constant(UNIT * -90)).clamp(-64.0, 64.0), -worldDepth), finalDensity, oreVeininess, oreVein, oreGap);
 	}
-
-    private static DensityFunction blendClimateAxis(DensityFunction depth, DensityFunction surface, DensityFunction underground) {
-        double transitionRange = UNDERGROUND_CLIMATE_DEPTH - SURFACE_CLIMATE_DEPTH;
-        DensityFunction alpha = DensityFunctions.mul(
-            DensityFunctions.add(depth, DensityFunctions.constant(-SURFACE_CLIMATE_DEPTH)),
-            DensityFunctions.constant(1.0D / transitionRange)
-        ).clamp(0.0D, 1.0D);
-        return DensityFunctions.lerp(alpha, surface, underground);
-    }
-
-    private static DensityFunction terrainAlignedUndergroundContinentalness(
-        WorldSettings worldSettings,
-        DensityFunction surfaceContinents,
-        DensityFunction vanillaContinents
-    ) {
-        double squeezeLimit = 11.0D / 24.0D;
-        DensityFunction unitNoise = DensityFunctions.mul(
-            DensityFunctions.add(vanillaContinents.squeeze(), DensityFunctions.constant(squeezeLimit)),
-            DensityFunctions.constant(1.0D / (squeezeLimit * 2.0D))
-        );
-        DensityFunction inland = DensityFunctions.add(
-            DensityFunctions.constant(-0.11D),
-            DensityFunctions.mul(DensityFunctions.constant(1.11D), unitNoise.square())
-        );
-        return blendCoastToInland(worldSettings, surfaceContinents, inland);
-    }
-
-    private static DensityFunction terrainAlignedUndergroundErosion(
-        WorldSettings worldSettings,
-        DensityFunction terrainErosion,
-        DensityFunction vanillaErosion
-    ) {
-        DensityFunction landErosion = DensityFunctions.add(
-            terrainErosion,
-            DensityFunctions.mul(DensityFunctions.constant(UNDERGROUND_EROSION_VARIATION), vanillaErosion)
-        );
-        return blendCoastToInland(worldSettings, vanillaErosion, landErosion);
-    }
-
-    private static DensityFunction blendCoastToInland(
-        WorldSettings worldSettings,
-        DensityFunction coast,
-        DensityFunction inland
-    ) {
-        WorldSettings.ControlPoints controlPoints = worldSettings.controlPoints;
-        double transitionRange = controlPoints.inland - controlPoints.beach;
-        DensityFunction alpha = DensityFunctions.mul(
-            DensityFunctions.add(
-                FTFDensityFunctions.cell(CellSampler.Field.CONTINENT_EDGE),
-                DensityFunctions.constant(-controlPoints.beach)
-            ),
-            DensityFunctions.constant(1.0D / transitionRange)
-        ).clamp(0.0D, 1.0D);
-        return DensityFunctions.lerp(
-            alpha,
-            coast,
-            inland
-        );
-    }
 
     private static DensityFunction underground(float cheeseCaveProbability, HolderGetter<DensityFunction> densityFunctions, HolderGetter<NormalNoise.NoiseParameters> noiseParams, DensityFunction slopedCheese) {
         DensityFunction spaghetti2d = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.SPAGHETTI_2D);
