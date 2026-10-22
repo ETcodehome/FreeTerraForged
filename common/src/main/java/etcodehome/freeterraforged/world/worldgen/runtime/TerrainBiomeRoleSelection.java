@@ -15,6 +15,7 @@ import etcodehome.freeterraforged.concurrent.Resource;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeSurfaceProtection;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
 import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 
 final class TerrainBiomeRoleSelection {
@@ -48,25 +49,22 @@ final class TerrainBiomeRoleSelection {
 			) > 0.0F) {
 			return selected;
 		}
-		try (Resource<Cell> resource = Cell.getResource()) {
-			Cell cell = resource.get().reset();
-			boolean perfActive = WorldgenPerfTracker.isActive();
-			WorldgenPerfTracker.ThreadStats ts = perfActive ? WorldgenPerfTracker.threadStats() : null;
-			WorldgenPerfTracker.ApplyCellCaller prevCaller = null;
-			if (ts != null) {
-				prevCaller = ts.currentCaller;
-				ts.currentCaller = WorldgenPerfTracker.ApplyCellCaller.TERRAIN_ROLE_RIVER;
-			}
-			try {
-				context.lookup.applyCell(
-					cell, QuartPos.toBlock(quartX), QuartPos.toBlock(quartZ), false
-				);
-			} finally {
-				if (ts != null) {
-					ts.currentCaller = prevCaller;
-				}
-			}
+		boolean perfActive = WorldgenPerfTracker.isActive();
+		WorldgenPerfTracker.ThreadStats ts = perfActive ? WorldgenPerfTracker.threadStats() : null;
+		WorldgenPerfTracker.ApplyCellCaller prevCaller = null;
+		if (ts != null) {
+			prevCaller = ts.currentCaller;
+			ts.currentCaller = WorldgenPerfTracker.ApplyCellCaller.TERRAIN_ROLE_RIVER;
+		}
+		try {
+			Cell cell = CellSampler.getCachedOrLookup(
+				context.lookup, QuartPos.toBlock(quartX), QuartPos.toBlock(quartZ), false
+			);
 			return cell.terrain.isRiver() ? riverCandidates.findValue(result.target()) : selected;
+		} finally {
+			if (ts != null) {
+				ts.currentCaller = prevCaller;
+			}
 		}
 	}
 

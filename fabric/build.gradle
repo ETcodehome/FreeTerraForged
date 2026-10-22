@@ -34,7 +34,7 @@ loom {
             vmArg "-Xmx4G"
             vmArg "-Djava.awt.headless=true"
             vmArg "-Dfreeterraforged.benchmark.auto=true"
-            vmArg "-Dfreeterraforged.benchmark.radius=${project.findProperty('ftfBenchmarkRadius') ?: '5'}"
+            vmArg "-Dfreeterraforged.benchmark.radius=${project.findProperty('ftfBenchmarkRadius') ?: '10'}"
             vmArg "-Dfreeterraforged.benchmark.x=${project.findProperty('ftfBenchmarkX') ?: '100000'}"
             vmArg "-Dfreeterraforged.benchmark.z=${project.findProperty('ftfBenchmarkZ') ?: '100000'}"
             vmArg "-Dfreeterraforged.benchmark.exit=true"

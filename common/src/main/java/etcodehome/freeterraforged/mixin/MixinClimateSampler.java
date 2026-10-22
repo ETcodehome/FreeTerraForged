@@ -66,6 +66,9 @@ class MixinClimateSampler {
 					return cached;
 				}
 			}
+			if (UndergroundBiomeClimatePolicy.isSkippingBanding()) {
+				return original.call(x, y, z);
+			}
 
 			Climate.TargetPoint target = UndergroundBiomeClimatePolicy.apply(
 				(Climate.Sampler) (Object) this,

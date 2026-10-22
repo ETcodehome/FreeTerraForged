@@ -12,6 +12,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import etcodehome.freeterraforged.FTFCommon;
+import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
+import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
+import etcodehome.freeterraforged.world.worldgen.cell.Cell;
+import etcodehome.freeterraforged.world.worldgen.util.PosUtil;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -50,14 +54,48 @@ public final class WorldgenBenchmarkRunner {
         return activeBenchmark != null;
     }
 
+    public static final int DEFAULT_RADIUS = 10;
+
     /**
-     * Starts a benchmark at a fresh deterministic coordinate offset (default radius 6 -> 13x13 = 169 chunks).
+     * Starts a benchmark at a fresh deterministic CONTINENT_CENTER coordinate offset
+     * (default radius 10 -> 21x21 = 441 FULL chunks).
      */
     public static boolean startDefaultBenchmark(CommandSourceStack source, int radius) {
         int runIndex = AUTO_OFFSET_COUNTER.getAndIncrement();
-        int targetX = 100_000 + runIndex * 50_000;
-        int targetZ = 100_000 + runIndex * 50_000;
-        return startBenchmark(source, radius, targetX, targetZ, false);
+        int probeX = 100_000 + runIndex * 50_000;
+        int probeZ = 100_000 + runIndex * 50_000;
+        ServerPlayer player = source.getPlayer();
+        ServerLevel level = player != null ? (ServerLevel) player.getCommandSenderWorld() : source.getServer().overworld();
+        BlockPos center = resolveContinentCenter(level, probeX, probeZ);
+        return startBenchmark(source, radius, center.getX(), center.getZ(), false);
+    }
+
+    /**
+     * Uses {@code SpawnType.CONTINENT_CENTER} logic ({@code continent().getNearestCenter(x, z)})
+     * starting from {@code (probeX, probeZ)} and verifies the resolved center is inland and above water.
+     */
+    public static BlockPos resolveContinentCenter(ServerLevel level, int probeX, int probeZ) {
+        if ((Object) level.getChunkSource().randomState() instanceof FTFRandomState ftfRandomState) {
+            GeneratorContext ctx = ftfRandomState.generatorContext();
+            if (ctx != null) {
+                Cell cell = new Cell();
+                float inlandThreshold = ctx.heightmap.controlPoints().inland;
+                for (int attempt = 0; attempt < 32; attempt++) {
+                    float searchX = probeX + attempt * 10_000.0F;
+                    float searchZ = probeZ + attempt * 10_000.0F;
+                    long packedCenter = ctx.heightmap.continent().getNearestCenter(searchX, searchZ);
+                    int cx = PosUtil.unpackLeft(packedCenter);
+                    int cz = PosUtil.unpackRight(packedCenter);
+                    ctx.lookup.applyCell(cell.reset(), cx, cz, false, false);
+                    if (cell.continentEdge >= inlandThreshold && cell.height > ctx.levels.water && !cell.terrain.isSubmerged()) {
+                        return new BlockPos(cx, ctx.levels.scale(cell.height), cz);
+                    }
+                }
+                long fallback = ctx.heightmap.continent().getNearestCenter(probeX, probeZ);
+                return new BlockPos(PosUtil.unpackLeft(fallback), 0, PosUtil.unpackRight(fallback));
+            }
+        }
+        return new BlockPos(probeX, 0, probeZ);
     }
 
     public static boolean startBenchmark(
@@ -71,9 +109,24 @@ public final class WorldgenBenchmarkRunner {
             source.sendFailure(Component.literal("[FTF-Perf] A benchmark is already in progress."));
             return false;
         }
-        int clampedRadius = Math.max(1, Math.min(radius, 24));
+        int clampedRadius = Math.max(1, Math.min(radius, 32));
         ServerPlayer player = source.getPlayer();
         ServerLevel level = player != null ? (ServerLevel) player.getCommandSenderWorld() : source.getServer().overworld();
+
+        long worldSeed = level.getSeed();
+        String terrainInfo = "unknown";
+        if ((Object) level.getChunkSource().randomState() instanceof FTFRandomState ftfRandomState
+                && ftfRandomState.generatorContext() != null) {
+            GeneratorContext ctx = ftfRandomState.generatorContext();
+            Cell centerCell = new Cell();
+            ctx.lookup.applyCell(centerCell.reset(), blockX, blockZ, false, false);
+            terrainInfo = String.format(
+                "terrain=%s, continentEdge=%.3f, surfaceY=%d",
+                centerCell.terrain.getName(),
+                centerCell.continentEdge,
+                ctx.levels.scale(centerCell.height)
+            );
+        }
 
         // Teleport player if invoked by a player so client/server chunk tracking moves to the fresh coordinates
         if (player != null) {
@@ -87,8 +140,8 @@ public final class WorldgenBenchmarkRunner {
             int safeY = Math.max(level.getSeaLevel() + 2, Math.min(315, surfaceY + 3));
             player.teleportTo(level, blockX + 0.5D, safeY, blockZ + 0.5D, player.getYRot(), player.getXRot());
             source.sendSystemMessage(Component.literal(String.format(
-                "[FTF-Perf] Teleported to (%d, %d, %d) for fresh chunk generation.",
-                blockX, safeY, blockZ
+                "[FTF-Perf] Teleported to (%d, %d, %d) [%s] for fresh chunk generation.",
+                blockX, safeY, blockZ, terrainInfo
             )));
         }
 
@@ -98,8 +151,8 @@ public final class WorldgenBenchmarkRunner {
         int totalChunks = diameter * diameter;
 
         String startMsg = String.format(
-            "[FTF-Perf] Starting benchmark: radius=%d (%dx%d = %d FULL chunks) centered at block (%d, %d) [chunk (%d, %d)]...",
-            clampedRadius, diameter, diameter, totalChunks, blockX, blockZ, centerChunkX, centerChunkZ
+            "[FTF-Perf] Starting benchmark: seed=%d, radius=%d (%dx%d = %d FULL chunks) at block (%d, %d) [chunk (%d, %d), %s]...",
+            worldSeed, clampedRadius, diameter, diameter, totalChunks, blockX, blockZ, centerChunkX, centerChunkZ, terrainInfo
         );
         source.sendSystemMessage(Component.literal(startMsg));
         FTFCommon.LOGGER.info(startMsg);
@@ -134,6 +187,8 @@ public final class WorldgenBenchmarkRunner {
             clampedRadius,
             blockX,
             blockZ,
+            worldSeed,
+            terrainInfo,
             startWallNanos,
             shutdownOnComplete
         );
@@ -151,17 +206,19 @@ public final class WorldgenBenchmarkRunner {
         if (!autoBenchmarkTriggered && Boolean.getBoolean("freeterraforged.benchmark.auto")) {
             if (server.getTickCount() >= 20) {
                 autoBenchmarkTriggered = true;
-                int radius = Integer.getInteger("freeterraforged.benchmark.radius", 6);
-                int x = Integer.getInteger("freeterraforged.benchmark.x", 100_000);
-                int z = Integer.getInteger("freeterraforged.benchmark.z", 100_000);
+                int radius = Integer.getInteger("freeterraforged.benchmark.radius", DEFAULT_RADIUS);
+                int probeX = Integer.getInteger("freeterraforged.benchmark.x", 100_000);
+                int probeZ = Integer.getInteger("freeterraforged.benchmark.z", 100_000);
                 boolean exitOnComplete = Boolean.parseBoolean(
                     System.getProperty("freeterraforged.benchmark.exit", "true")
                 );
+                ServerLevel overworld = server.overworld();
+                BlockPos center = resolveContinentCenter(overworld, probeX, probeZ);
                 FTFCommon.LOGGER.info(
-                    "[FTF-Perf] Auto-benchmark triggered via JVM properties (radius={}, x={}, z={}, exit={})",
-                    radius, x, z, exitOnComplete
+                    "[FTF-Perf] Auto-benchmark triggered via JVM properties (seed={}, radius={}, probe=({}, {}), resolvedContinentCenter=({}, {}), exit={})",
+                    overworld.getSeed(), radius, probeX, probeZ, center.getX(), center.getZ(), exitOnComplete
                 );
-                startBenchmark(server.createCommandSourceStack(), radius, x, z, exitOnComplete);
+                startBenchmark(server.createCommandSourceStack(), radius, center.getX(), center.getZ(), exitOnComplete);
             }
         }
 
@@ -207,8 +264,8 @@ public final class WorldgenBenchmarkRunner {
         }
 
         String header = String.format(
-            "Benchmark Target: radius=%d (%d FULL chunks) at block (%d, %d)",
-            current.radius, total, current.blockX, current.blockZ
+            "Seed=%d | Target: radius=%d (%d FULL chunks) at CONTINENT_CENTER (%d, %d) [%s]",
+            current.worldSeed, current.radius, total, current.blockX, current.blockZ, current.terrainInfo
         );
         String report = WorldgenPerfTracker.buildReport(header, total, total);
 
@@ -275,6 +332,8 @@ public final class WorldgenBenchmarkRunner {
         final int radius;
         final int blockX;
         final int blockZ;
+        final long worldSeed;
+        final String terrainInfo;
         final long startWallNanos;
         final boolean shutdownOnComplete;
         long lastProgressLogNanos;
@@ -287,6 +346,8 @@ public final class WorldgenBenchmarkRunner {
             int radius,
             int blockX,
             int blockZ,
+            long worldSeed,
+            String terrainInfo,
             long startWallNanos,
             boolean shutdownOnComplete
         ) {
@@ -297,6 +358,8 @@ public final class WorldgenBenchmarkRunner {
             this.radius = radius;
             this.blockX = blockX;
             this.blockZ = blockZ;
+            this.worldSeed = worldSeed;
+            this.terrainInfo = terrainInfo;
             this.startWallNanos = startWallNanos;
             this.shutdownOnComplete = shutdownOnComplete;
             this.lastProgressLogNanos = startWallNanos;

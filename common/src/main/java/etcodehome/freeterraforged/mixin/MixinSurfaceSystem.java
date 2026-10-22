@@ -11,6 +11,7 @@ import etcodehome.freeterraforged.world.worldgen.IChunkCellsHolder;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.river.RiverCarverSettings;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
 import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 import etcodehome.freeterraforged.world.worldgen.surface.FTFSurfaceSystem;
 import etcodehome.freeterraforged.world.worldgen.surface.rule.StrataRule;
@@ -119,8 +120,10 @@ class MixinSurfaceSystem {
 		java.util.function.BiFunction<Integer, Integer, Cell> cellGetter = (gx, gz) -> {
 			int lx = gx - minBlockX;
 			int lz = gz - minBlockZ;
-			if (chunkCells != null && lx >= 0 && lx < 16 && lz >= 0 && lz < 16) {
-				return chunkCells[lz * 16 + lx];
+			if (chunkCells != null && lx >= -1 && lx <= 16 && lz >= -1 && lz <= 16
+					&& (chunkCells.length >= etcodehome.freeterraforged.world.worldgen.cell.filter.ChunkFilterGrid.HOLDER_ARRAY_LENGTH
+						|| (lx >= 0 && lx < 16 && lz >= 0 && lz < 16))) {
+				return etcodehome.freeterraforged.world.worldgen.cell.filter.ChunkFilterGrid.getPaddedCell(chunkCells, lx, lz);
 			}
 			boolean perfActive = WorldgenPerfTracker.isActive();
 			WorldgenPerfTracker.ThreadStats ts = perfActive ? WorldgenPerfTracker.threadStats() : null;
@@ -130,13 +133,12 @@ class MixinSurfaceSystem {
 				ts.currentCaller = WorldgenPerfTracker.ApplyCellCaller.SURFACE_RIVER;
 			}
 			try {
-				genCtx.lookup.applyCell(neighborScratch.reset(), gx, gz, false, false);
+				return CellSampler.getCachedOrLookup(genCtx.lookup, gx, gz, false);
 			} finally {
 				if (ts != null) {
 					ts.currentCaller = prevCaller;
 				}
 			}
-			return neighborScratch;
 		};
 
 		var levels = genCtx.heightmap.levels();

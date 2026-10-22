@@ -72,9 +72,11 @@ public class FTFCommands {
                                         }))))
                 .then(Commands.literal("benchmark")
                         .executes(context -> {
-                            return WorldgenBenchmarkRunner.startDefaultBenchmark(context.getSource(), 6) ? 1 : 0;
+                            return WorldgenBenchmarkRunner.startDefaultBenchmark(
+                                context.getSource(), WorldgenBenchmarkRunner.DEFAULT_RADIUS
+                            ) ? 1 : 0;
                         })
-                        .then(Commands.argument("radius", IntegerArgumentType.integer(1, 24))
+                        .then(Commands.argument("radius", IntegerArgumentType.integer(1, 32))
                                 .executes(context -> {
                                     int radius = IntegerArgumentType.getInteger(context, "radius");
                                     return WorldgenBenchmarkRunner.startDefaultBenchmark(context.getSource(), radius) ? 1 : 0;

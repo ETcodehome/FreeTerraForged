@@ -194,14 +194,14 @@ class MixinNoiseChunk implements IChunkCellsHolder {
 					prevCaller = ts.currentCaller;
 					ts.currentCaller = WorldgenPerfTracker.ApplyCellCaller.AQUIFER;
 				}
+				float continentEdge;
 				try {
-					generatorContext.lookup.applyCell(scratchCell.reset(), x, z, false, false);
+					continentEdge = CellSampler.getCachedOrLookup(generatorContext.lookup, x, z, false).continentEdge;
 				} finally {
 					if (ts != null) {
 						ts.currentCaller = prevCaller;
 					}
 				}
-				float continentEdge = scratchCell.continentEdge;
 
 				if (continentEdge <= shallowOceanCP) {
 					effectiveLava = oceanLavaLevel;
