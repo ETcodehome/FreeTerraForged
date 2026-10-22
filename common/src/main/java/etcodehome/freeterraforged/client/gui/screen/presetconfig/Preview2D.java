@@ -134,6 +134,10 @@ public class Preview2D extends Button implements IPreviewHandler {
             } else {
                 int biomeColor = biomes == null ? 0xFFFF00FF : biomes.color(bx, bz);
                 color = mode.getColor(cell, levels, biomeColor);
+                if (mode == RenderMode.BIOME && biomes != null
+                    && this.page.showBiomeOverrides() && biomes.hatchAt(bx, bz)) {
+                    color = BiomePreviewColors.hatch(color);
+                }
             }
             pixels[bz * tileWidth + bx] = color;
         });
@@ -216,6 +220,7 @@ public class Preview2D extends Button implements IPreviewHandler {
         renderSpawnMarker(guiGraphics);
         updateLegend(mx, my);
         renderLegend(guiGraphics, mx, my, this.state.legendLabels, this.state.legendValues, xPos, yPos + this.width + 30, 10, 0xFFFFFF);
+        renderOverrideDetails(guiGraphics, mx, my);
     }
 
     private void renderSpawnMarker(GuiGraphics guiGraphics) {
@@ -269,6 +274,13 @@ public class Preview2D extends Button implements IPreviewHandler {
                 Cell cell = this.state.tile.lookup(ix, iz);
                 this.state.legendValues[1] = IPreviewHandler.getTerrainName(cell);
                 String biomeId = this.state.biomes == null ? null : this.state.biomes.id(ix, iz);
+                this.state.hoveredOverrideDetails = getRenderMode() == RenderMode.BIOME
+                        && this.page.showBiomeOverrides() && this.state.biomes != null
+                        ? this.state.biomes.overrideDetails(ix, iz)
+                        : java.util.List.of();
+                if (biomeId != null && !this.state.hoveredOverrideDetails.isEmpty()) {
+                    biomeId += " [override]";
+                }
                 PreviewDetails.Detail detail = PreviewDetails.forCell(
                         getRenderMode(), cell, levels, biomeId
                 );
@@ -285,6 +297,7 @@ public class Preview2D extends Button implements IPreviewHandler {
                 return true;
             } else {
                 this.state.hoveredCoords = "";
+                this.state.hoveredOverrideDetails = java.util.List.of();
             }
         }
         return false;

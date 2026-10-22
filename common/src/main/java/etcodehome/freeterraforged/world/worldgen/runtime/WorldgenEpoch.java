@@ -18,6 +18,7 @@ public record WorldgenEpoch(
 	long resourceRevision,
 	String resourceLayerFingerprint,
 	TagEpoch tagEpoch,
+	BiomeReplacementConfigSnapshot biomeReplacementConfig,
 	WorldgenContributionRevision.Snapshot contributionRevision
 ) implements WorldgenOwner {
 	public WorldgenEpoch {
@@ -31,6 +32,9 @@ public record WorldgenEpoch(
 		}
 		resourceLayerFingerprint = Objects.requireNonNull(resourceLayerFingerprint, "resourceLayerFingerprint");
 		tagEpoch = Objects.requireNonNull(tagEpoch, "tagEpoch");
+		biomeReplacementConfig = Objects.requireNonNull(
+			biomeReplacementConfig, "biomeReplacementConfig"
+		);
 		contributionRevision = Objects.requireNonNull(contributionRevision, "contributionRevision");
 		if (!contributionRevision.dimension().equals(dimension.location())) {
 			throw new IllegalArgumentException("Contribution revision belongs to a different dimension");
@@ -46,12 +50,13 @@ public record WorldgenEpoch(
 		long resourceRevision,
 		String resourceLayerFingerprint,
 		TagEpoch tagEpoch,
+		BiomeReplacementConfigSnapshot biomeReplacementConfig,
 		WorldgenContributionRevision.Snapshot contributionRevision
 	) {
 		return new WorldgenEpoch(
 			UUID.randomUUID(), dimension, seed, registries.freeze(), selectedStem,
 			settingsIdentity, resourceRevision, resourceLayerFingerprint, tagEpoch,
-			contributionRevision
+			biomeReplacementConfig, contributionRevision
 		);
 	}
 
@@ -69,6 +74,7 @@ public record WorldgenEpoch(
 		requireSameOwner(previous);
 		return this.resourceRevision > previous.resourceRevision
 			|| this.tagEpoch.sequence() > previous.tagEpoch.sequence()
+			|| this.biomeReplacementConfig.revision() > previous.biomeReplacementConfig.revision()
 			|| this.contributionRevision.strictlyAdvances(previous.contributionRevision);
 	}
 
@@ -76,6 +82,7 @@ public record WorldgenEpoch(
 		requireSameOwner(previous);
 		return this.resourceRevision < previous.resourceRevision
 			|| this.tagEpoch.sequence() < previous.tagEpoch.sequence()
+			|| this.biomeReplacementConfig.revision() < previous.biomeReplacementConfig.revision()
 			|| this.contributionRevision.regressesFrom(previous.contributionRevision);
 	}
 
@@ -90,16 +97,18 @@ public record WorldgenEpoch(
 		long replacementResourceRevision,
 		String replacementResourceLayerFingerprint,
 		TagEpoch replacementTags,
+		BiomeReplacementConfigSnapshot replacementBiomeConfig,
 		WorldgenContributionRevision.Snapshot replacementContributions
 	) {
 		Objects.requireNonNull(replacementResourceLayerFingerprint, "replacementResourceLayerFingerprint");
 		Objects.requireNonNull(replacementTags, "replacementTags");
+		Objects.requireNonNull(replacementBiomeConfig, "replacementBiomeConfig");
 		Objects.requireNonNull(replacementContributions, "replacementContributions");
 		WorldgenEpoch replacement = new WorldgenEpoch(
 			this.id, this.dimension, this.seed, this.registries, this.selectedStem,
 			this.settingsIdentity, replacementResourceRevision,
 			replacementResourceLayerFingerprint, replacementTags,
-			replacementContributions
+			replacementBiomeConfig, replacementContributions
 		);
 		if (!replacement.inputRevisionStrictlyAdvances(this)) {
 			throw new IllegalArgumentException("Replacement worldgen inputs do not advance this epoch");

@@ -13,6 +13,13 @@ dependencies {
 	modCompileOnly "maven.modrinth:biolith:3.0.14-neoforge"
 	modCompileOnly "maven.modrinth:lithostitched:1.8.0+beta6-neoforge-21.1"
 	compileOnly "dev.architectury:architectury-injectables:1.0.13"
+
+	testImplementation platform("org.junit:junit-bom:5.11.4")
+	testImplementation "org.junit.jupiter:junit-jupiter"
+}
+
+tasks.named("test", Test) {
+	useJUnitPlatform()
 }
 
 repositories {

@@ -2,11 +2,15 @@ package etcodehome.freeterraforged.client.gui.screen.presetconfig;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.function.BooleanSupplier;
 
 import net.minecraft.core.Holder;
+import net.minecraft.core.QuartPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.WorldDataConfiguration;
@@ -18,6 +22,9 @@ import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.biome.BiomePreviewResolver;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
+import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementConfig;
+import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementConfigSnapshot;
+import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementPlan;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenContributionRevision;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenProviderCatalog;
 
@@ -52,6 +59,7 @@ final class BiomePreview implements AutoCloseable {
 			cacheKey.settingsIdentity(),
             cacheKey.dataConfiguration().toString(),
 				cacheKey.tagFingerprint(),
+				cacheKey.biomeReplacementConfig(),
 				cacheKey.contributionRevision(),
 				cacheKey.providers(),
 				cancelled
@@ -69,9 +77,14 @@ final class BiomePreview implements AutoCloseable {
     ) {
         int size = tile.getBlockSize().size();
         short[] indices = new short[size * size];
+        short[] overrideIndices = new short[size * size];
+        byte[] hatchPhases = new byte[size * size];
         ArrayList<String> palette = new ArrayList<>();
+        ArrayList<OverrideInfo> overrides = new ArrayList<>();
+        overrides.add(null);
         int[] paletteColors = new int[32];
         IdentityHashMap<Holder<Biome>, Entry> entries = new IdentityHashMap<>();
+        Map<OverrideKey, Integer> overrideEntries = new HashMap<>();
         BiomePreviewResolver.ResolvedTile resolved = this.resolver.resolveSurfaceTile(
             tile, centerX, centerZ, zoom, levels, cancelled
         );
@@ -80,7 +93,8 @@ final class BiomePreview implements AutoCloseable {
             checkCancelled(cancelled);
             int rowOffset = z * size;
             for (int x = 0; x < size; x++) {
-                Holder<Biome> biome = resolved.biomeAt(x, z);
+                BiomeReplacementPlan.PreviewSelection selection = resolved.selectionAt(x, z);
+                Holder<Biome> biome = selection.finalBiome();
 
                 Entry entry = entries.get(biome);
                 if (entry == null) {
@@ -98,13 +112,52 @@ final class BiomePreview implements AutoCloseable {
                     throw new IllegalStateException("Preview biome palette exceeds its 65,536-entry index space");
                 }
                 indices[index] = (short) entry.paletteIndex();
+                if (selection.overrideKind() != BiomeReplacementPlan.OverrideKind.NONE) {
+                    OverrideKey overrideKey = new OverrideKey(
+                        selection.preReplacementBiome(), selection.finalBiome(),
+                        selection.overrideKind(), selection.rule()
+                    );
+                    int overrideIndex = overrideEntries.computeIfAbsent(overrideKey, ignored -> {
+                        ResourceLocation sourceId = selection.preReplacementBiome().unwrapKey()
+                            .map(ResourceKey::location).orElse(UNREGISTERED);
+                        ResourceLocation targetId = selection.finalBiome().unwrapKey()
+                            .map(ResourceKey::location).orElse(UNREGISTERED);
+                        String selector = selection.rule().selectorKind()
+                            == BiomeReplacementConfig.SelectorKind.TAG
+                                ? "#" + selection.rule().selector()
+                                : selection.rule().selector();
+                        overrides.add(new OverrideInfo(
+                            selection.overrideKind(), sourceId.toString(), targetId.toString(),
+                            selection.rule().index(), selection.rule().line(), selector
+                        ));
+                        return overrides.size() - 1;
+                    });
+                    if (overrideIndex > 0xFFFF) {
+                        throw new IllegalStateException(
+                            "Preview override palette exceeds its 65,535-entry index space"
+                        );
+                    }
+                    overrideIndices[index] = (short) overrideIndex;
+                    int worldX = Math.addExact(
+                        centerX, Math.multiplyExact(x - size / 2, zoom)
+                    );
+                    int worldZ = Math.addExact(
+                        centerZ, Math.multiplyExact(z - size / 2, zoom)
+                    );
+                    int gridX = QuartPos.fromBlock(worldX);
+                    int gridZ = QuartPos.fromBlock(worldZ);
+                    hatchPhases[index] = (byte) Math.floorMod(gridX + gridZ, 4);
+                }
             }
         }
         return new Sidecar(
             size,
             palette.toArray(String[]::new),
             indices,
-            Arrays.copyOf(paletteColors, palette.size())
+            Arrays.copyOf(paletteColors, palette.size()),
+            overrideIndices,
+            hatchPhases,
+            overrides.toArray(OverrideInfo[]::new)
         );
     }
 
@@ -145,12 +198,53 @@ final class BiomePreview implements AutoCloseable {
     private record Entry(int paletteIndex, int color) {
     }
 
+    private record OverrideKey(
+        Holder<Biome> source,
+        Holder<Biome> target,
+        BiomeReplacementPlan.OverrideKind kind,
+        BiomeReplacementPlan.RuleInfo rule
+    ) {
+    }
+
+    record OverrideInfo(
+        BiomeReplacementPlan.OverrideKind kind,
+        String source,
+        String target,
+        int ruleIndex,
+        int line,
+        String selector
+    ) {
+        OverrideInfo {
+            java.util.Objects.requireNonNull(kind, "kind");
+            java.util.Objects.requireNonNull(source, "source");
+            java.util.Objects.requireNonNull(target, "target");
+            java.util.Objects.requireNonNull(selector, "selector");
+            if (kind == BiomeReplacementPlan.OverrideKind.NONE || ruleIndex < 0 || line <= 0) {
+                throw new IllegalArgumentException("Override palette entry has invalid provenance");
+            }
+        }
+
+        List<String> details() {
+            String action = this.kind == BiomeReplacementPlan.OverrideKind.REPLACED
+                ? "User replacement: " + this.source + " -> " + this.target
+                : "User removal fallback: removed " + this.source + ", used " + this.target;
+            return List.of(
+                "Biome: " + this.target,
+                action,
+                "Rule: index " + this.ruleIndex + ", line " + this.line
+                    + ", selector " + this.selector,
+                "Placement: source biome climate and terrain preserved"
+            );
+        }
+    }
+
     record CacheKey(
 		long seed,
 		String preset,
 		WorldDataConfiguration dataConfiguration,
 		String settingsIdentity,
 		String tagFingerprint,
+		BiomeReplacementConfigSnapshot biomeReplacementConfig,
 		WorldgenContributionRevision.Snapshot contributionRevision,
 		net.minecraft.core.RegistryAccess.Frozen registrySnapshot,
 		LevelStem selectedStem,
@@ -162,6 +256,9 @@ final class BiomePreview implements AutoCloseable {
 			dataConfiguration = java.util.Objects.requireNonNull(dataConfiguration, "dataConfiguration");
 			settingsIdentity = java.util.Objects.requireNonNull(settingsIdentity, "settingsIdentity");
 			tagFingerprint = java.util.Objects.requireNonNull(tagFingerprint, "tagFingerprint");
+			biomeReplacementConfig = java.util.Objects.requireNonNull(
+				biomeReplacementConfig, "biomeReplacementConfig"
+			);
 			contributionRevision = java.util.Objects.requireNonNull(contributionRevision, "contributionRevision");
 			registrySnapshot = java.util.Objects.requireNonNull(registrySnapshot, "registrySnapshot");
 			selectedStem = java.util.Objects.requireNonNull(selectedStem, "selectedStem");
@@ -177,6 +274,7 @@ final class BiomePreview implements AutoCloseable {
 			WorldDataConfiguration dataConfiguration,
 			String settingsIdentity,
 			String tagFingerprint,
+			BiomeReplacementConfigSnapshot biomeReplacementConfig,
 			net.minecraft.core.RegistryAccess.Frozen registrySnapshot,
 			LevelStem selectedStem,
 			WorldgenProviderCatalog providers
@@ -186,6 +284,8 @@ final class BiomePreview implements AutoCloseable {
 				&& this.dataConfiguration.equals(dataConfiguration)
 				&& this.settingsIdentity.equals(settingsIdentity)
 				&& this.tagFingerprint.equals(tagFingerprint)
+				&& this.biomeReplacementConfig.revision() == biomeReplacementConfig.revision()
+				&& this.biomeReplacementConfig.fingerprint().equals(biomeReplacementConfig.fingerprint())
 				&& this.registrySnapshot == registrySnapshot
 				&& this.selectedStem == selectedStem
 				&& this.providers == providers;
@@ -204,6 +304,10 @@ final class BiomePreview implements AutoCloseable {
 				&& this.dataConfiguration.equals(other.dataConfiguration)
 				&& this.settingsIdentity.equals(other.settingsIdentity)
 				&& this.tagFingerprint.equals(other.tagFingerprint)
+				&& this.biomeReplacementConfig.revision() == other.biomeReplacementConfig.revision()
+				&& this.biomeReplacementConfig.fingerprint().equals(
+					other.biomeReplacementConfig.fingerprint()
+				)
 				&& this.contributionRevision.equals(other.contributionRevision)
 				&& this.registrySnapshot == other.registrySnapshot
 				&& this.selectedStem == other.selectedStem
@@ -215,7 +319,8 @@ final class BiomePreview implements AutoCloseable {
 		public int hashCode() {
 			int values = java.util.Objects.hash(
 				this.seed, this.preset, this.dataConfiguration, this.settingsIdentity,
-				this.tagFingerprint, this.contributionRevision
+				this.tagFingerprint, this.biomeReplacementConfig.revision(),
+				this.biomeReplacementConfig.fingerprint(), this.contributionRevision
 			);
 			values = 31 * values + System.identityHashCode(this.registrySnapshot);
 			values = 31 * values + System.identityHashCode(this.selectedStem);
@@ -229,12 +334,18 @@ final class BiomePreview implements AutoCloseable {
         private final String[] palette;
         private final short[] indices;
         private final int[] paletteColors;
+        private final short[] overrideIndices;
+        private final byte[] hatchPhases;
+        private final OverrideInfo[] overrides;
 
         Sidecar(
             int size,
             String[] palette,
             short[] indices,
-            int[] paletteColors
+            int[] paletteColors,
+            short[] overrideIndices,
+            byte[] hatchPhases,
+            OverrideInfo[] overrides
         ) {
             if (size <= 0 || indices.length != Math.multiplyExact(size, size)) {
                 throw new IllegalArgumentException("Preview biome indices do not match the tile dimensions");
@@ -242,10 +353,17 @@ final class BiomePreview implements AutoCloseable {
             if (palette.length != paletteColors.length || palette.length > 0x10000) {
                 throw new IllegalArgumentException("Preview biome palette IDs and colors must share a valid index space");
             }
+            if (overrideIndices.length != indices.length || hatchPhases.length != indices.length
+                || overrides.length > 0x10000 || overrides.length == 0 || overrides[0] != null) {
+                throw new IllegalArgumentException("Preview override provenance does not match the tile dimensions");
+            }
             this.size = size;
             this.palette = palette;
             this.indices = indices;
             this.paletteColors = paletteColors;
+            this.overrideIndices = overrideIndices;
+            this.hatchPhases = hatchPhases;
+            this.overrides = overrides;
         }
 
         String id(int x, int z) {
@@ -256,6 +374,25 @@ final class BiomePreview implements AutoCloseable {
             return this.paletteColors[this.paletteIndex(x, z)];
         }
 
+        boolean hasOverride(int x, int z) {
+            return this.overrideIndex(x, z) != 0;
+        }
+
+        boolean hatchAt(int x, int z) {
+            int index = this.index(x, z);
+            return Short.toUnsignedInt(this.overrideIndices[index]) != 0
+                && this.hatchPhases[index] == 0;
+        }
+
+        int hatchPhase(int x, int z) {
+            return Byte.toUnsignedInt(this.hatchPhases[this.index(x, z)]);
+        }
+
+        List<String> overrideDetails(int x, int z) {
+            int overrideIndex = this.overrideIndex(x, z);
+            return overrideIndex == 0 ? List.of() : this.overrides[overrideIndex].details();
+        }
+
         private int index(int x, int z) {
             int clampedX = Math.max(0, Math.min(this.size - 1, x));
             int clampedZ = Math.max(0, Math.min(this.size - 1, z));
@@ -264,6 +401,10 @@ final class BiomePreview implements AutoCloseable {
 
         private int paletteIndex(int x, int z) {
             return Short.toUnsignedInt(this.indices[this.index(x, z)]);
+        }
+
+        private int overrideIndex(int x, int z) {
+            return Short.toUnsignedInt(this.overrideIndices[this.index(x, z)]);
         }
     }
 }

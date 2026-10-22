@@ -571,6 +571,7 @@ public interface IPreviewHandler {
 			state.frameLevels = null;
 			state.previewFailure = null;
 			state.generatedWithBiomePipeline = false;
+			state.hoveredOverrideDetails = java.util.List.of();
 		}
 		if (failure instanceof RuntimeException runtime) {
 			throw runtime;
@@ -636,6 +637,40 @@ public interface IPreviewHandler {
         String hoveredCoords = state().hoveredCoords;
         if (!hoveredCoords.isEmpty()) {
             guiGraphics.drawCenteredString(renderer, hoveredCoords, mx, my - 10, 0xFFFFFF);
+        }
+    }
+
+    default void renderOverrideDetails(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+        java.util.List<String> details = state().hoveredOverrideDetails;
+        if (details.isEmpty() || getRenderMode() != RenderMode.BIOME) {
+            return;
+        }
+        Font font = Minecraft.getInstance().font;
+        int padding = 4;
+        int lineHeight = font.lineHeight + 2;
+        int screenWidth = Minecraft.getInstance().getWindow().getGuiScaledWidth();
+        int screenHeight = Minecraft.getInstance().getWindow().getGuiScaledHeight();
+        int maxTextWidth = Math.max(32, screenWidth - 24 - padding * 2);
+        java.util.List<String> displayed = details.stream().map(value -> {
+            String clipped = value;
+            while (clipped.length() > 1 && font.width(clipped + "…") > maxTextWidth) {
+                clipped = clipped.substring(0, clipped.length() - 1);
+            }
+            return clipped.equals(value) ? clipped : clipped + "…";
+        }).toList();
+        int width = displayed.stream().mapToInt(font::width).max().orElse(0) + padding * 2;
+        int height = displayed.size() * lineHeight + padding * 2;
+        int left = Math.min(mouseX + 12, screenWidth - width - 4);
+        int top = Math.min(mouseY + 12, screenHeight - height - 4);
+        left = Math.max(4, left);
+        top = Math.max(4, top);
+        guiGraphics.fill(left - 1, top - 1, left + width + 1, top + height + 1, 0xFF101010);
+        guiGraphics.fill(left, top, left + width, top + height, 0xF0202020);
+        for (int index = 0; index < displayed.size(); index++) {
+            guiGraphics.drawString(
+                font, displayed.get(index), left + padding, top + padding + index * lineHeight,
+                0xFFFFFFFF, false
+            );
         }
     }
 

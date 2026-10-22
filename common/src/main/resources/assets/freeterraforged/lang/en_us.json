@@ -61,6 +61,8 @@
   "freeterraforged.gui.button.oreCompatibleStoneOnly.tooltip": "Only use stone types that ores can generate in",
   "freeterraforged.gui.button.renderMode": "Preview",
   "freeterraforged.gui.button.renderMode.tooltip": "Cycles the render preview mode.",
+  "freeterraforged.gui.button.showBiomeOverrides": "Show Biome Overrides",
+  "freeterraforged.gui.button.showBiomeOverrides.tooltip": "Shows a crosshatch over biomes selected by user replacement or removal rules.",
   "freeterraforged.gui.button.riverSeedOffset": "Seed Offset",
   "freeterraforged.gui.button.riverSeedOffset.tooltip": "A seed offset used to randomise river distribution",
   "freeterraforged.gui.button.salt": "Salt",
