@@ -13,6 +13,7 @@ import etcodehome.freeterraforged.platform.ConfigUtil;
 public final class DefaultPresetArchive {
 	private static final Path SAVED_ARCHIVE = ConfigUtil.ftf("default-preset.zip");
 	private static final Path SAVED_SOURCE = ConfigUtil.ftf("default-preset-source.txt");
+	private static final String BUILTIN_SOURCE_PREFIX = "builtin:";
 
 	private DefaultPresetArchive() {
 	}
@@ -31,7 +32,7 @@ public final class DefaultPresetArchive {
 		}
 
 		String savedPath = Files.readString(SAVED_SOURCE, StandardCharsets.UTF_8).trim();
-		if (savedPath.isEmpty()) {
+		if (savedPath.isEmpty() || savedPath.startsWith(BUILTIN_SOURCE_PREFIX)) {
 			return false;
 		}
 
@@ -55,11 +56,28 @@ public final class DefaultPresetArchive {
 			throw new IOException("Default preset source is outside the Minecraft config directory: " + source);
 		}
 
+		writeSource(configRoot.relativize(source).toString());
+	}
+
+	public static boolean isBuiltinSource(String builtinId) throws IOException {
+		return Files.isRegularFile(SAVED_SOURCE)
+			&& Files.readString(SAVED_SOURCE, StandardCharsets.UTF_8).trim()
+				.equals(BUILTIN_SOURCE_PREFIX + builtinId);
+	}
+
+	public static void setBuiltinSource(String builtinId) throws IOException {
+		if (builtinId == null || builtinId.isBlank()) {
+			throw new IllegalArgumentException("Built-in default preset ID must not be blank");
+		}
+		writeSource(BUILTIN_SOURCE_PREFIX + builtinId);
+	}
+
+	private static void writeSource(String source) throws IOException {
 		Path parent = SAVED_SOURCE.getParent();
 		Files.createDirectories(parent);
 		Path temporary = Files.createTempFile(parent, "default-preset-source-", ".tmp");
 		try {
-			Files.writeString(temporary, configRoot.relativize(source).toString(), StandardCharsets.UTF_8);
+			Files.writeString(temporary, source, StandardCharsets.UTF_8);
 			try {
 				Files.move(temporary, SAVED_SOURCE, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
 			} catch (AtomicMoveNotSupportedException exception) {
