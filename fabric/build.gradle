@@ -20,7 +20,7 @@ loom {
         defaultPresetData {
             server()
             name "Generate Default Preset Data"
-            runDir = layout.buildDirectory.dir("default-preset-datagen-run").get().asFile.absolutePath
+            runDir "build/default-preset-datagen-run"
             vmArg "-Dfabric-api.datagen"
             vmArg "-Dfabric-api.datagen.output-dir=${defaultPresetDatagenOutput.get().asFile.absolutePath}"
             vmArg "-Dfabric-api.datagen.modid=freeterraforged"
