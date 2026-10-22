@@ -86,7 +86,14 @@ public class Preview2D extends Button implements IPreviewHandler {
 
     @Override
     public int getZoom() {
-        return NoiseUtil.round(1.5F * (101 - (float) this.page.zoom2D.getLerpedValue()));
+        // Inverted slider input (0.0 = zoomed out, 1.0 = 1:1 zoomed in)
+        float t = 1.0F - (float) this.page.zoom2D.getValue();
+
+        // Hybrid curve: adds a linear floor so 95% produces Zoom 4 instead of Zoom 1
+        float cubic = t * t * t;
+        float zoomFactor = 1.0F + 1952.125F * (0.95F * cubic + 0.05F * t);
+
+        return NoiseUtil.round(zoomFactor);
     }
 
     @Override

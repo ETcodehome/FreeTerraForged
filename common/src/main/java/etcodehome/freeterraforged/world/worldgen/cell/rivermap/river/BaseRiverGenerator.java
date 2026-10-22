@@ -30,12 +30,17 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
     protected WetlandConfig wetland;
     protected T continent;
     protected Levels levels;
-    
+    /** True when the continent can bridge cells together (UPLIFT), so cell borders may be dry land instead of ocean. */
+    protected final boolean bridgeAware;
+    protected final float shallowOcean;
+
     public BaseRiverGenerator(T continent, GeneratorContext context) {
         this.continent = continent;
         this.levels = context.levels;
         this.continentScale = context.preset.world().continent.continentScale;
         this.minEdgeValue = context.preset.world().controlPoints.inland;
+        this.shallowOcean = context.preset.world().controlPoints.shallowOcean;
+        this.bridgeAware = continent instanceof UpliftContinentGenerator;
         this.seed = Seed.toInt(context.seed.root() + context.preset.rivers().seedOffset);
         this.count = context.preset.rivers().riverCount;
         this.main = RiverConfig.builder(context.levels).bankHeight(context.preset.rivers().mainRivers.minBankHeight, context.preset.rivers().mainRivers.maxBankHeight).bankWidth(context.preset.rivers().mainRivers.bankWidth).bedWidth(context.preset.rivers().mainRivers.bedWidth).bedDepth(context.preset.rivers().mainRivers.bedDepth).fade(context.preset.rivers().mainRivers.fade).length(5000).main(true).order(0).build();
@@ -43,7 +48,7 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
         this.wetland = new WetlandConfig(context.preset.rivers().wetlands);
         this.lake = LakeConfig.of(context.preset.rivers().lakes, context.levels);
     }
-    
+
     @Override
     public Rivermap generateRivers(int x, int z, long id) {
 
@@ -69,11 +74,11 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
         Network[] networks = rivers.stream().map(Network.Builder::build).toArray(Network[]::new);
         return new Rivermap(x, z, networks, warp);
     }
-    
+
     public List<Network.Builder> generateRoots(int x, int z, Random random, GenWarp warp) {
         return Collections.emptyList();
     }
-    
+
     public void generateForks(Network.Builder parent, Variance spacing, RiverConfig config, Random random, GenWarp warp, List<Network.Builder> rivers, int depth) {
         if (depth > 2) {
             return;
@@ -97,7 +102,7 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
                 if (this.continent.getEdgeValue(x1, z1) >= this.minEdgeValue) {
                     float x2 = x1 - dx * length;
                     float z2 = z1 - dz * length;
-                    if (this.continent.getEdgeValue(x2, z2) >= this.minEdgeValue) {
+                    if (this.continent.getEdgeValue(x2, z2) >= this.minEdgeValue && !this.endsInNeighbourCell(x1, z1, x2, z2)) {
                         RiverConfig forkConfig = parent.carver.createForkConfig(offset, this.levels);
                         River river = new River(x2, z2, x1, z1);
                         if (!this.riverOverlaps(river, parent, rivers)) {
@@ -117,7 +122,24 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
             }
         }
     }
-    
+
+    /**
+     * A river end that is still on land is only possible where the ray reached a cell border without hitting the coast,
+     * i.e. the border is bridged to a neighbouring continent. The rivermap is only applied inside this continent's own
+     * cell, so such a river would stop dead in the middle of the merged landmass.
+     */
+    protected boolean terminatesOnLand(float x, float z) {
+        return this.bridgeAware && this.continent.getEdgeValue(x, z) > this.shallowOcean;
+    }
+
+    /**
+     * True if a fork's upstream end lies in a different cell than its junction point, which (with the edge check
+     * already passed) means it crossed a bridged border and would be cut off at the boundary.
+     */
+    protected boolean endsInNeighbourCell(float x1, float z1, float x2, float z2) {
+        return this.bridgeAware && this.continent.getNearestCenter(x2, z2) != this.continent.getNearestCenter(x1, z1);
+    }
+
     public void generateWetlands(Network.Builder builder, Random random) {
         int skip = random.nextInt(this.wetland.skipSize);
         if (skip == 0) {
@@ -138,7 +160,7 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
             this.generateWetlands(child, random);
         }
     }
-    
+
     public boolean riverOverlaps(River river, Network.Builder parent, List<Network.Builder> rivers) {
         for (Network.Builder other : rivers) {
             if (other.overlaps(river, parent, 250.0f)) {
