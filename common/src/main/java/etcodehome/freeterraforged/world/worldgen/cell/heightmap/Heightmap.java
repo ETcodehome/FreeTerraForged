@@ -39,6 +39,7 @@ import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
 import etcodehome.freeterraforged.world.worldgen.util.Seed;
 import net.minecraft.core.HolderGetter;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
+import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 
 public record Heightmap(
     CellPopulator terrain,
@@ -53,12 +54,31 @@ public record Heightmap(
 ) implements AutoCloseable {
 	
 	public void apply(Cell cell, float x, float z, boolean applyClimate) {
+		if (!WorldgenPerfTracker.ACTIVE) {
+			this.applyTerrain(cell, x, z);
+			if (cell.terrain == TerrainType.ISLAND_BEACH) {
+				cell.terrain = TerrainType.BEACH;
+			}
+			this.applyRivers(cell, x, z, this.continent.getRivermap(cell));
+			this.applyClimate(cell, x, z, applyClimate);
+			return;
+		}
+		WorldgenPerfTracker.ThreadStats ts = WorldgenPerfTracker.stats();
+		long t0 = System.nanoTime();
 		this.applyTerrain(cell, x, z);
 		if (cell.terrain == TerrainType.ISLAND_BEACH) {
 			cell.terrain = TerrainType.BEACH;
 		}
+		long t1 = System.nanoTime();
 		this.applyRivers(cell, x, z, this.continent.getRivermap(cell));
+		long t2 = System.nanoTime();
 		this.applyClimate(cell, x, z, applyClimate);
+		long t3 = System.nanoTime();
+		ts.heightmapApplyCount++;
+		ts.heightmapApplyNanos += (t3 - t0);
+		ts.cellTerrainNanos += (t1 - t0);
+		ts.cellRiverNanos += (t2 - t1);
+		ts.cellClimateNanos += (t3 - t2);
 	}
 	
 	public void applyTerrain(Cell cell, float x, float z) {

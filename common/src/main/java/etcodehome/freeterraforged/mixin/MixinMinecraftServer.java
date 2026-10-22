@@ -15,10 +15,12 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.storage.ServerLevelData;
+import java.util.function.BooleanSupplier;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.registries.FTFRegistries;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 import etcodehome.freeterraforged.world.worldgen.biome.FTFClimateSampler;
+import etcodehome.freeterraforged.world.worldgen.perf.WorldgenBenchmarkRunner;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenResourceRevision;
 
 @Mixin(MinecraftServer.class)
@@ -63,4 +65,9 @@ class MixinMinecraftServer implements WorldgenResourceRevision {
 			}
 		});
     }
+
+	@Inject(at = @At("TAIL"), method = "tickServer")
+	private void freeterraforged$onTickServer(BooleanSupplier hasTimeLeft, CallbackInfo ci) {
+		WorldgenBenchmarkRunner.onServerTick((MinecraftServer) (Object) this);
+	}
 }

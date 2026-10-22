@@ -15,6 +15,7 @@ import etcodehome.freeterraforged.concurrent.Resource;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeSurfaceProtection;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
+import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 
 final class TerrainBiomeRoleSelection {
 	private final Map<Climate.ParameterList<Holder<Biome>>, Climate.ParameterList<Holder<Biome>>> rivers;
@@ -49,9 +50,22 @@ final class TerrainBiomeRoleSelection {
 		}
 		try (Resource<Cell> resource = Cell.getResource()) {
 			Cell cell = resource.get().reset();
-			context.lookup.applyCell(
-				cell, QuartPos.toBlock(quartX), QuartPos.toBlock(quartZ), false
-			);
+			boolean perfActive = WorldgenPerfTracker.isActive();
+			WorldgenPerfTracker.ThreadStats ts = perfActive ? WorldgenPerfTracker.threadStats() : null;
+			WorldgenPerfTracker.ApplyCellCaller prevCaller = null;
+			if (ts != null) {
+				prevCaller = ts.currentCaller;
+				ts.currentCaller = WorldgenPerfTracker.ApplyCellCaller.TERRAIN_ROLE_RIVER;
+			}
+			try {
+				context.lookup.applyCell(
+					cell, QuartPos.toBlock(quartX), QuartPos.toBlock(quartZ), false
+				);
+			} finally {
+				if (ts != null) {
+					ts.currentCaller = prevCaller;
+				}
+			}
 			return cell.terrain.isRiver() ? riverCandidates.findValue(result.target()) : selected;
 		}
 	}

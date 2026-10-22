@@ -23,6 +23,8 @@ import net.minecraft.world.level.levelgen.NoiseChunk;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.blending.Blender;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 import etcodehome.freeterraforged.world.worldgen.biome.BiomeColumnCache;
@@ -30,12 +32,63 @@ import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.IFlowFieldHolder;
 import etcodehome.freeterraforged.world.worldgen.IChunkCellsHolder;
 import etcodehome.freeterraforged.world.worldgen.ChunkFlowField;
+import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
 
 @Mixin(NoiseBasedChunkGenerator.class)
 abstract class MixinNoiseBasedChunkGenerator extends ChunkGenerator {
 	public MixinNoiseBasedChunkGenerator(BiomeSource biomeSource, Function<Holder<Biome>, BiomeGenerationSettings> settingsGetter) {
 		super(biomeSource, settingsGetter);
+	}
+
+	@WrapMethod(method = "doCreateBiomes")
+	private void freeterraforged$wrapDoCreateBiomes(
+		Blender blender,
+		RandomState randomState,
+		StructureManager structureManager,
+		ChunkAccess chunk,
+		Operation<Void> original
+	) {
+		boolean perfActive = WorldgenPerfTracker.isActive() && ((Object) this instanceof TerraForgedChunkGenerator);
+		long t0 = perfActive ? System.nanoTime() : 0L;
+		try {
+			original.call(blender, randomState, structureManager, chunk);
+		} finally {
+			if (perfActive) {
+				WorldgenPerfTracker.recordStage(
+					chunk.getPos().x,
+					chunk.getPos().z,
+					WorldgenPerfTracker.Stage.BIOMES,
+					System.nanoTime() - t0
+				);
+			}
+		}
+	}
+
+	@WrapMethod(method = "doFill")
+	private ChunkAccess freeterraforged$wrapDoFill(
+		Blender blender,
+		StructureManager structureManager,
+		RandomState randomState,
+		ChunkAccess chunk,
+		int minCellY,
+		int cellCountY,
+		Operation<ChunkAccess> original
+	) {
+		boolean perfActive = WorldgenPerfTracker.isActive() && ((Object) this instanceof TerraForgedChunkGenerator);
+		long t0 = perfActive ? System.nanoTime() : 0L;
+		try {
+			return original.call(blender, structureManager, randomState, chunk, minCellY, cellCountY);
+		} finally {
+			if (perfActive) {
+				WorldgenPerfTracker.recordStage(
+					chunk.getPos().x,
+					chunk.getPos().z,
+					WorldgenPerfTracker.Stage.NOISE,
+					System.nanoTime() - t0
+				);
+			}
+		}
 	}
 
 	@Inject(

@@ -7,6 +7,7 @@ import net.minecraft.core.QuartPos;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.WorldLookup;
+import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 import etcodehome.freeterraforged.world.worldgen.runtime.OwnerThreadCache;
 
 public final class BiomeSurfaceEnvelope {
@@ -21,17 +22,45 @@ public final class BiomeSurfaceEnvelope {
 	public int minimumSurfaceY(GeneratorContext context, int quartX, int quartZ) {
 		Cell cell = new Cell();
 		return this.minimumSurfaceY(context.lookup, true, quartX, quartZ, (x, z) -> {
-			context.lookup.getHeightmap().apply(cell.reset(), x, z, false);
+			if (!WorldgenPerfTracker.ACTIVE) {
+				context.lookup.getHeightmap().apply(cell.reset(), x, z, false);
+			} else {
+				WorldgenPerfTracker.ThreadStats ts = WorldgenPerfTracker.stats();
+				long t0 = System.nanoTime();
+				context.lookup.getHeightmap().apply(cell.reset(), x, z, false);
+				long elapsed = System.nanoTime() - t0;
+				ts.standaloneApplyCellCount++;
+				ts.standaloneApplyCellNanos += elapsed;
+				int idx = WorldgenPerfTracker.ApplyCellCaller.BIOME_ENVELOPE.ordinal();
+				ts.callerCounts[idx]++;
+				ts.callerNanos[idx] += elapsed;
+			}
 			return Math.min(context.levels.worldHeight - 1, context.levels.scale(cell.height));
 		});
 	}
 
 	int minimumSurfaceY(WorldLookup lookup, boolean accurate, int quartX, int quartZ, IntBinaryOperator surface) {
 		long key = ((long) quartX << 32) ^ (quartZ & 0xFFFFFFFFL);
+		if (!WorldgenPerfTracker.ACTIVE) {
+			Entry cached = this.values.find(key);
+			if (cached != null && cached.get() == lookup && cached.accurate == accurate) return cached.height;
+			int height = minimumSurfaceY(quartX, quartZ, surface);
+			this.values.store(key, new Entry(lookup, height, accurate));
+			return height;
+		}
+		WorldgenPerfTracker.ThreadStats ts = WorldgenPerfTracker.stats();
+		long t0 = System.nanoTime();
+		ts.biomeEnvelopeCalls++;
 		Entry cached = this.values.find(key);
-		if (cached != null && cached.get() == lookup && cached.accurate == accurate) return cached.height;
+		if (cached != null && cached.get() == lookup && cached.accurate == accurate) {
+			ts.biomeEnvelopeHits++;
+			ts.biomeEnvelopeNanos += (System.nanoTime() - t0);
+			return cached.height;
+		}
+		ts.biomeEnvelopeMisses++;
 		int height = minimumSurfaceY(quartX, quartZ, surface);
 		this.values.store(key, new Entry(lookup, height, accurate));
+		ts.biomeEnvelopeNanos += (System.nanoTime() - t0);
 		return height;
 	}
 

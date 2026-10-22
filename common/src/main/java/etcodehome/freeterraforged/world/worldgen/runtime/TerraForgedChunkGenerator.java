@@ -15,6 +15,7 @@ import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
+import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
@@ -383,11 +384,21 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 	}
 
 	public Holder<Biome> resolveBiome(int quartX, int quartY, int quartZ, Climate.Sampler sampler) {
-		WorldgenRuntimeBinding binding = Objects.requireNonNull(
-				this.runtime, "Generator root has no active worldgen epoch"
-		);
-		WorldgenRuntimeBinding.State state = binding.current();
-		return state.biomeSelection().resolve(quartX, quartY, quartZ, sampler);
+		boolean perfActive = WorldgenPerfTracker.isActive();
+		long t0 = perfActive ? System.nanoTime() : 0L;
+		try {
+			WorldgenRuntimeBinding binding = Objects.requireNonNull(
+					this.runtime, "Generator root has no active worldgen epoch"
+			);
+			WorldgenRuntimeBinding.State state = binding.current();
+			return state.biomeSelection().resolve(quartX, quartY, quartZ, sampler);
+		} finally {
+			if (perfActive) {
+				WorldgenPerfTracker.ThreadStats ts = WorldgenPerfTracker.threadStats();
+				ts.resolveBiomeCount++;
+				ts.resolveBiomeNanos += (System.nanoTime() - t0);
+			}
+		}
 	}
 
 	public Holder<Biome> resolveBiomeInCell(
@@ -398,13 +409,23 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 			long biomeCellX,
 			long biomeCellZ
 	) {
-		WorldgenRuntimeBinding binding = Objects.requireNonNull(
-				this.runtime, "Generator root has no active worldgen epoch"
-		);
-		WorldgenRuntimeBinding.State state = binding.current();
-		return state.biomeSelection().resolveInCell(
-				quartX, quartY, quartZ, sampler, biomeCellX, biomeCellZ
-		);
+		boolean perfActive = WorldgenPerfTracker.isActive();
+		long t0 = perfActive ? System.nanoTime() : 0L;
+		try {
+			WorldgenRuntimeBinding binding = Objects.requireNonNull(
+					this.runtime, "Generator root has no active worldgen epoch"
+			);
+			WorldgenRuntimeBinding.State state = binding.current();
+			return state.biomeSelection().resolveInCell(
+					quartX, quartY, quartZ, sampler, biomeCellX, biomeCellZ
+			);
+		} finally {
+			if (perfActive) {
+				WorldgenPerfTracker.ThreadStats ts = WorldgenPerfTracker.threadStats();
+				ts.resolveBiomeCount++;
+				ts.resolveBiomeNanos += (System.nanoTime() - t0);
+			}
+		}
 	}
 
 	@Override
@@ -453,9 +474,21 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 			RandomState randomState,
 			ChunkAccess chunk
 	) {
-		WorldgenRuntimeBinding.State stage = this.requireState(WorldgenFacet.SURFACE);
-		super.buildSurface(region, structureManager, randomState, chunk);
-		stage.surfaceColumns().apply(region, this, chunk, stage.possibleBiomes());
+		boolean perfActive = WorldgenPerfTracker.isActive();
+		long t0 = perfActive ? System.nanoTime() : 0L;
+		try {
+			WorldgenRuntimeBinding.State stage = this.requireState(WorldgenFacet.SURFACE);
+			super.buildSurface(region, structureManager, randomState, chunk);
+			stage.surfaceColumns().apply(region, this, chunk, stage.possibleBiomes());
+		} finally {
+			if (perfActive) {
+				WorldgenPerfTracker.recordStage(
+					chunk.getPos().x, chunk.getPos().z,
+					WorldgenPerfTracker.Stage.SURFACE,
+					System.nanoTime() - t0
+				);
+			}
+		}
 	}
 
 	@Override
@@ -500,13 +533,27 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 			ChunkAccess chunk,
 			GenerationStep.Carving step
 	) {
-		this.requireStage(WorldgenFacet.CARVERS);
-		this.requireStage(WorldgenFacet.SURFACE);
-		super.applyCarvers(region, seed, randomState, biomeManager, structureManager, chunk, step);
+		boolean perfActive = WorldgenPerfTracker.isActive();
+		long t0 = perfActive ? System.nanoTime() : 0L;
+		try {
+			this.requireStage(WorldgenFacet.CARVERS);
+			this.requireStage(WorldgenFacet.SURFACE);
+			super.applyCarvers(region, seed, randomState, biomeManager, structureManager, chunk, step);
+		} finally {
+			if (perfActive) {
+				WorldgenPerfTracker.recordStage(
+					chunk.getPos().x, chunk.getPos().z,
+					WorldgenPerfTracker.Stage.CARVERS,
+					System.nanoTime() - t0
+				);
+			}
+		}
 	}
 
 	@Override
 	public void applyBiomeDecoration(WorldGenLevel level, ChunkAccess chunk, StructureManager structureManager) {
+		boolean perfActive = WorldgenPerfTracker.isActive();
+		long t0 = perfActive ? System.nanoTime() : 0L;
 		WorldgenRuntimeBinding.State stage = this.requireState(WorldgenFacet.PLACED_FEATURES);
 		WorldgenPlan current = stage.plan();
 		PlanDescriptor structures = current.structures().descriptor();
@@ -528,6 +575,13 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 			} else {
 				this.activeBiomeDecoration.set(previous);
 			}
+			if (perfActive) {
+				WorldgenPerfTracker.recordStage(
+					chunk.getPos().x, chunk.getPos().z,
+					WorldgenPerfTracker.Stage.FEATURES,
+					System.nanoTime() - t0
+				);
+			}
 		}
 	}
 
@@ -544,6 +598,8 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 			ChunkAccess chunk,
 			StructureTemplateManager templates
 	) {
+		boolean perfActive = WorldgenPerfTracker.isActive();
+		long t0 = perfActive ? System.nanoTime() : 0L;
 		WorldgenPlans.Structures plan = this.requireStage(WorldgenFacet.STRUCTURES).structures();
 		Set<ResourceKey<StructureSet>> plannedSets =
 				plan.sets().stream().map(Holder.Reference::key).collect(Collectors.toUnmodifiableSet());
@@ -564,6 +620,13 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 				this.activeStructures.remove();
 			} else {
 				this.activeStructures.set(previous);
+			}
+			if (perfActive) {
+				WorldgenPerfTracker.recordStage(
+					chunk.getPos().x, chunk.getPos().z,
+					WorldgenPerfTracker.Stage.STRUCTURES,
+					System.nanoTime() - t0
+				);
 			}
 		}
 	}

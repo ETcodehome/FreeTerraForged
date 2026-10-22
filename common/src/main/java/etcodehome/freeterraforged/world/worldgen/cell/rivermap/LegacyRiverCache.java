@@ -1,6 +1,7 @@
 package etcodehome.freeterraforged.world.worldgen.cell.rivermap;
 
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
+import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 
 public class LegacyRiverCache extends RiverCache {
     private static final class ThreadLocalCache {
@@ -21,7 +22,17 @@ public class LegacyRiverCache extends RiverCache {
         if (tc.lastRivermap != null && tc.lastX == x && tc.lastZ == z) {
             return tc.lastRivermap;
         }
-        Rivermap rivermap = this.cache.computeIfAbsent(NoiseUtil.seed(x, z), id -> this.generator.generateRivers(x, z, id));
+        Rivermap rivermap = this.cache.computeIfAbsent(NoiseUtil.seed(x, z), id -> {
+            if (!WorldgenPerfTracker.ACTIVE) {
+                return this.generator.generateRivers(x, z, id);
+            }
+            long t0 = System.nanoTime();
+            Rivermap rm = this.generator.generateRivers(x, z, id);
+            WorldgenPerfTracker.ThreadStats ts = WorldgenPerfTracker.stats();
+            ts.rivermapGenerateCount++;
+            ts.rivermapGenerateNanos += (System.nanoTime() - t0);
+            return rm;
+        });
         tc.lastX = x;
         tc.lastZ = z;
         tc.lastRivermap = rivermap;

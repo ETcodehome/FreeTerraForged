@@ -3,9 +3,12 @@ package etcodehome.freeterraforged.client.command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.context.CommandContext;
+import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
+import etcodehome.freeterraforged.world.worldgen.perf.WorldgenBenchmarkRunner;
+import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
@@ -67,7 +70,62 @@ public class FTFCommands {
 
                                             return 1;
                                         }))))
+                .then(Commands.literal("benchmark")
+                        .executes(context -> {
+                            return WorldgenBenchmarkRunner.startDefaultBenchmark(context.getSource(), 6) ? 1 : 0;
+                        })
+                        .then(Commands.argument("radius", IntegerArgumentType.integer(1, 24))
+                                .executes(context -> {
+                                    int radius = IntegerArgumentType.getInteger(context, "radius");
+                                    return WorldgenBenchmarkRunner.startDefaultBenchmark(context.getSource(), radius) ? 1 : 0;
+                                })
+                                .then(Commands.argument("x", IntegerArgumentType.integer())
+                                        .then(Commands.argument("z", IntegerArgumentType.integer())
+                                                .executes(context -> {
+                                                    int radius = IntegerArgumentType.getInteger(context, "radius");
+                                                    int x = IntegerArgumentType.getInteger(context, "x");
+                                                    int z = IntegerArgumentType.getInteger(context, "z");
+                                                    return WorldgenBenchmarkRunner.startBenchmark(context.getSource(), radius, x, z, false) ? 1 : 0;
+                                                })))))
+                .then(Commands.literal("perf")
+                        .then(Commands.literal("start")
+                                .executes(context -> {
+                                    WorldgenPerfTracker.start();
+                                    context.getSource().sendSystemMessage(Component.literal("[FTF-Perf] Started worldgen performance tracking."));
+                                    return 1;
+                                }))
+                        .then(Commands.literal("stop")
+                                .executes(context -> {
+                                    WorldgenPerfTracker.stop();
+                                    sendPerfReport(context.getSource(), "Manual profiling session stopped");
+                                    return 1;
+                                }))
+                        .then(Commands.literal("report")
+                                .executes(context -> {
+                                    sendPerfReport(context.getSource(), "Live profiling snapshot");
+                                    return 1;
+                                }))
+                        .then(Commands.literal("reset")
+                                .executes(context -> {
+                                    WorldgenPerfTracker.reset();
+                                    context.getSource().sendSystemMessage(Component.literal("[FTF-Perf] Reset worldgen performance counters."));
+                                    return 1;
+                                })))
         );
+    }
+
+    private static void sendPerfReport(CommandSourceStack source, String title) {
+        String report = WorldgenPerfTracker.buildReport(title);
+        for (String line : report.split("\n")) {
+            if (!line.isBlank()) {
+                FTFCommon.LOGGER.info("[FTF-Perf] {}", line);
+                source.sendSystemMessage(Component.literal(line));
+            }
+        }
+        Path saved = WorldgenBenchmarkRunner.writeReportFile(report);
+        if (saved != null) {
+            source.sendSystemMessage(Component.literal("[FTF-Perf] Saved report to: " + saved.toAbsolutePath()));
+        }
     }
 
     private static ServerLevel deduceServerLevel(CommandSourceStack source) {

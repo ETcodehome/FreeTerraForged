@@ -35,6 +35,7 @@ import etcodehome.freeterraforged.world.worldgen.biome.FTFClimateSampler;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.filter.ChunkFilterGrid;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
+import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPlan;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPlans;
 
@@ -186,7 +187,20 @@ class MixinNoiseChunk implements IChunkCellsHolder {
 			} else {
 				effectiveLava = globalLavaLevel;
 				effectiveLavaStatus = lava;
-				generatorContext.lookup.applyCell(scratchCell.reset(), x, z, false, false);
+				boolean perfActive = WorldgenPerfTracker.isActive();
+				WorldgenPerfTracker.ThreadStats ts = perfActive ? WorldgenPerfTracker.threadStats() : null;
+				WorldgenPerfTracker.ApplyCellCaller prevCaller = null;
+				if (ts != null) {
+					prevCaller = ts.currentCaller;
+					ts.currentCaller = WorldgenPerfTracker.ApplyCellCaller.AQUIFER;
+				}
+				try {
+					generatorContext.lookup.applyCell(scratchCell.reset(), x, z, false, false);
+				} finally {
+					if (ts != null) {
+						ts.currentCaller = prevCaller;
+					}
+				}
 				float continentEdge = scratchCell.continentEdge;
 
 				if (continentEdge <= shallowOceanCP) {

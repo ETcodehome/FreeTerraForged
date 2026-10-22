@@ -11,6 +11,7 @@ import etcodehome.freeterraforged.world.worldgen.IChunkCellsHolder;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.river.RiverCarverSettings;
+import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 import etcodehome.freeterraforged.world.worldgen.surface.FTFSurfaceSystem;
 import etcodehome.freeterraforged.world.worldgen.surface.rule.StrataRule;
 import org.spongepowered.asm.mixin.Implements;
@@ -121,7 +122,20 @@ class MixinSurfaceSystem {
 			if (chunkCells != null && lx >= 0 && lx < 16 && lz >= 0 && lz < 16) {
 				return chunkCells[lz * 16 + lx];
 			}
-			genCtx.lookup.applyCell(neighborScratch.reset(), gx, gz, false, false);
+			boolean perfActive = WorldgenPerfTracker.isActive();
+			WorldgenPerfTracker.ThreadStats ts = perfActive ? WorldgenPerfTracker.threadStats() : null;
+			WorldgenPerfTracker.ApplyCellCaller prevCaller = null;
+			if (ts != null) {
+				prevCaller = ts.currentCaller;
+				ts.currentCaller = WorldgenPerfTracker.ApplyCellCaller.SURFACE_RIVER;
+			}
+			try {
+				genCtx.lookup.applyCell(neighborScratch.reset(), gx, gz, false, false);
+			} finally {
+				if (ts != null) {
+					ts.currentCaller = prevCaller;
+				}
+			}
 			return neighborScratch;
 		};
 

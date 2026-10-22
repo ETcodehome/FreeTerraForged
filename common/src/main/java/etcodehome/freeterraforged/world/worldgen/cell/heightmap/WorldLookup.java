@@ -4,6 +4,7 @@ import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.CellLookup;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
+import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 
 public class WorldLookup implements CellLookup {
 	private static final ThreadLocal<Cell> SCRATCH_NEIGHBOR = ThreadLocal.withInitial(Cell::new);
@@ -37,15 +38,40 @@ public class WorldLookup implements CellLookup {
 	}
 
 	public boolean applyCell(Cell cell, int x, int z, boolean load, boolean applyClimate) {
+		if (!WorldgenPerfTracker.ACTIVE) {
+			boolean res = this.compute(cell, x, z, applyClimate);
+			if (load) {
+				this.computeSteepness(cell, x, z);
+			}
+			return res;
+		}
+		WorldgenPerfTracker.ThreadStats ts = WorldgenPerfTracker.stats();
+		long t0 = System.nanoTime();
 		boolean res = this.compute(cell, x, z, applyClimate);
 		if (load) {
 			this.computeSteepness(cell, x, z);
+		}
+		long elapsed = System.nanoTime() - t0;
+		if (!ts.insideGridInit) {
+			ts.standaloneApplyCellCount++;
+			ts.standaloneApplyCellNanos += elapsed;
+			int callerIdx = ts.currentCaller.ordinal();
+			ts.callerCounts[callerIdx]++;
+			ts.callerNanos[callerIdx] += elapsed;
 		}
 		return res;
 	}
 
 	public void applyBiomeRegion(Cell cell, int x, int z) {
+		if (!WorldgenPerfTracker.ACTIVE) {
+			this.heightmap.applyBiomeRegion(cell, x, z);
+			return;
+		}
+		WorldgenPerfTracker.ThreadStats ts = WorldgenPerfTracker.stats();
+		long t0 = System.nanoTime();
 		this.heightmap.applyBiomeRegion(cell, x, z);
+		ts.applyBiomeRegionCount++;
+		ts.applyBiomeRegionNanos += (System.nanoTime() - t0);
 	}
 
 	public void computeSteepness(Cell cell, int cx, int cz) {

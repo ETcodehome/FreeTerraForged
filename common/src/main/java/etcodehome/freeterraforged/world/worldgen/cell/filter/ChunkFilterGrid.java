@@ -3,6 +3,7 @@ package etcodehome.freeterraforged.world.worldgen.cell.filter;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap;
+import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 
 public class ChunkFilterGrid implements FilterGrid {
     public static final int CHUNK_SIZE = 16;
@@ -99,7 +100,30 @@ public class ChunkFilterGrid implements FilterGrid {
 
     public static Cell[] generateChunkCells(int chunkX, int chunkZ, GeneratorContext context) {
         ChunkFilterGrid grid = THREAD_LOCAL.get();
-        grid.init(chunkX, chunkZ, context.heightmap);
+        if (!WorldgenPerfTracker.ACTIVE) {
+            grid.init(chunkX, chunkZ, context.heightmap);
+            if (context.filters != null) {
+                context.filters.apply(grid);
+            }
+            Cell[] chunkCells = new Cell[CHUNK_SIZE * CHUNK_SIZE];
+            for (int i = 0; i < chunkCells.length; i++) {
+                chunkCells[i] = new Cell();
+            }
+            grid.copyTo(chunkCells);
+            return chunkCells;
+        }
+
+        WorldgenPerfTracker.ThreadStats ts = WorldgenPerfTracker.stats();
+        long t0 = System.nanoTime();
+        boolean prevInside = ts.insideGridInit;
+        ts.insideGridInit = true;
+        try {
+            grid.init(chunkX, chunkZ, context.heightmap);
+        } finally {
+            ts.insideGridInit = prevInside;
+        }
+        long t1 = System.nanoTime();
+        ts.gridInitNanos += (t1 - t0);
         if (context.filters != null) {
             context.filters.apply(grid);
         }
@@ -108,6 +132,9 @@ public class ChunkFilterGrid implements FilterGrid {
             chunkCells[i] = new Cell();
         }
         grid.copyTo(chunkCells);
+        long t2 = System.nanoTime();
+        ts.gridGenerateCount++;
+        ts.gridGenerateNanos += (t2 - t0);
         return chunkCells;
     }
 }

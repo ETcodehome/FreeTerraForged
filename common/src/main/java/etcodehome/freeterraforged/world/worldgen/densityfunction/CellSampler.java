@@ -25,6 +25,7 @@ import etcodehome.freeterraforged.world.worldgen.cell.heightmap.WorldLookup;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainCategory;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
+import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 import etcodehome.freeterraforged.world.worldgen.util.PosUtil;
 
 public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) implements MarkerFunction.Mapped {
@@ -39,6 +40,9 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 			throw new IllegalStateException("FTF cell sampler used before its world lookup was initialized");
 		}
 		Cell cell = CELL.get().getAndUpdate(worldLookup, ctx.blockX(), ctx.blockZ(), true);
+		if (WorldgenPerfTracker.ACTIVE) {
+			WorldgenPerfTracker.stats().fieldReadCounts[this.field.ordinal()]++;
+		}
 		return this.field.readFinite(cell, worldLookup.getHeightmap());
 	}
 
@@ -65,13 +69,27 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 			boolean sameOwner = this.lastLookup.get() == lookup;
 			if(!this.valid || !sameOwner || this.lastPos != packedPos || this.lastSampleClimate != sampleClimate) {
 				this.valid = false;
-				lookup.applyCell(this.cell.reset(), blockX, blockZ, false, sampleClimate);
+				if (!WorldgenPerfTracker.ACTIVE) {
+					lookup.applyCell(this.cell.reset(), blockX, blockZ, false, sampleClimate);
+				} else {
+					WorldgenPerfTracker.ThreadStats ts = WorldgenPerfTracker.stats();
+					ts.cellSamplerCache2dMisses++;
+					WorldgenPerfTracker.ApplyCellCaller prev = ts.currentCaller;
+					ts.currentCaller = WorldgenPerfTracker.ApplyCellCaller.CELL_SAMPLER_MISS;
+					try {
+						lookup.applyCell(this.cell.reset(), blockX, blockZ, false, sampleClimate);
+					} finally {
+						ts.currentCaller = prev;
+					}
+				}
 				this.lastPos = packedPos;
 				if (!sameOwner) {
 					this.lastLookup = new WeakReference<>(lookup);
 				}
 				this.lastSampleClimate = sampleClimate;
 				this.valid = true;
+			} else if (WorldgenPerfTracker.ACTIVE) {
+				WorldgenPerfTracker.stats().cellSamplerCache2dHits++;
 			}
 			return this.cell;
 		}
@@ -105,8 +123,16 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 			int relZ = bz - this.minBlockZ;
 			if (this.chunkCells != null && relX >= 0 && relX < 16 && relZ >= 0 && relZ < 16) {
 				cell = this.chunkCells[relZ * 16 + relX];
+				if (WorldgenPerfTracker.ACTIVE) {
+					WorldgenPerfTracker.ThreadStats ts = WorldgenPerfTracker.stats();
+					ts.cellSamplerChunkHits++;
+					ts.fieldReadCounts[CellSampler.this.field.ordinal()]++;
+				}
 			} else {
 				cell = this.cache2d.getAndUpdate(worldLookup, bx, bz, false);
+				if (WorldgenPerfTracker.ACTIVE) {
+					WorldgenPerfTracker.stats().fieldReadCounts[CellSampler.this.field.ordinal()]++;
+				}
 			}
 			return CellSampler.this.field.readFinite(cell, worldLookup.getHeightmap());
 		}
