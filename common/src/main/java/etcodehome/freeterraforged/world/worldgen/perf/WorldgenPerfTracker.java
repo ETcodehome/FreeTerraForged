@@ -673,7 +673,6 @@ public final class WorldgenPerfTracker {
 		lines.add("--------------------------------------------------------------------------------");
 		lines.add("6. PARALLEL THREAD UTILIZATION (Sorted by Work Time):");
 		activeThreads.sort(Comparator.comparingLong(ThreadStats::totalStageWorkNanos).reversed());
-		int shown = 0;
 		for (ThreadStats ts : activeThreads) {
 			long workNanos = ts.totalStageWorkNanos();
 			double workMs = workNanos / 1_000_000.0;
@@ -681,10 +680,6 @@ public final class WorldgenPerfTracker {
 			lines.add(String.format(Locale.ROOT,
 				"   %-26s : %8.1f ms work (%5.1f%% wall utilization) | grids=%d, hmCalls=%,d, biomes=%,d",
 				ts.threadName, workMs, busyPct, ts.gridGenerateCount, ts.heightmapApplyCount, ts.resolveBiomeCount));
-			if (++shown >= 16 && activeThreads.size() > 16) {
-				lines.add(String.format(Locale.ROOT, "   ... and %d more threads", activeThreads.size() - shown));
-				break;
-			}
 		}
 		lines.add("================================================================================");
 		return lines;
