@@ -108,7 +108,7 @@ tasks.named("runBenchmarkServer").configure {
         new File(benchDir, "eula.txt").text = "eula=true\n"
         new File(benchDir, "server.properties").text = """\
 level-type=freeterraforged\\:freeterraforged
-level-seed=123456789
+level-seed=${project.findProperty('ftfBenchmarkSeed') ?: '-7442486958049957310'}
 online-mode=false
 spawn-protection=0
 view-distance=10

@@ -1,5 +1,6 @@
 package etcodehome.freeterraforged.world.worldgen.cell.rivermap;
 
+import java.lang.ref.WeakReference;
 import java.util.concurrent.TimeUnit;
 
 import etcodehome.freeterraforged.concurrent.cache.Cache;
@@ -8,6 +9,7 @@ import etcodehome.freeterraforged.world.worldgen.util.PosUtil;
 
 public class RiverCache implements AutoCloseable {
     private static final class ThreadLocalCache {
+        WeakReference<RiverCache> owner = new WeakReference<>(null);
         long lastKey = Long.MIN_VALUE;
         Rivermap lastRivermap;
     }
@@ -25,12 +27,13 @@ public class RiverCache implements AutoCloseable {
     public Rivermap getRivers(int x, int z) {
         long key = PosUtil.pack(x, z);
         ThreadLocalCache tc = THREAD_CACHE.get();
-        if (tc.lastRivermap != null && tc.lastKey == key) {
+        if (tc.owner.get() == this && tc.lastRivermap != null && tc.lastKey == key) {
             return tc.lastRivermap;
         }
         Rivermap rivermap = this.cache.computeIfAbsent(key, id -> {
         	return this.generator.generateRivers(PosUtil.unpackLeft(id), PosUtil.unpackRight(id), id);
         });
+        tc.owner = new WeakReference<>(this);
         tc.lastKey = key;
         tc.lastRivermap = rivermap;
         return rivermap;

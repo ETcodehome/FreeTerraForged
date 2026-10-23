@@ -68,19 +68,6 @@ public class RawChunkCache {
         return cells;
     }
 
-    public Cell getExistingRawCell(int blockX, int blockZ) {
-        int chunkX = blockX >> 4;
-        int chunkZ = blockZ >> 4;
-        long key = PosUtil.pack(chunkX, chunkZ);
-        Cell[] chunkCells = this.cache.get(key);
-        if (chunkCells != null) {
-            int localX = blockX & 15;
-            int localZ = blockZ & 15;
-            return chunkCells[localZ * 16 + localX];
-        }
-        return null;
-    }
-
     public void clear() {
         this.cache.clear();
         this.evictionQueue.clear();

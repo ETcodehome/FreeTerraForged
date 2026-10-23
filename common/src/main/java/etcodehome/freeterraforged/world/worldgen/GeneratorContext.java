@@ -59,6 +59,9 @@ public class GeneratorContext implements AutoCloseable {
 	@Override
 	public void close() {
 		this.biomeSurfaceEnvelope.clear();
+		if (this.filteredChunkCache != null) {
+			this.filteredChunkCache.clear();
+		}
 		if (this.rawChunkCache != null) {
 			this.rawChunkCache.clear();
 		}

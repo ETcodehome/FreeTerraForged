@@ -65,24 +65,31 @@ public class FastStrataSequenceRule implements SurfaceRules.SurfaceRule {
 			int depthBelow = sc.freeterraforged$getStoneDepthBelow();
 
 			// Deepslate zone (below Y=0 down to bedrock boundary Y=-58):
-			// In deepslate layer, cave floor rules (lush/dripstone) only reach depth 2, and ceiling reaches depth 1.
-			// All rock below Y=0 in Minecraft is deepslate.
+			// Keep depthAbove > 10 and depthBelow > 4 to safely clear cave floors (lush cave clay, dripstone, rooted dirt)
+			// and cave ceiling features (hanging roots, stalactites).
 			// Note: When stone extends to the bottom of the world without caves below, Minecraft's stoneDepthBelow
-			// underflows to <= 0 (currentY - WAY_BELOW_MIN_Y + 1). Thus (depthBelow <= 0 || depthBelow > 1) ensures
+			// underflows to <= 0 (currentY - WAY_BELOW_MIN_Y + 1). Thus (depthBelow <= 0 || depthBelow > 4) ensures
 			// we are safe from cave ceilings even in completely solid columns.
-			if (y <= 0 && y > -59 && depthAbove > 2 && (depthBelow <= 0 || depthBelow > 1)) {
+			if (y <= 0 && y > -59 && depthAbove > 10 && (depthBelow <= 0 || depthBelow > 4)) {
 				if (WorldgenPerfTracker.ACTIVE) {
 					WorldgenPerfTracker.stats().strataFastPathHits++;
+				}
+				if (this.strata != null) {
+					BlockState strataState = this.strata.tryApply(x, y, z);
+					if (strataState != null) {
+						return strataState;
+					}
 				}
 				return Blocks.DEEPSLATE.defaultBlockState();
 			}
 
 			// Stone & Strata zone (above deepslate transition Y > 8):
-			// Non-desert/badlands biomes only place surface blocks up to depth 5 (grass, dirt, snow, calcite).
-			// Ceilings only check up to depth 3.
+			// Use minDepthAbove = 20 to guarantee all vanilla and modded surface materials (sand, sandstone dunes,
+			// gravel beaches, coarse dirt, mud, rooted dirt, and cave floors) are fully resolved before short-circuiting.
+			// Ceilings check depthBelow > 4 to protect hanging ceiling formations.
 			// Note: As above, depthBelow <= 0 indicates solid stone extending to bedrock without any cave below.
-			int minDepthAbove = this.isDesert ? 12 : 5;
-			if (y > 8 && depthAbove > minDepthAbove && (depthBelow <= 0 || depthBelow > 3)) {
+			int minDepthAbove = 20;
+			if (y > 8 && depthAbove > minDepthAbove && (depthBelow <= 0 || depthBelow > 4)) {
 				if (WorldgenPerfTracker.ACTIVE) {
 					WorldgenPerfTracker.stats().strataFastPathHits++;
 				}

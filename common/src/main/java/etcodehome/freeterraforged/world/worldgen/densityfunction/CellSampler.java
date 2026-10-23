@@ -180,13 +180,8 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 			this.tableValid[slot] = false;
 			etcodehome.freeterraforged.world.worldgen.GeneratorContext genCtx = lookup.getContext();
 			Cell cachedCell = null;
-			if (genCtx != null) {
-				if (genCtx.filteredChunkCache != null) {
-					cachedCell = genCtx.filteredChunkCache.getExistingFilteredCell(blockX, blockZ);
-				}
-				if (cachedCell == null && genCtx.rawChunkCache != null) {
-					cachedCell = genCtx.rawChunkCache.getExistingRawCell(blockX, blockZ);
-				}
+			if (genCtx != null && genCtx.filteredChunkCache != null) {
+				cachedCell = genCtx.filteredChunkCache.getExistingFilteredCell(blockX, blockZ);
 			}
 			if (cachedCell != null) {
 				slotCell.copyFrom(cachedCell);
