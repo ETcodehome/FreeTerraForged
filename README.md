@@ -49,7 +49,7 @@ config/freeterraforged/biome_replacements.properties
 On first startup:
 
 - if `config/biome_replacer.properties` exists, FTF atomically copies its rules into the native file
-  and enables compatibility validation for that imported content;
+  and records that they came from a legacy import;
 - otherwise, FTF creates a documented native template; and
 - after the native file has been created, it is authoritative. Later changes to the legacy Biome
   Replacer file are not merged or copied over it.
@@ -65,11 +65,10 @@ minecraft:snowy_plains > minecraft:desert
 minecraft:deep_dark > null
 ```
 
-`format_version` allows later FTF releases to identify the file syntax. Native files use strict
-validation and preserve the source biome's placement automatically; users do not need to configure
-those behaviors. Files imported from Biome Replacer retain an internal compatibility-validation
-option so legacy rules that refer to absent content can be skipped safely. Previously generated
-files containing `placement=preserve` remain valid, but no alternative placement mode exists.
+`format_version` allows later FTF releases to identify the file syntax. Native rules are validated
+strictly, and replacement always preserves the source biome's placement. Neither behavior is a
+configurable setting. Files imported from Biome Replacer carry a fixed migration-source marker so
+legacy rules that refer to absent content can be skipped safely.
 
 Rules are atomic and one-hop. For example, with `a > b` and `b > c`, an original `a` becomes `b`
 and an original `b` becomes `c`; FTF does not recursively chase the chain. Swaps are therefore

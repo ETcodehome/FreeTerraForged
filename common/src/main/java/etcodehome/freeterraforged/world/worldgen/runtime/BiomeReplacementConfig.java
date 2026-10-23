@@ -12,7 +12,7 @@ import java.util.Objects;
  */
 public record BiomeReplacementConfig(
 	int formatVersion,
-	ValidationMode validationMode,
+	boolean legacyImport,
 	List<Rule> rules,
 	List<Diagnostic> diagnostics,
 	Map<String, String> options
@@ -23,7 +23,6 @@ public record BiomeReplacementConfig(
 		if (formatVersion <= 0) {
 			throw new IllegalArgumentException("Biome replacement format version must be positive");
 		}
-		validationMode = Objects.requireNonNull(validationMode, "validationMode");
 		rules = List.copyOf(rules);
 		diagnostics = List.copyOf(diagnostics);
 		options = Map.copyOf(options);
@@ -31,21 +30,6 @@ public record BiomeReplacementConfig(
 
 	public boolean hasErrors() {
 		return this.diagnostics.stream().anyMatch(diagnostic -> diagnostic.severity() == Severity.ERROR);
-	}
-
-	public enum ValidationMode {
-		STRICT,
-		COMPATIBILITY;
-
-		static ValidationMode parse(String value) {
-			return switch (value.trim().toLowerCase(Locale.ROOT)) {
-				case "strict" -> STRICT;
-				case "compatibility", "legacy" -> COMPATIBILITY;
-				default -> throw new IllegalArgumentException(
-					"validation must be 'strict' or 'compatibility'"
-				);
-			};
-		}
 	}
 
 	public enum SelectorKind {
@@ -206,47 +190,34 @@ public record BiomeReplacementConfig(
 			}
 		}
 
-		ValidationMode validationMode = ValidationMode.STRICT;
-		String validation = options.get("validation");
-		if (validation != null) {
-			try {
-				validationMode = ValidationMode.parse(validation);
-			} catch (IllegalArgumentException failure) {
+		boolean legacyImport = false;
+		String migrationSource = options.get("migration_source");
+		if (migrationSource != null) {
+			if (migrationSource.equalsIgnoreCase("biome_replacer")) {
+				legacyImport = true;
+			} else {
 				diagnostics.add(error(
-					"invalid_validation", optionLines.get("validation"), failure.getMessage()
+					"invalid_migration_source", optionLines.get("migration_source"),
+					"migration_source must be 'biome_replacer'"
 				));
 			}
 		}
 
-		String placement = options.get("placement");
-		if (placement != null && !placement.equalsIgnoreCase("preserve")) {
-			Diagnostic diagnostic = validationMode == ValidationMode.STRICT
-				? error(
-					"invalid_placement", optionLines.get("placement"),
-					"placement must be 'preserve'; replacement does not relocate terrain or climate"
-				)
-				: warning(
-					"invalid_placement", optionLines.get("placement"),
-					"Ignoring legacy placement option; replacement preserves terrain and climate"
-				);
-			diagnostics.add(diagnostic);
-		}
 		for (String option : options.keySet()) {
-			if (!option.equals("format_version") && !option.equals("validation")
-				&& !option.equals("placement")) {
-				BiomeReplacementConfig.Diagnostic diagnostic = validationMode == ValidationMode.STRICT
-					? error(
-						"unknown_option", optionLines.get(option),
-						"Unknown biome replacement option '" + option + "'"
-					)
-					: warning(
+			if (!option.equals("format_version") && !option.equals("migration_source")) {
+				BiomeReplacementConfig.Diagnostic diagnostic = legacyImport
+					? warning(
 						"unknown_option", optionLines.get(option),
 						"Ignoring legacy option '" + option + "'"
+					)
+					: error(
+						"unknown_option", optionLines.get(option),
+						"Unknown biome replacement option '" + option + "'"
 					);
 				diagnostics.add(diagnostic);
 			}
 		}
-		return new BiomeReplacementConfig(formatVersion, validationMode, rules, diagnostics, options);
+		return new BiomeReplacementConfig(formatVersion, legacyImport, rules, diagnostics, options);
 	}
 
 	private static Diagnostic error(String code, int line, String message) {

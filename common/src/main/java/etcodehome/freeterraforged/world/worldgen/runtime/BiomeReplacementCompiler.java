@@ -30,8 +30,7 @@ public final class BiomeReplacementCompiler {
 	private static final Set<String> ALWAYS_FATAL_PARSE_CODES = Set.of(
 		"unsupported_format_version",
 		"invalid_format_version",
-		"invalid_validation",
-		"invalid_placement"
+		"invalid_migration_source"
 	);
 
 	private BiomeReplacementCompiler() {
@@ -48,7 +47,7 @@ public final class BiomeReplacementCompiler {
 		BiomeReplacementConfig config = snapshot.config();
 		List<BiomeReplacementConfig.Diagnostic> diagnostics = new ArrayList<>();
 		for (BiomeReplacementConfig.Diagnostic diagnostic : config.diagnostics()) {
-			if (config.validationMode() == BiomeReplacementConfig.ValidationMode.COMPATIBILITY
+			if (config.legacyImport()
 				&& diagnostic.severity() == BiomeReplacementConfig.Severity.ERROR
 				&& !ALWAYS_FATAL_PARSE_CODES.contains(diagnostic.code())) {
 				diagnostics.add(new BiomeReplacementConfig.Diagnostic(
@@ -294,7 +293,7 @@ public final class BiomeReplacementCompiler {
 		String message
 	) {
 		BiomeReplacementConfig.Severity severity = code.equals("integration_marker")
-			|| config.validationMode() == BiomeReplacementConfig.ValidationMode.STRICT
+			|| !config.legacyImport()
 				? BiomeReplacementConfig.Severity.ERROR
 				: BiomeReplacementConfig.Severity.WARNING;
 		diagnostics.add(new BiomeReplacementConfig.Diagnostic(

@@ -47,9 +47,8 @@ public final class BiomeReplacementConfigStore {
 	private static final byte[] MIGRATION_SUFFIX = """
 
 		! Imported by FreeTerraForged from config/biome_replacer.properties.
-		! Compatibility validation preserves Biome Replacer's skip-invalid behavior.
 		format_version=1
-		validation=compatibility
+		migration_source=biome_replacer
 		""".getBytes(StandardCharsets.UTF_8);
 
 	private static BiomeReplacementConfigSnapshot latest;
