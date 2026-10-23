@@ -134,6 +134,9 @@ public class Preview2D extends Button implements IPreviewHandler {
             } else {
                 int biomeColor = biomes == null ? 0xFFFF00FF : biomes.color(bx, bz);
                 color = mode.getColor(cell, levels, biomeColor);
+                if (mode == RenderMode.BIOME && biomes != null && biomes.hatchAt(bx, bz)) {
+                    color = BiomePreviewColors.hatch(color);
+                }
             }
             pixels[bz * tileWidth + bx] = color;
         });
@@ -268,7 +271,7 @@ public class Preview2D extends Button implements IPreviewHandler {
                 int iz = Math.max(0, Math.min(maxIndex, NoiseUtil.round(fz * maxIndex)));
                 Cell cell = this.state.tile.lookup(ix, iz);
                 this.state.legendValues[1] = IPreviewHandler.getTerrainName(cell);
-                String biomeId = this.state.biomes == null ? null : this.state.biomes.id(ix, iz);
+                String biomeId = this.state.biomes == null ? null : this.state.biomes.legendId(ix, iz);
                 PreviewDetails.Detail detail = PreviewDetails.forCell(
                         getRenderMode(), cell, levels, biomeId
                 );

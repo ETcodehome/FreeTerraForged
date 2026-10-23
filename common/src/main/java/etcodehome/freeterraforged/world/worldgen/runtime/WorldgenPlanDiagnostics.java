@@ -76,15 +76,9 @@ public final class WorldgenPlanDiagnostics {
 				.thenComparing(value -> value.id().toString()))
 			.toList();
 
-		LinkedHashSet<Output> outputs = new LinkedHashSet<>();
-		plan.biomeComposition().entries().forEach(entry -> outputs.add(Output.of(entry.getSecond())));
-		plan.providerSelection().providers().forEach(provider -> provider.candidates().values()
-			.forEach(entry -> outputs.add(Output.of(entry.getSecond()))));
-		plan.providerSelection().fallback().ifPresent(fallback -> fallback.values()
-			.forEach(entry -> outputs.add(Output.of(entry.getSecond()))));
-		plan.providerSelection().directInput().ifPresent(input -> input.possibleOutputs()
-			.forEach(holder -> outputs.add(Output.of(holder))));
-		plan.selectionDecoration().possibleOutputs().forEach(holder -> outputs.add(Output.of(holder)));
+		LinkedHashSet<Output> outputs = WorldgenBiomeSelection.possibleBiomes(plan).stream()
+			.map(Output::of)
+			.collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
 		List<Output> possibleOutputs = outputs.stream()
 			.sorted(Comparator.comparing(value -> value.id().map(Object::toString).orElse("")))
 			.toList();
@@ -147,6 +141,8 @@ public final class WorldgenPlanDiagnostics {
 			));
 		AdaptationSummary adaptations = adaptations(plan.placedFeatures());
 
+		BiomeReplacementPlan replacementPlan = plan.biomeReplacement().plan();
+		BiomeReplacementConfigSnapshot replacementConfig = replacementPlan.config();
 		return new Snapshot(
 			new Owner(
 				owner.id().toString(), owner.type(), owner.dimension().location(), owner.settingsIdentity(),
@@ -159,6 +155,12 @@ public final class WorldgenPlanDiagnostics {
 				plan.biomeComposition().descriptor().state(),
 				plan.providerSelection().rootCompositionDomain(),
 				plan.providerSelection().directInput().map(BiomeSourcePlanInput::id)
+			),
+			new Replacement(
+				replacementConfig.revision(), replacementConfig.fingerprint(), replacementConfig.path(),
+				replacementConfig.origin(), replacementConfig.legacyFilePresent(),
+				replacementPlan.decisionCount(), replacementPlan.removals().size(),
+				replacementPlan.diagnostics().stream().map(ReplacementDiagnostic::of).toList()
 			),
 			facets,
 			providers,
@@ -177,6 +179,7 @@ public final class WorldgenPlanDiagnostics {
 	public record Snapshot(
 		Owner owner,
 		SourceShape sourceShape,
+		Replacement biomeReplacement,
 		List<Facet> facets,
 		List<Provider> providers,
 		List<Contribution> contributions,
@@ -190,6 +193,7 @@ public final class WorldgenPlanDiagnostics {
 		public Snapshot {
 			owner = Objects.requireNonNull(owner, "owner");
 			sourceShape = Objects.requireNonNull(sourceShape, "sourceShape");
+			biomeReplacement = Objects.requireNonNull(biomeReplacement, "biomeReplacement");
 			facets = List.copyOf(facets);
 			providers = List.copyOf(providers);
 			contributions = List.copyOf(contributions);
@@ -203,9 +207,10 @@ public final class WorldgenPlanDiagnostics {
 
 		public JsonObject toJson() {
 			JsonObject root = new JsonObject();
-			root.addProperty("schema_version", 3);
+			root.addProperty("schema_version", 4);
 			root.add("owner", this.owner.toJson());
 			root.add("source_shape", this.sourceShape.toJson());
+			root.add("biome_replacement", this.biomeReplacement.toJson());
 			root.add("facets", array(this.facets.stream().map(Facet::toJson).toList()));
 			root.add("providers", array(this.providers.stream().map(Provider::toJson).toList()));
 			root.add("contributions", array(this.contributions.stream().map(Contribution::toJson).toList()));
@@ -216,6 +221,72 @@ public final class WorldgenPlanDiagnostics {
 			root.add("adaptations", this.adaptations.toJson());
 			root.add("capability_summary", this.capabilitySummary.toJson());
 			return root;
+		}
+	}
+
+	public record Replacement(
+		long revision,
+		String fingerprint,
+		String path,
+		BiomeReplacementConfigSnapshot.Origin origin,
+		boolean legacyFilePresent,
+		int decisions,
+		int removals,
+		List<ReplacementDiagnostic> diagnostics
+	) {
+		public Replacement {
+			if (revision < 0L || decisions < 0 || removals < 0 || removals > decisions) {
+				throw new IllegalArgumentException("Invalid biome replacement diagnostic counts");
+			}
+			fingerprint = Objects.requireNonNull(fingerprint, "fingerprint");
+			path = Objects.requireNonNull(path, "path");
+			origin = Objects.requireNonNull(origin, "origin");
+			diagnostics = List.copyOf(diagnostics);
+		}
+
+		private JsonObject toJson() {
+			JsonObject value = new JsonObject();
+			value.addProperty("revision", this.revision);
+			value.addProperty("fingerprint", this.fingerprint);
+			value.addProperty("path", this.path);
+			value.addProperty("origin", lower(this.origin));
+			value.addProperty("legacy_file_present", this.legacyFilePresent);
+			value.addProperty("decisions", this.decisions);
+			value.addProperty("removals", this.removals);
+			value.add("diagnostics", array(this.diagnostics.stream()
+				.map(ReplacementDiagnostic::toJson).toList()));
+			return value;
+		}
+	}
+
+	public record ReplacementDiagnostic(
+		BiomeReplacementConfig.Severity severity,
+		String code,
+		int line,
+		String message
+	) {
+		public ReplacementDiagnostic {
+			severity = Objects.requireNonNull(severity, "severity");
+			code = Objects.requireNonNull(code, "code");
+			if (line < 0) {
+				throw new IllegalArgumentException("Replacement diagnostic line must be non-negative");
+			}
+			message = Objects.requireNonNull(message, "message");
+		}
+
+		private static ReplacementDiagnostic of(BiomeReplacementConfig.Diagnostic diagnostic) {
+			return new ReplacementDiagnostic(
+				diagnostic.severity(), diagnostic.code(), diagnostic.line(), diagnostic.message()
+			);
+		}
+
+		private JsonObject toJson() {
+			JsonObject value = new JsonObject();
+			value.addProperty("severity", lower(this.severity));
+			value.addProperty("code", this.code);
+			value.addProperty("line", this.line);
+			value.addProperty("message", this.message);
+			return value;
 		}
 	}
 

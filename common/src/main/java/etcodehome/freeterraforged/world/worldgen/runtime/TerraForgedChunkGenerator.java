@@ -291,6 +291,7 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 			long replacementResourceRevision,
 			String replacementResourceLayerFingerprint,
 			TagEpoch replacementTags,
+			BiomeReplacementConfigSnapshot replacementBiomeConfig,
 			WorldgenContributionRevision.Snapshot replacementContributions,
 			FTFRandomState randomState
 	) throws Exception {
@@ -298,7 +299,7 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 		WorldgenRuntimeBinding.State current = binding.current();
 		WorldgenEpoch refreshedEpoch = current.epoch().withInputs(
 				replacementResourceRevision, replacementResourceLayerFingerprint,
-				replacementTags, replacementContributions
+				replacementTags, replacementBiomeConfig, replacementContributions
 		);
 		try {
 			WorldgenProviderCatalog providers = Objects.requireNonNull(
@@ -327,6 +328,7 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 			long resourceRevision,
 			String resourceLayerFingerprint,
 			TagEpoch tags,
+			BiomeReplacementConfigSnapshot biomeConfig,
 			WorldgenContributionRevision.Snapshot attempted,
 			Throwable failure
 	) {
@@ -335,7 +337,8 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 		);
 		WorldgenEpoch current = binding.epoch();
 		binding.reject(
-				current.id(), resourceRevision, resourceLayerFingerprint, tags, attempted, failure
+				current.id(), resourceRevision, resourceLayerFingerprint, tags, biomeConfig,
+				attempted, failure
 		);
 	}
 
@@ -620,6 +623,7 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 		WorldgenPlan current = this.requireStage(WorldgenFacet.PROVIDER_SELECTION);
 		this.requireStage(WorldgenFacet.SELECTION_DECORATION);
 		this.requireStage(WorldgenFacet.SPATIAL_OWNERSHIP);
+		this.requireStage(WorldgenFacet.BIOME_REPLACEMENT);
 		return current;
 	}
 
