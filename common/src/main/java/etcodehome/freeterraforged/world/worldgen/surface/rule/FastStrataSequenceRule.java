@@ -2,7 +2,9 @@ package etcodehome.freeterraforged.world.worldgen.surface.rule;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.RecordComponent;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
 import org.jetbrains.annotations.Nullable;
@@ -139,8 +141,11 @@ public class FastStrataSequenceRule implements SurfaceRules.SurfaceRule {
 	}
 
 	public static SurfaceRules.RuleSource removeStrataRule(SurfaceRules.RuleSource source, StrataRule target) {
-		if (source == null || source == target) {
+		if (source == null || source == target || source.equals(target)) {
 			return null;
+		}
+		if (source instanceof StrataRule) {
+			return source;
 		}
 		if (source instanceof AcquiredSurfaceRule acquired) {
 			SurfaceRules.RuleSource inner = removeStrataRule(acquired.root(), target);
@@ -174,7 +179,7 @@ public class FastStrataSequenceRule implements SurfaceRules.SurfaceRule {
 
 	@SuppressWarnings("unchecked")
 	public static List<SurfaceRules.RuleSource> getChildren(SurfaceRules.RuleSource source) {
-		if (source == null) {
+		if (source == null || source instanceof StrataRule) {
 			return null;
 		}
 		Class<?> clazz = source.getClass();
@@ -186,7 +191,7 @@ public class FastStrataSequenceRule implements SurfaceRules.SurfaceRule {
 						Method accessor = rc.getAccessor();
 						accessor.setAccessible(true);
 						Object val = accessor.invoke(source);
-						if (val instanceof List<?> l) {
+						if (val instanceof List<?> l && isRuleSourceList(rc.getGenericType(), l)) {
 							return (List<SurfaceRules.RuleSource>) l;
 						}
 					} catch (Throwable ignored) {}
@@ -198,7 +203,7 @@ public class FastStrataSequenceRule implements SurfaceRules.SurfaceRule {
 			Method m = clazz.getMethod("sequence");
 			m.setAccessible(true);
 			Object val = m.invoke(source);
-			if (val instanceof List<?> l) {
+			if (val instanceof List<?> l && isRuleSourceList(m.getGenericReturnType(), l)) {
 				return (List<SurfaceRules.RuleSource>) l;
 			}
 		} catch (Throwable ignored) {}
@@ -208,13 +213,31 @@ public class FastStrataSequenceRule implements SurfaceRules.SurfaceRule {
 				try {
 					f.setAccessible(true);
 					Object val = f.get(source);
-					if (val instanceof List<?> l) {
+					if (val instanceof List<?> l && isRuleSourceList(f.getGenericType(), l)) {
 						return (List<SurfaceRules.RuleSource>) l;
 					}
 				} catch (Throwable ignored) {}
 			}
 		}
 		return null;
+	}
+
+	private static boolean isRuleSourceList(Type genericType, List<?> list) {
+		if (genericType instanceof ParameterizedType pt) {
+			Type[] args = pt.getActualTypeArguments();
+			if (args.length == 1 && args[0] instanceof Class<?> elemClass) {
+				return SurfaceRules.RuleSource.class.isAssignableFrom(elemClass);
+			}
+		}
+		if (list.isEmpty()) {
+			return false;
+		}
+		for (Object elem : list) {
+			if (!(elem instanceof SurfaceRules.RuleSource)) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	public record Source(SurfaceRules.RuleSource base, @Nullable StrataRule strata) implements SurfaceRules.RuleSource {
