@@ -28,7 +28,6 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	Slider zoom3D;
 	CycleButton<RenderMode> renderMode2D;
 	CycleButton<RenderMode> renderMode3D;
-	CycleButton<Boolean> showBiomeOverrides;
 	private int previewNavigationX;
 	private int previewNavigationZ;
 	private boolean previewNavigated;
@@ -41,7 +40,6 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	public static double staticZoom3D = 95.0D;
 	public static RenderMode staticMode2D = RenderMode.BIOME;
 	public static RenderMode staticMode3D = RenderMode.HYPSOMETRIC;
-	public static boolean staticShowBiomeOverrides = true;
 
 	private EditBox seedEdit;
 	private Button seedRandomize;
@@ -72,12 +70,6 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 
 	PreviewComputationCache previewCache() {
 		return this.screen.previewCache();
-	}
-
-	boolean showBiomeOverrides() {
-		return this.showBiomeOverrides == null
-			? staticShowBiomeOverrides
-			: this.showBiomeOverrides.getValue();
 	}
 
 	int previewNavigationX() {
@@ -184,25 +176,6 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 			if (this.preview3D != null) this.preview3D.refreshRenderMode(value);
 		}, RenderMode::displayName);
 
-		boolean initialShowOverrides = this.showBiomeOverrides != null
-			? this.showBiomeOverrides.getValue()
-			: staticShowBiomeOverrides;
-		this.showBiomeOverrides = PresetWidgets.createToggle(
-			initialShowOverrides,
-			FTFTranslationKeys.GUI_BUTTON_SHOW_BIOME_OVERRIDES,
-			(button, value) -> {
-				staticShowBiomeOverrides = value;
-				if (this.preview2D != null) {
-					this.preview2D.state().hoveredOverrideDetails = java.util.List.of();
-					this.preview2D.requestRasterization();
-				}
-				if (this.preview3D != null) {
-					this.preview3D.onRenderModeChanged(this.preview3D.getRenderMode());
-					this.preview3D.requestRasterization();
-				}
-			}
-		);
-
 		// Seed Text Input
 		String currentSeed = this.getInitialSeedText();
 		this.seedEdit = new EditBox(Minecraft.getInstance().font, 0, 0, 0, 20, Component.translatable(FTFTranslationKeys.GUI_BUTTON_SEED)) {
@@ -245,7 +218,7 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		int x = columnX + padding + offset;
 
 		// Viewport, registered first so that dropdowns display over the top
-		this.preview2D = new Preview2D(this, x, yBase + 72, width, width);
+		this.preview2D = new Preview2D(this, x, yBase + 48, width, width);
 		this.preview2D.regenerate();
 		this.screen.addWidgetToScreen(this.preview2D);
 
@@ -261,12 +234,6 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		this.renderMode2D.setWidth(width);
 		this.renderMode2D.setHeight(20);
 		this.screen.addWidgetToScreen(this.renderMode2D);
-
-		this.showBiomeOverrides.setX(x);
-		this.showBiomeOverrides.setY(yBase + 48);
-		this.showBiomeOverrides.setWidth(width);
-		this.showBiomeOverrides.setHeight(20);
-		this.screen.addWidgetToScreen(this.showBiomeOverrides);
 	}
 
 	private void initRightPreviewColumn(int columnX, int padding, int offset, int width, int yBase) {
@@ -317,7 +284,6 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		if (this.zoom3D != null) this.screen.removeWidgetFromScreen(this.zoom3D);
 		if (this.renderMode2D != null) this.screen.removeWidgetFromScreen(this.renderMode2D);
 		if (this.renderMode3D != null) this.screen.removeWidgetFromScreen(this.renderMode3D);
-		if (this.showBiomeOverrides != null) this.screen.removeWidgetFromScreen(this.showBiomeOverrides);
 		if (this.seedEdit != null) this.screen.removeWidgetFromScreen(this.seedEdit);
 		if (this.seedRandomize != null) this.screen.removeWidgetFromScreen(this.seedRandomize);
 

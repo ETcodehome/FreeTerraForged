@@ -91,7 +91,7 @@ useful only for additional dimensions that have explicitly been configured to us
 Use Minecraft's resource reload or reopen the world after editing the file. A failed reload leaves
 the previous immutable plan active. In the preset biome preview, replaced cells use the target
 biome's color with a zoom-aware crosshatch. Hovering shows one line in the form
-`Biome Replacement: source -> target`. The **Show Biome Overrides** control toggles this annotation.
+`Biome Replacement: source -> target`.
 
 Biome Replacer remains available to non-FTF generators when both mods are installed. FTF does not
 call its mutable resolver; FTF-owned plans use the native immutable rules and suppress only

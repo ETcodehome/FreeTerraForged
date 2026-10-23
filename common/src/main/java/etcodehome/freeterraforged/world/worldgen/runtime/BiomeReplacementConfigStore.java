@@ -50,7 +50,6 @@ public final class BiomeReplacementConfigStore {
 		! Compatibility validation preserves Biome Replacer's skip-invalid behavior.
 		format_version=1
 		validation=compatibility
-		placement=preserve
 		""".getBytes(StandardCharsets.UTF_8);
 
 	private static BiomeReplacementConfigSnapshot latest;

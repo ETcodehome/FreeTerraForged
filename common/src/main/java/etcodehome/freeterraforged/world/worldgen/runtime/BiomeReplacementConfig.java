@@ -220,10 +220,16 @@ public record BiomeReplacementConfig(
 
 		String placement = options.get("placement");
 		if (placement != null && !placement.equalsIgnoreCase("preserve")) {
-			diagnostics.add(error(
-				"invalid_placement", optionLines.get("placement"),
-				"placement must be 'preserve'; replacement does not relocate terrain or climate"
-			));
+			Diagnostic diagnostic = validationMode == ValidationMode.STRICT
+				? error(
+					"invalid_placement", optionLines.get("placement"),
+					"placement must be 'preserve'; replacement does not relocate terrain or climate"
+				)
+				: warning(
+					"invalid_placement", optionLines.get("placement"),
+					"Ignoring legacy placement option; replacement preserves terrain and climate"
+				);
+			diagnostics.add(diagnostic);
 		}
 		for (String option : options.keySet()) {
 			if (!option.equals("format_version") && !option.equals("validation")

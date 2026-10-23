@@ -175,7 +175,7 @@ public class Preview3D extends Button implements IPreviewHandler {
                 int isoY = centerVisualY + (dx + dz) * halfH;
                 int renderY = isoY - Math.round(effectiveHeight * heightScale);
                 boolean showOverride = mode == RenderMode.BIOME && activeBiomes != null
-                        && this.page.showBiomeOverrides() && activeBiomes.hasOverride(ix, iz);
+                        && activeBiomes.hasOverride(ix, iz);
                 int topColor = jitteredColor;
                 int sideBaseColor = showOverride
                         ? BiomePreviewColors.overrideTint(jitteredColor)
@@ -477,7 +477,7 @@ public class Preview3D extends Button implements IPreviewHandler {
                     this.state.legendValues[1] = IPreviewHandler.getTerrainName(cell);
                     String biomeId = activeBiomes == null ? null : activeBiomes.id(ix, iz);
                     this.state.hoveredOverrideDetails = getRenderMode() == RenderMode.BIOME
-                            && this.page.showBiomeOverrides() && activeBiomes != null
+                            && activeBiomes != null
                             ? activeBiomes.overrideDetails(ix, iz)
                             : java.util.List.of();
                     if (biomeId != null && !this.state.hoveredOverrideDetails.isEmpty()) {
