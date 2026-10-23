@@ -99,10 +99,17 @@ public final class DynamicOrePlacement {
 		if (!(context.generator() instanceof TerraForgedChunkGenerator)) {
 			return false;
 		}
-		return context.topFeature()
-			.filter(feature -> feature.placement().stream().anyMatch(modifier -> modifier == placement))
-			.filter(DynamicOrePlacement::isStandardOre)
-			.isPresent();
+		PlacedFeature topFeature = context.topFeature().orElse(null);
+		if (topFeature == null || !DynamicOrePlacement.isStandardOre(topFeature)) {
+			return false;
+		}
+		List<PlacementModifier> modifiers = topFeature.placement();
+		for (int i = 0; i < modifiers.size(); i++) {
+			if (modifiers.get(i) == placement) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private static boolean isStandardOre(PlacedFeature feature) {
@@ -114,12 +121,8 @@ public final class DynamicOrePlacement {
 		if (!(context.generator() instanceof TerraForgedChunkGenerator generator)) {
 			return Optional.empty();
 		}
-		Optional<PlacedFeature> topFeature = context.topFeature().filter(DynamicOrePlacement::isStandardOre);
-		if (topFeature.isEmpty()) {
-			return Optional.empty();
-		}
-		int modifierIndex = identityIndex(topFeature.orElseThrow().placement(), modifier);
-		if (modifierIndex < 0) {
+		PlacedFeature topFeature = context.topFeature().orElse(null);
+		if (topFeature == null || !DynamicOrePlacement.isStandardOre(topFeature)) {
 			return Optional.empty();
 		}
 		WorldgenPlans.PlacedFeatures placedFeatures = generator.plan()
@@ -128,17 +131,36 @@ public final class DynamicOrePlacement {
 		if (placedFeatures == null) {
 			return Optional.empty();
 		}
-		DynamicOrePlan plan = placedFeatures.ores();
-		VerticalFrame currentFrame = new VerticalFrame(
-			context.getMinGenY(),
-			context.getMinGenY() + context.getGenDepth() - 1,
-			context.generator().getSeaLevel()
-		);
-		if (plan.verticalFrame().isEmpty() || !plan.verticalFrame().orElseThrow().equals(currentFrame)) {
+		Optional<VerticalTransform> transformOpt = placedFeatures.oreTransform(topFeature);
+		if (transformOpt.isEmpty()) {
 			return Optional.empty();
 		}
-		return placedFeatures.oreTransform(topFeature.orElseThrow())
-			.map(transform -> new Activation(transform, modifierIndex));
+		VerticalTransform transform = transformOpt.get();
+		DynamicOrePlan plan = placedFeatures.ores();
+		Optional<VerticalFrame> vf = plan.verticalFrame();
+		if (vf.isEmpty()) {
+			return Optional.empty();
+		}
+		VerticalFrame currentFrame = vf.get();
+		if (currentFrame.minY() != context.getMinGenY()
+				|| currentFrame.maxY() != context.getMinGenY() + context.getGenDepth() - 1
+				|| currentFrame.seaLevel() != context.generator().getSeaLevel()) {
+			return Optional.empty();
+		}
+
+		List<PlacementModifier> modifiers = topFeature.placement();
+		int modifierIndex = -1;
+		if (transform.heightModifierIndex() < modifiers.size() && modifiers.get(transform.heightModifierIndex()) == modifier) {
+			modifierIndex = transform.heightModifierIndex();
+		} else if (transform.fanoutModifierIndex() < modifiers.size() && modifiers.get(transform.fanoutModifierIndex()) == modifier) {
+			modifierIndex = transform.fanoutModifierIndex();
+		} else {
+			modifierIndex = identityIndex(modifiers, modifier);
+		}
+		if (modifierIndex < 0) {
+			return Optional.empty();
+		}
+		return Optional.of(new Activation(transform, modifierIndex));
 	}
 
 	private static int identityIndex(List<PlacementModifier> modifiers, PlacementModifier target) {

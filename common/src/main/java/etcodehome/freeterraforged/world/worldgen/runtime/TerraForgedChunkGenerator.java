@@ -15,6 +15,7 @@ import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
 import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
@@ -367,17 +368,8 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 			return super.getBaseHeight(x, z, type, level, random);
 		}
 
-		Cell cell = SCRATCH_CELL.get();
-
-		try {
-			// Attempt standard accurate sampling. If a cache closure race condition
-			// occurs anywhere in this call stack, catch it cleanly instead of crashing.
-			ctx.lookup.applyCell(cell, x, z, true, false);
-		} catch (IllegalStateException e) {
-			// Gracefully fallback to safe/approximate sampling if the underlying
-			// cache closed during a background transition or teleport race.
-			ctx.lookup.applyCell(cell, x, z, false, true);
-		}
+		// Fast cache-aware sampling via CellSampler (hits 2D thread cache, FilteredChunkCache, or RawChunkCache)
+		Cell cell = CellSampler.getCachedOrLookup(ctx.lookup, x, z, false);
 
 		// Convert normalized height (0.0F - 1.0F) to world Y block coordinate
 		return ctx.levels.scale(cell.height);
@@ -527,7 +519,7 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 				context,
 				chunk,
 				noiseChunk,
-				surfaceRule
+				etcodehome.freeterraforged.world.worldgen.surface.rule.FastStrataSequenceRule.optimize(surfaceRule)
 		);
 	}
 

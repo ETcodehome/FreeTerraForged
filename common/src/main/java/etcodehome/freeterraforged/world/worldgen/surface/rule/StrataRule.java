@@ -22,6 +22,7 @@ import net.minecraft.tags.TagKey;
 import net.minecraft.util.KeyDispatchDataCodec;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.SurfaceRules;
@@ -153,7 +154,11 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
 				this.currentLayerIndex++;
 			}
 
-			return this.layers.get(this.currentLayerIndex).material();
+			BlockState material = this.layers.get(this.currentLayerIndex).material();
+			if (material.is(Blocks.STONE)) {
+				return null;
+			}
+			return material;
 		}
 
 		private void initBuffer(int x, int z) {

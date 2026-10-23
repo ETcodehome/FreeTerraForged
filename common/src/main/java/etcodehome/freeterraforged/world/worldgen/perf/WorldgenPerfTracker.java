@@ -56,7 +56,7 @@ public final class WorldgenPerfTracker {
 		public final long[] stageNanos = new long[Stage.values().length];
 		public final long[] stageCounts = new long[Stage.values().length];
 
-		// ChunkFilterGrid (40x40 grid + filters)
+		// ChunkFilterGrid / RegionFilterGrid
 		public long gridGenerateCount;
 		public long gridGenerateNanos;
 		public long gridInitNanos;
@@ -82,12 +82,18 @@ public final class WorldgenPerfTracker {
 		public long surfaceRiverWaterNanos;
 		public long surfaceRulesNanos;
 		public long surfaceColumnsNanos;
+		public long strataFastPathHits;
+		public long strataBaseCalls;
+		public long doFillCellsTotal;
+		public long doFillCellsSkipped;
 
-		// RawChunkCache
+		// RawChunkCache & FilteredChunkCache
 		public long rawChunkCacheHits;
 		public long rawChunkCacheMisses;
+		public long filteredChunkCacheHits;
+		public long filteredChunkCacheMisses;
 
-		// Standalone applyCell (outside ChunkFilterGrid.init)
+		// Standalone applyCell (outside RegionFilterGrid.init)
 		public long standaloneApplyCellCount;
 		public long standaloneApplyCellNanos;
 		public final long[] callerCounts = new long[ApplyCellCaller.values().length];
@@ -143,8 +149,14 @@ public final class WorldgenPerfTracker {
 			this.surfaceRiverWaterNanos = 0L;
 			this.surfaceRulesNanos = 0L;
 			this.surfaceColumnsNanos = 0L;
+			this.strataFastPathHits = 0L;
+			this.strataBaseCalls = 0L;
+			this.doFillCellsTotal = 0L;
+			this.doFillCellsSkipped = 0L;
 			this.rawChunkCacheHits = 0L;
 			this.rawChunkCacheMisses = 0L;
+			this.filteredChunkCacheHits = 0L;
+			this.filteredChunkCacheMisses = 0L;
 			this.standaloneApplyCellCount = 0L;
 			this.standaloneApplyCellNanos = 0L;
 			Arrays.fill(this.callerCounts, 0L);
@@ -337,7 +349,7 @@ public final class WorldgenPerfTracker {
 			double gridMs = (gridGenerateNanos / 1_000_000.0) / gridGenerateCount;
 			double erosionMs = (filterErosionNanos / 1_000_000.0) / gridGenerateCount;
 			if (hasStage) stageSummary.append(" | ");
-			stageSummary.append(String.format(Locale.ROOT, "Grid: %.1f ms (Erosion: %.1f ms)", gridMs, erosionMs));
+			stageSummary.append(String.format(Locale.ROOT, "Region Grids: %.1f ms (Erosion: %.1f ms)", gridMs, erosionMs));
 			hasStage = true;
 		}
 		if (hasStage) {
@@ -370,7 +382,10 @@ public final class WorldgenPerfTracker {
 		long cellTerrainNanos = 0, cellRiverNanos = 0, cellClimateNanos = 0;
 		long rivermapGenCount = 0, rivermapGenNanos = 0;
 		long surfaceRiverWaterNanos = 0, surfaceRulesNanos = 0, surfaceColumnsNanos = 0;
+		long strataFastPathHits = 0, strataBaseCalls = 0;
+		long doFillCellsTotal = 0, doFillCellsSkipped = 0;
 		long rawChunkCacheHits = 0, rawChunkCacheMisses = 0;
+		long filteredChunkCacheHits = 0, filteredChunkCacheMisses = 0;
 		long standaloneApplyCount = 0, standaloneApplyNanos = 0;
 		long[] callerCounts = new long[ApplyCellCaller.values().length];
 		long[] callerNanos = new long[ApplyCellCaller.values().length];
@@ -411,8 +426,14 @@ public final class WorldgenPerfTracker {
 			surfaceRiverWaterNanos += s.surfaceRiverWaterNanos;
 			surfaceRulesNanos += s.surfaceRulesNanos;
 			surfaceColumnsNanos += s.surfaceColumnsNanos;
+			strataFastPathHits += s.strataFastPathHits;
+			strataBaseCalls += s.strataBaseCalls;
+			doFillCellsTotal += s.doFillCellsTotal;
+			doFillCellsSkipped += s.doFillCellsSkipped;
 			rawChunkCacheHits += s.rawChunkCacheHits;
 			rawChunkCacheMisses += s.rawChunkCacheMisses;
+			filteredChunkCacheHits += s.filteredChunkCacheHits;
+			filteredChunkCacheMisses += s.filteredChunkCacheMisses;
 			standaloneApplyCount += s.standaloneApplyCellCount;
 			standaloneApplyNanos += s.standaloneApplyCellNanos;
 			for (int i = 0; i < ApplyCellCaller.values().length; i++) {
@@ -504,10 +525,22 @@ public final class WorldgenPerfTracker {
 			lines.add(String.format(Locale.ROOT,
 				"   %-34s : %8.1f ms (%5.1f%%) | %4d chunks | %6.2f ms/chunk",
 				stage.label, totalMs, pct, count, avgMs));
+			if (stage == Stage.NOISE && totalMs > 0 && doFillCellsTotal > 0) {
+				lines.add(String.format(Locale.ROOT,
+					"     - Sky Density Cells Skipped            : %d / %d cells (%5.1f%% skipped above terrain)",
+					doFillCellsSkipped, doFillCellsTotal,
+					pct(doFillCellsSkipped, doFillCellsTotal)));
+			}
 			if (stage == Stage.SURFACE && totalMs > 0) {
 				lines.add(String.format(Locale.ROOT,
 					"     - Surface Rules (super.buildSurface)   : %8.1f ms (%5.1f%% of surface)",
 					surfaceRulesNanos / 1_000_000.0, pct(surfaceRulesNanos, totalStageNanos[i])));
+				if (strataFastPathHits + strataBaseCalls > 0) {
+					lines.add(String.format(Locale.ROOT,
+					"       * Underground Fast-Path (Rock)   : %d hits, %d base calls (%5.1f%% bypassed)",
+						strataFastPathHits, strataBaseCalls,
+						pct(strataFastPathHits, strataFastPathHits + strataBaseCalls)));
+				}
 				lines.add(String.format(Locale.ROOT,
 					"     - River & Lake (placeRiverWater)       : %8.1f ms (%5.1f%% of surface)",
 					surfaceRiverWaterNanos / 1_000_000.0, pct(surfaceRiverWaterNanos, totalStageNanos[i])));
@@ -518,17 +551,21 @@ public final class WorldgenPerfTracker {
 		}
 
 		lines.add("--------------------------------------------------------------------------------");
-		lines.add("3. CHUNK FILTER GRID (40x40 = 1600 Cells) & FILTER PIPELINE:");
+		lines.add("3. REGION FILTER GRID (4x4 Chunks, 88x88 = 7,744 Cells) & FILTER PIPELINE:");
 		double gridTotalMs = gridGenerateNanos / 1_000_000.0;
 		double gridAvgMs = gridGenerateCount > 0 ? gridTotalMs / gridGenerateCount : 0.0;
 		lines.add(String.format(Locale.ROOT,
-			"   ChunkFilterGrid.generateChunkCells : %8.1f ms | %4d grids  | %6.2f ms/grid",
+			"   RegionFilterGrid.generateRegion    : %8.1f ms | %4d grids  | %6.2f ms/grid",
 			gridTotalMs, gridGenerateCount, gridAvgMs));
 		if (gridGenerateCount > 0) {
 			lines.add(String.format(Locale.ROOT,
-				"     - Grid Init (1600x Sliced/Heightmap): %8.1f ms (%5.1f%%) | %6.2f ms/grid",
+				"     - Grid Init (Raw Chunk Extraction): %8.1f ms (%5.1f%%) | %6.2f ms/grid",
 				gridInitNanos / 1_000_000.0, pct(gridInitNanos, gridGenerateNanos),
 				(gridInitNanos / 1_000_000.0) / gridGenerateCount));
+			lines.add(String.format(Locale.ROOT,
+				"       * FilteredChunkCache             : %d hits, %d misses (%5.1f%% hit rate)",
+				filteredChunkCacheHits, filteredChunkCacheMisses,
+				pct(filteredChunkCacheHits, filteredChunkCacheHits + filteredChunkCacheMisses)));
 			lines.add(String.format(Locale.ROOT,
 				"       * RawChunkCache                  : %d hits, %d misses (%5.1f%% hit rate)",
 				rawChunkCacheHits, rawChunkCacheMisses,
@@ -559,12 +596,12 @@ public final class WorldgenPerfTracker {
 		lines.add("4. CELL HEIGHTMAP & SUB-COMPONENT CALCULATIONS (All Heightmap.apply calls):");
 		double hmTotalMs = heightmapApplyNanos / 1_000_000.0;
 		double hmUsPerCall = heightmapApplyCount > 0 ? (heightmapApplyNanos / 1_000.0) / heightmapApplyCount : 0.0;
-		long gridCellsEvaluated = gridGenerateCount * 1600L;
+		long gridCellsEvaluated = gridGenerateCount * 7744L;
 		lines.add(String.format(Locale.ROOT,
 			"   Total Heightmap.apply Calls        : %,10d calls (%8.1f ms | %.2f us/call)",
 			heightmapApplyCount, hmTotalMs, hmUsPerCall));
 		lines.add(String.format(Locale.ROOT,
-			"     - From ChunkFilterGrid (1600/ch) : %,10d calls", gridCellsEvaluated));
+			"     - From RegionFilterGrid (484/ch) : %,10d calls", gridCellsEvaluated));
 		lines.add(String.format(Locale.ROOT,
 			"     - Standalone (Outside Grid!)     : %,10d calls (%8.1f ms)",
 			standaloneApplyCount, standaloneApplyNanos / 1_000_000.0));

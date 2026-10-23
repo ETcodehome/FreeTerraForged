@@ -179,11 +179,17 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 			this.valid = false;
 			this.tableValid[slot] = false;
 			etcodehome.freeterraforged.world.worldgen.GeneratorContext genCtx = lookup.getContext();
-			Cell rawCell = (genCtx != null && genCtx.rawChunkCache != null)
-				? genCtx.rawChunkCache.getExistingRawCell(blockX, blockZ)
-				: null;
-			if (rawCell != null) {
-				slotCell.copyFrom(rawCell);
+			Cell cachedCell = null;
+			if (genCtx != null) {
+				if (genCtx.filteredChunkCache != null) {
+					cachedCell = genCtx.filteredChunkCache.getExistingFilteredCell(blockX, blockZ);
+				}
+				if (cachedCell == null && genCtx.rawChunkCache != null) {
+					cachedCell = genCtx.rawChunkCache.getExistingRawCell(blockX, blockZ);
+				}
+			}
+			if (cachedCell != null) {
+				slotCell.copyFrom(cachedCell);
 			} else if (!WorldgenPerfTracker.ACTIVE) {
 				lookup.applyCell(slotCell.reset(), blockX, blockZ, false, sampleClimate);
 			} else {
@@ -215,11 +221,17 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 		private final Cell[] chunkCells;
 		private final int minBlockX;
 		private final int minBlockZ;
+		private int lastX = Integer.MIN_VALUE;
+		private int lastZ = Integer.MIN_VALUE;
+		private double lastValue;
+		@Nullable
+		private final WorldgenPerfTracker.ThreadStats perfStats;
 		
 		public CacheChunk(@Nullable Cell[] chunkCells, int minBlockX, int minBlockZ, @Nullable Cache2d cache2d) {
 			this.chunkCells = chunkCells;
 			this.minBlockX = minBlockX;
 			this.minBlockZ = minBlockZ;
+			this.perfStats = WorldgenPerfTracker.ACTIVE ? WorldgenPerfTracker.stats() : null;
 		}
 
 		public CacheChunk(@Nullable Cache2d cache2d) {
@@ -230,6 +242,10 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 		public double compute(FunctionContext ctx) {
 			int bx = ctx.blockX();
 			int bz = ctx.blockZ();
+			if (bx == this.lastX && bz == this.lastZ) {
+				return this.lastValue;
+			}
+
 			WorldLookup worldLookup = CellSampler.this.deferredLookup.get();
 			Cell cell;
 			int relX = bx - this.minBlockX;
@@ -238,18 +254,21 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 					&& (this.chunkCells.length >= etcodehome.freeterraforged.world.worldgen.cell.filter.ChunkFilterGrid.HOLDER_ARRAY_LENGTH
 						|| (relX >= 0 && relX < 16 && relZ >= 0 && relZ < 16))) {
 				cell = etcodehome.freeterraforged.world.worldgen.cell.filter.ChunkFilterGrid.getPaddedCell(this.chunkCells, relX, relZ);
-				if (WorldgenPerfTracker.ACTIVE) {
-					WorldgenPerfTracker.ThreadStats ts = WorldgenPerfTracker.stats();
-					ts.cellSamplerChunkHits++;
-					ts.fieldReadCounts[CellSampler.this.field.ordinal()]++;
+				if (this.perfStats != null) {
+					this.perfStats.cellSamplerChunkHits++;
+					this.perfStats.fieldReadCounts[CellSampler.this.field.ordinal()]++;
 				}
 			} else {
 				cell = CELL.get().getAndUpdate(worldLookup, bx, bz, false);
-				if (WorldgenPerfTracker.ACTIVE) {
-					WorldgenPerfTracker.stats().fieldReadCounts[CellSampler.this.field.ordinal()]++;
+				if (this.perfStats != null) {
+					this.perfStats.fieldReadCounts[CellSampler.this.field.ordinal()]++;
 				}
 			}
-			return CellSampler.this.field.readFinite(cell, worldLookup.getHeightmap());
+			double val = CellSampler.this.field.readFinite(cell, worldLookup.getHeightmap());
+			this.lastX = bx;
+			this.lastZ = bz;
+			this.lastValue = val;
+			return val;
 		}
 
 		@Override

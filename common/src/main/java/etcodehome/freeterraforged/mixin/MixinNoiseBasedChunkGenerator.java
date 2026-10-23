@@ -78,7 +78,34 @@ abstract class MixinNoiseBasedChunkGenerator extends ChunkGenerator {
 		boolean perfActive = WorldgenPerfTracker.isActive() && ((Object) this instanceof TerraForgedChunkGenerator);
 		long t0 = perfActive ? System.nanoTime() : 0L;
 		try {
-			return original.call(blender, structureManager, randomState, chunk, minCellY, cellCountY);
+			int effectiveCellCountY = cellCountY;
+			if ((Object) randomState instanceof FTFRandomState ftfRandomState) {
+				GeneratorContext genCtx = ftfRandomState.generatorContext();
+				if (genCtx != null && chunk instanceof IChunkCellsHolder cellsHolder) {
+					Cell[] cells = cellsHolder.freeterraforged$getChunkCells();
+					if (cells != null && cells.length > 0) {
+						float maxHeight = cells[0].height;
+						for (int i = 1; i < cells.length; i++) {
+							if (cells[i].height > maxHeight) {
+								maxHeight = cells[i].height;
+							}
+						}
+						int maxTerrainY = genCtx.levels.scale(maxHeight);
+						int seaLevel = ((NoiseBasedChunkGenerator) (Object) this).getSeaLevel();
+						int targetMaxY = Math.max(maxTerrainY, seaLevel) + 16;
+						int cellHeight = ((NoiseBasedChunkGenerator) (Object) this).generatorSettings().value().noiseSettings().getCellHeight();
+						int minY = minCellY * cellHeight;
+						int neededCells = Math.floorDiv(targetMaxY - minY + cellHeight - 1, cellHeight);
+						effectiveCellCountY = Math.min(cellCountY, Math.max(1, neededCells));
+						if (perfActive) {
+							WorldgenPerfTracker.ThreadStats ts = WorldgenPerfTracker.stats();
+							ts.doFillCellsTotal += cellCountY;
+							ts.doFillCellsSkipped += (cellCountY - effectiveCellCountY);
+						}
+					}
+				}
+			}
+			return original.call(blender, structureManager, randomState, chunk, minCellY, effectiveCellCountY);
 		} finally {
 			if (perfActive) {
 				WorldgenPerfTracker.recordStage(

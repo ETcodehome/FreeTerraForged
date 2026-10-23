@@ -71,6 +71,15 @@ class MixinSurfaceSystem {
 		return Math.floorMod(y, 192) + 3840;
 	}
 
+	@ModifyVariable(
+			method = "buildSurface",
+			at = @At("HEAD"),
+			argsOnly = true
+	)
+	private SurfaceRules.RuleSource freeterraforged$optimizeSurfaceRule(SurfaceRules.RuleSource ruleSource) {
+		return etcodehome.freeterraforged.world.worldgen.surface.rule.FastStrataSequenceRule.optimize(ruleSource);
+	}
+
 	// INJECT AT HEAD to carve out rivers and lakes before surface rules run
 	@Inject(
 			method = "buildSurface",

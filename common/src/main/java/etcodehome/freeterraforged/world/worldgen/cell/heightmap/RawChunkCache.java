@@ -9,7 +9,7 @@ import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 import etcodehome.freeterraforged.world.worldgen.util.PosUtil;
 
 public class RawChunkCache {
-    private static final int MAX_ENTRIES = 1024;
+    private static final int MAX_ENTRIES = 2048;
     private final ConcurrentHashMap<Long, Cell[]> cache = new ConcurrentHashMap<>(512);
     private final ConcurrentLinkedQueue<Long> evictionQueue = new ConcurrentLinkedQueue<>();
     private final AtomicInteger size = new AtomicInteger(0);

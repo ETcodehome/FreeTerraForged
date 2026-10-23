@@ -63,9 +63,7 @@ public abstract class MixinChunkAccess implements IFlowFieldHolder, IChunkCellsH
 			current = this.freeterraforged$chunkCells;
 			if (current == null) {
 				ChunkAccess chunk = (ChunkAccess) (Object) this;
-				int chunkX = chunk.getPos().x;
-				int chunkZ = chunk.getPos().z;
-				current = ChunkFilterGrid.generateChunkCells(chunkX, chunkZ, context);
+				current = context.filteredChunkCache.getFilteredChunk(chunk.getPos().x, chunk.getPos().z);
 				this.freeterraforged$chunkCells = current;
 			}
 		}

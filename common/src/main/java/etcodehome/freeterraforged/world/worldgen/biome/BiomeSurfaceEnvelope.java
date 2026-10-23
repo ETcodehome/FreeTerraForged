@@ -17,39 +17,49 @@ public final class BiomeSurfaceEnvelope {
 	static final int MIN_OFFSET = -3;
 	static final int MAX_OFFSET = 6;
 	static final int MAX_VERTICAL_OFFSET = 5;
-	private static final ThreadLocal<int[]> SCALED_GRID_SCRATCH = ThreadLocal.withInitial(() -> new int[40 * 40]);
-	private final OwnerThreadCache<Entry> values = new OwnerThreadCache<>(16384);
+
+	// Canonical sampling offsets shared between prepopulate and on-demand paths
+	// to guarantee bit-for-bit identical results and eliminate order dependence.
+	private static final int[] SAMPLE_OFFSETS = {-3, -1, 1, 3, 5, 6};
+
+	private static final ThreadLocal<int[]> SCALED_GRID_SCRATCH = ThreadLocal.withInitial(() -> new int[88 * 88]);
+	private final OwnerThreadCache<Entry> values = new OwnerThreadCache<>(65536);
 
 	/**
-	 * Pre-populates the surface envelope cache for all quarts in {@code [-2..5] x [-2..5]}
-	 * around the chunk directly from the freshly initialized 40x40 heightmap grid
-	 * (before filters modify {@code cell.height}).
+	 * Pre-populates the surface envelope cache for all quarts covering the given multi-chunk
+	 * filter grid directly from the freshly initialized heightmap grid.
 	 */
-	public void prepopulateFromChunkGrid(
+	public void prepopulateFromRegionGrid(
 		GeneratorContext context,
-		int chunkX,
-		int chunkZ,
+		int regionChunkX,
+		int regionChunkZ,
 		Cell[] grid,
 		int totalSize,
-		int border
+		int border,
+		int regionChunks
 	) {
-		if (totalSize < 40 || border < 12) {
-			return;
-		}
 		WorldLookup lookup = context.lookup;
 		int maxAllowedY = context.levels.worldHeight - 1;
 		int[] scaled = SCALED_GRID_SCRATCH.get();
-		int len = totalSize * totalSize;
-		for (int i = 0; i < len; i++) {
+		int requiredLen = totalSize * totalSize;
+		if (scaled.length < requiredLen) {
+			scaled = new int[requiredLen];
+			SCALED_GRID_SCRATCH.set(scaled);
+		}
+		for (int i = 0; i < requiredLen; i++) {
 			scaled[i] = Math.min(maxAllowedY, context.levels.scale(grid[i].height));
 		}
 
-		int baseQuartX = chunkX << 2;
-		int baseQuartZ = chunkZ << 2;
-		for (int lqz = -2; lqz <= 5; lqz++) {
+		int baseQuartX = regionChunkX << 2;
+		int baseQuartZ = regionChunkZ << 2;
+		int quartCount = regionChunks << 2;
+		int minQuart = -2;
+		int maxQuart = quartCount + 1;
+
+		for (int lqz = minQuart; lqz <= maxQuart; lqz++) {
 			int qz = baseQuartZ + lqz;
 			int gridBaseZ = border + (lqz << 2);
-			for (int lqx = -2; lqx <= 5; lqx++) {
+			for (int lqx = minQuart; lqx <= maxQuart; lqx++) {
 				int qx = baseQuartX + lqx;
 				long key = ((long) qx << 32) ^ (qz & 0xFFFFFFFFL);
 				Entry existing = this.values.find(key);
@@ -58,9 +68,9 @@ public final class BiomeSurfaceEnvelope {
 				}
 				int gridBaseX = border + (lqx << 2);
 				int minimum = Integer.MAX_VALUE;
-				for (int dz = MIN_OFFSET; dz <= MAX_OFFSET; dz++) {
+				for (int dz : SAMPLE_OFFSETS) {
 					int rowOffset = (gridBaseZ + dz) * totalSize + gridBaseX;
-					for (int dx = MIN_OFFSET; dx <= MAX_OFFSET; dx++) {
+					for (int dx : SAMPLE_OFFSETS) {
 						int y = scaled[rowOffset + dx];
 						if (y < minimum) {
 							minimum = y;
@@ -70,6 +80,21 @@ public final class BiomeSurfaceEnvelope {
 				this.values.store(key, new Entry(lookup, minimum, true));
 			}
 		}
+	}
+
+	/**
+	 * Pre-populates the surface envelope cache for all quarts in {@code [-2..5] x [-2..5]}
+	 * around a single chunk directly from the freshly initialized 40x40 heightmap grid.
+	 */
+	public void prepopulateFromChunkGrid(
+		GeneratorContext context,
+		int chunkX,
+		int chunkZ,
+		Cell[] grid,
+		int totalSize,
+		int border
+	) {
+		this.prepopulateFromRegionGrid(context, chunkX, chunkZ, grid, totalSize, border, 1);
 	}
 
 	public int minimumSurfaceY(GeneratorContext context, int quartX, int quartZ) {
@@ -93,28 +118,60 @@ public final class BiomeSurfaceEnvelope {
 		});
 	}
 
+	private static final class MruSlot {
+		long key = Long.MAX_VALUE;
+		int height;
+		boolean accurate;
+		WeakReference<WorldLookup> lookup = new WeakReference<>(null);
+	}
+
+	private static final ThreadLocal<MruSlot> THREAD_MRU = ThreadLocal.withInitial(MruSlot::new);
+
 	int minimumSurfaceY(WorldLookup lookup, boolean accurate, int quartX, int quartZ, IntBinaryOperator surface) {
 		long key = ((long) quartX << 32) ^ (quartZ & 0xFFFFFFFFL);
+		MruSlot mru = THREAD_MRU.get();
+		if (mru.key == key && mru.accurate == accurate && mru.lookup.get() == lookup) {
+			if (WorldgenPerfTracker.ACTIVE) {
+				WorldgenPerfTracker.ThreadStats ts = WorldgenPerfTracker.stats();
+				ts.biomeEnvelopeCalls++;
+				ts.biomeEnvelopeHits++;
+			}
+			return mru.height;
+		}
+
 		if (!WorldgenPerfTracker.ACTIVE) {
 			Entry cached = this.values.find(key);
-			if (cached != null && cached.get() == lookup && cached.accurate == accurate) return cached.height;
-			int height = minimumSurfaceY(quartX, quartZ, surface);
-			this.values.store(key, new Entry(lookup, height, accurate));
+			int height;
+			if (cached != null && cached.get() == lookup && cached.accurate == accurate) {
+				height = cached.height;
+			} else {
+				height = minimumSurfaceY(quartX, quartZ, surface);
+				this.values.store(key, new Entry(lookup, height, accurate));
+			}
+			mru.key = key;
+			mru.height = height;
+			mru.accurate = accurate;
+			mru.lookup = new WeakReference<>(lookup);
 			return height;
 		}
 		WorldgenPerfTracker.ThreadStats ts = WorldgenPerfTracker.stats();
 		long t0 = System.nanoTime();
 		ts.biomeEnvelopeCalls++;
 		Entry cached = this.values.find(key);
+		int height;
 		if (cached != null && cached.get() == lookup && cached.accurate == accurate) {
 			ts.biomeEnvelopeHits++;
-			ts.biomeEnvelopeNanos += (System.nanoTime() - t0);
-			return cached.height;
+			height = cached.height;
+		} else {
+			ts.biomeEnvelopeMisses++;
+			height = minimumSurfaceY(quartX, quartZ, surface);
+			this.values.store(key, new Entry(lookup, height, accurate));
 		}
-		ts.biomeEnvelopeMisses++;
-		int height = minimumSurfaceY(quartX, quartZ, surface);
-		this.values.store(key, new Entry(lookup, height, accurate));
 		ts.biomeEnvelopeNanos += (System.nanoTime() - t0);
+		mru.key = key;
+		mru.height = height;
+		mru.accurate = accurate;
+		mru.lookup = new WeakReference<>(lookup);
 		return height;
 	}
 
@@ -122,23 +179,21 @@ public final class BiomeSurfaceEnvelope {
 		int baseX = QuartPos.toBlock(quartX);
 		int baseZ = QuartPos.toBlock(quartZ);
 		int minimum = Integer.MAX_VALUE;
-		for (int dz = MIN_OFFSET; dz <= MAX_OFFSET; dz += 2) {
-			for (int dx = MIN_OFFSET; dx <= MAX_OFFSET; dx += 2) {
-				minimum = Math.min(minimum, surface.applyAsInt(baseX + dx, baseZ + dz));
+		for (int dz : SAMPLE_OFFSETS) {
+			int z = baseZ + dz;
+			for (int dx : SAMPLE_OFFSETS) {
+				int y = surface.applyAsInt(baseX + dx, z);
+				if (y < minimum) {
+					minimum = y;
+				}
 			}
 		}
-		for (int dz = MIN_OFFSET; dz <= MAX_OFFSET; dz += 2) {
-			minimum = Math.min(minimum, surface.applyAsInt(baseX + MAX_OFFSET, baseZ + dz));
-		}
-		for (int dx = MIN_OFFSET; dx <= MAX_OFFSET; dx += 2) {
-			minimum = Math.min(minimum, surface.applyAsInt(baseX + dx, baseZ + MAX_OFFSET));
-		}
-		minimum = Math.min(minimum, surface.applyAsInt(baseX + MAX_OFFSET, baseZ + MAX_OFFSET));
 		return minimum;
 	}
 
 	public void clear() {
 		this.values.clear();
+		THREAD_MRU.get().key = Long.MAX_VALUE;
 	}
 
 	private static final class Entry extends WeakReference<WorldLookup> {

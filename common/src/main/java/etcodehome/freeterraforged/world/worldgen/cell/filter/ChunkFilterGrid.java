@@ -175,7 +175,7 @@ public class ChunkFilterGrid implements FilterGrid {
         return chunkCells[relZ * CHUNK_SIZE + relX];
     }
 
-    private static Cell[] allocateHolderCells() {
+    public static Cell[] allocateHolderCells() {
         Cell[] chunkCells = new Cell[HOLDER_ARRAY_LENGTH];
         for (int i = PADDED_OFFSET; i < HOLDER_ARRAY_LENGTH; i++) {
             chunkCells[i] = new Cell();

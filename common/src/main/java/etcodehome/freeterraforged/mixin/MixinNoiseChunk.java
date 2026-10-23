@@ -122,8 +122,10 @@ class MixinNoiseChunk implements IChunkCellsHolder {
 							&& activeChunk.getPos().z == this.chunkZ) {
 						this.freeterraforged$chunkCells = holder.freeterraforged$getOrCreateChunkCells(generatorContext);
 					} else {
-						this.freeterraforged$chunkCells = ChunkFilterGrid.generateChunkCells(this.chunkX, this.chunkZ, generatorContext);
+						this.freeterraforged$chunkCells = generatorContext.filteredChunkCache.getFilteredChunk(this.chunkX, this.chunkZ);
 					}
+				} else {
+					this.freeterraforged$chunkCells = generatorContext.filteredChunkCache.getIfPresent(this.chunkX, this.chunkZ);
 				}
 			}
 		}
@@ -271,7 +273,7 @@ class MixinNoiseChunk implements IChunkCellsHolder {
 	@Override
 	public Cell[] freeterraforged$getOrCreateChunkCells(GeneratorContext context) {
 		if (this.freeterraforged$chunkCells == null) {
-			this.freeterraforged$chunkCells = ChunkFilterGrid.generateChunkCells(this.chunkX, this.chunkZ, context);
+			this.freeterraforged$chunkCells = context.filteredChunkCache.getFilteredChunk(this.chunkX, this.chunkZ);
 		}
 		return this.freeterraforged$chunkCells;
 	}

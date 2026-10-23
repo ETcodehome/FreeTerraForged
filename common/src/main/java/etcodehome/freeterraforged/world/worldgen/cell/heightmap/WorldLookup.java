@@ -44,6 +44,23 @@ public class WorldLookup implements CellLookup {
 	}
 
 	public boolean applyCell(Cell cell, int x, int z, boolean load, boolean applyClimate) {
+		if (this.context != null) {
+			Cell cached = null;
+			if (this.context.filteredChunkCache != null) {
+				cached = this.context.filteredChunkCache.getExistingFilteredCell(x, z);
+			}
+			if (cached == null && this.context.rawChunkCache != null) {
+				cached = this.context.rawChunkCache.getExistingRawCell(x, z);
+			}
+			if (cached != null) {
+				cell.copyFrom(cached);
+				if (load && cell.gradient == 0.0F) {
+					this.computeSteepness(cell, x, z);
+				}
+				return false;
+			}
+		}
+
 		if (!WorldgenPerfTracker.ACTIVE) {
 			boolean res = this.compute(cell, x, z, applyClimate);
 			if (load) {
