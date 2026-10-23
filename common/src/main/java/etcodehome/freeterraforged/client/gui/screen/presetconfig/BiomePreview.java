@@ -10,7 +10,6 @@ import java.util.concurrent.CancellationException;
 import java.util.function.BooleanSupplier;
 
 import net.minecraft.core.Holder;
-import net.minecraft.core.QuartPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.WorldDataConfiguration;
@@ -144,9 +143,7 @@ final class BiomePreview implements AutoCloseable {
                     int worldZ = Math.addExact(
                         centerZ, Math.multiplyExact(z - size / 2, zoom)
                     );
-                    int gridX = QuartPos.fromBlock(worldX);
-                    int gridZ = QuartPos.fromBlock(worldZ);
-                    hatchPhases[index] = (byte) Math.floorMod(gridX + gridZ, 4);
+                    hatchPhases[index] = (byte) hatchPhase(worldX, worldZ, zoom);
                 }
             }
         }
@@ -182,6 +179,15 @@ final class BiomePreview implements AutoCloseable {
             tile, centerX, centerZ, zoom, levels,
             cacheCancelled::getAsBoolean
         )).join();
+    }
+
+    static int hatchPhase(int worldX, int worldZ, int zoom) {
+        if (zoom < 1) {
+            throw new IllegalArgumentException("Preview zoom must be positive");
+        }
+        int sampleX = Math.floorDiv(worldX, zoom);
+        int sampleZ = Math.floorDiv(worldZ, zoom);
+        return Math.floorMod(Math.floorMod(sampleX, 4) + Math.floorMod(sampleZ, 4), 4);
     }
 
     private static void checkCancelled(BooleanSupplier cancelled) {
@@ -225,16 +231,7 @@ final class BiomePreview implements AutoCloseable {
         }
 
         List<String> details() {
-            String action = this.kind == BiomeReplacementPlan.OverrideKind.REPLACED
-                ? "User replacement: " + this.source + " -> " + this.target
-                : "User removal fallback: removed " + this.source + ", used " + this.target;
-            return List.of(
-                "Biome: " + this.target,
-                action,
-                "Rule: index " + this.ruleIndex + ", line " + this.line
-                    + ", selector " + this.selector,
-                "Placement: source biome climate and terrain preserved"
-            );
+            return List.of("Biome Replacement: " + this.source + " -> " + this.target);
         }
     }
 

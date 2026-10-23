@@ -90,6 +90,39 @@ class BiomeReplacementPlanTest {
 	}
 
 	@Test
+	void removalAppliesTheProviderFallbackReplacementOnce() {
+		Holder<Biome> removed = biome(0.2F);
+		Holder<Biome> providerBase = biome(0.5F);
+		Holder<Biome> replacement = biome(0.8F);
+		Holder<Biome> recursiveTarget = biome(0.9F);
+		BiomeReplacementPlan.RuleInfo removalRule = rule(
+			0, 4, BiomeReplacementConfig.ActionKind.REMOVE
+		);
+		IdentityHashMap<Holder<Biome>, BiomeReplacementPlan.Decision> decisions = new IdentityHashMap<>();
+		decisions.put(removed, new BiomeReplacementPlan.Remove(removalRule));
+		decisions.put(providerBase, new BiomeReplacementPlan.Replace(
+			replacement, rule(1, 5, BiomeReplacementConfig.ActionKind.REPLACE)
+		));
+		decisions.put(replacement, new BiomeReplacementPlan.Replace(
+			recursiveTarget, rule(2, 6, BiomeReplacementConfig.ActionKind.REPLACE)
+		));
+		BiomeReplacementPlan plan = plan(
+			decisions, Set.of(removed), Set.of(replacement, recursiveTarget)
+		);
+
+		assertSame(replacement, plan.apply(removed, providerBase));
+		BiomeReplacementPlan.PreviewSelection preview = plan.describe(removed, providerBase);
+		assertSame(replacement, preview.finalBiome());
+		assertSame(removed, preview.preReplacementBiome());
+		assertEquals(BiomeReplacementPlan.OverrideKind.REMOVAL_FALLBACK, preview.overrideKind());
+		assertSame(removalRule, preview.rule());
+		assertEquals(
+			Set.of(replacement),
+			plan.transformPossible(List.of(removed, providerBase))
+		);
+	}
+
+	@Test
 	void candidateRemovalFiltersRequiredTablesAndRejectsEmptyTables() {
 		Holder<Biome> removed = biome(0.3F);
 		Holder<Biome> retained = biome(0.6F);

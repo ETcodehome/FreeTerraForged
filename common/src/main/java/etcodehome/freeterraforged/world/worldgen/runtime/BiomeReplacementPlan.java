@@ -111,6 +111,10 @@ public final class BiomeReplacementPlan {
 				"Biome removal fallback is itself removed: " + biomeId(providerBase)
 			);
 		}
+		Decision fallbackDecision = this.decisions.get(providerBase);
+		if (fallbackDecision instanceof Replace replace) {
+			return replace.target();
+		}
 		return providerBase;
 	}
 

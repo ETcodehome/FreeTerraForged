@@ -1,6 +1,7 @@
 package etcodehome.freeterraforged.world.worldgen.runtime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -27,7 +28,11 @@ class BiomeReplacementConfigStoreTest {
 		assertTrue(Files.isRegularFile(destination));
 		assertEquals(BiomeReplacementConfigSnapshot.Origin.CREATED_TEMPLATE, snapshot.origin());
 		assertEquals(BiomeReplacementConfig.ValidationMode.STRICT, snapshot.config().validationMode());
-		assertTrue(snapshot.content().contains("source_biome > target_biome"));
+		assertTrue(snapshot.content().contains("standard FTF world type"));
+		assertTrue(snapshot.content().contains("config/biome_replacer.properties"));
+		assertTrue(snapshot.content().contains("minecraft:dark_forest > minecraft:cherry_grove"));
+		assertFalse(snapshot.content().contains("validation=strict"));
+		assertFalse(snapshot.content().contains("placement=preserve"));
 	}
 
 	@Test
