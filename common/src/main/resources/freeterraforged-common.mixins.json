@@ -6,6 +6,7 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "MixinBeehiveDecorator",
+    "MixinSnowAndFreezeFeature",
     "BiomeSourceAccessor",
     "MixinNoiseChunk",
     "MixinRandomState",
