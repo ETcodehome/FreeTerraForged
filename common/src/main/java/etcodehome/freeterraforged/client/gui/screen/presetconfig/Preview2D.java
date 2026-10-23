@@ -219,7 +219,6 @@ public class Preview2D extends Button implements IPreviewHandler {
         renderSpawnMarker(guiGraphics);
         updateLegend(mx, my);
         renderLegend(guiGraphics, mx, my, this.state.legendLabels, this.state.legendValues, xPos, yPos + this.width + 30, 10, 0xFFFFFF);
-        renderOverrideDetails(guiGraphics, mx, my);
     }
 
     private void renderSpawnMarker(GuiGraphics guiGraphics) {
@@ -272,14 +271,7 @@ public class Preview2D extends Button implements IPreviewHandler {
                 int iz = Math.max(0, Math.min(maxIndex, NoiseUtil.round(fz * maxIndex)));
                 Cell cell = this.state.tile.lookup(ix, iz);
                 this.state.legendValues[1] = IPreviewHandler.getTerrainName(cell);
-                String biomeId = this.state.biomes == null ? null : this.state.biomes.id(ix, iz);
-                this.state.hoveredOverrideDetails = getRenderMode() == RenderMode.BIOME
-                        && this.state.biomes != null
-                        ? this.state.biomes.overrideDetails(ix, iz)
-                        : java.util.List.of();
-                if (biomeId != null && !this.state.hoveredOverrideDetails.isEmpty()) {
-                    biomeId += " [override]";
-                }
+                String biomeId = this.state.biomes == null ? null : this.state.biomes.legendId(ix, iz);
                 PreviewDetails.Detail detail = PreviewDetails.forCell(
                         getRenderMode(), cell, levels, biomeId
                 );
@@ -296,7 +288,6 @@ public class Preview2D extends Button implements IPreviewHandler {
                 return true;
             } else {
                 this.state.hoveredCoords = "";
-                this.state.hoveredOverrideDetails = java.util.List.of();
             }
         }
         return false;

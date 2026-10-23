@@ -33,7 +33,6 @@ final class PreviewState {
     int centerX, centerZ;
     int hoveredCoordX, hoveredCoordZ;
     String hoveredCoords = "";
-    java.util.List<String> hoveredOverrideDetails = java.util.List.of();
 
     CompletableFuture<IPreviewHandler.FrameResult> pendingGeneration;
     final AtomicReference<IPreviewHandler.FrameResult> pendingFrame = new AtomicReference<>();

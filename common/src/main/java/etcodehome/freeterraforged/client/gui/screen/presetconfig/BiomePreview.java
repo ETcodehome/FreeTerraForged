@@ -230,9 +230,6 @@ final class BiomePreview implements AutoCloseable {
             }
         }
 
-        List<String> details() {
-            return List.of("Biome Replacement: " + this.source + " -> " + this.target);
-        }
     }
 
     record CacheKey(
@@ -367,6 +364,15 @@ final class BiomePreview implements AutoCloseable {
             return this.palette[this.paletteIndex(x, z)];
         }
 
+        String legendId(int x, int z) {
+            String target = this.id(x, z);
+            int overrideIndex = this.overrideIndex(x, z);
+            if (overrideIndex == 0) {
+                return target;
+            }
+            return target + " (overriding " + this.overrides[overrideIndex].source() + ")";
+        }
+
         int color(int x, int z) {
             return this.paletteColors[this.paletteIndex(x, z)];
         }
@@ -383,11 +389,6 @@ final class BiomePreview implements AutoCloseable {
 
         int hatchPhase(int x, int z) {
             return Byte.toUnsignedInt(this.hatchPhases[this.index(x, z)]);
-        }
-
-        List<String> overrideDetails(int x, int z) {
-            int overrideIndex = this.overrideIndex(x, z);
-            return overrideIndex == 0 ? List.of() : this.overrides[overrideIndex].details();
         }
 
         private int index(int x, int z) {

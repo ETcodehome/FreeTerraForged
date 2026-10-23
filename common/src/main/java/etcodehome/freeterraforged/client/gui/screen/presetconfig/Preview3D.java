@@ -74,7 +74,6 @@ public class Preview3D extends Button implements IPreviewHandler {
         this.currentMode = mode;
         this.lastHoveredIx = -1;
         this.lastHoveredIz = -1;
-        this.state.hoveredOverrideDetails = java.util.List.of();
     }
 
     @Override
@@ -347,7 +346,6 @@ public class Preview3D extends Button implements IPreviewHandler {
         renderSpawnMarker(guiGraphics);
         updateLegend(mx, my);
         renderLegend(guiGraphics, mx, my, this.state.legendLabels, this.state.legendValues, x, y + this.width + 30, 10, 0xFFFFFF);
-        renderOverrideDetails(guiGraphics, mx, my);
     }
 
     private static float getHeightScale(float blockW, double zoomValue) {
@@ -446,7 +444,6 @@ public class Preview3D extends Button implements IPreviewHandler {
 
             if (mx < left || mx >= left + this.width || my < top || my >= top + this.height) {
                 this.state.hoveredCoords = "";
-                this.state.hoveredOverrideDetails = java.util.List.of();
                 this.lastHoveredIx = -1;
                 this.lastHoveredIz = -1;
                 return false;
@@ -475,14 +472,7 @@ public class Preview3D extends Button implements IPreviewHandler {
 
                     Cell cell = activeTile.lookup(ix, iz);
                     this.state.legendValues[1] = IPreviewHandler.getTerrainName(cell);
-                    String biomeId = activeBiomes == null ? null : activeBiomes.id(ix, iz);
-                    this.state.hoveredOverrideDetails = getRenderMode() == RenderMode.BIOME
-                            && activeBiomes != null
-                            ? activeBiomes.overrideDetails(ix, iz)
-                            : java.util.List.of();
-                    if (biomeId != null && !this.state.hoveredOverrideDetails.isEmpty()) {
-                        biomeId += " [override]";
-                    }
+                    String biomeId = activeBiomes == null ? null : activeBiomes.legendId(ix, iz);
                     PreviewDetails.Detail detail = PreviewDetails.forCell(
                             getRenderMode(), cell,
                             levels,
@@ -505,7 +495,6 @@ public class Preview3D extends Button implements IPreviewHandler {
                 return true;
             } else {
                 this.state.hoveredCoords = "";
-                this.state.hoveredOverrideDetails = java.util.List.of();
                 this.lastHoveredIx = -1;
                 this.lastHoveredIz = -1;
             }
