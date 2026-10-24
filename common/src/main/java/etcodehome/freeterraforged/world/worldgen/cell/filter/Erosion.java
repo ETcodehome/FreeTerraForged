@@ -1,3 +1,4 @@
+
 /*
  * Copyright (c) Rune Skovbo Johansen (runevision)
  * Copyright (c) 2026 FreeTerraForged Contributors
@@ -13,7 +14,7 @@
  * https://www.mozilla.org/MPL/2.0/
  */
 
-package etcodehome.freeterraforged.world.worldgen.densityfunction.tile.filter;
+package etcodehome.freeterraforged.world.worldgen.cell.filter;
 
 import java.util.function.IntFunction;
 
@@ -22,7 +23,6 @@ import etcodehome.freeterraforged.data.worldgen.preset.settings.ErosionFilterSet
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Size;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.util.Seed;
 
@@ -81,54 +81,45 @@ import etcodehome.freeterraforged.world.worldgen.util.Seed;
  *  - Wavelength: s.scale * BASE_WAVELENGTH_BLOCKS blocks (octave n: divided by lacunarity^n).
  *  - Depth: strength * wavelength, in blocks, so depth-to-wavelength ratio is fixed.
  *  - Slope: blocks of rise per block of run (normalized slope * worldHeight).
- * The accumulated delta is converted to normalized height (divided by worldHeight) only when written,
- * which makes the result independent of world height.
- *
- * Octave count and gain come straight from the preset with no limiting, so every slider is live.
+ * The accumulated delta is converted to normalized height only at the end.
  */
 public class Erosion implements Filter {
 
-    /** Gully wavelength in blocks when s.scale == 1. Octave n has wavelength ~ this / lacunarity^n. */
-    private static final float BASE_WAVELENGTH_BLOCKS = 96.0f;
+    /** Scale of octave 0 in blocks when s.scale == 1.0. */
+    private static final float BASE_WAVELENGTH_BLOCKS = 300.0f;
 
     /**
-     * Slope (blocks/block) below which erosion is fully off, and above which the gate is fully open.
-     * Smoothstep in between. START should sit just above the slope your flat and rolling terrain produces.
-     * The raw slope is tested against START only (to decide whether to run the octave loop); the smoothed
-     * slope uses the full START..FULL smoothstep to scale the carve.
+     * Radius (blocks) of the square window used to find the highest original terrain near each cell.
+     * Must be large enough to look over the shoulder of the octave's gully features, but small enough
+     * not to clamp peaks against a distant higher peak. 3 gives a 7x7 window, well matched to the finer
+     * octaves that produce narrow spikes.
      */
-    private static final float FLAT_SLOPE_START = 0.15f;
-    private static final float FLAT_SLOPE_FULL  = 0.60f;
-
-    /**
-     * Radius (cells) of both the window-min and the box blur applied to the amplitude slope. Carve amplitude
-     * fades out over roughly 2 * this many cells around any crest, rim or valley floor.
-     * Raise it if spikes still show next to sharp ridgelines; lower it if erosion detail is dying out on
-     * terrain that oscillates quickly. 0 disables the smoothing (raw minmod slope, as before).
-     */
-    private static final int GATE_SMOOTH_RADIUS = 2;
-
-    /** Radius (cells) of the window used to find the highest original terrain near a cell. */
     private static final int ENVELOPE_RADIUS = 3;
 
     /**
-     * Extra blocks a cell may rise even when it is already the local maximum. Lower = flatter crests,
-     * higher = more ridge relief survives. Raise ENVELOPE_RADIUS or this value if ridges look too tame.
-     * Must be > 0 (it is the floor of the headroom, which is used as a divisor).
+     * Extra headroom (blocks) allowed above the local envelope maximum. At a sharp peak where all
+     * neighbors are lower, this is the entire headroom available. Keeps peaks rounded rather than flat-topped.
      */
-    private static final float ENVELOPE_MARGIN_BLOCKS = 0.5f;
+    private static final float ENVELOPE_MARGIN_BLOCKS = 1.5f;
 
     /**
-     * Max |delta| as a multiple of (slope * base wavelength): a gully can't be deeper than the slope
-     * supports. Lower this if gentle slopes still ripple too much.
+     * Radius (blocks) of the window-MIN and box-blur passes that smooth the slope field for the carve gate.
+     * A radius of 2 gives a 5x5 window (spreads the crest quiet-zone by 2 blocks, ramps over 2 more).
      */
-    private static final float MAX_DEPTH_PER_SLOPE = 0.5f;
+    private static final int GATE_SMOOTH_RADIUS = 2;
+
+    /** Slope below which erosion is completely disabled (blocks of rise per block of run). */
+    private static final float FLAT_SLOPE_START = 0.05f;
+
+    /** Slope at which erosion reaches full strength (blocks of rise per block of run). */
+    private static final float FLAT_SLOPE_FULL = 0.15f;
+
+    /** Maximum carve depth allowed per unit of slope (expressed as a fraction of wavelength). */
+    private static final float MAX_DEPTH_PER_SLOPE = 0.08f;
 
     /**
-     * Slope (blocks/block) at which the depth cap stops growing. The cap is
-     * MAX_DEPTH_PER_SLOPE * min(slope, MAX_SLOPE_FOR_CAP) * scaleBlocks, so the absolute ceiling is
-     * MAX_DEPTH_PER_SLOPE * MAX_SLOPE_FOR_CAP * scaleBlocks blocks (about 34 with the default preset).
-     * Behaviour below this slope is unchanged. Lower it (2-3) for tamer cliffs, raise it (4-6) for wilder ones.
+     * Slopes above this (blocks/block) no longer increase the depth cap. Prevents cliffs (slope 10-50)
+     * from allowing multi-hundred-block carves that produce vertical spikes. 3.0 blocks/block is ~71 degrees.
      */
     private static final float MAX_SLOPE_FOR_CAP = 3.0f;
 
@@ -196,14 +187,15 @@ public class Erosion implements Filter {
             final int seed,
             final int mapSize,
             final Modifier modifier,
-            final Levels levels
+            final Levels levels,
+            final ErosionFilterSettings settings
     ) {
         this.seed = seed;
         this.mapSize = mapSize;
         this.modifier = modifier;
         this.levels = levels;
 
-        this.s = PresetManager.PM.erosionFilterSettings;
+        this.s = settings != null ? settings : (PresetManager.PM.erosionFilterSettings != null ? PresetManager.PM.erosionFilterSettings : ErosionFilterSettings.makeDefault());
         this.scaleBlocks = s.scale * BASE_WAVELENGTH_BLOCKS;
         this.worldHeight = (float) levels.worldHeight;
         this.strength = 0.20F * s.strengthMultiplier;
@@ -219,9 +211,8 @@ public class Erosion implements Filter {
     }
 
     @Override
-    public void apply(Filterable map, int regionX, int regionZ, int iterationsPerChunk) {
-        final Size size = map.getBlockSize();
-        final int tileSize = size.total(); // no longer shadows the mapSize field
+    public void apply(FilterGrid map, int regionX, int regionZ, int iterationsPerChunk) {
+        final int tileSize = map.getTotalSize();
         final Cell[] cells = map.getBacking();
 
         // Fetch this thread's scratch buffers, growing them only if this map is larger than any seen so far.
@@ -257,9 +248,8 @@ public class Erosion implements Filter {
         // Multiplying by worldHeight gives blocks of rise per block of run.
         //
         // Slopes use a minmod of the one-sided differences (not a central difference), so a plateau rim
-        // cell whose far side is flat reads slope 0 instead of half the cliff drop. Tile borders use the
-        // one side that exists. Border cases are handled outside the hot loops so the interior loops
-        // are branch-light and easy for the JIT to vectorize/inline. Requires tileSize >= 2.
+        // cell whose far side is flat reads slope 0 instead of half the cliff drop. Border cases are
+        // handled outside the hot loops so the interior loops are branch-light. Requires tileSize >= 2.
         final float wh = this.worldHeight;
         final int last = tileSize - 1;
         for (int z = 0; z < tileSize; ++z) {
@@ -662,12 +652,18 @@ public class Erosion implements Filter {
                 float vecZ = pFracZ - j - hashZ;
 
                 float sqrDist = vecX * vecX + vecZ * vecZ;
-                float weight = Math.max(0.0f, (float) Math.exp(-sqrDist * 2.0f) - 0.01111f);
+                if (sqrDist >= 2.25f) {
+                    continue;
+                }
+                float weight = (float) Math.exp(-sqrDist * 2.0f) - 0.01111f;
+                if (weight <= 0.0f) {
+                    continue;
+                }
 
                 weightSum += weight;
                 float waveInput = vecX * sideDirX + vecZ * sideDirZ + offset;
-                phaseDirX += (float) Math.cos(waveInput) * weight;
-                phaseDirZ += (float) Math.sin(waveInput) * weight;
+                phaseDirX += NoiseUtil.cos(waveInput) * weight;
+                phaseDirZ += NoiseUtil.sin(waveInput) * weight;
             }
         }
 
@@ -734,7 +730,7 @@ public class Erosion implements Filter {
     }
 
     public static IntFunction<Erosion> factory(final GeneratorContext context) {
-        return new Factory(Seed.toInt(context.seed.root()), context.levels);
+        return new Factory(Seed.toInt(context.seed.root()), context.levels, context.preset != null ? context.preset.erosionFilters() : null);
     }
 
     private static class Factory implements IntFunction<Erosion> {
@@ -742,16 +738,18 @@ public class Erosion implements Filter {
         private final int seed;
         private final Modifier modifier;
         private final Levels levels;
+        private final ErosionFilterSettings settings;
 
-        private Factory(final int seed, final Levels levels) {
+        private Factory(final int seed, final Levels levels, final ErosionFilterSettings settings) {
             this.seed = seed + SEED_OFFSET;
             this.modifier = Modifier.range(levels.ground, levels.ground(ERODE_RAMP_LEVELS));
             this.levels = levels;
+            this.settings = settings;
         }
 
         @Override
         public Erosion apply(final int size) {
-            return new Erosion(this.seed, size, this.modifier, this.levels);
+            return new Erosion(this.seed, size, this.modifier, this.levels, this.settings);
         }
     }
 }

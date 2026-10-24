@@ -24,7 +24,7 @@ tasks.register("syncDefaultPresetPack", Sync) {
     outputs.upToDateWhen { false }
 }
 
-tasks.matching { ["runClient", "runServer", "runClientRenderDoc", "jar", "shadowJar"].contains(it.name) }.configureEach {
+tasks.matching { ["runClient", "runServer", "runBenchmarkServer", "runClientRenderDoc", "jar", "shadowJar"].contains(it.name) }.configureEach {
     dependsOn tasks.named("syncDefaultPresetPack")
 }
 
@@ -34,6 +34,23 @@ loom {
     runs {
         client {
             ideConfigGenerated(true)
+        }
+        server {
+            // Remove "nogui" so the vanilla Swing interface opens for standard dev runs
+            programArgs.remove("nogui")
+        }
+        benchmarkServer {
+            server()
+            name "Run Headless Worldgen Benchmark Server (NeoForge)"
+            runDir "build/benchmark-run"
+            programArg "nogui"
+            vmArg "-Xmx4G"
+            vmArg "-Djava.awt.headless=true"
+            vmArg "-Dfreeterraforged.benchmark.auto=true"
+            vmArg "-Dfreeterraforged.benchmark.radius=${project.findProperty('ftfBenchmarkRadius') ?: '10'}"
+            vmArg "-Dfreeterraforged.benchmark.x=${project.findProperty('ftfBenchmarkX') ?: '100000'}"
+            vmArg "-Dfreeterraforged.benchmark.z=${project.findProperty('ftfBenchmarkZ') ?: '100000'}"
+            vmArg "-Dfreeterraforged.benchmark.exit=true"
         }
     }
 }
@@ -100,6 +117,25 @@ tasks.register("prodServer", Exec) {
             "-Xmx4G",
             "@libraries/net/neoforged/neoforge/${rootProject.neoforge_version}/unix_args.txt",
             "nogui"
+    }
+}
+
+tasks.named("runBenchmarkServer").configure {
+    doFirst {
+        def benchDir = file("build/benchmark-run")
+        delete(new File(benchDir, "world"))
+        benchDir.mkdirs()
+        new File(benchDir, "eula.txt").text = "eula=true\n"
+        new File(benchDir, "server.properties").text = """\
+level-type=freeterraforged\\:freeterraforged
+level-seed=${project.findProperty('ftfBenchmarkSeed') ?: '-7442486958049957310'}
+online-mode=false
+spawn-protection=0
+view-distance=10
+simulation-distance=10
+sync-chunk-writes=false
+max-tick-time=-1
+""".stripIndent()
     }
 }
 

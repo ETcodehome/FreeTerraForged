@@ -11,24 +11,22 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 
-import etcodehome.freeterraforged.FTFCommon;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
+import etcodehome.freeterraforged.world.worldgen.cell.heightmap.PreviewGrid;
 
 final class PreviewComputationCache implements AutoCloseable {
-    private static final int MAX_TILE_ENTRIES = 6;
+    private static final int MAX_GRID_ENTRIES = 6;
     private static final int MAX_SIDECAR_ENTRIES = 8;
 
-    private final LinkedHashMap<TileKey, TileEntry> tiles = new LinkedHashMap<>(16, 0.75F, true);
-    private final LinkedHashMap<TileKey, PendingTile> pendingTiles = new LinkedHashMap<>();
+    private final LinkedHashMap<GridKey, GridEntry> grids = new LinkedHashMap<>(16, 0.75F, true);
+    private final LinkedHashMap<GridKey, PendingGrid> pendingGrids = new LinkedHashMap<>();
     private final LinkedHashMap<SidecarKey, PendingSidecar> sidecars = new LinkedHashMap<>(16, 0.75F, true);
     private BiomePreview.CacheKey currentRevision;
     private boolean closed;
 
     void advance(BiomePreview.CacheKey revision) {
         Objects.requireNonNull(revision, "revision");
-        PendingTile[] cancellingTiles;
+        PendingGrid[] cancellingGrids;
         PendingSidecar[] cancellingSidecars;
-		List<Tile> retiring = new ArrayList<>();
         synchronized (this) {
             if (this.closed) {
                 throw new CancellationException("Preview cache is closed");
@@ -50,23 +48,21 @@ final class PreviewComputationCache implements AutoCloseable {
             }
 
             this.currentRevision = revision;
-            for (TileEntry entry : this.tiles.values()) {
-				Tile retired = entry.evict();
-				if (retired != null) retiring.add(retired);
+            for (GridEntry entry : this.grids.values()) {
+                entry.evict();
             }
-            this.tiles.clear();
-            cancellingTiles = this.pendingTiles.values().toArray(PendingTile[]::new);
-            this.pendingTiles.clear();
+            this.grids.clear();
+            cancellingGrids = this.pendingGrids.values().toArray(PendingGrid[]::new);
+            this.pendingGrids.clear();
             cancellingSidecars = this.sidecars.values().toArray(PendingSidecar[]::new);
             this.sidecars.clear();
         }
-        for (PendingTile pending : cancellingTiles) {
-            pending.cancel("Preview tile belongs to a superseded acquisition generation");
+        for (PendingGrid pending : cancellingGrids) {
+            pending.cancel("Preview grid belongs to a superseded acquisition generation");
         }
         for (PendingSidecar pending : cancellingSidecars) {
             pending.cancel("Preview sidecar belongs to a superseded acquisition generation");
         }
-		throwIfFailed(closeTiles(retiring));
     }
 
     private static String mismatch(BiomePreview.CacheKey current, BiomePreview.CacheKey requested) {
@@ -83,15 +79,15 @@ final class PreviewComputationCache implements AutoCloseable {
                 + " providers=" + (current.providers() == requested.providers());
     }
 
-    CompletableFuture<TileLease> acquireOrGenerate(
-        TileKey key,
+    CompletableFuture<GridLease> acquireOrGenerate(
+        GridKey key,
         BooleanSupplier requesterCancelled,
-        Function<BooleanSupplier, CompletableFuture<Tile>> factory
+        Function<BooleanSupplier, CompletableFuture<PreviewGrid>> factory
     ) {
         Objects.requireNonNull(key, "key");
         Objects.requireNonNull(requesterCancelled, "requesterCancelled");
         Objects.requireNonNull(factory, "factory");
-        PendingTile pending;
+        PendingGrid pending;
         boolean owner = false;
         synchronized (this) {
             if (this.closed) {
@@ -102,33 +98,33 @@ final class PreviewComputationCache implements AutoCloseable {
             } catch (RuntimeException failure) {
                 return CompletableFuture.failedFuture(failure);
             }
-            TileEntry existing = this.tiles.get(key);
+            GridEntry existing = this.grids.get(key);
             if (existing != null) {
                 if (requesterCancelled.getAsBoolean()) {
                     return CompletableFuture.failedFuture(
-                            new CancellationException("Preview tile request was superseded")
+                            new CancellationException("Preview grid request was superseded")
                     );
                 }
                 return CompletableFuture.completedFuture(existing.retain());
             }
-            pending = this.pendingTiles.get(key);
+            pending = this.pendingGrids.get(key);
             if (pending == null) {
-                pending = new PendingTile(key);
-                this.pendingTiles.put(key, pending);
+                pending = new PendingGrid(key);
+                this.pendingGrids.put(key, pending);
                 owner = true;
             }
             pending.addSubscriber(requesterCancelled);
         }
 
-        PendingTile shared = pending;
-        CompletableFuture<TileLease> lease = shared.result.thenApply(entry -> {
+        PendingGrid shared = pending;
+        CompletableFuture<GridLease> lease = shared.result.thenApply(entry -> {
             synchronized (this) {
                 if (requesterCancelled.getAsBoolean()) {
-                    throw new CancellationException("Preview tile request was superseded");
+                    throw new CancellationException("Preview grid request was superseded");
                 }
                 this.requireCurrent(key.revision());
-                if (this.tiles.get(key) != entry) {
-                    throw new CancellationException("Preview tile no longer belongs to the active cache");
+                if (this.grids.get(key) != entry) {
+                    throw new CancellationException("Preview grid no longer belongs to the active cache");
                 }
                 return entry.retain();
             }
@@ -139,37 +135,30 @@ final class PreviewComputationCache implements AutoCloseable {
         return lease;
     }
 
-    private void finishPendingTile(PendingTile pending, Tile tile, Throwable failure) {
-        TileEntry entry = null;
+    private void finishPendingGrid(PendingGrid pending, PreviewGrid grid, Throwable failure) {
+        GridEntry entry = null;
         Throwable terminalFailure = failure;
         boolean discard;
         synchronized (this) {
-            boolean ownsSlot = this.pendingTiles.get(pending.key) == pending;
+            boolean ownsSlot = this.pendingGrids.get(pending.key) == pending;
             discard = this.closed || pending.isCancelled() || !ownsSlot
                     || this.currentRevision == null || !this.currentRevision.equals(pending.key.revision());
             if (ownsSlot) {
-                this.pendingTiles.remove(pending.key);
+                this.pendingGrids.remove(pending.key);
             }
             if (!discard && failure == null) {
-                if (tile == null) {
-                    terminalFailure = new IllegalStateException("Preview tile factory completed with null");
+                if (grid == null) {
+                    terminalFailure = new IllegalStateException("Preview grid factory completed with null");
                 } else {
-                    entry = new TileEntry(tile);
-                    this.tiles.put(pending.key, entry);
+                    entry = new GridEntry(grid);
+                    this.grids.put(pending.key, entry);
                 }
             }
         }
 
         if (discard || terminalFailure != null) {
-			if (terminalFailure == null) {
-				terminalFailure = new CancellationException("Preview tile generation was superseded");
-			}
-            if (tile != null) {
-				try {
-					tile.close();
-				} catch (RuntimeException | Error cleanupFailure) {
-					terminalFailure.addSuppressed(cleanupFailure);
-				}
+            if (terminalFailure == null) {
+                terminalFailure = new CancellationException("Preview grid generation was superseded");
             }
             pending.result.completeExceptionally(terminalFailure);
             pending.releaseSubscribers();
@@ -178,21 +167,19 @@ final class PreviewComputationCache implements AutoCloseable {
 
         pending.result.complete(entry);
         pending.releaseSubscribers();
-		List<Tile> retiring;
-		synchronized (this) {
-			retiring = this.trimTiles();
-		}
-		logRetirementFailures(closeTiles(retiring));
+        synchronized (this) {
+            this.trimGrids();
+        }
     }
 
-    private final class PendingTile {
-        private final TileKey key;
-        private final CompletableFuture<TileEntry> result = new CompletableFuture<>();
+    private final class PendingGrid {
+        private final GridKey key;
+        private final CompletableFuture<GridEntry> result = new CompletableFuture<>();
         private final List<BooleanSupplier> subscribers = new ArrayList<>();
-        private CompletableFuture<Tile> producer;
+        private CompletableFuture<PreviewGrid> producer;
         private boolean cancelled;
 
-        private PendingTile(TileKey key) {
+        private PendingGrid(GridKey key) {
             this.key = key;
         }
 
@@ -202,14 +189,14 @@ final class PreviewComputationCache implements AutoCloseable {
             }
         }
 
-        private void start(Function<BooleanSupplier, CompletableFuture<Tile>> factory) {
-            CompletableFuture<Tile> started;
+        private void start(Function<BooleanSupplier, CompletableFuture<PreviewGrid>> factory) {
+            CompletableFuture<PreviewGrid> started;
             try {
                 started = Objects.requireNonNull(
-                        factory.apply(this::isCancelled), "Preview tile factory returned null"
+                        factory.apply(this::isCancelled), "Preview grid factory returned null"
                 );
             } catch (Throwable failure) {
-                PreviewComputationCache.this.finishPendingTile(this, null, failure);
+                PreviewComputationCache.this.finishPendingGrid(this, null, failure);
                 return;
             }
             synchronized (this) {
@@ -218,8 +205,8 @@ final class PreviewComputationCache implements AutoCloseable {
                     started.cancel(true);
                 }
             }
-            started.whenComplete((tile, failure) ->
-                    PreviewComputationCache.this.finishPendingTile(this, tile, failure)
+            started.whenComplete((grid, failure) ->
+                    PreviewComputationCache.this.finishPendingGrid(this, grid, failure)
             );
         }
 
@@ -240,7 +227,7 @@ final class PreviewComputationCache implements AutoCloseable {
         }
 
         private void cancel(String message) {
-            CompletableFuture<Tile> cancelling;
+            CompletableFuture<PreviewGrid> cancelling;
             synchronized (this) {
                 if (this.cancelled) {
                     return;
@@ -300,9 +287,9 @@ final class PreviewComputationCache implements AutoCloseable {
         BiomePreview.Sidecar sidecar,
         Throwable failure
     ) {
-		if (failure == null && sidecar == null) {
-			failure = new IllegalStateException("Preview sidecar factory completed with null");
-		}
+        if (failure == null && sidecar == null) {
+            failure = new IllegalStateException("Preview sidecar factory completed with null");
+        }
         boolean discard;
         synchronized (this) {
             boolean ownsSlot = this.sidecars.get(pending.key) == pending;
@@ -382,16 +369,13 @@ final class PreviewComputationCache implements AutoCloseable {
         }
     }
 
-	private List<Tile> trimTiles() {
-		List<Tile> retiring = new ArrayList<>();
-        Iterator<Map.Entry<TileKey, TileEntry>> iterator = this.tiles.entrySet().iterator();
-        while (this.tiles.size() > MAX_TILE_ENTRIES && iterator.hasNext()) {
-            TileEntry entry = iterator.next().getValue();
+    private void trimGrids() {
+        Iterator<Map.Entry<GridKey, GridEntry>> iterator = this.grids.entrySet().iterator();
+        while (this.grids.size() > MAX_GRID_ENTRIES && iterator.hasNext()) {
+            GridEntry entry = iterator.next().getValue();
             iterator.remove();
-			Tile retired = entry.evict();
-			if (retired != null) retiring.add(retired);
+            entry.evict();
         }
-		return retiring;
     }
 
     private void trimSidecars() {
@@ -406,68 +390,65 @@ final class PreviewComputationCache implements AutoCloseable {
 
     @Override
     public void close() {
-        PendingTile[] cancellingTiles;
+        PendingGrid[] cancellingGrids;
         PendingSidecar[] cancellingSidecars;
-		List<Tile> retiring = new ArrayList<>();
         synchronized (this) {
             if (this.closed) {
                 return;
             }
             this.closed = true;
-            for (TileEntry entry : this.tiles.values()) {
-				Tile retired = entry.evict();
-				if (retired != null) retiring.add(retired);
+            for (GridEntry entry : this.grids.values()) {
+                entry.evict();
             }
-            this.tiles.clear();
-            cancellingTiles = this.pendingTiles.values().toArray(PendingTile[]::new);
-            this.pendingTiles.clear();
+            this.grids.clear();
+            cancellingGrids = this.pendingGrids.values().toArray(PendingGrid[]::new);
+            this.pendingGrids.clear();
             cancellingSidecars = this.sidecars.values().toArray(PendingSidecar[]::new);
             this.sidecars.clear();
             this.currentRevision = null;
         }
-        for (PendingTile pending : cancellingTiles) {
+        for (PendingGrid pending : cancellingGrids) {
             pending.cancel("Preview cache is closed");
         }
         for (PendingSidecar pending : cancellingSidecars) {
             pending.cancel("Preview cache is closed");
         }
-		throwIfFailed(closeTiles(retiring));
     }
 
     private void requireCurrent(BiomePreview.CacheKey revision) {
         Objects.requireNonNull(revision, "revision");
         if (this.currentRevision == null || !this.currentRevision.equals(revision)) {
-            throw new java.util.concurrent.CancellationException(
+            throw new CancellationException(
                     "Preview result belongs to a stale acquisition generation"
             );
         }
     }
 
-    record TileKey(BiomePreview.CacheKey revision, int centerX, int centerZ, int zoom, int size, boolean biomePipeline) {
+    record GridKey(BiomePreview.CacheKey revision, int centerX, int centerZ, int zoom, int size, boolean biomePipeline) {
     }
 
     record SidecarKey(BiomePreview.CacheKey revision, int centerX, int centerZ, int zoom, int size) {
     }
 
-    final class TileLease implements AutoCloseable {
-        private TileEntry entry;
+    final class GridLease implements AutoCloseable {
+        private GridEntry entry;
 
-        private TileLease(TileEntry entry) {
+        private GridLease(GridEntry entry) {
             this.entry = entry;
         }
 
-        Tile tile() {
-            TileEntry current = this.entry;
+        PreviewGrid grid() {
+            GridEntry current = this.entry;
             if (current == null) {
-                throw new IllegalStateException("Preview tile lease is closed");
+                throw new IllegalStateException("Preview grid lease is closed");
             }
-            return current.tile;
+            return current.grid;
         }
 
-        TileLease retain() {
-            TileEntry current = this.entry;
+        GridLease retain() {
+            GridEntry current = this.entry;
             if (current == null) {
-                throw new IllegalStateException("Preview tile lease is closed");
+                throw new IllegalStateException("Preview grid lease is closed");
             }
             synchronized (PreviewComputationCache.this) {
                 return current.retain();
@@ -476,92 +457,41 @@ final class PreviewComputationCache implements AutoCloseable {
 
         @Override
         public void close() {
-            TileEntry current = this.entry;
+            GridEntry current = this.entry;
             if (current == null) {
                 return;
             }
             this.entry = null;
-			List<Tile> retiring;
             synchronized (PreviewComputationCache.this) {
-				retiring = new ArrayList<>();
-				Tile released = current.release();
-				if (released != null) retiring.add(released);
-				retiring.addAll(PreviewComputationCache.this.trimTiles());
+                current.release();
+                PreviewComputationCache.this.trimGrids();
             }
-			throwIfFailed(closeTiles(retiring));
         }
     }
 
-    private final class TileEntry {
-        private final Tile tile;
+    private final class GridEntry {
+        private final PreviewGrid grid;
         private int references;
         private boolean evicted;
-        private boolean recycled;
 
-        private TileEntry(Tile tile) {
-            this.tile = tile;
+        private GridEntry(PreviewGrid grid) {
+            this.grid = grid;
         }
 
-        private TileLease retain() {
-            if (this.recycled) {
-                throw new IllegalStateException("Preview tile was recycled");
-            }
+        private GridLease retain() {
             this.references++;
-            return new TileLease(this);
+            return new GridLease(this);
         }
 
-        private Tile release() {
+        private void release() {
             if (this.references <= 0) {
-                throw new IllegalStateException("Preview tile lease underflow");
+                throw new IllegalStateException("Preview grid lease underflow");
             }
             this.references--;
-			return this.recycleIfUnused();
         }
 
-        private Tile evict() {
+        private void evict() {
             this.evicted = true;
-			return this.recycleIfUnused();
-        }
-
-        private Tile recycleIfUnused() {
-            if (this.evicted && this.references == 0 && !this.recycled) {
-                this.recycled = true;
-				return this.tile;
-            }
-			return null;
         }
     }
-
-	private static Throwable closeTiles(List<Tile> tiles) {
-		Throwable failure = null;
-		for (Tile tile : tiles) {
-			try {
-				tile.close();
-			} catch (RuntimeException | Error closeFailure) {
-				failure = mergeFailure(failure, closeFailure);
-			}
-		}
-		return failure;
-	}
-
-	private static Throwable mergeFailure(Throwable current, Throwable next) {
-		if (current == null) return next;
-		if (next instanceof Error && !(current instanceof Error)) {
-			next.addSuppressed(current);
-			return next;
-		}
-		current.addSuppressed(next);
-		return current;
-	}
-
-	private static void throwIfFailed(Throwable failure) {
-		if (failure instanceof RuntimeException runtime) throw runtime;
-		if (failure instanceof Error error) throw error;
-	}
-
-	private static void logRetirementFailures(Throwable failure) {
-		if (failure != null) {
-			FTFCommon.LOGGER.error("Failed retiring an evicted preview tile", failure);
-		}
-	}
 }

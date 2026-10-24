@@ -1,4 +1,4 @@
-package etcodehome.freeterraforged.world.worldgen.densityfunction.tile.filter;
+package etcodehome.freeterraforged.world.worldgen.cell.filter;
 
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
@@ -7,7 +7,7 @@ public interface Modifier {
     float getValueModifier(float value);
     
     default float modify(Cell cell, float value) {
-    	float strengthModifier = 1.0F;
+        float strengthModifier = 1.0F;
         float erosionModifier = cell.terrain.erosionModifier();
         if (erosionModifier != 1.0F) {
             float alpha = NoiseUtil.map(cell.terrainRegionEdge, 0.0F, 0.15F, 0.15F);
@@ -23,7 +23,7 @@ public interface Modifier {
         return v -> 1.0F - this.getValueModifier(v);
     }
     
-    public static Modifier range(float minValue, float maxValue) {
+    static Modifier range(float minValue, float maxValue) {
         return new Modifier() {
             private final float min = minValue;
             private final float max = maxValue;

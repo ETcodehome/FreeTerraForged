@@ -20,6 +20,7 @@ import etcodehome.freeterraforged.world.worldgen.feature.placement.DynamicHeight
 import etcodehome.freeterraforged.world.worldgen.feature.placement.SurfacePlacementClassifier.Classification;
 import etcodehome.freeterraforged.world.worldgen.feature.placement.SurfacePlacementClassifier.SurfacePipeline;
 import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
+import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPlan;
 
 /**
  * Gives a conventional surface placement its original chance first, then
@@ -30,7 +31,7 @@ import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerat
 public final class SurfaceFeatureRescue {
 	private static final int UNSCALED_RESCUE_THRESHOLD = 8;
 	private static final Frame INACTIVE = new Frame(null);
-	private static final ThreadLocal<Deque<Frame>> ACTIVE_FEATURES = new ThreadLocal<>();
+	private static final ThreadLocal<Deque<Frame>> ACTIVE_FEATURES = ThreadLocal.withInitial(ArrayDeque::new);
 
 	private SurfaceFeatureRescue() {
 	}
@@ -40,9 +41,10 @@ public final class SurfaceFeatureRescue {
 			return false;
 		}
 		Run run = null;
-		Classification classification = generator.plan()
-			.map(plan -> plan.placedFeatures().surfaceClassification(feature))
-			.orElseGet(Classification::rejected);
+		WorldgenPlan plan = generator.plan().orElse(null);
+		Classification classification = plan != null
+			? plan.placedFeatures().surfaceClassification(feature)
+			: Classification.rejected();
 		if (classification.eligible()) {
 			Optional<UndergroundFeatureEnclosure.Guard> enclosure = UndergroundFeatureEnclosure.create(context);
 			if (enclosure.isPresent()) {
@@ -50,10 +52,6 @@ public final class SurfaceFeatureRescue {
 			}
 		}
 		Deque<Frame> stack = ACTIVE_FEATURES.get();
-		if (stack == null) {
-			stack = new ArrayDeque<>();
-			ACTIVE_FEATURES.set(stack);
-		}
 		stack.push(run == null ? INACTIVE : new Frame(run));
 		return true;
 	}
@@ -63,13 +61,10 @@ public final class SurfaceFeatureRescue {
 			return;
 		}
 		Deque<Frame> stack = ACTIVE_FEATURES.get();
-		if (stack == null || stack.isEmpty()) {
+		if (stack.isEmpty()) {
 			throw new IllegalStateException("Surface-feature rescue scope underflow");
 		}
 		stack.pop();
-		if (stack.isEmpty()) {
-			ACTIVE_FEATURES.remove();
-		}
 	}
 
 	public static void recordCount(CountPlacement placement, int count) {

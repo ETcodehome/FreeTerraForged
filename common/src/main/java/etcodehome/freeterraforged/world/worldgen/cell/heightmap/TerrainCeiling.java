@@ -1,4 +1,4 @@
-package etcodehome.freeterraforged.world.worldgen.densityfunction.tile.filter;
+package etcodehome.freeterraforged.world.worldgen.cell.heightmap;
 
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
@@ -8,19 +8,16 @@ import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
  * when mountain variability is enabled, instead of allowing the result to be
  * truncated at the build ceiling.
  */
-public record TerrainCeiling(float compressionStart, float linearEnd, float tailStart, float maximum) implements Filter {
+public record TerrainCeiling(float compressionStart, float linearEnd, float tailStart, float maximum) {
 	static final int SURFACE_HEADROOM_BLOCKS = 16;
 	static final int COMPRESSION_BAND_BLOCKS = 112;
 	static final int TAIL_HEADROOM_BLOCKS = 8;
 
-	@Override
-	public void apply(Filterable map, int seedX, int seedZ, int iterationsPerChunk) {
-		this.iterate(map, (source, cell, dx, dz) ->
-			cell.height = compress(cell.height, this.compressionStart, this.linearEnd, this.tailStart, this.maximum)
-		);
+	public float apply(float height) {
+		return compress(height, this.compressionStart, this.linearEnd, this.tailStart, this.maximum);
 	}
 
-	static float compress(float height, float compressionStart, float linearEnd, float tailStart, float maximum) {
+	public static float compress(float height, float compressionStart, float linearEnd, float tailStart, float maximum) {
 		if (height <= compressionStart) {
 			return height;
 		}

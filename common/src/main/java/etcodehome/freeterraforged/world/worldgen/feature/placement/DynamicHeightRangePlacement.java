@@ -2,7 +2,9 @@ package etcodehome.freeterraforged.world.worldgen.feature.placement;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
 import com.google.gson.JsonElement;
@@ -16,6 +18,7 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.levelgen.placement.HeightRangePlacement;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.minecraft.world.level.levelgen.placement.PlacementContext;
+import net.minecraft.world.level.levelgen.placement.PlacementModifier;
 import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPlan;
 
@@ -34,6 +37,8 @@ public final class DynamicHeightRangePlacement {
 	public static final int REFERENCE_MIN_Y = -64;
 	public static final int REFERENCE_MAX_Y = 256;
 	public static final int REFERENCE_SPAN = REFERENCE_MAX_Y - REFERENCE_MIN_Y + 1;
+
+	private static final Map<Long, List<HeightBand>> BANDS_CACHE = new ConcurrentHashMap<>();
 
 	private DynamicHeightRangePlacement() {
 	}
@@ -74,7 +79,7 @@ public final class DynamicHeightRangePlacement {
 			return Optional.empty();
 		}
 
-		List<HeightBand> bands = createBands(minY, maxY);
+		List<HeightBand> bands = getOrCreateBands(minY, maxY);
 		List<BlockPos> positions = new ArrayList<>(bands.size());
 		int baseY = Mth.randomBetweenInclusive(random, REFERENCE_MIN_Y, REFERENCE_MAX_Y);
 		positions.add(origin.atY(baseY));
@@ -122,6 +127,11 @@ public final class DynamicHeightRangePlacement {
 			&& anchor.has(member)
 			&& anchor.get(member).isJsonPrimitive()
 			&& anchor.get(member).getAsInt() == expected;
+	}
+
+	static List<HeightBand> getOrCreateBands(int minY, int maxY) {
+		long key = (((long) minY) << 32) | (maxY & 0xFFFFFFFFL);
+		return BANDS_CACHE.computeIfAbsent(key, k -> createBands(minY, maxY));
 	}
 
 	static List<HeightBand> createBands(int minY, int maxY) {
@@ -183,8 +193,17 @@ public final class DynamicHeightRangePlacement {
 	}
 
 	private static Optional<PlacedFeature> getTopLevelFeature(HeightRangePlacement placement, PlacementContext context) {
-		return context.topFeature()
-			.filter(topFeature -> topFeature.placement().stream().anyMatch(modifier -> modifier == placement));
+		PlacedFeature topFeature = context.topFeature().orElse(null);
+		if (topFeature == null) {
+			return Optional.empty();
+		}
+		List<PlacementModifier> modifiers = topFeature.placement();
+		for (int i = 0; i < modifiers.size(); i++) {
+			if (modifiers.get(i) == placement) {
+				return Optional.of(topFeature);
+			}
+		}
+		return Optional.empty();
 	}
 
 	private static long extensionSeed(PlacementContext context, ResourceLocation featureId, BlockPos origin, int baseY) {

@@ -26,7 +26,7 @@ package etcodehome.freeterraforged.world.worldgen.feature.placement.poisson;
 
 import com.mojang.serialization.MapCodec;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
+import etcodehome.freeterraforged.world.worldgen.cell.heightmap.WorldLookup;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 
 public class BiomeVariance implements Noise {
@@ -45,17 +45,23 @@ public class BiomeVariance implements Noise {
 
     private final float fade;
     private final float range;
-    private final Tile.Chunk chunk;
+    private final WorldLookup lookup;
+    private final ThreadLocal<Cell> localCell = ThreadLocal.withInitial(Cell::new);
 
-    public BiomeVariance(Tile.Chunk chunk, float fade) {
-        this.chunk = chunk;
+    public BiomeVariance(WorldLookup lookup, float fade) {
+        this.lookup = lookup;
         this.fade = fade;
         this.range = fade - MIN_FADE;
     }
 
     @Override
 	public float compute(float x, float z, int seed) {
-        Cell cell = this.chunk.getCell((int) x, (int) z);
+        if (this.lookup == null) {
+            return NO_SPREAD;
+        }
+        Cell cell = this.localCell.get();
+        cell.reset();
+        this.lookup.applyBiomeRegion(cell, (int) x, (int) z);
         float edge = 0.02F + cell.biomeRegionEdge;
 
         if (edge >= this.fade) {

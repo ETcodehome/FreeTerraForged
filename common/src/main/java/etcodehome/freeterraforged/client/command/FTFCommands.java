@@ -3,11 +3,12 @@ package etcodehome.freeterraforged.client.command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.context.CommandContext;
+import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.TileCache;
+import etcodehome.freeterraforged.world.worldgen.perf.WorldgenBenchmarkRunner;
+import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
@@ -69,7 +70,64 @@ public class FTFCommands {
 
                                             return 1;
                                         }))))
+                .then(Commands.literal("benchmark")
+                        .executes(context -> {
+                            return WorldgenBenchmarkRunner.startDefaultBenchmark(
+                                context.getSource(), WorldgenBenchmarkRunner.DEFAULT_RADIUS
+                            ) ? 1 : 0;
+                        })
+                        .then(Commands.argument("radius", IntegerArgumentType.integer(1, 32))
+                                .executes(context -> {
+                                    int radius = IntegerArgumentType.getInteger(context, "radius");
+                                    return WorldgenBenchmarkRunner.startDefaultBenchmark(context.getSource(), radius) ? 1 : 0;
+                                })
+                                .then(Commands.argument("x", IntegerArgumentType.integer())
+                                        .then(Commands.argument("z", IntegerArgumentType.integer())
+                                                .executes(context -> {
+                                                    int radius = IntegerArgumentType.getInteger(context, "radius");
+                                                    int x = IntegerArgumentType.getInteger(context, "x");
+                                                    int z = IntegerArgumentType.getInteger(context, "z");
+                                                    return WorldgenBenchmarkRunner.startBenchmark(context.getSource(), radius, x, z, false) ? 1 : 0;
+                                                })))))
+                .then(Commands.literal("perf")
+                        .then(Commands.literal("start")
+                                .executes(context -> {
+                                    WorldgenPerfTracker.start();
+                                    context.getSource().sendSystemMessage(Component.literal("[FTF-Perf] Started worldgen performance tracking."));
+                                    return 1;
+                                }))
+                        .then(Commands.literal("stop")
+                                .executes(context -> {
+                                    WorldgenPerfTracker.stop();
+                                    sendPerfReport(context.getSource(), "Manual profiling session stopped");
+                                    return 1;
+                                }))
+                        .then(Commands.literal("report")
+                                .executes(context -> {
+                                    sendPerfReport(context.getSource(), "Live profiling snapshot");
+                                    return 1;
+                                }))
+                        .then(Commands.literal("reset")
+                                .executes(context -> {
+                                    WorldgenPerfTracker.reset();
+                                    context.getSource().sendSystemMessage(Component.literal("[FTF-Perf] Reset worldgen performance counters."));
+                                    return 1;
+                                })))
         );
+    }
+
+    private static void sendPerfReport(CommandSourceStack source, String title) {
+        String report = WorldgenPerfTracker.buildReport(title);
+        for (String line : report.split("\n")) {
+            if (!line.isBlank()) {
+                FTFCommon.LOGGER.info("[FTF-Perf] {}", line);
+                source.sendSystemMessage(Component.literal(line));
+            }
+        }
+        Path saved = WorldgenBenchmarkRunner.writeReportFile(report);
+        if (saved != null) {
+            source.sendSystemMessage(Component.literal("[FTF-Perf] Saved report to: " + saved.toAbsolutePath()));
+        }
     }
 
     private static ServerLevel deduceServerLevel(CommandSourceStack source) {
@@ -134,6 +192,7 @@ public class FTFCommands {
         }
 
         // Phase 1: Generate heightmap sections safely in the background thread (no thread starvation)
+        Cell cell = new Cell();
         for (int cx = 0; cx < chunksX; cx++) {
             for (int cz = 0; cz < chunksZ; cz++) {
                 int startX = minX + cx * CHUNK;
@@ -144,41 +203,14 @@ public class FTFCommands {
                 BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_USHORT_GRAY);
                 WritableRaster raster = img.getRaster();
 
-                int currentRx = Integer.MIN_VALUE;
-                int currentRz = Integer.MIN_VALUE;
-                TileCache.Lease currentLease = null;
-                Tile currentTile = null;
-
-                try {
-                    for (int x = 0; x < w; x++) {
-                        int worldX = startX + x;
-                        int chunkXCoord = worldX >> 4;
-                        int rx = generatorContext.cache.chunkToTile(chunkXCoord);
-
-                        for (int z = 0; z < h; z++) {
-                            int worldZ = startZ + z;
-                            int chunkZCoord = worldZ >> 4;
-                            int rz = generatorContext.cache.chunkToTile(chunkZCoord);
-
-                            if (rx != currentRx || rz != currentRz || currentLease == null) {
-                                if (currentLease != null) {
-                                    currentLease.close();
-                                }
-                                currentRx = rx;
-                                currentRz = rz;
-                                currentLease = generatorContext.cache.acquire(rx, rz);
-                                currentTile = currentLease.tile();
-                            }
-
-                            Cell cell = currentTile.lookup(worldX, worldZ);
-                            float height = generatorContext.levels.getNormalizedElevation(cell.height);
-                            int gray = (int) (Math.clamp(height, 0f, 1f) * 65535);
-                            raster.setSample(x, z, 0, gray);
-                        }
-                    }
-                } finally {
-                    if (currentLease != null) {
-                        currentLease.close();
+                for (int x = 0; x < w; x++) {
+                    int worldX = startX + x;
+                    for (int z = 0; z < h; z++) {
+                        int worldZ = startZ + z;
+                        generatorContext.lookup.applyCell(cell.reset(), worldX, worldZ, false, false);
+                        float height = generatorContext.levels.getNormalizedElevation(cell.height);
+                        int gray = (int) (Math.clamp(height, 0f, 1f) * 65535);
+                        raster.setSample(x, z, 0, gray);
                     }
                 }
 

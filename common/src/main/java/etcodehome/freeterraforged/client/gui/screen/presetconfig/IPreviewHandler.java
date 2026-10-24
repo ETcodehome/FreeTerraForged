@@ -25,7 +25,7 @@ import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.SpawnType;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
+import etcodehome.freeterraforged.world.worldgen.cell.heightmap.PreviewGrid;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 
 /**
@@ -77,7 +77,7 @@ public interface IPreviewHandler {
     RasterParams captureRasterParams();
 
     /** Turns a generated tile into pixels. For 2D this is a flat top-down buffer; for 3D an isometric projection. */
-    int[] createRasterData(Tile tile, BiomePreview.Sidecar biomes, RenderMode mode, Levels levels, WorldSettings.Properties properties, RasterParams params);
+    int[] createRasterData(PreviewGrid tile, BiomePreview.Sidecar biomes, RenderMode mode, Levels levels, WorldSettings.Properties properties, RasterParams params);
 
     /** Applies a freshly generated frame's raster data (only called when the frame has no failure). */
     void applyGeneratedFrame(FrameResult result);
@@ -145,7 +145,7 @@ public interface IPreviewHandler {
         onRenderModeChanged(mode);
         PreviewState state = state();
         boolean biomePipeline = mode == RenderMode.BIOME;
-        if (state.tile == null
+        if (state.grid == null
                 || (mode == RenderMode.BIOME && state.biomes == null)
                 || state.generatedWithBiomePipeline != biomePipeline) {
             regenerate();
@@ -282,11 +282,11 @@ public interface IPreviewHandler {
                     cz = localNavigated ? localOffsetZ : (properties.spawnType == SpawnType.USER_SELECTED ? properties.spawnZ : 0);
                 }
 
-                PreviewComputationCache.TileKey tileKey = new PreviewComputationCache.TileKey(
+                PreviewComputationCache.GridKey gridKey = new PreviewComputationCache.GridKey(
                         requestedKey, cx, cz, zoomLevel, SIZE, biomePipeline
                 );
                 return new PreGenContext(
-                        generatorContext, biomePreview, cx, cz, zoomLevel, tileKey,
+                        generatorContext, biomePreview, cx, cz, zoomLevel, gridKey,
                         properties, generatorContext.levels, biomeFailure, lease
                 );
             } catch (RuntimeException | Error failure) {
@@ -305,18 +305,20 @@ public interface IPreviewHandler {
         state.pendingGeneration = setupStage.thenCompose(preGen -> {
             try {
                 cancellation.check();
-                CompletableFuture<PreviewComputationCache.TileLease> tileFuture =
+                CompletableFuture<PreviewComputationCache.GridLease> gridFuture =
                         page.previewCache().acquireOrGenerate(
-                                preGen.tileKey,
+                                preGen.gridKey,
                                 cancellation::isCancelled,
-                                cacheCancelled -> preGen.context.generator.generateZoomed(
-                                        preGen.cx, preGen.cz, preGen.zoomLevel, cacheCancelled
+                                cacheCancelled -> PreviewGrid.generateZoomed(
+                                        preGen.context.heightmap,
+                                        preGen.context.filters,
+                                        preGen.cx, preGen.cz, preGen.zoomLevel, SIZE, cacheCancelled
                                 )
                         );
-                return tileFuture.thenApply(lease -> {
+                return gridFuture.thenApply(lease -> {
                     try {
                         cancellation.check();
-                        Tile generatedTile = lease.tile();
+                        PreviewGrid generatedTile = lease.grid();
                         BiomePreview.Sidecar biomes = null;
                         PreviewFailure failure = preGen.biomeFailure;
                         if (failure == null && biomePipeline) {
@@ -424,13 +426,13 @@ public interface IPreviewHandler {
                 if (!PreviewCancellation.isCancellation(throwable)) {
                     state.previewFailure = PreviewFailure.log("Failed handling " + getFailureLabel() + " preview generation pipeline", throwable);
                 }
-            } else if (!state.isDirty && result != null && result.tile != null
+            } else if (!state.isDirty && result != null && result.grid != null
                     && !cancellation.isCancelled()
                     && mode == getRenderMode()) {
-                PreviewComputationCache.TileLease previousLease = state.tileLease;
+                PreviewComputationCache.GridLease previousLease = state.gridLease;
                 try {
-                    state.tileLease = result.lease;
-                    state.tile = result.lease.tile();
+                    state.gridLease = result.lease;
+                    state.grid = result.lease.grid();
                     state.biomes = result.biomes;
                     state.frameProperties = result.properties;
                     state.frameLevels = result.levels;
@@ -471,7 +473,7 @@ public interface IPreviewHandler {
     /** Re-rasterizes the current tile without a full regenerate - used when only the render mode changes. */
     default void requestRasterization() {
         PreviewState state = state();
-        PreviewComputationCache.TileLease current = state.tileLease;
+        PreviewComputationCache.GridLease current = state.gridLease;
         if (current == null || state.closed || rasterizationBlocked()) {
             return;
         }
@@ -480,7 +482,7 @@ public interface IPreviewHandler {
         PreviewCancellation cancellation = new PreviewCancellation();
         state.rasterCancellation = cancellation;
         long version = state.rasterRequestVersion.incrementAndGet();
-        PreviewComputationCache.TileLease retained = current.retain();
+        PreviewComputationCache.GridLease retained = current.retain();
         RenderMode mode = getRenderMode();
         WorldSettings.Properties properties = state.frameProperties;
         Levels levels = state.frameLevels;
@@ -492,7 +494,7 @@ public interface IPreviewHandler {
         BiomePreview.Sidecar sidecar = state.biomes;
         state.pendingRasterization = CompletableFuture.supplyAsync(() -> {
             cancellation.check();
-            return createRasterData(retained.tile(), sidecar, mode, levels, properties, params);
+            return createRasterData(retained.grid(), sidecar, mode, levels, properties, params);
         }, net.minecraft.Util.backgroundExecutor()).whenComplete((pixels, throwable) -> {
             Throwable completionFailure = throwable;
             try {
@@ -558,14 +560,14 @@ public interface IPreviewHandler {
 			failure = mergeFailure(failure, resourceFailure);
 		}
 		try {
-			if (state.tileLease != null) {
-				state.tileLease.close();
+			if (state.gridLease != null) {
+				state.gridLease.close();
 			}
 		} catch (RuntimeException | Error leaseFailure) {
 			failure = mergeFailure(failure, leaseFailure);
 		} finally {
-			state.tileLease = null;
-			state.tile = null;
+			state.gridLease = null;
+			state.grid = null;
 			state.biomes = null;
 			state.frameProperties = null;
 			state.frameLevels = null;
@@ -766,7 +768,7 @@ public interface IPreviewHandler {
         final int cx;
         final int cz;
         final int zoomLevel;
-        final PreviewComputationCache.TileKey tileKey;
+        final PreviewComputationCache.GridKey gridKey;
         final WorldSettings.Properties properties;
         final Levels levels;
         final PreviewFailure biomeFailure;
@@ -778,7 +780,7 @@ public interface IPreviewHandler {
                 int cx,
                 int cz,
                 int zoomLevel,
-                PreviewComputationCache.TileKey tileKey,
+                PreviewComputationCache.GridKey gridKey,
                 WorldSettings.Properties properties,
                 Levels levels,
                 PreviewFailure biomeFailure,
@@ -789,7 +791,7 @@ public interface IPreviewHandler {
             this.cx = cx;
             this.cz = cz;
             this.zoomLevel = zoomLevel;
-            this.tileKey = tileKey;
+            this.gridKey = gridKey;
             this.properties = properties;
             this.levels = levels;
             this.biomeFailure = biomeFailure;
@@ -935,8 +937,8 @@ public interface IPreviewHandler {
     }
 
     final class FrameResult implements AutoCloseable {
-        final PreviewComputationCache.TileLease lease;
-        final Tile tile;
+        final PreviewComputationCache.GridLease lease;
+        final PreviewGrid grid;
         final BiomePreview.Sidecar biomes;
         final int centerX;
         final int centerZ;
@@ -950,7 +952,7 @@ public interface IPreviewHandler {
                 new java.util.concurrent.atomic.AtomicBoolean();
 
         FrameResult(
-                PreviewComputationCache.TileLease lease,
+                PreviewComputationCache.GridLease lease,
                 BiomePreview.Sidecar biomes,
                 int centerX,
                 int centerZ,
@@ -962,7 +964,7 @@ public interface IPreviewHandler {
                 PreviewFailure failure
         ) {
             this.lease = lease;
-            this.tile = lease.tile();
+            this.grid = lease.grid();
             this.biomes = biomes;
             this.centerX = centerX;
             this.centerZ = centerZ;

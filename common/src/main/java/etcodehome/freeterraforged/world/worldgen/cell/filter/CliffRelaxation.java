@@ -1,11 +1,10 @@
-package etcodehome.freeterraforged.world.worldgen.densityfunction.tile.filter;
+package etcodehome.freeterraforged.world.worldgen.cell.filter;
 
 import java.util.function.IntFunction;
 
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Size;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.util.Seed;
 
@@ -21,7 +20,7 @@ import etcodehome.freeterraforged.world.worldgen.util.Seed;
  *  - STRENGTH: scales the relax rate, so a face is softened heavily in one stretch and lightly in the next.
  *  - THRESHOLD: scales the relief thresholds, so some stretches stay sheer while others get relaxed.
  * Both fields use only a broad octave plus a weaker mid octave (no fine grain), so the result is organic
- * variation rather than noise. Noise is sampled in WORLD coordinates, so it is seamless across tiles and
+ * variation rather than noise. Noise is sampled in WORLD coordinates, so it is seamless across chunks and
  * deterministic. When the filter runs more than once in the pipeline, give each instance a different salt
  * so the variation patterns do not line up.
  *
@@ -81,9 +80,8 @@ public class CliffRelaxation implements Filter {
     }
 
     @Override
-    public void apply(Filterable map, int regionX, int regionZ, int iterationsPerChunk) {
-        final Size size = map.getBlockSize();
-        final int tileSize = size.total();
+    public void apply(FilterGrid map, int regionX, int regionZ, int iterationsPerChunk) {
+        final int tileSize = map.getTotalSize();
         final Cell[] cells = map.getBacking();
         final int total = tileSize * tileSize;
 
@@ -113,7 +111,7 @@ public class CliffRelaxation implements Filter {
             mods[i] = (cell.erosionMask || !Float.isFinite(heights[i])) ? 0.0f : this.modifier.modify(cell, 1.0F);
         }
 
-        // Per-cell lateral variation, computed once (constant across passes). World-space so tiles match.
+        // Per-cell lateral variation, computed once (constant across passes). World-space so chunks match.
         // Only cells that can change need it.
         final int worldBlockX = map.getBlockX();
         final int worldBlockZ = map.getBlockZ();

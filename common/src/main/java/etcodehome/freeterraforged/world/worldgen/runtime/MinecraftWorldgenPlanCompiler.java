@@ -838,8 +838,10 @@ public final class MinecraftWorldgenPlanCompiler {
 					(identityQuartX, identityQuartY, identityQuartZ) -> providers.projectTarget(
 						domain,
 						result.usedFallback(),
-						samplerDecoration.sample(
-							sampler, identityQuartX, identityQuartY, identityQuartZ
+						etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeClimatePolicy.sampleWithoutBanding(
+							() -> samplerDecoration.sample(
+								sampler, identityQuartX, identityQuartY, identityQuartZ
+							)
 						)
 					)
 				);
