@@ -31,6 +31,7 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
 
     protected float bridgeChance;
     protected float bridgeReach;
+    protected PlateUpliftBridge plateUpliftBridge;
     private final int bridgeSeed;
 
     private static final class BoundaryScratch {
@@ -80,6 +81,8 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
 
         // Must stay the LAST seed.next() so existing noise seeds above are not shifted.
         this.bridgeSeed = seed.next();
+        int tectonicSeed = seed.next();
+        this.plateUpliftBridge = new PlateUpliftBridge(this, this.seed, this.jitter, tectonicSeed, settings.continent.tectonicPlateUplift);
     }
 
     @Override
@@ -163,18 +166,25 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
      * getVariedDistanceValue scales distance per cell, which would create a seam across an open border if the two
      * cells had different modifiers.
      */
-    private boolean canBridge(int cx, int cy) {
+    public boolean canBridge(int cx, int cy) {
         return !this.shouldSkip(cx, cy) && this.getContinentSizeModifier(cx, cy) >= 1.0F;
     }
 
     /** Symmetric per-border roll in [0,1]; identical when evaluated from either side of the border. */
-    private float bridgeRoll(int ax, int ay, int bx, int by) {
+    public float bridgeRoll(int ax, int ay, int bx, int by) {
         if (ax > bx || (ax == bx && ay > by)) {
             int t = ax; ax = bx; bx = t;
             t = ay; ay = by; by = t;
         }
         int s = this.bridgeSeed ^ (bx * 73856093) ^ (by * 19349663);
         return 0.5F + NoiseUtil.valCoord2D(s, ax, ay) * 0.5F;
+    }
+
+    public boolean isBridged(int ax, int ay, int bx, int by) {
+        return this.bridgeChance > 0.0F
+                && this.canBridge(ax, ay)
+                && this.canBridge(bx, by)
+                && this.bridgeRoll(ax, ay, bx, by) < this.bridgeChance;
     }
 
     private static float distToSegment(float px, float py, float ax, float ay, float bx, float by) {
@@ -313,81 +323,7 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
      * Peak relies completely on true cellPoint to ensure zero boundary discontinuities.
      */
     public float getSmoothVoronoiGradient(Cell cell, float rawX, float rawY) {
-        if (cell.terrain != null && (cell.terrain.isShallowOcean() || cell.terrain.isDeepOcean())) {
-            return 0.0F;
-        }
-
-        float x = rawX * this.frequency;
-        float y = rawY * this.frequency;
-
-        int xi = NoiseUtil.floor(x);
-        int yi = NoiseUtil.floor(y);
-
-        int cellX = xi;
-        int cellY = yi;
-        float cellPointX = x;
-        float cellPointY = y;
-        float nearestSq = Float.MAX_VALUE;
-
-        // Find the closest Voronoi cell seed
-        for (int cy = yi - 1; cy <= yi + 1; ++cy) {
-            for (int cx = xi - 1; cx <= xi + 1; ++cx) {
-                NoiseUtil.Vec2f vec = NoiseUtil.cell(this.seed, cx, cy);
-                float px = cx + vec.x() * this.jitter;
-                float py = cy + vec.y() * this.jitter;
-                float dist2 = Line.distSq(x, y, px, py);
-
-                if (dist2 < nearestSq) {
-                    nearestSq = dist2;
-                    cellPointX = px;
-                    cellPointY = py;
-                    cellX = cx;
-                    cellY = cy;
-                }
-            }
-        }
-
-        // Collect the 8 immediate neighboring seeds
-        float[] neighborX = new float[8];
-        float[] neighborY = new float[8];
-        int nIndex = 0;
-        for (int cy2 = cellY - 1; cy2 <= cellY + 1; ++cy2) {
-            for (int cx2 = cellX - 1; cx2 <= cellX + 1; ++cx2) {
-                if (cx2 != cellX || cy2 != cellY) {
-                    NoiseUtil.Vec2f vec2 = NoiseUtil.cell(this.seed, cx2, cy2);
-                    neighborX[nIndex] = cx2 + vec2.x() * this.jitter;
-                    neighborY[nIndex] = cy2 + vec2.y() * this.jitter;
-                    nIndex++;
-                }
-            }
-        }
-
-        float s0Sq = cellPointX * cellPointX + cellPointY * cellPointY;
-
-        float minGradient = 1.0F;
-        for (int i = 0; i < 8; i++) {
-            float px2 = neighborX[i];
-            float py2 = neighborY[i];
-            float dx = px2 - cellPointX;
-            float dy = py2 - cellPointY;
-            float lenSq = dx * dx + dy * dy;
-
-            if (lenSq > 0.00001F) {
-                float siSq = px2 * px2 + py2 * py2;
-                float baseHalfDiff = 0.5F * (siSq - s0Sq);
-                float h_x = baseHalfDiff - (x * dx + y * dy);
-
-                // Using the true centroid ensures the intersecting planes
-                // always evaluate to exactly 0.0 at the Voronoi border edge.
-                float h_c = baseHalfDiff - (cellPointX * dx + cellPointY * dy);
-
-                if (h_c > 0.00001F) {
-                    float planeValue = h_x / h_c;
-                    if (planeValue < minGradient) minGradient = planeValue;
-                }
-            }
-        }
-        return NoiseUtil.clamp(minGradient, 0.0F, 1.0F);
+        return this.plateUpliftBridge.computeSmoothVoronoiGradient(cell, rawX, rawY);
     }
 
     @Override
@@ -419,6 +355,14 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
 
     public float getBridgeReach() {
         return this.bridgeReach;
+    }
+
+    public PlateUpliftBridge getPlateUpliftBridge() {
+        return this.plateUpliftBridge;
+    }
+
+    public float getTectonicPlateUplift() {
+        return this.plateUpliftBridge != null ? this.plateUpliftBridge.getTectonicPlateUplift() : 0.0F;
     }
 
     protected Domain createWarp(int seedX, int seedZ, int tectonicScale, WorldSettings.Continent continent, boolean applyLacunarity) {

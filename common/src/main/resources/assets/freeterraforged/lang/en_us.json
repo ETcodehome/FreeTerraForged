@@ -153,6 +153,8 @@
   "freeterraforged.gui.slider.bridgeChance.tooltip": "Controls the probability that adjacent eligible continents bridge together into merged landmasses.",
   "freeterraforged.gui.slider.bridgeReach": "Bridge Reach",
   "freeterraforged.gui.slider.bridgeReach.tooltip": "Controls the distance threshold in cell units at which neighboring bridged borders influence terrain shaping.",
+  "freeterraforged.gui.slider.tectonicPlateUplift": "Tectonic Plate Uplift",
+  "freeterraforged.gui.slider.tectonicPlateUplift.tooltip": "Controls the probability that adjacent bridged continents connect their tectonic uplift peaks into continuous ridges.",
   "freeterraforged.gui.slider.biomeEdgeGain": "Gain",
   "freeterraforged.gui.slider.biomeEdgeGain.tooltip": "Controls the gain subsequent noise octaves",
   "freeterraforged.gui.slider.biomeEdgeLacunarity": "Lacunarity",
