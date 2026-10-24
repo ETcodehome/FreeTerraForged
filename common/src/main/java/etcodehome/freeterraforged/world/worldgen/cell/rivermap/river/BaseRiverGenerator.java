@@ -4,6 +4,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
+import etcodehome.freeterraforged.data.worldgen.preset.settings.ContinentType;
 import etcodehome.freeterraforged.world.worldgen.cell.continent.Continent;
 import etcodehome.freeterraforged.world.worldgen.cell.continent.uplift.UpliftContinentGenerator;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
@@ -40,7 +41,8 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
         this.continentScale = context.preset.world().continent.continentScale;
         this.minEdgeValue = context.preset.world().controlPoints.inland;
         this.shallowOcean = context.preset.world().controlPoints.shallowOcean;
-        this.bridgeAware = continent instanceof UpliftContinentGenerator;
+        this.bridgeAware = (continent instanceof UpliftContinentGenerator || context.preset.world().continent.continentType == ContinentType.UPLIFT)
+                && context.preset.world().continent.bridgeChance > 0.0F;
         this.seed = Seed.toInt(context.seed.root() + context.preset.rivers().seedOffset);
         this.count = context.preset.rivers().riverCount;
         this.main = RiverConfig.builder(context.levels).bankHeight(context.preset.rivers().mainRivers.minBankHeight, context.preset.rivers().mainRivers.maxBankHeight).bankWidth(context.preset.rivers().mainRivers.bankWidth).bedWidth(context.preset.rivers().mainRivers.bedWidth).bedDepth(context.preset.rivers().mainRivers.bedDepth).fade(context.preset.rivers().mainRivers.fade).length(5000).main(true).order(0).build();
@@ -123,13 +125,20 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
         }
     }
 
+    public boolean isBridgeAware() {
+        if (this.continent instanceof UpliftContinentGenerator uplift) {
+            return uplift.getBridgeChance() > 0.0F;
+        }
+        return this.bridgeAware;
+    }
+
     /**
      * A river end that is still on land is only possible where the ray reached a cell border without hitting the coast,
      * i.e. the border is bridged to a neighbouring continent. The rivermap is only applied inside this continent's own
      * cell, so such a river would stop dead in the middle of the merged landmass.
      */
     protected boolean terminatesOnLand(float x, float z) {
-        return this.bridgeAware && this.continent.getEdgeValue(x, z) > this.shallowOcean;
+        return this.isBridgeAware() && this.continent.getEdgeValue(x, z) > this.shallowOcean;
     }
 
     /**
@@ -137,7 +146,7 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
      * already passed) means it crossed a bridged border and would be cut off at the boundary.
      */
     protected boolean endsInNeighbourCell(float x1, float z1, float x2, float z2) {
-        return this.bridgeAware && this.continent.getNearestCenter(x2, z2) != this.continent.getNearestCenter(x1, z1);
+        return this.isBridgeAware() && this.continent.getNearestCenter(x2, z2) != this.continent.getNearestCenter(x1, z1);
     }
 
     public void generateWetlands(Network.Builder builder, Random random) {

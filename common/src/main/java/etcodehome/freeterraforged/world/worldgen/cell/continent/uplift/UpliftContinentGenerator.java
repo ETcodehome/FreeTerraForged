@@ -18,12 +18,6 @@ import etcodehome.freeterraforged.world.worldgen.cell.rivermap.Rivermap;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 
 public class UpliftContinentGenerator extends AbstractContinent implements SimpleContinent {
-    // --- continent bridging tuning (hard-coded starting point) ---
-    /** Chance that a border between two eligible continents is left dry. ~0.12-0.25 gives a few merged continents; ~0.45 percolates into giants. */
-    private static final float BRIDGE_CHANCE = 0.18F;
-    /** Distance (cell units) at which the coastline ramp saturates; matches the upper bound of the map(...) in getDistanceValue. */
-    private static final float BRIDGE_REACH = 0.25F;
-
     protected float frequency;
     protected float variance;
     protected int varianceSeed;
@@ -35,6 +29,8 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
 
     protected WorldSettings.Continent continentSettings;
 
+    protected float bridgeChance;
+    protected float bridgeReach;
     private final int bridgeSeed;
 
     private static final class BoundaryScratch {
@@ -78,6 +74,9 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         this.bayNoise = bayNoise;
 
         this.levels = context.levels;
+
+        this.bridgeChance = settings.continent.bridgeChance;
+        this.bridgeReach = settings.continent.bridgeReach;
 
         // Must stay the LAST seed.next() so existing noise seeds above are not shifted.
         this.bridgeSeed = seed.next();
@@ -216,9 +215,9 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
                 s.cx[n] = cx2;
                 s.cy[n] = cy2;
                 s.eligible[n] = aEligible && this.canBridge(cx2, cy2);
-                s.open[n] = s.eligible[n] && this.bridgeRoll(cellX, cellY, cx2, cy2) < BRIDGE_CHANCE;
+                s.open[n] = s.eligible[n] && this.bridgeRoll(cellX, cellY, cx2, cy2) < this.bridgeChance;
                 if (s.open[n]) {
-                    if (s.d[n] < BRIDGE_REACH) {
+                    if (s.d[n] < this.bridgeReach) {
                         anyOpenNear = true;
                     }
                 } else if (s.d[n] < closedMin) {
@@ -288,7 +287,7 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
                 }
                 // third border also open -> fully merged corner, no boundary here
                 if (s.eligible[k] && s.eligible[l]
-                        && this.bridgeRoll(s.cx[k], s.cy[k], s.cx[l], s.cy[l]) < BRIDGE_CHANCE) {
+                        && this.bridgeRoll(s.cx[k], s.cy[k], s.cx[l], s.cy[l]) < this.bridgeChance) {
                     continue;
                 }
                 float t = end == 0 ? s.lo[k] : s.hi[k];
@@ -412,6 +411,14 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
     @Override
     public Rivermap getRivermap(int x, int z) {
         return this.riverCache.getRivers(x, z);
+    }
+
+    public float getBridgeChance() {
+        return this.bridgeChance;
+    }
+
+    public float getBridgeReach() {
+        return this.bridgeReach;
     }
 
     protected Domain createWarp(int seedX, int seedZ, int tectonicScale, WorldSettings.Continent continent, boolean applyLacunarity) {
