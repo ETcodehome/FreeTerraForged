@@ -63,7 +63,7 @@ public final class BiomeSurfaceEnvelope {
 				int qx = baseQuartX + lqx;
 				long key = ((long) qx << 32) ^ (qz & 0xFFFFFFFFL);
 				Entry existing = this.values.find(key);
-				if (existing != null && existing.get() == lookup && existing.accurate) {
+				if (existing != null && existing.get() == lookup) {
 					continue;
 				}
 				int gridBaseX = border + (lqx << 2);
@@ -97,6 +97,8 @@ public final class BiomeSurfaceEnvelope {
 		this.prepopulateFromRegionGrid(context, chunkX, chunkZ, grid, totalSize, border, 1);
 	}
 
+	private static final ThreadLocal<Cell> SCRATCH_CELL = ThreadLocal.withInitial(Cell::new);
+
 	public int minimumSurfaceY(GeneratorContext context, int quartX, int quartZ) {
 		return this.minimumSurfaceY(context.lookup, true, quartX, quartZ, (x, z) -> {
 			WorldgenPerfTracker.ThreadStats ts = WorldgenPerfTracker.ACTIVE ? WorldgenPerfTracker.stats() : null;
@@ -106,9 +108,8 @@ public final class BiomeSurfaceEnvelope {
 				ts.currentCaller = WorldgenPerfTracker.ApplyCellCaller.BIOME_ENVELOPE;
 			}
 			try {
-				Cell cell = etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler.getCachedOrLookup(
-					context.lookup, x, z, false
-				);
+				Cell cell = SCRATCH_CELL.get();
+				context.lookup.getHeightmap().apply(cell.reset(), x, z, false);
 				return Math.min(context.levels.worldHeight - 1, context.levels.scale(cell.height));
 			} finally {
 				if (ts != null) {
