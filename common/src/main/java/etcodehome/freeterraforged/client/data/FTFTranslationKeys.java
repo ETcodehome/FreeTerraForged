@@ -18,6 +18,8 @@ public final class FTFTranslationKeys {
 	public static final String GUI_LABEL_LEGACY_USER_PRESET = resolve("gui.label.legacy_user_preset");
 	public static final String METADATA_DESCRIPTION = resolve("metadata.description");
 	public static final String PRESET_METADATA_DESCRIPTION = resolve("preset.metadata.description");
+	public static final String DEFAULT_PRESET_PACK_DESCRIPTION = resolve("preset.default_pack.description");
+	public static final String DEFAULT_PRESET_PACK_NAME = resolve("preset.default_pack.name");
 	public static final String MUD_SWAMPS_METADATA_DESCRIPTION = resolve("mudSwamps.metadata.description");
 	public static final String NO_ERROR_MESSAGE = resolve("error.noMessage");
 
@@ -52,6 +54,9 @@ public final class FTFTranslationKeys {
 	public static final String GUI_BUTTON_OPEN_EXPORT_FOLDER = resolve("gui.button.openDatapackFolder");
 	public static final String GUI_BUTTON_EXPORT_AS_DATAPACK = resolve("gui.button.export");
 	public static final String GUI_BUTTON_EXPORT_SUCCESS = resolve("gui.button.export.success");
+	public static final String GUI_BUTTON_SET_AS_DEFAULT_PRESET = resolve("gui.button.set_as_default");
+	public static final String GUI_DEFAULT_PRESET_SAVED = resolve("gui.button.set_as_default.success");
+	public static final String GUI_DEFAULT_PRESET_INDICATOR_TOOLTIP = resolve("gui.preset.default_indicator.tooltip");
 	public static final String GUI_BUTTON_SEED = resolve("gui.button.seed");
 	public static final String GUI_BUTTON_RANDOMIZE_SEED = resolve("gui.button.randomize.seed.tooltip");
 	public static final String GUI_BUTTON_CONTINENT_TYPE = resolve("gui.button.continentType");

@@ -26,12 +26,11 @@ import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfigur
 import etcodehome.freeterraforged.tags.FTFBlockTags;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
+import etcodehome.freeterraforged.world.worldgen.IChunkCellsHolder;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.TileCache;
 import etcodehome.freeterraforged.world.worldgen.feature.ScreeFeature.Config;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
@@ -84,27 +83,25 @@ public class ScreeFeature extends Feature<Config> {
             int chunkZ = chunkPos.z;
             ChunkGenerator generator = placeContext.chunkGenerator();
             ChunkAccess chunk = level.getChunk(chunkX, chunkZ);
-			try (TileCache.Lease lease = generatorContext.cache.acquireAtChunk(chunkX, chunkZ)) {
-				Tile.Chunk tileChunk = lease.tile().getChunkReader(chunkX, chunkZ);
-            etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap heightmap = generatorContext.generator.getHeightmap();
+            etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap heightmap = generatorContext.heightmap;
             Levels levels = heightmap.levels();
 
-            long worldSeed = heightmap.climate().randomSeed();
-            Noise rand = Noises.white((int) worldSeed, 1);
-
-            Noise clusterNoise = Noises.perlin((int) (worldSeed + 7777), 2, 1);
-            Noise warpX = Noises.perlin((int) (worldSeed + 1001), 2, 1);
-            Noise warpZ = Noises.perlin((int) (worldSeed + 2002), 2, 1);
-
-            Noise desertErosionVariance = makeDesertErosionVariance(levels);
+            ScreeNoises noises = generatorContext.screeNoises;
+            Noise rand = noises != null ? noises.rand : Noises.white((int) heightmap.climate().randomSeed(), 1);
+            Noise clusterNoise = noises != null ? noises.clusterNoise : Noises.perlin((int) (heightmap.climate().randomSeed() + 7777), 2, 1);
+            Noise warpX = noises != null ? noises.warpX : Noises.perlin((int) (heightmap.climate().randomSeed() + 1001), 2, 1);
+            Noise warpZ = noises != null ? noises.warpZ : Noises.perlin((int) (heightmap.climate().randomSeed() + 2002), 2, 1);
+            Noise desertErosionVariance = noises != null ? noises.desertErosionVariance : makeDesertErosionVariance(levels);
             BlockPos.MutableBlockPos pos = new MutableBlockPos();
             Config config = placeContext.config();
-            for(int x = 0; x < 16; x++) {
-                for(int z = 0; z < 16; z++) {
+            IChunkCellsHolder cellsHolder = chunk instanceof IChunkCellsHolder h ? h : null;
+            Cell[] chunkCells = cellsHolder != null ? cellsHolder.freeterraforged$getOrCreateChunkCells(generatorContext) : null;
+            for(int z = 0; z < 16; z++) {
+                for(int x = 0; x < 16; x++) {
                     int worldX = chunkPos.getBlockX(x);
                     int worldZ = chunkPos.getBlockZ(z);
 
-                    Cell cell = tileChunk.getCell(x, z);
+                    Cell cell = chunkCells != null ? chunkCells[z * 16 + x] : generatorContext.lookup.lookup(worldX, worldZ);
                     int scaledY = levels.scale(cell.height);
                     int surfaceY = chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, x, z);
                     Holder<Biome> biome = level.getBiome(pos.set(worldX, surfaceY, worldZ));
@@ -117,6 +114,9 @@ public class ScreeFeature extends Feature<Config> {
                     }
 
                     if(surfaceY <= scaledY && surfaceY >= generator.getSeaLevel() - 1 && !biome.is(Biomes.WOODED_BADLANDS) && !biome.is(Biomes.BADLANDS)) {
+                        if (chunkCells == null && cell.gradient == 0.0F) {
+                            generatorContext.lookup.computeSteepness(cell, worldX, worldZ);
+                        }
                         erodeColumn(config, levels, rand, clusterNoise, warpX, warpZ, generator, chunk, cell, pos, surfaceY);
                         // remove any foliage that may have generated above
                         pos.setY(surfaceY);
@@ -127,7 +127,6 @@ public class ScreeFeature extends Feature<Config> {
                 }
             }
 				return true;
-			}
         } else {
             return false;
         }

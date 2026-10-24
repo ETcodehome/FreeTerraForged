@@ -10,11 +10,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
+import etcodehome.freeterraforged.client.data.DefaultPresetArchive;
 import etcodehome.freeterraforged.client.gui.widget.Label;
 import etcodehome.freeterraforged.client.gui.widget.WidgetList;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetManager.PM;
 import etcodehome.freeterraforged.platform.ConfigUtil;
-import org.apache.commons.compress.utils.FileNameUtils;
 import org.jetbrains.annotations.Nullable;
 import com.google.gson.JsonParser;
 import com.google.gson.stream.JsonWriter;
@@ -29,6 +29,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.components.toasts.SystemToast.SystemToastId;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.Component;
@@ -51,6 +52,7 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 	private static final Path LEGACY_FTF_PRESET_PATH = ConfigUtil.legacy_rtf("presets");
 
 	private static final Predicate<String> IS_VALID = Pattern.compile("^[A-Za-z0-9\\-_ ()]+(?<! )$").asPredicate();
+	private static final String DEFAULT_FTF_PRESET_ID = FTFTranslationKeys.GUI_RIVERS_PRESET_NAME;
 
 	private EditBox input;
 	private Button createPreset;
@@ -60,6 +62,7 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 	private Button openPresetFolder;
 	private Button openExportFolder;
 	private Button exportAsDatapack;
+	private Button setAsDefaultPreset;
 
 	private WrappedLabel selectionDetails;
 
@@ -131,11 +134,16 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 				String newName = this.input.getValue().trim();
 				if (this.isValidPresetName(newName)) {
 					Path oldPath = entry.getPath();
+					boolean wasDefaultPreset = DefaultPresetArchive.isSource(oldPath);
 					Preset preset = entry.getPreset();
 					preset.presentation().updateLastModified();
 
 					PresetEntry renamedEntry = new PresetEntry(newName, Component.literal(newName).withStyle(ChatFormatting.GOLD), preset, false, this);
 					renamedEntry.save();
+					if (wasDefaultPreset) {
+						this.screen.exportAsDatapack(DefaultPresetArchive.path(), renamedEntry);
+						DefaultPresetArchive.updateSource(oldPath, renamedEntry.getPath());
+					}
 
 					if (Files.exists(oldPath) && !Files.isSameFile(oldPath, renamedEntry.getPath())) {
 						Files.delete(oldPath);
@@ -185,6 +193,7 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 					}
 				}
 
+				DefaultPresetArchive.clearSourceIfMatches(preset.getPath());
 				Files.deleteIfExists(preset.getPath());
 				this.rebuildPresets(nextSelectedName);
 			}
@@ -216,6 +225,23 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 			}
 		});
 
+		this.setAsDefaultPreset = PresetWidgets.createThrowingButton(FTFTranslationKeys.GUI_BUTTON_SET_AS_DEFAULT_PRESET, () -> {
+			if (this.left.getSelected() != null && this.left.getSelected().getWidget() instanceof PresetEntry preset) {
+				this.screen.exportAsDatapack(DefaultPresetArchive.path(), preset);
+				if (preset.isBuiltin()) {
+					DefaultPresetArchive.setBuiltinSource(preset.getBuiltinId());
+				} else {
+					DefaultPresetArchive.setSource(preset.getPath());
+				}
+				this.refreshDefaultPresetIndicators();
+				Toasts.notify(
+					FTFTranslationKeys.GUI_DEFAULT_PRESET_SAVED,
+					Component.literal(preset.getRawName()),
+					SystemToastId.WORLD_BACKUP
+				);
+			}
+		});
+
 		// Information & Description Labels (At bottom of right panel)
 		this.selectionDetails = new WrappedLabel(this.screen.font);
 
@@ -225,6 +251,7 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 		this.right.addWidget(this.renamePreset);
 		this.right.addWidget(this.copyPreset);
 		this.right.addWidget(this.deletePreset);
+		this.right.addWidget(this.setAsDefaultPreset);
 		this.right.addWidget(this.openPresetFolder);
 		this.right.addWidget(this.openExportFolder);
 		this.right.addWidget(this.exportAsDatapack);
@@ -316,6 +343,7 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 		this.screen.nextButton.active = active;
 		this.copyPreset.active = active;
 		this.exportAsDatapack.active = active;
+		this.setAsDefaultPreset.active = active;
 		this.deletePreset.active = isCustom;
 
 		// Populate input box with selected preset name for fast editing/renaming
@@ -379,19 +407,20 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 		widgets.add(new CategoryHeader(Component.translatable(FTFTranslationKeys.GUI_HEADER_INCLUDED_TEMPLATES).withStyle(ChatFormatting.GRAY)));
 
 		// Modern Patterns
-		widgets.add(createTemplateEntry(Component.translatable(FTFTranslationKeys.GUI_RIVERS_PRESET_NAME), Presets.modernDefaultWithRivers(), ChatFormatting.GRAY));
+		widgets.add(createTemplateEntry(FTFTranslationKeys.GUI_RIVERS_PRESET_NAME, Component.translatable(FTFTranslationKeys.GUI_RIVERS_PRESET_NAME), Presets.modernDefaultWithRivers(), ChatFormatting.GRAY));
 
 		// Community Patterns
-		widgets.add(createTemplateEntry(Component.translatable(FTFTranslationKeys.GUI_COMMUNITY1_PRESET_NAME), Presets.makeCommunityPreset1(), ChatFormatting.GRAY));
+		widgets.add(createTemplateEntry(FTFTranslationKeys.GUI_COMMUNITY1_PRESET_NAME, Component.translatable(FTFTranslationKeys.GUI_COMMUNITY1_PRESET_NAME), Presets.makeCommunityPreset1(), ChatFormatting.GRAY));
 
 		// Legacy Patterns
-		widgets.add(createTemplateEntry(Component.translatable(FTFTranslationKeys.GUI_DEFAULT_LEGACY_PRESET_NAME), Presets.makeLegacyDefault(), ChatFormatting.DARK_GRAY));
-		widgets.add(createTemplateEntry(Component.translatable(FTFTranslationKeys.GUI_BEAUTIFUL_PRESET_NAME), Presets.makeLegacyBeautiful(), ChatFormatting.DARK_GRAY));
-		widgets.add(createTemplateEntry(Component.translatable(FTFTranslationKeys.GUI_HUGE_BIOMES_PRESET_NAME), Presets.makeLegacyHugeBiomes(), ChatFormatting.DARK_GRAY));
-		widgets.add(createTemplateEntry(Component.translatable(FTFTranslationKeys.GUI_LITE_PRESET_NAME), Presets.makeLegacyLite(), ChatFormatting.DARK_GRAY));
-		widgets.add(createTemplateEntry(Component.translatable(FTFTranslationKeys.GUI_VANILLAISH_PRESET_NAME), Presets.makeLegacyVanillaish(), ChatFormatting.DARK_GRAY));
+		widgets.add(createTemplateEntry(FTFTranslationKeys.GUI_DEFAULT_LEGACY_PRESET_NAME, Component.translatable(FTFTranslationKeys.GUI_DEFAULT_LEGACY_PRESET_NAME), Presets.makeLegacyDefault(), ChatFormatting.DARK_GRAY));
+		widgets.add(createTemplateEntry(FTFTranslationKeys.GUI_BEAUTIFUL_PRESET_NAME, Component.translatable(FTFTranslationKeys.GUI_BEAUTIFUL_PRESET_NAME), Presets.makeLegacyBeautiful(), ChatFormatting.DARK_GRAY));
+		widgets.add(createTemplateEntry(FTFTranslationKeys.GUI_HUGE_BIOMES_PRESET_NAME, Component.translatable(FTFTranslationKeys.GUI_HUGE_BIOMES_PRESET_NAME), Presets.makeLegacyHugeBiomes(), ChatFormatting.DARK_GRAY));
+		widgets.add(createTemplateEntry(FTFTranslationKeys.GUI_LITE_PRESET_NAME, Component.translatable(FTFTranslationKeys.GUI_LITE_PRESET_NAME), Presets.makeLegacyLite(), ChatFormatting.DARK_GRAY));
+		widgets.add(createTemplateEntry(FTFTranslationKeys.GUI_VANILLAISH_PRESET_NAME, Component.translatable(FTFTranslationKeys.GUI_VANILLAISH_PRESET_NAME), Presets.makeLegacyVanillaish(), ChatFormatting.DARK_GRAY));
 
 		this.left.replaceEntries(widgets.stream().map(WidgetList.Entry::new).toList());
+		this.refreshDefaultPresetIndicators();
 
 		// Auto-select requested preset after rebuilding
 		if (selectPresetName != null) {
@@ -407,10 +436,30 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 		}
 	}
 
-	private PresetEntry createTemplateEntry(Component nameComponent, Preset preset, ChatFormatting nameColor) {
+	private PresetEntry createTemplateEntry(String builtinId, Component nameComponent, Preset preset, ChatFormatting nameColor) {
 		String cleanName = nameComponent.getString();
 		Component label = nameComponent.copy().withStyle(nameColor);
-		return new PresetEntry(cleanName, label, preset, true, this);
+		PresetEntry entry = new PresetEntry(cleanName, label, preset, true, this);
+		entry.setBuiltinId(builtinId);
+		return entry;
+	}
+
+	private void refreshDefaultPresetIndicators() throws IOException {
+		boolean hasSavedDefault = DefaultPresetArchive.exists();
+		for (WidgetList.Entry<AbstractWidget> listEntry : this.left.children()) {
+			if (listEntry.getWidget() instanceof PresetEntry presetEntry) {
+				boolean isDefault;
+				if (!hasSavedDefault) {
+					isDefault = DEFAULT_FTF_PRESET_ID.equals(presetEntry.getBuiltinId());
+				} else if (presetEntry.isBuiltin()) {
+					String builtinId = presetEntry.getBuiltinId();
+					isDefault = builtinId != null && DefaultPresetArchive.isBuiltinSource(builtinId);
+				} else {
+					isDefault = DefaultPresetArchive.isSource(presetEntry.getPath());
+				}
+				presetEntry.setDefaultIndicator(isDefault);
+			}
+		}
 	}
 
 	private boolean isValidPresetName(String text) {
@@ -450,7 +499,8 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 						.toList()
 				) {
 					try(Reader reader = Files.newBufferedReader(presetPath)) {
-						String base = FileNameUtils.getBaseName(presetPath.toString());
+						String fileName = presetPath.getFileName().toString();
+						String base = fileName.substring(0, fileName.length() - ".json".length());
 						DataResult<Preset> result = Preset.DIRECT_CODEC.parse(JsonOps.INSTANCE, JsonParser.parseReader(reader));
 						Preset preset = result.resultOrPartial(err -> {}).orElse(null);
 						if(preset != null) {
@@ -570,6 +620,8 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 		private Preset preset;
 		private boolean builtin;
 		private boolean legacy;
+		private boolean defaultPreset;
+		@Nullable private String builtinId;
 
 		public PresetEntry(Path path, String rawName, Component displayName, Preset preset, boolean builtin, boolean legacy, OnPress onPress) {
 			super(-1, -1, -1, -1, onPress, displayName);
@@ -637,6 +689,22 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 			return this.path;
 		}
 
+		@Nullable
+		public String getBuiltinId() {
+			return this.builtinId;
+		}
+
+		private void setBuiltinId(String builtinId) {
+			this.builtinId = builtinId;
+		}
+
+		public void setDefaultIndicator(boolean isDefault) {
+			this.defaultPreset = isDefault;
+			this.setTooltip(isDefault
+					? Tooltip.create(Component.translatable(FTFTranslationKeys.GUI_DEFAULT_PRESET_INDICATOR_TOOLTIP))
+					: null);
+		}
+
 		@Override
 		public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
 			Font font = Minecraft.getInstance().font;
@@ -647,7 +715,10 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 			int textColor = this.isHoveredOrFocused() ? 0xFFFFFF : 0xE0E0E0;
 
 			// 1. Main Title centered near top of entry slot
-			graphics.drawCenteredString(font, this.displayName, x + w / 2, y + 2, textColor);
+			Component title = this.defaultPreset
+					? this.displayName.copy().append(Component.literal(" ★").withStyle(ChatFormatting.GOLD))
+					: this.displayName;
+			graphics.drawCenteredString(font, title, x + w / 2, y + 2, textColor);
 
 			// 2. Small subtext tag centered underneath (with last modified timestamp from presentation settings)
 			Component baseSubtext;

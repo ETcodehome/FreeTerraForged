@@ -1,11 +1,9 @@
 package etcodehome.freeterraforged.mixin;
 
 import java.util.function.Function;
-import java.util.concurrent.CompletableFuture;
 
-import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
-import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
@@ -13,27 +11,28 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import net.minecraft.core.Holder;
 import net.minecraft.core.QuartPos;
-import net.minecraft.server.level.WorldGenRegion;
 import net.minecraft.world.level.StructureManager;
 import net.minecraft.world.level.biome.Biome;
-import net.minecraft.world.level.biome.BiomeManager;
 import net.minecraft.world.level.biome.BiomeGenerationSettings;
 import net.minecraft.world.level.biome.BiomeSource;
 import net.minecraft.world.level.biome.BiomeResolver;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
-import net.minecraft.world.level.levelgen.GenerationStep;
+import net.minecraft.world.level.levelgen.NoiseChunk;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.blending.Blender;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
-import etcodehome.freeterraforged.world.worldgen.NoiseChunkHolder;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
+import etcodehome.freeterraforged.world.worldgen.biome.BiomeColumnCache;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.NoiseChunkTileOwner;
 import etcodehome.freeterraforged.world.worldgen.IFlowFieldHolder;
+import etcodehome.freeterraforged.world.worldgen.IChunkCellsHolder;
 import etcodehome.freeterraforged.world.worldgen.ChunkFlowField;
+import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
 
 @Mixin(NoiseBasedChunkGenerator.class)
@@ -42,117 +41,81 @@ abstract class MixinNoiseBasedChunkGenerator extends ChunkGenerator {
 		super(biomeSource, settingsGetter);
 	}
 
-	@WrapMethod(method = "createBiomes")
-	private CompletableFuture<ChunkAccess> freeterraforged$ownCreateBiomesTile(
-		RandomState randomState,
-		Blender blender,
-		StructureManager structureManager,
-		ChunkAccess chunk,
-		Operation<CompletableFuture<ChunkAccess>> original
-	) {
-		if (!this.freeterraforged$ownsTileStages()) {
-			return original.call(randomState, blender, structureManager, chunk);
-		}
-		beginTileStage(chunk);
-		try {
-			CompletableFuture<ChunkAccess> result = original.call(
-				randomState, blender, structureManager, chunk
-			);
-			return result.whenComplete((ignored, failure) -> endTileStage(chunk));
-		} catch (RuntimeException | Error failure) {
-			endTileStageAfterFailure(chunk, failure);
-			throw failure;
-		}
-	}
-
-	@WrapMethod(method = "fillFromNoise")
-	private CompletableFuture<ChunkAccess> freeterraforged$ownNoiseTile(
+	@WrapMethod(method = "doCreateBiomes")
+	private void freeterraforged$wrapDoCreateBiomes(
 		Blender blender,
 		RandomState randomState,
 		StructureManager structureManager,
 		ChunkAccess chunk,
-		Operation<CompletableFuture<ChunkAccess>> original
+		Operation<Void> original
 	) {
-		if (!this.freeterraforged$ownsTileStages()) {
-			return original.call(blender, randomState, structureManager, chunk);
-		}
-		beginTileStage(chunk);
+		boolean perfActive = WorldgenPerfTracker.isActive() && ((Object) this instanceof TerraForgedChunkGenerator);
+		long t0 = perfActive ? System.nanoTime() : 0L;
 		try {
-			CompletableFuture<ChunkAccess> result = original.call(
-				blender, randomState, structureManager, chunk
-			);
-			return result.whenComplete((ignored, failure) -> endTileStage(chunk));
-		} catch (RuntimeException | Error failure) {
-			endTileStageAfterFailure(chunk, failure);
-			throw failure;
+			original.call(blender, randomState, structureManager, chunk);
+		} finally {
+			if (perfActive) {
+				WorldgenPerfTracker.recordStage(
+					chunk.getPos().x,
+					chunk.getPos().z,
+					WorldgenPerfTracker.Stage.BIOMES,
+					System.nanoTime() - t0
+				);
+			}
 		}
 	}
 
-	@WrapMethod(method = "buildSurface(Lnet/minecraft/server/level/WorldGenRegion;Lnet/minecraft/world/level/StructureManager;Lnet/minecraft/world/level/levelgen/RandomState;Lnet/minecraft/world/level/chunk/ChunkAccess;)V")
-	private void freeterraforged$ownSurfaceTile(
-		WorldGenRegion region,
+	@WrapMethod(method = "doFill")
+	private ChunkAccess freeterraforged$wrapDoFill(
+		Blender blender,
 		StructureManager structureManager,
 		RandomState randomState,
 		ChunkAccess chunk,
-		Operation<Void> original
+		int minCellY,
+		int cellCountY,
+		Operation<ChunkAccess> original
 	) {
-		if (!this.freeterraforged$ownsTileStages()) {
-			original.call(region, structureManager, randomState, chunk);
-			return;
-		}
-		beginTileStage(chunk);
+		boolean perfActive = WorldgenPerfTracker.isActive() && ((Object) this instanceof TerraForgedChunkGenerator);
+		long t0 = perfActive ? System.nanoTime() : 0L;
 		try {
-			original.call(region, structureManager, randomState, chunk);
-		} catch (RuntimeException | Error failure) {
-			endTileStageAfterFailure(chunk, failure);
-			throw failure;
+			int effectiveCellCountY = cellCountY;
+			if ((Object) randomState instanceof FTFRandomState ftfRandomState) {
+				GeneratorContext genCtx = ftfRandomState.generatorContext();
+				if (genCtx != null && chunk instanceof IChunkCellsHolder cellsHolder) {
+					Cell[] cells = cellsHolder.freeterraforged$getChunkCells();
+					if (cells != null && cells.length > 0) {
+						float maxHeight = cells[0].height;
+						for (int i = 1; i < cells.length; i++) {
+							if (cells[i].height > maxHeight) {
+								maxHeight = cells[i].height;
+							}
+						}
+						int maxTerrainY = genCtx.levels.scale(maxHeight);
+						int seaLevel = ((NoiseBasedChunkGenerator) (Object) this).getSeaLevel();
+						int targetMaxY = Math.max(maxTerrainY, seaLevel) + 16;
+						int cellHeight = ((NoiseBasedChunkGenerator) (Object) this).generatorSettings().value().noiseSettings().getCellHeight();
+						int minY = minCellY * cellHeight;
+						int neededCells = Math.floorDiv(targetMaxY - minY + cellHeight - 1, cellHeight);
+						effectiveCellCountY = Math.min(cellCountY, Math.max(1, neededCells));
+						if (perfActive) {
+							WorldgenPerfTracker.ThreadStats ts = WorldgenPerfTracker.stats();
+							ts.doFillCellsTotal += cellCountY;
+							ts.doFillCellsSkipped += (cellCountY - effectiveCellCountY);
+						}
+					}
+				}
+			}
+			return original.call(blender, structureManager, randomState, chunk, minCellY, effectiveCellCountY);
+		} finally {
+			if (perfActive) {
+				WorldgenPerfTracker.recordStage(
+					chunk.getPos().x,
+					chunk.getPos().z,
+					WorldgenPerfTracker.Stage.NOISE,
+					System.nanoTime() - t0
+				);
+			}
 		}
-		endTileStage(chunk);
-	}
-
-	@WrapMethod(method = "applyCarvers")
-	private void freeterraforged$ownCarverTile(
-		WorldGenRegion region,
-		long seed,
-		RandomState randomState,
-		BiomeManager biomeManager,
-		StructureManager structureManager,
-		ChunkAccess chunk,
-		GenerationStep.Carving step,
-		Operation<Void> original
-	) {
-		if (!this.freeterraforged$ownsTileStages()) {
-			original.call(region, seed, randomState, biomeManager, structureManager, chunk, step);
-			return;
-		}
-		beginTileStage(chunk);
-		try {
-			original.call(region, seed, randomState, biomeManager, structureManager, chunk, step);
-		} catch (RuntimeException | Error failure) {
-			endTileStageAfterFailure(chunk, failure);
-			throw failure;
-		}
-		endTileStage(chunk);
-	}
-
-	private static void beginTileStage(ChunkAccess chunk) {
-		((NoiseChunkHolder) chunk).freeterraforged$beginNoiseChunkTileStage();
-	}
-
-	private static void endTileStage(ChunkAccess chunk) {
-		((NoiseChunkHolder) chunk).freeterraforged$endNoiseChunkTileStage();
-	}
-
-	private static void endTileStageAfterFailure(ChunkAccess chunk, Throwable failure) {
-		try {
-			endTileStage(chunk);
-		} catch (RuntimeException | Error cleanupFailure) {
-			failure.addSuppressed(cleanupFailure);
-		}
-	}
-
-	private boolean freeterraforged$ownsTileStages() {
-		return (Object) this instanceof TerraForgedChunkGenerator;
 	}
 
 	@Inject(
@@ -164,28 +127,43 @@ abstract class MixinNoiseBasedChunkGenerator extends ChunkGenerator {
 			)
 	)
 	public void doCreateBiomes(Blender blender, RandomState randomState, StructureManager structureManager, ChunkAccess chunk, CallbackInfo callback) {
-		if (!this.freeterraforged$ownsTileStages() || !((Object) randomState instanceof FTFRandomState rtfRandomState)) {
+		if (!((Object) this instanceof TerraForgedChunkGenerator) || !((Object) randomState instanceof FTFRandomState rtfRandomState)) {
 			return;
 		}
 		GeneratorContext generatorContext = rtfRandomState.generatorContext();
-
-		if(generatorContext == null) {
+		if (generatorContext == null) {
 			return;
 		}
-
-		Tile.Chunk tileChunk = currentTileChunk(chunk);
-		if (tileChunk == null) {
-			throw new IllegalStateException("FTF biome stage has no request-owned terrain tile");
-		}
-		this.freeterraforged$bakeFlowField(chunk, tileChunk);
+		this.freeterraforged$bakeFlowField(chunk, generatorContext);
 	}
 
-	private void freeterraforged$bakeFlowField(ChunkAccess chunk, Tile.Chunk tileChunk) {
+	@Inject(
+		method = "createNoiseChunk",
+		at = @At("RETURN")
+	)
+	private void freeterraforged$bindChunkCells(ChunkAccess chunk, StructureManager sm, Blender blender, RandomState rs, CallbackInfoReturnable<NoiseChunk> cir) {
+		if ((Object) rs instanceof FTFRandomState rtfRs && rtfRs.generatorContext() != null) {
+			if (cir.getReturnValue() instanceof IChunkCellsHolder noiseChunkHolder && chunk instanceof IChunkCellsHolder chunkHolder) {
+				Cell[] cells = noiseChunkHolder.freeterraforged$getChunkCells();
+				if (cells != null) {
+					chunkHolder.freeterraforged$setChunkCells(cells);
+				} else if (chunkHolder.freeterraforged$getChunkCells() != null) {
+					noiseChunkHolder.freeterraforged$setChunkCells(chunkHolder.freeterraforged$getChunkCells());
+				}
+			}
+		}
+	}
+
+	private void freeterraforged$bakeFlowField(ChunkAccess chunk, GeneratorContext generatorContext) {
 		IFlowFieldHolder holder = (IFlowFieldHolder) chunk;
 		ChunkFlowField flowField = holder.freeterraforged$getFlowField();
-		for(int x = 0; x < 16; x++) {
-			for(int z = 0; z < 16; z++) {
-				Cell cell = tileChunk.getCell(x, z);
+		IChunkCellsHolder cellsHolder = chunk instanceof IChunkCellsHolder ch ? ch : null;
+		Cell[] cells = cellsHolder != null ? cellsHolder.freeterraforged$getOrCreateChunkCells(generatorContext) : null;
+		for(int z = 0; z < 16; z++) {
+			for(int x = 0; x < 16; x++) {
+				Cell cell = cells != null
+					? cells[z * 16 + x]
+					: generatorContext.lookup.lookup(chunk.getPos().getBlockX(x), chunk.getPos().getBlockZ(z));
 				if (cell.hasFlow) {
 					if (flowField == null) {
 						flowField = holder.freeterraforged$getOrCreateFlowField();
@@ -211,32 +189,65 @@ abstract class MixinNoiseBasedChunkGenerator extends ChunkGenerator {
 		StructureManager structureManager,
 		ChunkAccess chunk
 	) {
-		if ((Object) this instanceof TerraForgedChunkGenerator generator) {
-			Tile.Chunk tileChunk = currentTileChunk(chunk);
-			if (tileChunk == null) {
-				throw new IllegalStateException("FTF biome stage has no request-owned terrain tile");
-			}
-			return blender.getBiomeResolver((quartX, quartY, quartZ, sampler) -> {
-				int blockX = QuartPos.toBlock(quartX);
-				int blockZ = QuartPos.toBlock(quartZ);
-				if (blockX >> 4 != tileChunk.getChunkX() || blockZ >> 4 != tileChunk.getChunkZ()) {
-					return generator.resolveBiome(quartX, quartY, quartZ, sampler);
+		if ((Object) this instanceof TerraForgedChunkGenerator generator
+			&& (Object) randomState instanceof FTFRandomState rtfRandomState
+			&& rtfRandomState.generatorContext() != null) {
+			GeneratorContext generatorContext = rtfRandomState.generatorContext();
+			final int chunkQuartX = chunk.getPos().x << 2;
+			final int chunkQuartZ = chunk.getPos().z << 2;
+			final long[] internalRegionX = new long[16];
+			final long[] internalRegionZ = new long[16];
+			final boolean hasInternalCells;
+			if (chunk instanceof IChunkCellsHolder holder) {
+				Cell[] chunkCells = holder.freeterraforged$getOrCreateChunkCells(generatorContext);
+				if (chunkCells != null) {
+					for (int qz = 0; qz < 4; qz++) {
+						for (int qx = 0; qx < 4; qx++) {
+							Cell cell = chunkCells[(qz * 4) * 16 + (qx * 4)];
+							int idx = qz * 4 + qx;
+							internalRegionX[idx] = cell.biomeRegionX;
+							internalRegionZ[idx] = cell.biomeRegionZ;
+						}
+					}
+					hasInternalCells = true;
+				} else {
+					hasInternalCells = false;
 				}
-				Cell cell = tileChunk.getCell(blockX, blockZ);
+			} else {
+				hasInternalCells = false;
+			}
+
+			return blender.getBiomeResolver((quartX, quartY, quartZ, sampler) -> {
+				int localQx = quartX - chunkQuartX;
+				int localQz = quartZ - chunkQuartZ;
+				long regionX;
+				long regionZ;
+				if (hasInternalCells && localQx >= 0 && localQx < 4 && localQz >= 0 && localQz < 4) {
+					int idx = localQz * 4 + localQx;
+					regionX = internalRegionX[idx];
+					regionZ = internalRegionZ[idx];
+				} else {
+					BiomeColumnCache colCache = BiomeColumnCache.get();
+					if (colCache.quartX == quartX && colCache.quartZ == quartZ) {
+						regionX = colCache.regionX;
+						regionZ = colCache.regionZ;
+					} else {
+						int blockX = QuartPos.toBlock(quartX);
+						int blockZ = QuartPos.toBlock(quartZ);
+						generatorContext.lookup.applyBiomeRegion(colCache.scratch.reset(), blockX, blockZ);
+						colCache.quartX = quartX;
+						colCache.quartZ = quartZ;
+						colCache.regionX = colCache.scratch.biomeRegionX;
+						colCache.regionZ = colCache.scratch.biomeRegionZ;
+						regionX = colCache.regionX;
+						regionZ = colCache.regionZ;
+					}
+				}
 				return generator.resolveBiomeInCell(
-					quartX, quartY, quartZ, sampler, cell.biomeRegionX, cell.biomeRegionZ
+					quartX, quartY, quartZ, sampler, regionX, regionZ
 				);
 			});
 		}
 		return blender.getBiomeResolver(source);
 	}
-
-	private static Tile.Chunk currentTileChunk(ChunkAccess chunk) {
-		if (chunk instanceof NoiseChunkHolder holder
-			&& holder.freeterraforged$getNoiseChunk() instanceof NoiseChunkTileOwner owner) {
-			return owner.freeterraforged$currentTileChunk();
-		}
-		return null;
-	}
-
 }

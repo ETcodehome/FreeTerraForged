@@ -151,10 +151,7 @@ class MixinRandomState {
 				PerformanceConfig config = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
 						.resultOrPartial(FTFCommon.LOGGER::error)
 						.orElseGet(PerformanceConfig::makeDefault);
-				initializedContext = GeneratorContext.makeCached(
-						initializedPreset, noises, this.seed,
-						config.tileSize(), config.batchCount(), ThreadPools.availableProcessors() > 4
-				);
+				initializedContext = GeneratorContext.make(initializedPreset, noises, this.seed);
 			}
 			this.preset = initializedPreset;
 			this.generatorContext = initializedContext;

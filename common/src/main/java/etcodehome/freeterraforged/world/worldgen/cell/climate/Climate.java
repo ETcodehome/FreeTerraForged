@@ -19,13 +19,13 @@ public record Climate(int randomSeed, Noise offsetX, Noise offsetZ, int offsetDi
 	private static final float EDGE_BLEND = 0.4F;
 
 	public void apply(Cell cell, float x, float z, boolean applyClimate) {
-		this.biomeNoise.apply(cell, x, z, x, z, true);
+		this.biomeNoise.apply(cell, x, z, x, z, true, applyClimate);
 		if (cell.height <= this.levels.water) {
 			if (cell.terrain == TerrainType.COAST) {
 				cell.terrain = TerrainType.SHALLOW_OCEAN;
 			}
 		} else if (cell.biomeRegionEdge < EDGE_BLEND || cell.terrain == TerrainType.MOUNTAIN_CHAIN) {
-			this.applyEdge(cell, x, z, false);
+			this.applyEdge(cell, x, z, !applyClimate);
 		}
 	}
 
@@ -46,7 +46,7 @@ public record Climate(int randomSeed, Noise offsetX, Noise offsetZ, int offsetDi
 		if (regionOnly) {
 			this.biomeNoise.applyRegion(cell, x + dx, z + dz, false);
 		} else {
-			this.biomeNoise.apply(cell, x + dx, z + dz, x, z, false);
+			this.biomeNoise.apply(cell, x + dx, z + dz, x, z, false, true);
 		}
 	}
 	

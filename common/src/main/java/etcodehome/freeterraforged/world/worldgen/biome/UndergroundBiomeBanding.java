@@ -744,14 +744,13 @@ public final class UndergroundBiomeBanding {
 				return this.original.findValue(target);
 			}
 
-			T backgroundValue = this.background.findValue(target);
 			float surfaceFactor = Math.min(
 				this.surfaceFactor(target.depth()),
 				Math.clamp(surfaceCoverageFactor, 0.0F, 1.0F)
 			);
 			float effectiveDensity = this.density * surfaceFactor;
 			if (effectiveDensity <= 0.0F) {
-				return backgroundValue;
+				return this.background.findValue(target);
 			}
 
 			int blockX = QuartPos.toBlock(quartX);
@@ -766,7 +765,7 @@ public final class UndergroundBiomeBanding {
 				this.verticalSize
 			);
 			if (effectiveDensity < 1.0F && region.occupancy() >= effectiveDensity) {
-				return backgroundValue;
+				return this.background.findValue(target);
 			}
 
 			if (!this.bandingEnabled) {
