@@ -172,6 +172,55 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
     // ------------------------------------------------------------------------------------------
 
     /**
+     * Biases continent skipping so that continents with bridges to other continents get skipped
+     * significantly less near the start (low skipping thresholds), causing lonely isolated continents
+     * to be the ones skipped early.
+     */
+    @Override
+    protected boolean shouldSkip(int cellX, int cellY) {
+        if (!this.hasSkipping || this.isDefaultContinent(cellX, cellY)) {
+            return false;
+        }
+        if (this.bridgeChance <= 0.0F) {
+            return super.shouldSkip(cellX, cellY);
+        }
+
+        float t = this.skipThreshold;
+        float lonelyT = NoiseUtil.sqrt(t * NoiseUtil.sqrt(t));
+        float strength = NoiseUtil.clamp(this.bridgeChance / 0.35F, 0.0F, 1.0F);
+        float maxEffectiveT = NoiseUtil.lerp(t, lonelyT, strength);
+
+        float rawSkip = getCellValue(this.skippingSeed, cellX, cellY);
+        // Fast path 1: if raw roll is above the maximum possible threshold (lonely), it never skips
+        if (rawSkip >= maxEffectiveT) {
+            return false;
+        }
+
+        // Fast path 2: size-reduced continents (< 1.0) can never bridge, so they are always lonely
+        if (this.getContinentSizeModifier(cellX, cellY) < 1.0F) {
+            return true;
+        }
+
+        int bridges = 0;
+        for (int i = 0; i < 8; i++) {
+            int nx = cellX + NBR_DX[i];
+            int ny = cellY + NBR_DY[i];
+            if (this.getContinentSizeModifier(nx, ny) >= 1.0F
+                    && this.bridgeRoll(cellX, cellY, nx, ny) < this.bridgeChance) {
+                bridges++;
+            }
+        }
+
+        if (bridges == 0) {
+            return true;
+        }
+
+        float biasedT = (bridges == 1) ? (t * t) : (t * t * t);
+        float effectiveT = NoiseUtil.lerp(t, biasedT, strength);
+        return rawSkip < effectiveT;
+    }
+
+    /**
      * Only continents that spawned (not skipped) and are full size may bridge. The full-size requirement matters:
      * getVariedDistanceValue scales distance per cell, which would create a seam across an open border if the two
      * cells had different modifiers.
