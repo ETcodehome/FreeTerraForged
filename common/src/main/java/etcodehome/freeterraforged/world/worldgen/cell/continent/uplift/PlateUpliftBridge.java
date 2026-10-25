@@ -192,32 +192,60 @@ public class PlateUpliftBridge {
             return 1.0F;
         }
 
-        // Clip bisector minIndex against the other 7 bisectors to determine its edge segment bounds [lo, hi]
+        // Clip bisector minIndex symmetrically using the union bounding box of cell and neighbor
+        int ncx = s.cx[minIndex];
+        int ncy = s.cy[minIndex];
+        int minCx = Math.min(cellX, ncx) - 1;
+        int maxCx = Math.max(cellX, ncx) + 1;
+        int minCy = Math.min(cellY, ncy) - 1;
+        int maxCy = Math.max(cellY, ncy) + 1;
+        float mxK = s.mx[minIndex];
+        float myK = s.my[minIndex];
+
         float tx = -s.ny[minIndex];
         float ty = s.nx[minIndex];
         float lo = -1.0e9F;
         float hi = 1.0e9F;
         boolean ok = true;
 
-        for (int j = 0; j < 8 && ok; j++) {
-            if (j == minIndex) {
-                continue;
-            }
-            float a = tx * s.nx[j] + ty * s.ny[j];
-            float b = (s.mx[j] - s.mx[minIndex]) * s.nx[j] + (s.my[j] - s.my[minIndex]) * s.ny[j];
-            if (Math.abs(a) < 1.0e-6F) {
-                if (b < 0.0F) {
-                    ok = false;
+        for (int cy = minCy; cy <= maxCy && ok; ++cy) {
+            for (int cx = minCx; cx <= maxCx && ok; ++cx) {
+                if ((cx == cellX && cy == cellY) || (cx == ncx && cy == ncy)) {
+                    continue;
                 }
-                continue;
-            }
-            float t = b / a;
-            if (a > 0.0F) {
-                if (t < hi) {
-                    hi = t;
+                NoiseUtil.Vec2f vecC = NoiseUtil.cell(this.seed, cx, cy);
+                float pxC = cx + vecC.x() * this.jitter;
+                float pyC = cy + vecC.y() * this.jitter;
+
+                float dACx = pxC - cellPointX;
+                float dACy = pyC - cellPointY;
+                float lenACSq = dACx * dACx + dACy * dACy;
+                if (lenACSq < 1.0e-5F) {
+                    continue;
                 }
-            } else if (t > lo) {
-                lo = t;
+
+                float invAC = 1.0F / NoiseUtil.sqrt(lenACSq);
+                float nACx = dACx * invAC;
+                float nACy = dACy * invAC;
+                float mACx = (cellPointX + pxC) * 0.5F;
+                float mACy = (cellPointY + pyC) * 0.5F;
+
+                float a = tx * nACx + ty * nACy;
+                float b = (mACx - mxK) * nACx + (mACy - myK) * nACy;
+                if (Math.abs(a) < 1.0e-6F) {
+                    if (b < 0.0F) {
+                        ok = false;
+                    }
+                    continue;
+                }
+                float t = b / a;
+                if (a > 0.0F) {
+                    if (t < hi) {
+                        hi = t;
+                    }
+                } else if (t > lo) {
+                    lo = t;
+                }
             }
         }
 
@@ -245,7 +273,12 @@ public class PlateUpliftBridge {
         float f = fraction;
         float lateralFade = 1.0F - (3.0F * f * f - 2.0F * f * f * f);
         float edgeHeight = this.saddleHeight * lateralFade;
-        float bridged = clampedMin + r * edgeHeight;
+
+        // Smooth crest profile along r ensuring d(bridged)/dr = 0 at the saddle center crest (r = 1.0)
+        float sh = NoiseUtil.clamp(this.saddleHeight, 0.01F, 1.0F);
+        float kSlope = (1.0F - sh) / sh;
+        float gR = r * (1.0F + kSlope * (r - 1.0F));
+        float bridged = clampedMin + gR * edgeHeight;
 
         return NoiseUtil.clamp(bridged, 0.0F, 1.0F);
     }
