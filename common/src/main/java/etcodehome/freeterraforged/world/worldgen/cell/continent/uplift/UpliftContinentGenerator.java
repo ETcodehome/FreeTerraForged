@@ -258,8 +258,9 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         int xi = NoiseUtil.floor(x);
         int yi = NoiseUtil.floor(y);
 
-        // Precompute the 5x5 grid points and canBridge bitmask centered at (xi, yi)
+        // Precompute the 5x5 grid points, landMask, and canBridge bitmask centered at (xi, yi)
         int idx = 0;
+        int landMask = 0;
         int canBridgeMask = 0;
         for (int dy = -2; dy <= 2; dy++) {
             int cy = yi + dy;
@@ -268,8 +269,11 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
                 NoiseUtil.Vec2f vec = NoiseUtil.cell(this.seed, cx, cy);
                 s.px[idx] = cx + vec.x() * this.jitter;
                 s.py[idx] = cy + vec.y() * this.jitter;
-                if (this.canBridge(cx, cy)) {
-                    canBridgeMask |= (1 << idx);
+                if (!this.shouldSkip(cx, cy)) {
+                    landMask |= (1 << idx);
+                    if (this.getContinentSizeModifier(cx, cy) >= 1.0F) {
+                        canBridgeMask |= (1 << idx);
+                    }
                 }
                 idx++;
             }
@@ -283,6 +287,11 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
             for (int cdx = 1; cdx <= 3; cdx++) {
                 int cx = xi + (cdx - 2);
                 int cIdx = cdy * 5 + cdx;
+                boolean cLand = (landMask & (1 << cIdx)) != 0;
+                if (!cLand) {
+                    continue;
+                }
+
                 float cpx = s.px[cIdx];
                 float cpy = s.py[cIdx];
                 boolean cCanBridge = (canBridgeMask & (1 << cIdx)) != 0;
@@ -312,19 +321,19 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
 
                 // Clip each closed bisector to find the true coastal Voronoi edge segment
                 for (int k = 0; k < 8; k++) {
-                    int nIdx = cIdx + NBR_OFFSET[k];
-                    boolean nCanBridge = (canBridgeMask & (1 << nIdx)) != 0;
-                    boolean bothSkipped = (!cCanBridge) && (!nCanBridge);
                     boolean isOpen = (openMask & (1 << k)) != 0;
-                    if (bothSkipped || isOpen) {
-                        continue; // Open borders or ocean-ocean borders are not coasts
+                    if (isOpen) {
+                        continue; // Open bridged borders are internal ridges, not coasts
                     }
 
-                    // Undirected edge deduplication: only process each edge once
+                    int nIdx = cIdx + NBR_OFFSET[k];
+                    boolean nLand = (landMask & (1 << nIdx)) != 0;
+
+                    // Undirected edge deduplication: only deduplicate internal land-land borders
                     int nc_dx = cdx + NBR_DX[k];
                     int nc_dy = cdy + NBR_DY[k];
                     boolean nbrIn3x3 = (nc_dx >= 1 && nc_dx <= 3 && nc_dy >= 1 && nc_dy <= 3);
-                    if (nbrIn3x3 && (NBR_DX[k] < 0 || (NBR_DX[k] == 0 && NBR_DY[k] < 0))) {
+                    if (nbrIn3x3 && nLand && (NBR_DX[k] < 0 || (NBR_DX[k] == 0 && NBR_DY[k] < 0))) {
                         continue;
                     }
 

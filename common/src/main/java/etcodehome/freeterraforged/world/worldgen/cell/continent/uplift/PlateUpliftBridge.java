@@ -17,6 +17,19 @@ import etcodehome.freeterraforged.world.worldgen.noise.module.Line;
 public class PlateUpliftBridge {
     public static final float DEFAULT_SADDLE_HEIGHT = 0.75F;
     public static final float DEFAULT_TECTONIC_ROUNDING = 0.50F;
+    public static final float MIN_SECTOR_ANGLE_DEGREES = 20.0F;
+    public static final float MIN_SECTOR_ANGLE_TAN = (float) Math.tan(Math.toRadians(MIN_SECTOR_ANGLE_DEGREES));
+
+    /**
+     * Returns true if the sector of the peak pyramid subtended by the Voronoi edge [lo, hi]
+     * from the peak (at Delaunay distance len to neighbor) has an angular width less than 20 degrees.
+     */
+    public static boolean isSectorTooThin(float lo, float hi, float len) {
+        float halfL = 0.5F * len;
+        float dot = halfL * halfL + lo * hi;
+        float cross = halfL * (hi - lo);
+        return dot > 0.0F && cross < dot * MIN_SECTOR_ANGLE_TAN;
+    }
 
     protected final UpliftContinentGenerator generator;
     protected final int seed;
@@ -258,7 +271,8 @@ public class PlateUpliftBridge {
             }
         }
 
-        if (!ok || lo >= hi || lo <= -1.0e8F || hi >= 1.0e8F) {
+        // Hard cutoff threshold: sectors of the peak pyramid less than 20 degrees wide never bridge
+        if (!ok || lo >= hi || lo <= -1.0e8F || hi >= 1.0e8F || isSectorTooThin(lo, hi, s.len[minIndex])) {
             return clampedMin;
         }
 
