@@ -155,6 +155,8 @@
   "freeterraforged.gui.slider.bridgeReach.tooltip": "Controls the distance threshold in cell units at which neighboring bridged borders influence terrain shaping.",
   "freeterraforged.gui.slider.tectonicPlateUplift": "Tectonic Plate Uplift",
   "freeterraforged.gui.slider.tectonicPlateUplift.tooltip": "Controls the probability that adjacent bridged continents connect their tectonic uplift peaks into continuous ridges.",
+  "freeterraforged.gui.slider.tectonicRounding": "Tectonic Rounding",
+  "freeterraforged.gui.slider.tectonicRounding.tooltip": "Controls the bias from a straight line pathway to an organic, smooth arc for connecting uplift peaks.",
   "freeterraforged.gui.slider.biomeEdgeGain": "Gain",
   "freeterraforged.gui.slider.biomeEdgeGain.tooltip": "Controls the gain subsequent noise octaves",
   "freeterraforged.gui.slider.biomeEdgeLacunarity": "Lacunarity",

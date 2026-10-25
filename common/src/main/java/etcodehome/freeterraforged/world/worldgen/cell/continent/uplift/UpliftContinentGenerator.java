@@ -92,7 +92,7 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         // Must stay the LAST seed.next() so existing noise seeds above are not shifted.
         this.bridgeSeed = seed.next();
         int tectonicSeed = seed.next();
-        this.plateUpliftBridge = new PlateUpliftBridge(this, this.seed, this.jitter, tectonicSeed, settings.continent.tectonicPlateUplift);
+        this.plateUpliftBridge = new PlateUpliftBridge(this, this.seed, this.jitter, tectonicSeed, settings.continent.tectonicPlateUplift, settings.continent.tectonicRounding);
     }
 
     @Override
@@ -427,6 +427,10 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
 
     public float getTectonicPlateUplift() {
         return this.plateUpliftBridge != null ? this.plateUpliftBridge.getTectonicPlateUplift() : 0.0F;
+    }
+
+    public float getTectonicRounding() {
+        return this.plateUpliftBridge != null ? this.plateUpliftBridge.getTectonicRounding() : 0.0F;
     }
 
     protected Domain createWarp(int seedX, int seedZ, int tectonicScale, WorldSettings.Continent continent, boolean applyLacunarity) {

@@ -31,6 +31,7 @@ public class WorldSettingsPage extends PresetEditorPage {
 	private Slider bridgeChance;
 	private Slider bridgeReach;
 	private Slider tectonicPlateUplift;
+	private Slider tectonicRounding;
 
 	private Slider islandInland;
 	private Slider islandCoast;
@@ -138,6 +139,12 @@ public class WorldSettingsPage extends PresetEditorPage {
 				val -> continent.tectonicPlateUplift = val,
 				this::regenerate
 		);
+		this.tectonicRounding = PresetWidgets.createFloatSlider(
+				continent.tectonicRounding,
+				WorldSettings.Continent.tectonicRoundingSetting,
+				val -> continent.tectonicRounding = val,
+				this::regenerate
+		);
 		
 		this.applyContinentType(this.continentType.getValue());
 
@@ -232,6 +239,7 @@ public class WorldSettingsPage extends PresetEditorPage {
 		this.left.addWidget(this.bridgeChance);
 		this.left.addWidget(this.bridgeReach);
 		this.left.addWidget(this.tectonicPlateUplift);
+		this.left.addWidget(this.tectonicRounding);
 
 		this.left.addWidget(PresetWidgets.createLabel(FTFTranslationKeys.GUI_LABEL_CONTROL_POINTS));
 		this.left.addWidget(this.islandInland);
@@ -274,6 +282,7 @@ public class WorldSettingsPage extends PresetEditorPage {
 		this.bridgeChance.active = isUpliftContinent;
 		this.bridgeReach.active = isUpliftContinent;
 		this.tectonicPlateUplift.active = isUpliftContinent;
+		this.tectonicRounding.active = isUpliftContinent;
 		if(isUpliftContinent){
 			this.preset.getPreset().terrain().general.globalVerticalScale = Math.max(this.preset.getPreset().terrain().general.globalVerticalScale, 1.0F);
 			this.preset.getPreset().terrain().steppe.baseScale = Math.max(this.preset.getPreset().terrain().steppe.baseScale, 2.0F);

@@ -16,6 +16,7 @@ import etcodehome.freeterraforged.world.worldgen.noise.module.Line;
  */
 public class PlateUpliftBridge {
     public static final float DEFAULT_SADDLE_HEIGHT = 0.75F;
+    public static final float DEFAULT_TECTONIC_ROUNDING = 0.50F;
 
     protected final UpliftContinentGenerator generator;
     protected final int seed;
@@ -23,6 +24,7 @@ public class PlateUpliftBridge {
     protected final float frequency;
     protected final int tectonicSeed;
     protected float tectonicPlateUplift;
+    protected float tectonicRounding;
     protected float saddleHeight;
 
     private static final class BridgeScratch {
@@ -34,22 +36,28 @@ public class PlateUpliftBridge {
         final float[] ny = new float[8];
         final float[] mx = new float[8];
         final float[] my = new float[8];
+        final float[] len = new float[8];
         final float[] planeValue = new float[8];
     }
 
     private static final ThreadLocal<BridgeScratch> SCRATCH = ThreadLocal.withInitial(BridgeScratch::new);
 
     public PlateUpliftBridge(UpliftContinentGenerator generator, int seed, float jitter, int tectonicSeed, float tectonicPlateUplift) {
-        this(generator, seed, jitter, tectonicSeed, tectonicPlateUplift, DEFAULT_SADDLE_HEIGHT);
+        this(generator, seed, jitter, tectonicSeed, tectonicPlateUplift, DEFAULT_TECTONIC_ROUNDING, DEFAULT_SADDLE_HEIGHT);
     }
 
-    public PlateUpliftBridge(UpliftContinentGenerator generator, int seed, float jitter, int tectonicSeed, float tectonicPlateUplift, float saddleHeight) {
+    public PlateUpliftBridge(UpliftContinentGenerator generator, int seed, float jitter, int tectonicSeed, float tectonicPlateUplift, float tectonicRounding) {
+        this(generator, seed, jitter, tectonicSeed, tectonicPlateUplift, tectonicRounding, DEFAULT_SADDLE_HEIGHT);
+    }
+
+    public PlateUpliftBridge(UpliftContinentGenerator generator, int seed, float jitter, int tectonicSeed, float tectonicPlateUplift, float tectonicRounding, float saddleHeight) {
         this.generator = generator;
         this.seed = seed;
         this.jitter = jitter;
         this.frequency = generator.frequency;
         this.tectonicSeed = tectonicSeed;
         this.tectonicPlateUplift = tectonicPlateUplift;
+        this.tectonicRounding = tectonicRounding;
         this.saddleHeight = saddleHeight;
     }
 
@@ -145,6 +153,7 @@ public class PlateUpliftBridge {
             if (lenSq > 0.00001F) {
                 float len = NoiseUtil.sqrt(lenSq);
                 float inv = 1.0F / len;
+                s.len[i] = len;
                 s.nx[i] = dx * inv;
                 s.ny[i] = dy * inv;
                 s.mx[i] = (cellPointX + px2) * 0.5F;
@@ -264,7 +273,38 @@ public class PlateUpliftBridge {
             return clampedMin;
         }
 
-        float fraction = Math.abs(t_edge - t_mid) / halfLen;
+        float uEdge = (t_edge - t_mid) / halfLen;
+        if (uEdge <= -1.0F || uEdge >= 1.0F) {
+            return clampedMin;
+        }
+
+        float fraction;
+        if (this.tectonicRounding <= 0.0F || Math.abs(t_mid) < 1.0e-5F) {
+            fraction = Math.abs(uEdge);
+        } else {
+            // Circumcircle through Peak 1 (-halfL, 0), Chord intersection (0, t_mid), and Peak 2 (+halfL, 0)
+            float halfL = 0.5F * s.len[minIndex];
+            float h2 = halfL * halfL;
+            float cy = 0.5F * (t_mid - h2 / t_mid);
+            float M = Math.abs(cy);
+            float rFactor = r * (2.0F - r);
+            float radicand = M * M + rFactor * h2;
+            float denom = NoiseUtil.sqrt(radicand) + M;
+            float sign = t_mid >= 0.0F ? 1.0F : -1.0F;
+            float tArcDivR = sign * ((2.0F - r) * h2 / denom);
+
+            // Interpolate path between straight chord (0.0 rounding) and circular arc (1.0 rounding)
+            float uCrest = this.tectonicRounding * ((tArcDivR - t_mid) / halfLen);
+            uCrest = NoiseUtil.clamp(uCrest, -0.80F, 0.80F);
+
+            // Lateral distance from the curved ridge centerline to (x, y)
+            if (uEdge < uCrest) {
+                fraction = (uCrest - uEdge) / (uCrest + 1.0F);
+            } else {
+                fraction = (uEdge - uCrest) / (1.0F - uCrest);
+            }
+        }
+
         if (fraction >= 1.0F) {
             return clampedMin;
         }
@@ -289,6 +329,14 @@ public class PlateUpliftBridge {
 
     public void setTectonicPlateUplift(float tectonicPlateUplift) {
         this.tectonicPlateUplift = tectonicPlateUplift;
+    }
+
+    public float getTectonicRounding() {
+        return this.tectonicRounding;
+    }
+
+    public void setTectonicRounding(float tectonicRounding) {
+        this.tectonicRounding = tectonicRounding;
     }
 
     public float getSaddleHeight() {
