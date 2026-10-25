@@ -28,7 +28,7 @@ import net.minecraft.world.level.levelgen.placement.RarityFilter;
 import etcodehome.freeterraforged.FTFCommon;
 
 public class PresetPlacedFeatures {
-	public static final ResourceKey<PlacedFeature> ERODE = createKey("erode");
+	public static final ResourceKey<PlacedFeature> SCREE = createKey("scree");
 	public static final ResourceKey<PlacedFeature> DECORATE_SNOW = createKey("decorate_snow");
 	public static final ResourceKey<PlacedFeature> SWAMP_SURFACE = createKey("swamp_surface");
 
@@ -91,8 +91,8 @@ public class PresetPlacedFeatures {
 
 		PlacementModifier blacklistOverworld = FTFPlacementModifiers.blacklistDimensions(LevelStem.OVERWORLD);
 
-		if(miscellaneous.erosionDecorator) {
-			PlacementUtils.register(ctx, ERODE, features.getOrThrow(PresetConfiguredFeatures.ERODE));
+		if(miscellaneous.screeDecorator) {
+			PlacementUtils.register(ctx, SCREE, features.getOrThrow(PresetConfiguredFeatures.ERODE));
 		}
 
 		if(miscellaneous.naturalSnowDecorator || miscellaneous.smoothLayerDecorator) {
@@ -152,24 +152,24 @@ public class PresetPlacedFeatures {
             PlacementUtils.register(ctx, JUNGLE_LARGE, features.getOrThrow(PresetConfiguredFeatures.JUNGLE_LARGE), PlacementUtils.filteredByBlockSurvival(Blocks.JUNGLE_SAPLING));
             PlacementUtils.register(ctx, JUNGLE_HUGE, features.getOrThrow(PresetConfiguredFeatures.JUNGLE_HUGE), PlacementUtils.filteredByBlockSurvival(Blocks.JUNGLE_SAPLING));
 
-	PlacementUtils.register(ctx, MARSH_BUSH, features.getOrThrow(PresetConfiguredFeatures.MARSH_BUSH), FTFPlacementModifiers.countExtra(0, 0.3F, 1), HeightmapPlacement.onHeightmap(Types.WORLD_SURFACE), BiomeFilter.biome());
-	PlacementUtils.register(ctx, PLAINS_BUSH, features.getOrThrow(PresetConfiguredFeatures.PLAINS_BUSH), FTFPlacementModifiers.countExtra(0, 0.05F, 1), HeightmapPlacement.onHeightmap(Types.WORLD_SURFACE), BiomeFilter.biome());
-	PlacementUtils.register(ctx, STEPPE_BUSH, features.getOrThrow(PresetConfiguredFeatures.STEPPE_BUSH), FTFPlacementModifiers.countExtra(0, 0.125F, 1), HeightmapPlacement.onHeightmap(Types.WORLD_SURFACE), BiomeFilter.biome());
-	PlacementUtils.register(ctx, COLD_STEPPE_BUSH, features.getOrThrow(PresetConfiguredFeatures.COLD_STEPPE_BUSH), FTFPlacementModifiers.countExtra(0, 0.125F, 1), HeightmapPlacement.onHeightmap(Types.WORLD_SURFACE), BiomeFilter.biome());
-	PlacementUtils.register(ctx, TAIGA_SCRUB_BUSH, features.getOrThrow(PresetConfiguredFeatures.TAIGA_SCRUB_BUSH), FTFPlacementModifiers.countExtra(0, 0.1F, 1), HeightmapPlacement.onHeightmap(Types.WORLD_SURFACE), BiomeFilter.biome());
+		PlacementUtils.register(ctx, MARSH_BUSH, features.getOrThrow(PresetConfiguredFeatures.MARSH_BUSH), FTFPlacementModifiers.countExtraPlacement(0, 0.3F, 1), HeightmapPlacement.onHeightmap(Types.WORLD_SURFACE), BiomeFilter.biome());
+		PlacementUtils.register(ctx, PLAINS_BUSH, features.getOrThrow(PresetConfiguredFeatures.PLAINS_BUSH), FTFPlacementModifiers.countExtraPlacement(0, 0.05F, 1), HeightmapPlacement.onHeightmap(Types.WORLD_SURFACE), BiomeFilter.biome());
+		PlacementUtils.register(ctx, STEPPE_BUSH, features.getOrThrow(PresetConfiguredFeatures.STEPPE_BUSH), FTFPlacementModifiers.countExtraPlacement(0, 0.125F, 1), HeightmapPlacement.onHeightmap(Types.WORLD_SURFACE), BiomeFilter.biome());
+		PlacementUtils.register(ctx, COLD_STEPPE_BUSH, features.getOrThrow(PresetConfiguredFeatures.COLD_STEPPE_BUSH), FTFPlacementModifiers.countExtraPlacement(0, 0.125F, 1), HeightmapPlacement.onHeightmap(Types.WORLD_SURFACE), BiomeFilter.biome());
+		PlacementUtils.register(ctx, TAIGA_SCRUB_BUSH, features.getOrThrow(PresetConfiguredFeatures.TAIGA_SCRUB_BUSH), FTFPlacementModifiers.countExtraPlacement(0, 0.1F, 1), HeightmapPlacement.onHeightmap(Types.WORLD_SURFACE), BiomeFilter.biome());
 
             PlacementUtils.register(ctx, FOREST_GRASS, features.getOrThrow(PresetConfiguredFeatures.FOREST_GRASS), worldSurfaceSquaredWithCount(7));
             PlacementUtils.register(ctx, BIRCH_FOREST_GRASS, features.getOrThrow(PresetConfiguredFeatures.BIRCH_FOREST_GRASS), worldSurfaceSquaredWithCount(7));
 
-            PlacementUtils.register(ctx, PLAINS_TREES, features.getOrThrow(PresetConfiguredFeatures.PLAINS_TREES), PlacementUtils.HEIGHTMAP, FTFPlacementModifiers.countExtra(0, 0.02F, 1), BiomeFilter.biome());
+            PlacementUtils.register(ctx, PLAINS_TREES, features.getOrThrow(PresetConfiguredFeatures.PLAINS_TREES), PlacementUtils.HEIGHTMAP, FTFPlacementModifiers.countExtraPlacement(0, 0.02F, 1), BiomeFilter.biome());
 	PlacementUtils.register(ctx, FOREST_TREES, features.getOrThrow(PresetConfiguredFeatures.FOREST_TREES), FTFPlacementModifiers.poisson(7, 0.25F, 0.3F, 150, 0.75F), HeightmapPlacement.onHeightmap(Types.WORLD_SURFACE), BiomeFilter.biome());
 	PlacementUtils.register(ctx, FLOWER_FOREST_TREES, features.getOrThrow(PresetConfiguredFeatures.FLOWER_FOREST_TREES), FTFPlacementModifiers.poisson(8, 0.2F, 0.1F, 500, 0.75F), HeightmapPlacement.onHeightmap(Types.WORLD_SURFACE), BiomeFilter.biome());
 	PlacementUtils.register(ctx, BIRCH_TREES, features.getOrThrow(PresetConfiguredFeatures.BIRCH_TREES), FTFPlacementModifiers.poisson(6, 0.25F, 0.25F, 175, 0.9F), HeightmapPlacement.onHeightmap(Types.WORLD_SURFACE), BiomeFilter.biome());
 	PlacementUtils.register(ctx, DARK_FOREST_TREES, features.getOrThrow(PresetConfiguredFeatures.DARK_FOREST_TREES), FTFPlacementModifiers.poisson(5, 0.3F, 0.2F, 300, 0.75F), HeightmapPlacement.onHeightmap(Types.WORLD_SURFACE), BiomeFilter.biome());
-	PlacementUtils.register(ctx, SAVANNA_TREES, features.getOrThrow(PresetConfiguredFeatures.SAVANNA_TREES), PlacementUtils.HEIGHTMAP, FTFPlacementModifiers.countExtra(0, 0.1F, 1), BiomeFilter.biome());
-	PlacementUtils.register(ctx, BADLANDS_TREES, features.getOrThrow(PresetConfiguredFeatures.BADLANDS_TREES), PlacementUtils.HEIGHTMAP, FTFPlacementModifiers.countExtra(0, 0.02F, 3), BiomeFilter.biome());
+	PlacementUtils.register(ctx, SAVANNA_TREES, features.getOrThrow(PresetConfiguredFeatures.SAVANNA_TREES), PlacementUtils.HEIGHTMAP, FTFPlacementModifiers.countExtraPlacement(0, 0.1F, 1), BiomeFilter.biome());
+	PlacementUtils.register(ctx, BADLANDS_TREES, features.getOrThrow(PresetConfiguredFeatures.BADLANDS_TREES), PlacementUtils.HEIGHTMAP, FTFPlacementModifiers.countExtraPlacement(0, 0.02F, 3), BiomeFilter.biome());
 	PlacementUtils.register(ctx, WOODED_BADLANDS_TREES, features.getOrThrow(PresetConfiguredFeatures.WOODED_BADLANDS_TREES), FTFPlacementModifiers.poisson(8, 0.2F, 0.8F, 0.25F, 150, 0.75F), HeightmapPlacement.onHeightmap(Types.WORLD_SURFACE), BiomeFilter.biome());
-	PlacementUtils.register(ctx, SWAMP_TREES, features.getOrThrow(PresetConfiguredFeatures.SWAMP_TREES), InSquarePlacement.spread(), PlacementUtils.HEIGHTMAP, FTFPlacementModifiers.countExtra(5, 0.25F, 1), BiomeFilter.biome());
+	PlacementUtils.register(ctx, SWAMP_TREES, features.getOrThrow(PresetConfiguredFeatures.SWAMP_TREES), InSquarePlacement.spread(), PlacementUtils.HEIGHTMAP, FTFPlacementModifiers.countExtraPlacement(5, 0.25F, 1), BiomeFilter.biome());
 	PlacementUtils.register(ctx, MEADOW_TREES, features.getOrThrow(PresetConfiguredFeatures.OAK_SMALL), RarityFilter.onAverageOnceEvery(30), HeightmapPlacement.onHeightmap(Types.WORLD_SURFACE), BiomeFilter.biome());
 	PlacementUtils.register(ctx, FIR_TREES, features.getOrThrow(PresetConfiguredFeatures.FIR_TREES), FTFPlacementModifiers.poisson(4, 0.25F, 0.3F, 300, 0.6F), HeightmapPlacement.onHeightmap(Types.WORLD_SURFACE), BiomeFilter.biome());
 	PlacementUtils.register(ctx, WINDSWEPT_HILLS_FIR_TREES, features.getOrThrow(PresetConfiguredFeatures.FIR_TREES), RarityFilter.onAverageOnceEvery(30), HeightmapPlacement.onHeightmap(Types.WORLD_SURFACE), BiomeFilter.biome());

@@ -160,8 +160,8 @@ public class PresetBiomeModifierData {
 			ctx.register(ADD_BIRCH_FOREST_GRASS, prepend(GenerationStep.Decoration.VEGETAL_DECORATION, Filter.Behavior.WHITELIST, birchForests, placedFeatures.getOrThrow(PresetPlacedFeatures.BIRCH_FOREST_GRASS)));
 		}
 
-		if(miscellaneous.erosionDecorator) {
-			ctx.register(ADD_EROSION, prepend(GenerationStep.Decoration.RAW_GENERATION, placedFeatures.getOrThrow(PresetPlacedFeatures.ERODE)));
+		if(miscellaneous.screeDecorator) {
+			ctx.register(ADD_EROSION, prepend(GenerationStep.Decoration.RAW_GENERATION, placedFeatures.getOrThrow(PresetPlacedFeatures.SCREE)));
 		}
 		if(miscellaneous.naturalSnowDecorator || miscellaneous.smoothLayerDecorator) {
 			ctx.register(ADD_SNOW_PROCESSING, append(GenerationStep.Decoration.TOP_LAYER_MODIFICATION, placedFeatures.getOrThrow(PresetPlacedFeatures.DECORATE_SNOW)));

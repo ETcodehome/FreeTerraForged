@@ -24,6 +24,7 @@ import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPlan;
 import etcodehome.freeterraforged.world.worldgen.runtime.BiomeCellCache;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenRuntimeBinding;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenQueryCaches;
+import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 
 @Mixin(Climate.Sampler.class)
 @Implements(@Interface(iface = FTFClimateSampler.class, prefix = "freeterraforged$FTFClimateSampler$"))
@@ -47,39 +48,52 @@ class MixinClimateSampler {
 		int z,
 		Operation<Climate.TargetPoint> original
 	) {
-		ClimateQuerySemantics semantics = this.freeterraforged$querySemantics;
-		ClimateQueryPolicy policy = semantics.policy();
-		if (!policy.cachesClimatePoints() && !policy.appliesUndergroundBanding()) {
-			return original.call(x, y, z);
-		}
-		WorldgenQueryCaches caches = policy.cachesClimatePoints()
-			? this.freeterraforged$queryCaches()
-			: null;
-		Object queryOwner = semantics.cacheOwner();
-		if (caches != null) {
-			Climate.TargetPoint cached = caches.climatePoints().find(queryOwner, x, y, z);
-			if (cached != null) {
-				return cached;
+		boolean perfActive = WorldgenPerfTracker.isActive();
+		long t0 = perfActive ? System.nanoTime() : 0L;
+		try {
+			ClimateQuerySemantics semantics = this.freeterraforged$querySemantics;
+			ClimateQueryPolicy policy = semantics.policy();
+			if (!policy.cachesClimatePoints() && !policy.appliesUndergroundBanding()) {
+				return original.call(x, y, z);
+			}
+			WorldgenQueryCaches caches = policy.cachesClimatePoints()
+				? this.freeterraforged$queryCaches()
+				: null;
+			Object queryOwner = semantics.cacheOwner();
+			if (caches != null) {
+				Climate.TargetPoint cached = caches.climatePoints().find(queryOwner, x, y, z);
+				if (cached != null) {
+					return cached;
+				}
+			}
+			if (UndergroundBiomeClimatePolicy.isSkippingBanding()) {
+				return original.call(x, y, z);
+			}
+
+			Climate.TargetPoint target = UndergroundBiomeClimatePolicy.apply(
+				(Climate.Sampler) (Object) this,
+				original.call(x, y, z),
+				x,
+				y,
+				z,
+				policy,
+				semantics.preset(),
+				semantics.seed()
+			);
+			if (caches != null
+				&& semantics == this.freeterraforged$querySemantics
+				&& caches == this.freeterraforged$queryCaches
+				&& queryOwner == semantics.cacheOwner()) {
+				caches.climatePoints().store(queryOwner, x, y, z, target);
+			}
+			return target;
+		} finally {
+			if (perfActive) {
+				WorldgenPerfTracker.ThreadStats ts = WorldgenPerfTracker.threadStats();
+				ts.climateSamplerCount++;
+				ts.climateSamplerNanos += (System.nanoTime() - t0);
 			}
 		}
-
-		Climate.TargetPoint target = UndergroundBiomeClimatePolicy.apply(
-			(Climate.Sampler) (Object) this,
-			original.call(x, y, z),
-			x,
-			y,
-			z,
-			policy,
-			semantics.preset(),
-			semantics.seed()
-		);
-		if (caches != null
-			&& semantics == this.freeterraforged$querySemantics
-			&& caches == this.freeterraforged$queryCaches
-			&& queryOwner == semantics.cacheOwner()) {
-			caches.climatePoints().store(queryOwner, x, y, z, target);
-		}
-		return target;
 	}
 
 	public void freeterraforged$FTFClimateSampler$setSpawnSearch(FTFClimateSampler.SpawnSearch spawnSearch) {

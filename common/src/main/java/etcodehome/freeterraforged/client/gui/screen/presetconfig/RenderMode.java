@@ -2,6 +2,7 @@ package etcodehome.freeterraforged.client.gui.screen.presetconfig;
 
 import java.awt.Color;
 
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.river.RiverCarverSettings;
@@ -218,12 +219,37 @@ public enum RenderMode {
         @Override
         public int getColor(Cell cell, Levels levels, float scale, float bias) {
 
-            float erosion = NoiseUtil.clamp((cell.gradient + 1.0F) * 0.5F, 0.0F, 1.0F);
+            float normalized = Math.min(1.0F, cell.gradient / PresetManager.PM.worldSettings.properties.terrainScaleFactor());
 
             float hue = 0.0F;
             float saturation = 0.0F;
-            float brightness = erosion;
+            float brightness = normalized;
             return rgba(hue, saturation, brightness);
+        }
+    },
+    SEDIMENT {
+
+        @Override
+        public boolean handlesWater() {
+            return true;
+        }
+
+        @Override
+        public int getColor(Cell cell, Levels levels, float scale, float bias) {
+
+            if (cell.erosionMask){
+                return rgba(255, 32, 32);
+            }
+
+            float val = cell.sediment; // Ranges from -1.0 to +1.0
+
+            // Map from [-1.0, +1.0] to [0.0, 1.0]:
+            // -1.0 = Black (0)
+            // +1.0 = White (255)
+            float normalized = (Math.max(-1.0f, Math.min(1.0f, val)) + 1.0f) * 0.5f;
+            int c = (int) (normalized * 255.0f);
+
+            return rgba(c, c, c);
         }
     },
     WEIRDNESS{

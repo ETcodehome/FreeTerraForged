@@ -14,7 +14,7 @@ public class PresetTerrainTypeNoise {
 		WorldSettings worldSettings = preset.world();
 		WorldSettings.Properties properties = worldSettings.properties;
 		float seaLevel = properties.seaLevel;
-		int terrainScaler = properties.terrainScaler();
+		int terrainScaler = properties.terrainScaleFactor();
 
 		ctx.register(GROUND, Noises.constant(seaLevel / (float)terrainScaler));
 	}

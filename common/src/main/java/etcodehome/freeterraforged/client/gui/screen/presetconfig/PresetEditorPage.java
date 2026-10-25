@@ -337,6 +337,7 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	public SaveResult onSave() {
 		try {
 			this.preset.save();
+			this.screen.updateDefaultPresetIfSource(this.preset);
 			return this.screen.applyPreset(this.preset);
 		} catch (IOException e) {
 			return this.screen.reportPresetApplyFailure(e);

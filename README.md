@@ -8,7 +8,7 @@ Additional feature contributions are welcomed via forking and raising a merge PR
 - Finishes the Neoforge port work started by Equalizer32 in https://github.com/equalizer32/NeoTerraForged/tree/1.21.1
 
 ### Licensing 
-- Continued under the permissive MIT license as per all historic contributions.
+- Continued under the permissive MIT license as per all historic contributions, with the exception of `Erosion.java` which is licensed under the Mozilla Public License 2.0 (MPL-2.0). See [LICENSE](LICENSE) for details.
 
 ***
 

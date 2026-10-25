@@ -16,7 +16,9 @@ import net.minecraft.core.SectionPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.levelgen.Aquifer;
+import net.minecraft.world.level.levelgen.blending.Blender;
 import net.minecraft.world.level.levelgen.DensityFunction;
 import net.minecraft.world.level.levelgen.DensityFunctions;
 import net.minecraft.world.level.levelgen.NoiseChunk;
@@ -28,30 +30,59 @@ import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
+import etcodehome.freeterraforged.world.worldgen.IChunkCellsHolder;
 import etcodehome.freeterraforged.world.worldgen.biome.FTFClimateSampler;
+import etcodehome.freeterraforged.world.worldgen.cell.Cell;
+import etcodehome.freeterraforged.world.worldgen.cell.filter.ChunkFilterGrid;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.TileCache;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.NoiseChunkTileOwner;
+import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPlan;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPlans;
 
 @Mixin(NoiseChunk.class)
-class MixinNoiseChunk implements NoiseChunkTileOwner {
+class MixinNoiseChunk implements IChunkCellsHolder {
+	@Unique
+	private static final ThreadLocal<ChunkAccess> freeterraforged$ACTIVE_CHUNK = new ThreadLocal<>();
+
 	private RandomState randomState;
 	private int chunkX, chunkZ;
 	@Nullable
-	private TileCache tileCache;
-	@Nullable
 	private Aquifer.FluidPicker freeterraforged$fluidPicker;
-	@Nullable
-	private TileCache.Lease tileLease;
-	@Nullable
-	private volatile Tile tile;
-	@Nullable
-	private volatile Tile.Chunk chunk;
-	private int tileStageDepth;
 	private CellSampler.Cache2d cache2d;
+	@Nullable
+	private Cell[] freeterraforged$chunkCells;
+
+	@Inject(
+		method = "forChunk",
+		at = @At("HEAD")
+	)
+	private static void freeterraforged$onForChunkHead(
+		ChunkAccess chunk,
+		RandomState randomState,
+		DensityFunctions.BeardifierOrMarker beardifierOrMarker,
+		NoiseGeneratorSettings noiseGeneratorSettings,
+		Aquifer.FluidPicker fluidPicker,
+		Blender blender,
+		CallbackInfoReturnable<NoiseChunk> cir
+	) {
+		freeterraforged$ACTIVE_CHUNK.set(chunk);
+	}
+
+	@Inject(
+		method = "forChunk",
+		at = @At("RETURN")
+	)
+	private static void freeterraforged$onForChunkReturn(
+		ChunkAccess chunk,
+		RandomState randomState,
+		DensityFunctions.BeardifierOrMarker beardifierOrMarker,
+		NoiseGeneratorSettings noiseGeneratorSettings,
+		Aquifer.FluidPicker fluidPicker,
+		Blender blender,
+		CallbackInfoReturnable<NoiseChunk> cir
+	) {
+		freeterraforged$ACTIVE_CHUNK.remove();
+	}
 
 	@Inject(
 		method = "<init>",
@@ -70,7 +101,7 @@ class MixinNoiseChunk implements NoiseChunkTileOwner {
 		DensityFunctions.BeardifierOrMarker beardifierOrMarker,
 		NoiseGeneratorSettings generatorSettings,
 		Aquifer.FluidPicker fluidPicker,
-		net.minecraft.world.level.levelgen.blending.Blender blender,
+		Blender blender,
 		CallbackInfo callback
 	) {
 		this.randomState = randomState;
@@ -84,8 +115,17 @@ class MixinNoiseChunk implements NoiseChunkTileOwner {
 					preset, generatorContext, generatorSettings
 				);
 				if (cellCountXZ > 1) {
-					this.tileCache = generatorContext.cache;
 					this.cache2d = new CellSampler.Cache2d();
+					ChunkAccess activeChunk = freeterraforged$ACTIVE_CHUNK.get();
+					if (activeChunk instanceof IChunkCellsHolder holder
+							&& activeChunk.getPos().x == this.chunkX
+							&& activeChunk.getPos().z == this.chunkZ) {
+						this.freeterraforged$chunkCells = holder.freeterraforged$getOrCreateChunkCells(generatorContext);
+					} else {
+						this.freeterraforged$chunkCells = generatorContext.filteredChunkCache.getFilteredChunk(this.chunkX, this.chunkZ);
+					}
+				} else {
+					this.freeterraforged$chunkCells = generatorContext.filteredChunkCache.getIfPresent(this.chunkX, this.chunkZ);
 				}
 			}
 		}
@@ -135,10 +175,10 @@ class MixinNoiseChunk implements NoiseChunkTileOwner {
 		float shallowOceanCP = controlPoints.shallowOcean;
 		float coastCP = controlPoints.coast;
 		float transitionRange = coastCP - shallowOceanCP;
-		TileCache cache = generatorContext.cache;
 		Aquifer.FluidStatus oceanLava = new Aquifer.FluidStatus(oceanLavaLevel, Blocks.LAVA.defaultBlockState());
 		int[] columnCache = { Integer.MIN_VALUE, Integer.MIN_VALUE, globalLavaLevel };
 		Aquifer.FluidStatus[] cachedLavaStatus = { lava };
+		Cell scratchCell = new Cell();
 
 		return (x, y, z) -> {
 			int effectiveLava;
@@ -149,15 +189,19 @@ class MixinNoiseChunk implements NoiseChunkTileOwner {
 			} else {
 				effectiveLava = globalLavaLevel;
 				effectiveLavaStatus = lava;
-				int cx = SectionPos.blockToSectionCoord(x);
-				int cz = SectionPos.blockToSectionCoord(z);
+				boolean perfActive = WorldgenPerfTracker.isActive();
+				WorldgenPerfTracker.ThreadStats ts = perfActive ? WorldgenPerfTracker.threadStats() : null;
+				WorldgenPerfTracker.ApplyCellCaller prevCaller = null;
+				if (ts != null) {
+					prevCaller = ts.currentCaller;
+					ts.currentCaller = WorldgenPerfTracker.ApplyCellCaller.AQUIFER;
+				}
 				float continentEdge;
-				Tile ownedTile = this.freeterraforged$currentTile();
-				if (ownedTile != null) {
-					continentEdge = ownedTile.getChunkReader(cx, cz).getCell(x, z).continentEdge;
-				} else {
-					try (TileCache.Lease lease = cache.acquireAtChunk(cx, cz)) {
-						continentEdge = lease.tile().getChunkReader(cx, cz).getCell(x, z).continentEdge;
+				try {
+					continentEdge = CellSampler.getCachedOrLookup(generatorContext.lookup, x, z, false).continentEdge;
+				} finally {
+					if (ts != null) {
+						ts.currentCaller = prevCaller;
 					}
 				}
 
@@ -211,61 +255,32 @@ class MixinNoiseChunk implements NoiseChunkTileOwner {
 	)
 	private void wrapNew(DensityFunction function, CallbackInfoReturnable<DensityFunction> callback) {
 		if((Object) this.randomState instanceof FTFRandomState randomState && function instanceof CellSampler mapped) {
-			callback.setReturnValue(mapped.new CacheChunk(this::freeterraforged$currentTileChunk, this.cache2d, this.chunkX, this.chunkZ));
+			callback.setReturnValue(mapped.new CacheChunk(this.freeterraforged$chunkCells, this.chunkX << 4, this.chunkZ << 4, this.cache2d));
 		}
 	}
 
 	@Override
-	public synchronized void freeterraforged$beginTileStage() {
-		if (this.tileCache == null) {
-			return;
-		}
-		if (this.tileLease != null) {
-			this.tileStageDepth++;
-			return;
-		}
-		TileCache.Lease acquired = this.tileCache.acquireAtChunk(this.chunkX, this.chunkZ);
-		try {
-			Tile ownedTile = acquired.tile();
-			Tile.Chunk reader = ownedTile.getChunkReader(this.chunkX, this.chunkZ);
-			this.tileLease = acquired;
-			this.tile = ownedTile;
-			this.chunk = reader;
-			this.tileStageDepth = 1;
-		} catch (RuntimeException | Error failure) {
-			try {
-				acquired.close();
-			} catch (RuntimeException | Error cleanupFailure) {
-				failure.addSuppressed(cleanupFailure);
-			}
-			throw failure;
-		}
+	@Nullable
+	public Cell[] freeterraforged$getChunkCells() {
+		return this.freeterraforged$chunkCells;
 	}
 
 	@Override
-	public synchronized void freeterraforged$endTileStage() {
-		if (this.tileStageDepth <= 0) {
-			throw new IllegalStateException("NoiseChunk tile-stage ownership underflow");
-		}
-		if (--this.tileStageDepth > 0) {
-			return;
-		}
-		TileCache.Lease releasing = this.tileLease;
-		if (releasing != null) {
-			this.chunk = null;
-			this.tile = null;
-			this.tileLease = null;
-			releasing.close();
-		}
+	public void freeterraforged$setChunkCells(Cell[] cells) {
+		this.freeterraforged$chunkCells = cells;
 	}
 
 	@Override
-	public Tile.Chunk freeterraforged$currentTileChunk() {
-		return this.chunk;
+	public Cell[] freeterraforged$getOrCreateChunkCells(GeneratorContext context) {
+		if (this.freeterraforged$chunkCells == null) {
+			this.freeterraforged$chunkCells = context.filteredChunkCache.getFilteredChunk(this.chunkX, this.chunkZ);
+		}
+		return this.freeterraforged$chunkCells;
 	}
 
 	@Override
-	public Tile freeterraforged$currentTile() {
-		return this.tile;
+	public Cell freeterraforged$getCell(int localX, int localZ, GeneratorContext context) {
+		Cell[] cells = this.freeterraforged$getOrCreateChunkCells(context);
+		return cells[(localZ & 15) * 16 + (localX & 15)];
 	}
 }
