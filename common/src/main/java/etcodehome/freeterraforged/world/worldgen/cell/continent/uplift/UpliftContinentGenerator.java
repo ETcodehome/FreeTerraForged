@@ -34,11 +34,21 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
     protected PlateUpliftBridge plateUpliftBridge;
     private final int bridgeSeed;
 
+    // Constant 8-neighbor lookup tables for flat 1D traversal and bitmask indexing
+    private static final int[] NBR_DX = { -1, 0, 1, -1, 1, -1, 0, 1 };
+    private static final int[] NBR_DY = { -1, -1, -1, 0, 0, 1, 1, 1 };
+    private static final int[] NBR_OFFSET = { -6, -5, -4, -1, 1, 4, 5, 6 };
+
     private static final class BoundaryScratch {
-        final float[] nx = new float[8], ny = new float[8], mx = new float[8], my = new float[8], d = new float[8];
-        final float[] lo = new float[8], hi = new float[8];
-        final int[] cx = new int[8], cy = new int[8], loP = new int[8], hiP = new int[8];
-        final boolean[] eligible = new boolean[8], open = new boolean[8], real = new boolean[8];
+        // 5x5 grid of cell points centered at (xi, yi)
+        final float[] px = new float[25];
+        final float[] py = new float[25];
+
+        // 8-neighbor bisector geometry for clipping
+        final float[] nx = new float[8];
+        final float[] ny = new float[8];
+        final float[] mx = new float[8];
+        final float[] my = new float[8];
     }
 
     private static final ThreadLocal<BoundaryScratch> SCRATCH = ThreadLocal.withInitial(BoundaryScratch::new);
@@ -187,125 +197,179 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
                 && this.bridgeRoll(ax, ay, bx, by) < this.bridgeChance;
     }
 
-    private static float distToSegment(float px, float py, float ax, float ay, float bx, float by) {
+    private static float distToSegmentSq(float px, float py, float ax, float ay, float bx, float by) {
         float dx = bx - ax, dy = by - ay;
         float l2 = dx * dx + dy * dy;
         float t = l2 < 1.0e-12F ? 0.0F : NoiseUtil.clamp(((px - ax) * dx + (py - ay) * dy) / l2, 0.0F, 1.0F);
         float ex = px - (ax + t * dx), ey = py - (ay + t * dy);
-        return NoiseUtil.sqrt(ex * ex + ey * ey);
+        return ex * ex + ey * ey;
     }
 
     /**
      * Squared distance (cell units) from (x,y) to the nearest closed border of the merged landmass.
-     * With no open borders nearby this is identical to the original min-over-neighbour-bisectors distance.
+     * When all borders are unbridged (or for isolated continents), this computes the exact distance to
+     * the local cell's bisector boundary. When borders are bridged, this evaluates all true coastal Voronoi
+     * polygon segments in the local 3x3 window around (x,y) with continuous boundary interpolation.
      */
     private float getBoundaryDistanceSq(float x, float y, int cellX, int cellY, float ax, float ay) {
+        // Fast path 1: if bridging is globally disabled or this cell cannot bridge, all borders are closed.
+        if (this.bridgeChance <= 0.0F || !this.canBridge(cellX, cellY)) {
+            float bestSq = Float.MAX_VALUE;
+            for (int i = 0; i < 8; i++) {
+                int cx2 = cellX + NBR_DX[i];
+                int cy2 = cellY + NBR_DY[i];
+                NoiseUtil.Vec2f vec2 = NoiseUtil.cell(this.seed, cx2, cy2);
+                float px2 = cx2 + vec2.x() * this.jitter;
+                float py2 = cy2 + vec2.y() * this.jitter;
+                float dist = getDistance(x, y, ax, ay, px2, py2);
+                if (dist < bestSq) {
+                    bestSq = dist;
+                }
+            }
+            return bestSq == Float.MAX_VALUE ? 4.0F : bestSq;
+        }
+
+        // Fast path 2: single-pass check if all 8 neighbors are unbridged (isolated island).
+        // If an open bridged border is found, break early to run the bridged boundary path.
+        // Otherwise, bestSq is already computed over all 8 closed borders with zero duplicate passes.
+        boolean anyOpen = false;
+        float bestSq = Float.MAX_VALUE;
+        for (int i = 0; i < 8; i++) {
+            int cx2 = cellX + NBR_DX[i];
+            int cy2 = cellY + NBR_DY[i];
+            if (this.canBridge(cx2, cy2) && this.bridgeRoll(cellX, cellY, cx2, cy2) < this.bridgeChance) {
+                anyOpen = true;
+                break;
+            }
+            NoiseUtil.Vec2f vec2 = NoiseUtil.cell(this.seed, cx2, cy2);
+            float px2 = cx2 + vec2.x() * this.jitter;
+            float py2 = cy2 + vec2.y() * this.jitter;
+            float dist = getDistance(x, y, ax, ay, px2, py2);
+            if (dist < bestSq) {
+                bestSq = dist;
+            }
+        }
+        if (!anyOpen) {
+            return bestSq == Float.MAX_VALUE ? 4.0F : bestSq;
+        }
+
+        // Bridged landmass path: evaluate the true closed Voronoi polygon segments in the 3x3 window around (xi, yi).
         BoundaryScratch s = SCRATCH.get();
-        boolean aEligible = this.canBridge(cellX, cellY);
-        boolean anyOpenNear = false;
-        float closedMin = Float.MAX_VALUE;
-        int n = 0;
+        int xi = NoiseUtil.floor(x);
+        int yi = NoiseUtil.floor(y);
 
-        for (int cy2 = cellY - 1; cy2 <= cellY + 1; ++cy2) {
-            for (int cx2 = cellX - 1; cx2 <= cellX + 1; ++cx2) {
-                if (cx2 == cellX && cy2 == cellY) {
-                    continue;
+        // Precompute the 5x5 grid points and canBridge bitmask centered at (xi, yi)
+        int idx = 0;
+        int canBridgeMask = 0;
+        for (int dy = -2; dy <= 2; dy++) {
+            int cy = yi + dy;
+            for (int dx = -2; dx <= 2; dx++) {
+                int cx = xi + dx;
+                NoiseUtil.Vec2f vec = NoiseUtil.cell(this.seed, cx, cy);
+                s.px[idx] = cx + vec.x() * this.jitter;
+                s.py[idx] = cy + vec.y() * this.jitter;
+                if (this.canBridge(cx, cy)) {
+                    canBridgeMask |= (1 << idx);
                 }
-                NoiseUtil.Vec2f vec = NoiseUtil.cell(this.seed, cx2, cy2);
-                float px = cx2 + vec.x() * this.jitter;
-                float py = cy2 + vec.y() * this.jitter;
-                float ux = px - ax, uy = py - ay;
-                float inv = 1.0F / NoiseUtil.sqrt(ux * ux + uy * uy);
-                s.nx[n] = ux * inv;
-                s.ny[n] = uy * inv;
-                s.mx[n] = (ax + px) * 0.5F;
-                s.my[n] = (ay + py) * 0.5F;
-                // perpendicular distance to the bisector line (same value the old getDistance() produced, unsquared)
-                s.d[n] = Math.max(0.0F, (s.mx[n] - x) * s.nx[n] + (s.my[n] - y) * s.ny[n]);
-                s.cx[n] = cx2;
-                s.cy[n] = cy2;
-                s.eligible[n] = aEligible && this.canBridge(cx2, cy2);
-                s.open[n] = s.eligible[n] && this.bridgeRoll(cellX, cellY, cx2, cy2) < this.bridgeChance;
-                if (s.open[n]) {
-                    if (s.d[n] < this.bridgeReach) {
-                        anyOpenNear = true;
+                idx++;
+            }
+        }
+
+        bestSq = Float.MAX_VALUE;
+
+        // Iterate over the 3x3 cells (grid indices cdx=1..3, cdy=1..3 in the 5x5 array)
+        for (int cdy = 1; cdy <= 3; cdy++) {
+            int cy = yi + (cdy - 2);
+            for (int cdx = 1; cdx <= 3; cdx++) {
+                int cx = xi + (cdx - 2);
+                int cIdx = cdy * 5 + cdx;
+                float cpx = s.px[cIdx];
+                float cpy = s.py[cIdx];
+                boolean cCanBridge = (canBridgeMask & (1 << cIdx)) != 0;
+
+                // Gather 8 neighbors of cell (cx, cy)
+                int openMask = 0;
+                for (int n = 0; n < 8; n++) {
+                    int nIdx = cIdx + NBR_OFFSET[n];
+                    float npx = s.px[nIdx];
+                    float npy = s.py[nIdx];
+                    float ux = npx - cpx;
+                    float uy = npy - cpy;
+                    float inv = 1.0F / NoiseUtil.sqrt(ux * ux + uy * uy);
+                    s.nx[n] = ux * inv;
+                    s.ny[n] = uy * inv;
+                    s.mx[n] = (cpx + npx) * 0.5F;
+                    s.my[n] = (cpy + npy) * 0.5F;
+                    boolean nCanBridge = (canBridgeMask & (1 << nIdx)) != 0;
+                    if (cCanBridge && nCanBridge) {
+                        int ncx = cx + NBR_DX[n];
+                        int ncy = cy + NBR_DY[n];
+                        if (this.bridgeRoll(cx, cy, ncx, ncy) < this.bridgeChance) {
+                            openMask |= (1 << n);
+                        }
                     }
-                } else if (s.d[n] < closedMin) {
-                    closedMin = s.d[n];
                 }
-                n++;
-            }
-        }
 
-        // fast path: no open border can influence this point
-        if (!anyOpenNear) {
-            return closedMin == Float.MAX_VALUE ? 4.0F : closedMin * closedMin;
-        }
-
-        // slow path: clip every bisector by the other 7 to get this cell's true polygon edges
-        float best = Float.MAX_VALUE;
-        for (int k = 0; k < 8; k++) {
-            float tx = -s.ny[k], ty = s.nx[k];
-            float lo = -1.0e9F, hi = 1.0e9F;
-            int loP = -1, hiP = -1;
-            boolean ok = true;
-            for (int j = 0; j < 8 && ok; j++) {
-                if (j == k) {
-                    continue;
-                }
-                float a = tx * s.nx[j] + ty * s.ny[j];
-                float b = (s.mx[j] - s.mx[k]) * s.nx[j] + (s.my[j] - s.my[k]) * s.ny[j];
-                if (Math.abs(a) < 1.0e-6F) {
-                    if (b < 0.0F) {
-                        ok = false;
+                // Clip each closed bisector to find the true coastal Voronoi edge segment
+                for (int k = 0; k < 8; k++) {
+                    int nIdx = cIdx + NBR_OFFSET[k];
+                    boolean nCanBridge = (canBridgeMask & (1 << nIdx)) != 0;
+                    boolean bothSkipped = (!cCanBridge) && (!nCanBridge);
+                    boolean isOpen = (openMask & (1 << k)) != 0;
+                    if (bothSkipped || isOpen) {
+                        continue; // Open borders or ocean-ocean borders are not coasts
                     }
-                    continue;
-                }
-                float t = b / a;
-                if (a > 0.0F) {
-                    if (t < hi) {
-                        hi = t;
-                        hiP = j;
+
+                    // Undirected edge deduplication: only process each edge once
+                    int nc_dx = cdx + NBR_DX[k];
+                    int nc_dy = cdy + NBR_DY[k];
+                    boolean nbrIn3x3 = (nc_dx >= 1 && nc_dx <= 3 && nc_dy >= 1 && nc_dy <= 3);
+                    if (nbrIn3x3 && (NBR_DX[k] < 0 || (NBR_DX[k] == 0 && NBR_DY[k] < 0))) {
+                        continue;
                     }
-                } else if (t > lo) {
-                    lo = t;
-                    loP = j;
+
+                    float tx = -s.ny[k], ty = s.nx[k];
+                    float lo = -1.0e9F, hi = 1.0e9F;
+                    boolean ok = true;
+
+                    for (int j = 0; j < 8; j++) {
+                        if (j == k) {
+                            continue;
+                        }
+                        float a = tx * s.nx[j] + ty * s.ny[j];
+                        float b = (s.mx[j] - s.mx[k]) * s.nx[j] + (s.my[j] - s.my[k]) * s.ny[j];
+                        if (Math.abs(a) < 1.0e-6F) {
+                            if (b < 0.0F) {
+                                ok = false;
+                                break;
+                            }
+                            continue;
+                        }
+                        float t = b / a;
+                        if (a > 0.0F) {
+                            if (t < hi) {
+                                hi = t;
+                            }
+                        } else if (t > lo) {
+                            lo = t;
+                        }
+                    }
+
+                    if (ok && lo < hi && lo > -1.0e8F && hi < 1.0e8F) {
+                        float p1x = s.mx[k] + lo * tx;
+                        float p1y = s.my[k] + lo * ty;
+                        float p2x = s.mx[k] + hi * tx;
+                        float p2y = s.my[k] + hi * ty;
+                        float dSq = distToSegmentSq(x, y, p1x, p1y, p2x, p2y);
+                        if (dSq < bestSq) {
+                            bestSq = dSq;
+                        }
+                    }
                 }
-            }
-            s.real[k] = ok && lo < hi && lo > -1.0e8F && hi < 1.0e8F;
-            s.lo[k] = lo;
-            s.hi[k] = hi;
-            s.loP[k] = loP;
-            s.hiP[k] = hiP;
-            if (s.real[k] && !s.open[k]) {
-                best = Math.min(best, distToSegment(x, y,
-                        s.mx[k] + lo * tx, s.my[k] + lo * ty,
-                        s.mx[k] + hi * tx, s.my[k] + hi * ty));
             }
         }
 
-        // slit ends: a vertex shared by two OPEN edges whose far side (neighbour|neighbour) is closed
-        for (int k = 0; k < 8; k++) {
-            if (!s.real[k] || !s.open[k]) {
-                continue;
-            }
-            float tx = -s.ny[k], ty = s.nx[k];
-            for (int end = 0; end < 2; end++) {
-                int l = end == 0 ? s.loP[k] : s.hiP[k];
-                if (l < 0 || !s.real[l] || !s.open[l]) {
-                    continue;
-                }
-                // third border also open -> fully merged corner, no boundary here
-                if (s.eligible[k] && s.eligible[l]
-                        && this.bridgeRoll(s.cx[k], s.cy[k], s.cx[l], s.cy[l]) < this.bridgeChance) {
-                    continue;
-                }
-                float t = end == 0 ? s.lo[k] : s.hi[k];
-                float vx = x - (s.mx[k] + t * tx), vy = y - (s.my[k] + t * ty);
-                best = Math.min(best, NoiseUtil.sqrt(vx * vx + vy * vy));
-            }
-        }
-        return best == Float.MAX_VALUE ? 4.0F : best * best;
+        return bestSq == Float.MAX_VALUE ? 4.0F : bestSq;
     }
 
     // ------------------------------------------------------------------------------------------
