@@ -174,18 +174,22 @@ public class PlateUpliftBridge {
             return 1.0F;
         }
 
-        if (minGradient >= 1.0F) {
-            return 1.0F;
-        }
+        float clampedMin = NoiseUtil.clamp(minGradient, 0.0F, 1.0F);
 
         // Fast path: if tectonic plate uplift is inactive globally or on this specific border
         if (this.tectonicPlateUplift <= 0.0F) {
-            return NoiseUtil.clamp(minGradient, 0.0F, 1.0F);
+            return clampedMin;
         }
 
         boolean isActive = this.isTectonicUpliftActive(cellX, cellY, s.cx[minIndex], s.cy[minIndex]);
         if (!isActive) {
-            return NoiseUtil.clamp(minGradient, 0.0F, 1.0F);
+            return clampedMin;
+        }
+
+        // Progress r along the sector towards the bridged edge: 0.0 at cell center peak, 1.0 at Voronoi edge
+        float r = 1.0F - clampedMin;
+        if (r <= 1.0e-5F) {
+            return 1.0F;
         }
 
         // Clip bisector minIndex against the other 7 bisectors to determine its edge segment bounds [lo, hi]
@@ -218,29 +222,26 @@ public class PlateUpliftBridge {
         }
 
         if (!ok || lo >= hi || lo <= -1.0e8F || hi >= 1.0e8F) {
-            return NoiseUtil.clamp(minGradient, 0.0F, 1.0F);
+            return clampedMin;
         }
 
-        // Progress r along the sector towards the bridged edge: 0.0 at cell center peak, 1.0 at Voronoi edge
-        float clampedMin = Math.max(0.0F, minGradient);
-        float r = 1.0F - clampedMin;
-        if (r <= 1.0e-5F) {
-            return 1.0F;
+        // Tangent parameter t_edge along the bisector where the ray from peak (cellPointX, cellPointY) through (x, y) intersects the edge
+        float d_tan = (x - cellPointX) * tx + (y - cellPointY) * ty;
+        float t_edge = d_tan / r;
+
+        // Measure distance from the true center of the Voronoi edge relative to half-width
+        float t_mid = 0.5F * (lo + hi);
+        float halfLen = 0.5F * (hi - lo);
+        if (halfLen <= 1.0e-6F) {
+            return clampedMin;
         }
 
-        // Distance along bisector tangent from midpoint M
-        float d_tan = (x - s.mx[minIndex]) * tx + (y - s.my[minIndex]) * ty;
-        float limit = r * (d_tan < 0.0F ? -lo : hi);
-        if (limit <= 1.0e-6F) {
-            return NoiseUtil.clamp(minGradient, 0.0F, 1.0F);
-        }
-
-        float fraction = Math.abs(d_tan) / limit;
+        float fraction = Math.abs(t_edge - t_mid) / halfLen;
         if (fraction >= 1.0F) {
-            return NoiseUtil.clamp(minGradient, 0.0F, 1.0F);
+            return clampedMin;
         }
 
-        // Smoothstep lateral fade: 1.0 along the centerline bridge, 0.0 at the sector boundary rays
+        // Smoothstep lateral fade: 1.0 along the centerline bridge, fading to 0.0 at the sector boundary vertices
         float f = fraction;
         float lateralFade = 1.0F - (3.0F * f * f - 2.0F * f * f * f);
         float edgeHeight = this.saddleHeight * lateralFade;
