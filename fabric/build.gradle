@@ -102,7 +102,7 @@ tasks.named("runPresetTestServer").configure {
         new File(testDir, "eula.txt").text = "eula=true\n"
         new File(testDir, "server.properties").text = """\
 level-type=freeterraforged\\:freeterraforged
-level-seed=${project.findProperty('ftfTestSeed') ?: '228'}
+level-seed=${project.findProperty('ftfTestSeed') ?: '1337'}
 online-mode=false
 spawn-protection=0
 view-distance=10

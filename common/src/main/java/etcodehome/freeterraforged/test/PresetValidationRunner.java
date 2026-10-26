@@ -17,9 +17,17 @@ import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
 import org.apache.commons.io.file.PathUtils;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
+import java.io.File;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
+import etcodehome.freeterraforged.world.worldgen.cell.heightmap.TerrainMapGenerator;
+import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
+import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
+import etcodehome.freeterraforged.client.command.FTFCommands;
 import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.client.data.DefaultPresetArchive;
 import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
@@ -465,10 +473,105 @@ public final class PresetValidationRunner {
 			);
 
 			// -----------------------------------------------------------------------------------------
+			// Test 11: In-Game /ftf heightmap & /ftf reliefmap Command Execution & Parity Verification
+			// -----------------------------------------------------------------------------------------
+			FTFCommon.LOGGER.info("[FTF-Test] [11/11] Verifying In-Game /ftf heightmap & /ftf reliefmap Command Execution...");
+
+			java.io.File workingDir = new java.io.File(".");
+			java.io.FileFilter hmFilter = (f) -> f.getName().startsWith("heightmap_") && f.getName().endsWith(".png");
+			java.io.FileFilter rmFilter = (f) -> f.getName().startsWith("reliefmap_") && f.getName().endsWith(".png");
+
+			File[] existingHm = workingDir.listFiles(hmFilter);
+			if (existingHm != null) {
+				for (File f : existingHm) f.delete();
+			}
+			File[] existingRm = workingDir.listFiles(rmFilter);
+			if (existingRm != null) {
+				for (File f : existingRm) f.delete();
+			}
+
+			int testRadius = Integer.getInteger("freeterraforged.test.command.radius", 256);
+			BlockPos spawnPos = server.overworld().getSharedSpawnPos();
+			int minX = spawnPos.getX() - testRadius;
+			int minZ = spawnPos.getZ() - testRadius;
+			int maxX = spawnPos.getX() + testRadius;
+			int maxZ = spawnPos.getZ() + testRadius;
+			int expectedW = maxX - minX + 1;
+			int expectedH = maxZ - minZ + 1;
+
+			// 1. Dispatch /ftf heightmap radius <testRadius>
+			server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), "ftf heightmap radius " + testRadius);
+			java.util.concurrent.CompletableFuture<?> hmTask = FTFCommands.getCurrentHeightmapTask();
+			if (hmTask != null) {
+				hmTask.join();
+			}
+			File[] hmFiles = workingDir.listFiles(hmFilter);
+			if (hmFiles == null || hmFiles.length == 0) {
+				throw new AssertionError("In-game command /ftf heightmap failed to produce an output file!");
+			}
+			File hmFile = hmFiles[0];
+			if (hmFile.length() < 100) {
+				throw new AssertionError("In-game command /ftf heightmap produced empty or truncated file: " + hmFile.length() + " bytes");
+			}
+			BufferedImage hmImg = ImageIO.read(hmFile);
+			TerrainMapGenerator.ImageValidationReport hmReport = TerrainMapGenerator.validateImageContent(
+				hmImg, TerrainMapGenerator.MapType.RAW_HEIGHTMAP, expectedW, expectedH
+			);
+			if (!hmReport.passed()) {
+				throw new AssertionError("In-game /ftf heightmap failed content validation (black/flat image): " + hmReport.violations());
+			}
+
+			// 2. Dispatch /ftf reliefmap radius <testRadius>
+			server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), "ftf reliefmap radius " + testRadius);
+			java.util.concurrent.CompletableFuture<?> rmTask = FTFCommands.getCurrentReliefmapTask();
+			if (rmTask != null) {
+				rmTask.join();
+			}
+			File[] rmFiles = workingDir.listFiles(rmFilter);
+			if (rmFiles == null || rmFiles.length == 0) {
+				throw new AssertionError("In-game command /ftf reliefmap failed to produce an output file!");
+			}
+			File rmFile = rmFiles[0];
+			if (rmFile.length() < 100) {
+				throw new AssertionError("In-game command /ftf reliefmap produced empty or truncated file: " + rmFile.length() + " bytes");
+			}
+			BufferedImage rmImg = ImageIO.read(rmFile);
+			TerrainMapGenerator.ImageValidationReport rmReport = TerrainMapGenerator.validateImageContent(
+				rmImg, TerrainMapGenerator.MapType.SHADED_RELIEF, expectedW, expectedH
+			);
+			if (!rmReport.passed()) {
+				throw new AssertionError("In-game /ftf reliefmap failed content validation (black/flat image): " + rmReport.violations());
+			}
+
+			// 3. Bit-for-bit Parity Verification against direct core generator
+			GeneratorContext genCtx = ((FTFRandomState) (Object) server.overworld().getChunkSource().randomState()).generatorContext();
+			BufferedImage expectedHm = TerrainMapGenerator.generateHeightmapImage(genCtx, minX, minZ, maxX, maxZ, TerrainMapGenerator.DEFAULT_CHUNK_SIZE, null);
+			BufferedImage expectedRm = TerrainMapGenerator.generateReliefImage(genCtx, minX, minZ, maxX, maxZ, TerrainMapGenerator.DEFAULT_CHUNK_SIZE, null);
+			TerrainMapGenerator.assertImageParity(expectedHm, hmImg, "/ftf heightmap command parity");
+			TerrainMapGenerator.assertImageParity(expectedRm, rmImg, "/ftf reliefmap command parity");
+
+			// 4. Archive verified command outputs to report directory
+			try {
+				Path reportDir = HeightmapValidator.resolveReportDirectory();
+				Files.createDirectories(reportDir);
+				String timestamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
+				String loader = serverModName.replaceAll("[^a-zA-Z0-9_-]", "_");
+				Files.copy(hmFile.toPath(), reportDir.resolve(String.format("heightmap_%s_ingame_command_%s.png", loader, timestamp)), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+				Files.copy(rmFile.toPath(), reportDir.resolve(String.format("reliefmap_%s_ingame_command_%s.png", loader, timestamp)), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+			} catch (Exception e) {
+				FTFCommon.LOGGER.warn("[FTF-Test] Failed to archive command images: {}", e.getMessage());
+			}
+
+			// 5. Cleanup root directory
+			hmFile.delete();
+			rmFile.delete();
+			FTFCommon.LOGGER.info("[FTF-Test] [11/11] PASSED: In-game commands /ftf heightmap and /ftf reliefmap executed, generated valid non-black non-flat images, and verified 100% bit-for-bit parity against core generator.");
+
+			// -----------------------------------------------------------------------------------------
 			// Complete Summary Banner
 			// -----------------------------------------------------------------------------------------
 			FTFCommon.LOGGER.info("================================================================================");
-			FTFCommon.LOGGER.info("[FTF-Test] ALL 10 PRESET PERSISTENCE, RESOLUTION, HEIGHTMAP & PRESETMANAGER TESTS PASSED ON LOADER: {}", serverModName);
+			FTFCommon.LOGGER.info("[FTF-Test] ALL 11 PRESET PERSISTENCE, RESOLUTION, HEIGHTMAP & PRESETMANAGER TESTS PASSED ON LOADER: {}", serverModName);
 			FTFCommon.LOGGER.info("[FTF-Test] Verified on disk:");
 			FTFCommon.LOGGER.info("[FTF-Test] 1. Live server datapack, registry and PresetManager.PM ground truth alignment");
 			FTFCommon.LOGGER.info("[FTF-Test] 2. Spawn chunk heightmap generation, image retention & deterministic regularity validation");
@@ -480,6 +583,7 @@ public final class PresetValidationRunner {
 			FTFCommon.LOGGER.info("[FTF-Test] 8. Re-create world flow preserves manual preset on disk and in PresetManager.PM");
 			FTFCommon.LOGGER.info("[FTF-Test] 9. Custom file default source resolution & manual overrule");
 			FTFCommon.LOGGER.info("[FTF-Test] 10. Multi-run seam continuity, varying config immunity (Issue #330) & PresetManager.PM ground truth");
+			FTFCommon.LOGGER.info("[FTF-Test] 11. In-game /ftf heightmap and /ftf reliefmap command execution, black/flat defense & unified core parity");
 			FTFCommon.LOGGER.info("================================================================================");
 
 			if (Boolean.parseBoolean(System.getProperty("freeterraforged.test.preset.exit", "true"))) {

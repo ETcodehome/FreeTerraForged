@@ -24,6 +24,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.packs.repository.PackRepository;
 import net.minecraft.world.level.levelgen.RandomState;
 
+import etcodehome.freeterraforged.world.worldgen.cell.heightmap.TerrainMapGenerator;
+import etcodehome.freeterraforged.client.command.FTFCommands;
 import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.client.data.DefaultPresetArchive;
 import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
@@ -182,50 +184,34 @@ public final class HeightmapValidator {
 			minX, minZ, maxX, maxZ, width, height, width * height
 		);
 
-		// 3. Sample heights using direct applyCell (matching /ftf heightmap logic)
-		BufferedImage rawHeightmap = new BufferedImage(width, height, BufferedImage.TYPE_USHORT_GRAY);
-		WritableRaster rawRaster = rawHeightmap.getRaster();
-		float[][] normElevations = new float[width][height];
-		int[][] blockElevations = new int[width][height];
-
-		int nanOrInfCount = 0;
-		int minBlockElevation = Integer.MAX_VALUE;
-		int maxBlockElevation = Integer.MIN_VALUE;
-		double sumBlockElevation = 0.0;
-		java.util.Map<String, Integer> terrainCounts = new java.util.HashMap<>();
-
-		Cell cell = new Cell();
-		for (int z = 0; z < height; z++) {
-			int worldZ = minZ + z;
-			for (int x = 0; x < width; x++) {
-				int worldX = minX + x;
-				ctx.lookup.applyCell(cell.reset(), worldX, worldZ, false, false);
-				terrainCounts.merge(cell.terrain.getName(), 1, Integer::sum);
-				float norm = ctx.levels.getNormalizedElevation(cell.height);
-
-				if (Float.isNaN(norm) || Float.isInfinite(norm)) {
-					nanOrInfCount++;
-					norm = 0.0F;
-				}
-
-				float clampedNorm = Math.clamp(norm, 0.0F, 1.0F);
-				int gray = (int) (clampedNorm * 65535.0F);
-				rawRaster.setSample(x, z, 0, gray);
-
-				int blockY = ctx.levels.scale(cell.height);
-				normElevations[x][z] = norm;
-				blockElevations[x][z] = blockY;
-
-				minBlockElevation = Math.min(minBlockElevation, blockY);
-				maxBlockElevation = Math.max(maxBlockElevation, blockY);
-				sumBlockElevation += blockY;
-			}
-		}
-
-		float meanBlockElevation = (float) (sumBlockElevation / (width * height));
+		// 3. Sample heights using unified TerrainMapGenerator core
+		TerrainMapGenerator.SampledArea area = TerrainMapGenerator.sampleArea(ctx, minX, minZ, maxX, maxZ);
+		BufferedImage rawHeightmap = area.toRawHeightmap();
+		BufferedImage visualImage = area.toReliefMap(ctx.levels.waterLevel);
+		float[][] normElevations = area.normElevations();
+		int[][] blockElevations = area.blockElevations();
+		java.util.Map<String, Integer> terrainCounts = area.terrainCounts();
+		int minBlockElevation = area.minBlockElevation();
+		int maxBlockElevation = area.maxBlockElevation();
+		float meanBlockElevation = (float) area.meanBlockElevation();
+		int nanOrInfCount = area.nanOrInfCount();
 
 		// 4. Deterministic evaluation of step deltas, chunk boundaries, and single-pixel outliers
 		List<String> violations = new ArrayList<>();
+		// Validate image content against false positives (black, blank, or flat image failure modes)
+		TerrainMapGenerator.ImageValidationReport rawReport = TerrainMapGenerator.validateImageContent(
+			rawHeightmap, TerrainMapGenerator.MapType.RAW_HEIGHTMAP, width, height
+		);
+		if (!rawReport.passed()) {
+			violations.addAll(rawReport.violations());
+		}
+		TerrainMapGenerator.ImageValidationReport visualReport = TerrainMapGenerator.validateImageContent(
+			visualImage, TerrainMapGenerator.MapType.SHADED_RELIEF, width, height
+		);
+		if (!visualReport.passed()) {
+			violations.addAll(visualReport.violations());
+		}
+
 		if (nanOrInfCount > 0) {
 			violations.add(String.format("Detected %d NaN/Infinite height value(s) in heightmap", nanOrInfCount));
 		}
@@ -320,8 +306,6 @@ public final class HeightmapValidator {
 			));
 		}
 
-		// 5. Render visual inspection image (shaded hypsometric relief map)
-		BufferedImage visualImage = renderVisualReliefImage(blockElevations, ctx.levels.waterLevel, width, height);
 
 		// 6. Write output files
 		String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
@@ -639,17 +623,23 @@ public final class HeightmapValidator {
 				}
 			}
 
-			// Render outputs
-			BufferedImage rawHeightmap = new BufferedImage(width, height, BufferedImage.TYPE_USHORT_GRAY);
-			WritableRaster raster = rawHeightmap.getRaster();
-			for (int z = 0; z < height; z++) {
-				for (int x = 0; x < width; x++) {
-					int gray = (int) (compositeNorms[x][z] * 65535.0F);
-					raster.setSample(x, z, 0, gray);
-				}
-			}
+			// Render outputs via unified TerrainMapGenerator core
+			BufferedImage rawHeightmap = TerrainMapGenerator.renderRawHeightmap(compositeNorms, width, height);
+			BufferedImage visualImage = TerrainMapGenerator.renderReliefImage(compositeElevations, 63, width, height);
 
-			BufferedImage visualImage = renderVisualReliefImage(compositeElevations, 63, width, height);
+			// Validate multi-run image contents
+			TerrainMapGenerator.ImageValidationReport mrRawReport = TerrainMapGenerator.validateImageContent(
+				rawHeightmap, TerrainMapGenerator.MapType.RAW_HEIGHTMAP, width, height
+			);
+			if (!mrRawReport.passed()) {
+				violations.addAll(mrRawReport.violations());
+			}
+			TerrainMapGenerator.ImageValidationReport mrVisualReport = TerrainMapGenerator.validateImageContent(
+				visualImage, TerrainMapGenerator.MapType.SHADED_RELIEF, width, height
+			);
+			if (!mrVisualReport.passed()) {
+				violations.addAll(mrVisualReport.violations());
+			}
 
 			String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
 			String loader = server.getServerModName().replaceAll("[^a-zA-Z0-9_-]", "_");
@@ -724,64 +714,7 @@ public final class HeightmapValidator {
 		}
 	}
 
-	private static BufferedImage renderVisualReliefImage(int[][] blockElevations, int waterLevel, int width, int height) {
-		BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
-		for (int z = 0; z < height; z++) {
-			for (int x = 0; x < width; x++) {
-				int y = blockElevations[x][z];
-
-				// Hillshade calculation from neighbors
-				int left = blockElevations[Math.max(0, x - 1)][z];
-				int right = blockElevations[Math.min(width - 1, x + 1)][z];
-				int up = blockElevations[x][Math.max(0, z - 1)];
-				int down = blockElevations[x][Math.min(height - 1, z + 1)];
-
-				float dx = (right - left) * 0.5F;
-				float dz = (down - up) * 0.5F;
-				// Light from North-West (-1, -1)
-				float shade = (float) ((-dx - dz) / Math.sqrt(dx * dx + dz * dz + 4.0) * 0.35 + 1.0);
-				shade = Math.clamp(shade, 0.5F, 1.5F);
-
-				int r, g, b;
-				if (y <= waterLevel) {
-					// Water gradient: deep dark blue to shallow aqua
-					float depth = Math.clamp((waterLevel - y) / 30.0F, 0.0F, 1.0F);
-					r = (int) ((30 * depth + 45 * (1.0F - depth)) * shade);
-					g = (int) ((70 * depth + 115 * (1.0F - depth)) * shade);
-					b = (int) ((140 * depth + 195 * (1.0F - depth)) * shade);
-				} else if (y <= waterLevel + 4) {
-					// Coastal sandy beach
-					r = (int) (210 * shade);
-					g = (int) (200 * shade);
-					b = (int) (140 * shade);
-				} else if (y <= waterLevel + 60) {
-					// Lowlands / lush green plains
-					float t = (y - (waterLevel + 4)) / 56.0F;
-					r = (int) ((60 * (1.0F - t) + 110 * t) * shade);
-					g = (int) ((150 * (1.0F - t) + 160 * t) * shade);
-					b = (int) ((50 * (1.0F - t) + 70 * t) * shade);
-				} else if (y <= waterLevel + 160) {
-					// Foothills / highlands / warm plateau
-					float t = (y - (waterLevel + 60)) / 100.0F;
-					r = (int) ((110 * (1.0F - t) + 140 * t) * shade);
-					g = (int) ((160 * (1.0F - t) + 130 * t) * shade);
-					b = (int) ((70 * (1.0F - t) + 100 * t) * shade);
-				} else {
-					// Mountain rock to snowy peak
-					float t = Math.clamp((y - (waterLevel + 160)) / 80.0F, 0.0F, 1.0F);
-					r = (int) ((130 * (1.0F - t) + 240 * t) * shade);
-					g = (int) ((125 * (1.0F - t) + 245 * t) * shade);
-					b = (int) ((120 * (1.0F - t) + 250 * t) * shade);
-				}
-
-				r = Math.clamp(r, 0, 255);
-				g = Math.clamp(g, 0, 255);
-				b = Math.clamp(b, 0, 255);
-
-				int rgb = (r << 16) | (g << 8) | b;
-				img.setRGB(x, z, rgb);
-			}
-		}
-		return img;
+	public static BufferedImage renderVisualReliefImage(int[][] blockElevations, int waterLevel, int width, int height) {
+		return TerrainMapGenerator.renderReliefImage(blockElevations, waterLevel, width, height);
 	}
 }
