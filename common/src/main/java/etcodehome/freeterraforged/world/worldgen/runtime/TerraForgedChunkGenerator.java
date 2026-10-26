@@ -352,9 +352,25 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 		return super.createBiomes(randomState, blender, structureManager, chunk);
 	}
 
+	public Optional<GeneratorContext> generatorContext() {
+		if (this.randomState != null) {
+			GeneratorContext ctx = this.randomState.generatorContext();
+			if (ctx != null) {
+				return Optional.of(ctx);
+			}
+		}
+		return Optional.empty();
+	}
+
 	private GeneratorContext getGeneratorContext(RandomState random) {
 		if (this.randomState != null) {
-			return this.randomState.generatorContext();
+			GeneratorContext ctx = this.randomState.generatorContext();
+			if (ctx != null) {
+				return ctx;
+			}
+		}
+		if ((Object) random instanceof FTFRandomState ftfRandomState) {
+			return ftfRandomState.generatorContext();
 		}
 		return null;
 	}
