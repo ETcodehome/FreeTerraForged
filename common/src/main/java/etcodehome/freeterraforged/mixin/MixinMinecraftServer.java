@@ -20,6 +20,7 @@ import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.registries.FTFRegistries;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 import etcodehome.freeterraforged.world.worldgen.biome.FTFClimateSampler;
+import etcodehome.freeterraforged.test.PresetValidationRunner;
 import etcodehome.freeterraforged.world.worldgen.perf.WorldgenBenchmarkRunner;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenResourceRevision;
 
@@ -69,5 +70,6 @@ class MixinMinecraftServer implements WorldgenResourceRevision {
 	@Inject(at = @At("TAIL"), method = "tickServer")
 	private void freeterraforged$onTickServer(BooleanSupplier hasTimeLeft, CallbackInfo ci) {
 		WorldgenBenchmarkRunner.onServerTick((MinecraftServer) (Object) this);
+		PresetValidationRunner.onServerTick((MinecraftServer) (Object) this);
 	}
 }

@@ -197,11 +197,6 @@ public abstract class MixinCreateWorldScreen {
 				}
 			}
 		} else {
-			try {
-				Files.deleteIfExists(presetZipPath);
-			} catch (IOException exception) {
-				FTFCommon.LOGGER.warn("Could not delete the FreeTerraForged preset datapack at {}", presetZipPath, exception);
-			}
 			repository.removePack(customPackId);
 		}
 
@@ -224,5 +219,25 @@ public abstract class MixinCreateWorldScreen {
 	)
 	private WorldDimensions freeterraforged$encodeSelectedInputsForReload(WorldDimensions dimensions) {
 		return WorldgenDimensionInputs.forReload(dimensions);
+	}
+
+	@Inject(method = "onCreate", at = @At("HEAD"))
+	private void freeterraforged$cleanupPresetPackIfNonFtfWorld(CallbackInfo callback) {
+		var selectedType = this.uiState.getWorldType();
+		Holder<WorldPreset> selectedPreset = selectedType == null ? null : selectedType.preset();
+		boolean ftfSelected = selectedPreset != null && selectedPreset.unwrapKey()
+			.filter(FTFWorldPresets.FREETERRAFORGED::equals)
+			.isPresent();
+		if (!ftfSelected) {
+			Pair<Path, PackRepository> selection = this.getDataPackSelectionSettings(this.uiState.getSettings().dataConfiguration());
+			if (selection != null) {
+				Path presetZipPath = selection.getFirst().resolve(FTFWorldPresets.GENERATED_PRESET_PACK_FILE_NAME);
+				try {
+					Files.deleteIfExists(presetZipPath);
+				} catch (IOException exception) {
+					FTFCommon.LOGGER.warn("Could not delete unused FreeTerraForged preset datapack before non-FTF world creation", exception);
+				}
+			}
+		}
 	}
 }

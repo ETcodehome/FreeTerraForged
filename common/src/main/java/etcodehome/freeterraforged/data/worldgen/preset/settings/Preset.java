@@ -1,6 +1,7 @@
 package etcodehome.freeterraforged.data.worldgen.preset.settings;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.Lifecycle;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import etcodehome.freeterraforged.registries.FTFRegistries;
@@ -12,6 +13,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.data.worldgen.BootstrapContext;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.RegistryDataLoader;
+import net.minecraft.tags.TagKey;
 
 import etcodehome.freeterraforged.data.worldgen.compat.terrablender.TBNoiseRouterData;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetBiomeModifierData;
@@ -148,12 +150,58 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 		return new HolderLookup.Provider() {
 			@Override
 			public <T> Optional<HolderLookup.RegistryLookup<T>> lookup(ResourceKey<? extends Registry<? extends T>> key) {
-				return armed.contains(key) ? original.lookup(key) : Optional.empty();
+				if (!armed.contains(key)) {
+					return Optional.empty();
+				}
+				Optional<HolderLookup.RegistryLookup<T>> found = original.lookup(key);
+				if (found.isPresent()) {
+					return found;
+				}
+				return Optional.of(createEmptyLookup(key));
 			}
 
 			@Override
 			public Stream<ResourceKey<? extends Registry<?>>> listRegistries() {
-				return original.listRegistries().filter(armed::contains);
+				return Stream.concat(original.listRegistries(), armed.stream()).filter(armed::contains).distinct();
+			}
+		};
+	}
+
+	private static <T> HolderLookup.RegistryLookup<T> createEmptyLookup(ResourceKey<? extends Registry<? extends T>> registryKey) {
+		return new HolderLookup.RegistryLookup<T>() {
+			@Override
+			public ResourceKey<? extends Registry<? extends T>> key() {
+				return registryKey;
+			}
+
+			@Override
+			public Lifecycle registryLifecycle() {
+				return Lifecycle.stable();
+			}
+
+			@Override
+			public Stream<Holder.Reference<T>> listElements() {
+				return Stream.empty();
+			}
+
+			@Override
+			public Stream<HolderSet.Named<T>> listTags() {
+				return Stream.empty();
+			}
+
+			@Override
+			public Optional<Holder.Reference<T>> get(ResourceKey<T> resourceKey) {
+				return Optional.empty();
+			}
+
+			@Override
+			public Optional<HolderSet.Named<T>> get(TagKey<T> tagKey) {
+				return Optional.empty();
+			}
+
+			@Override
+			public boolean canSerializeIn(HolderOwner<T> owner) {
+				return owner == this;
 			}
 		};
 	}
