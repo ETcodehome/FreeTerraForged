@@ -59,7 +59,23 @@ public final class ParallelGridSearch {
 		if (step < 1 || radius < 0 || parallelism < 1) {
 			throw new IllegalArgumentException("step and parallelism must be positive and radius must not be negative");
 		}
-		return new Search(originX, originZ, step, radius, tests, executor, parallelism, deadlineNanos).searchFrom(0);
+		Search search = new Search(originX, originZ, step, radius, tests, executor, parallelism, deadlineNanos);
+		CompletableFuture<Result> future = search.searchFrom(0);
+		CompletableFuture<Result> cancellable = new CompletableFuture<>() {
+			@Override
+			public boolean cancel(boolean mayInterruptIfRunning) {
+				search.stop();
+				return super.cancel(mayInterruptIfRunning);
+			}
+		};
+		future.whenComplete((result, error) -> {
+			if (error != null) {
+				cancellable.completeExceptionally(error);
+			} else {
+				cancellable.complete(result);
+			}
+		});
+		return cancellable;
 	}
 
 	private static final class Search {
@@ -93,6 +109,10 @@ public final class ParallelGridSearch {
 			this.deadlineNanos = deadlineNanos;
 		}
 
+		void stop() {
+			this.stopped.set(true);
+		}
+
 		CompletableFuture<Result> searchFrom(int firstRing) {
 			Match best = this.best;
 			if (firstRing > this.lastRing || (best != null && this.ringDistanceSq(firstRing) > best.distanceSq()) || this.checkDeadline()) {
@@ -109,6 +129,9 @@ public final class ParallelGridSearch {
 				parts.add(CompletableFuture.supplyAsync(() -> this.scan(points, from, to), this.executor));
 			}
 			return CompletableFuture.allOf(parts.toArray(CompletableFuture[]::new)).thenCompose(ignored -> {
+				if (this.stopped.get()) {
+					return CompletableFuture.completedFuture(this.result(firstRing - 1));
+				}
 				Match closest = this.best;
 				for (CompletableFuture<Match> part : parts) {
 					Match match = part.join();
@@ -117,7 +140,7 @@ public final class ParallelGridSearch {
 					}
 				}
 				this.best = closest;
-				if (this.timedOut.get()) {
+				if (this.timedOut.get() || this.stopped.get()) {
 					return CompletableFuture.completedFuture(this.result(firstRing - 1));
 				}
 				return this.searchFrom(endRing + 1);
@@ -131,6 +154,10 @@ public final class ParallelGridSearch {
 				Match closest = null;
 				long tested = 0;
 				for (int n = from; n < to; n++) {
+					if (this.stopped.get() || Thread.currentThread().isInterrupted()) {
+						this.stopped.set(true);
+						break;
+					}
 					if (((n - from) & DEADLINE_CHECK_MASK) == 0 && this.checkDeadline()) {
 						break;
 					}
@@ -160,7 +187,8 @@ public final class ParallelGridSearch {
 		}
 
 		private boolean checkDeadline() {
-			if (this.stopped.get()) {
+			if (this.stopped.get() || Thread.currentThread().isInterrupted()) {
+				this.stopped.set(true);
 				return true;
 			}
 			if (System.nanoTime() - this.deadlineNanos >= 0) {

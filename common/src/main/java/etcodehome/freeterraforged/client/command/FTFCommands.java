@@ -5,6 +5,7 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.TerrainMapGenerator;
+import etcodehome.freeterraforged.server.command.LocateTerrainCommand;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
@@ -165,6 +166,7 @@ public class FTFCommands {
                                     context.getSource().sendSystemMessage(Component.literal("[FTF-Perf] Reset worldgen performance counters."));
                                     return 1;
                                 })))
+                .then(LocateTerrainCommand.build())
         );
     }
 
@@ -183,6 +185,10 @@ public class FTFCommands {
     }
 
     private static ServerLevel deduceServerLevel(CommandSourceStack source) {
+        LocateTerrainCommand.TargetLevel target = LocateTerrainCommand.findTargetLevel(source);
+        if (target != null) {
+            return target.level();
+        }
         ServerPlayer player = source.getPlayer();
         if (player == null) {
             return source.getServer().overworld();
