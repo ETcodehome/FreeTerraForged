@@ -141,7 +141,6 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 					PresetEntry renamedEntry = new PresetEntry(newName, Component.literal(newName).withStyle(ChatFormatting.GOLD), preset, false, this);
 					renamedEntry.save();
 					if (wasDefaultPreset) {
-						this.screen.exportAsDatapack(DefaultPresetArchive.path(), renamedEntry);
 						DefaultPresetArchive.updateSource(oldPath, renamedEntry.getPath());
 					}
 
@@ -227,7 +226,6 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 
 		this.setAsDefaultPreset = PresetWidgets.createThrowingButton(FTFTranslationKeys.GUI_BUTTON_SET_AS_DEFAULT_PRESET, () -> {
 			if (this.left.getSelected() != null && this.left.getSelected().getWidget() instanceof PresetEntry preset) {
-				this.screen.exportAsDatapack(DefaultPresetArchive.path(), preset);
 				if (preset.isBuiltin()) {
 					DefaultPresetArchive.setBuiltinSource(preset.getBuiltinId());
 				} else {
@@ -260,10 +258,20 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 		this.left.setRenderSelected(true);
 
 		try {
-			this.rebuildPresets();
+			String initialSelection = PM.cachedPreset != null
+				? PM.cachedPreset.getRawName()
+				: DefaultPresetArchive.getActiveDefaultPresetName();
+			this.rebuildPresets(initialSelection);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+	}
+
+	@Override
+	public boolean hasNext() {
+		return this.left != null
+			&& this.left.getSelected() != null
+			&& this.left.getSelected().getWidget() instanceof PresetEntry;
 	}
 
 	@Override
@@ -297,6 +305,7 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 				} catch (IOException e) {
 					FTFCommon.LOGGER.error("Failed to auto-create preset from template", e);
 				}
+				PM.ingestFromPreset(customEntry);
 				return new WorldSettingsPage(this.screen);
 			}
 			return new WorldSettingsPage(this.screen);
@@ -445,7 +454,7 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 	}
 
 	private void refreshDefaultPresetIndicators() throws IOException {
-		boolean hasSavedDefault = DefaultPresetArchive.exists();
+		boolean hasSavedDefault = DefaultPresetArchive.hasSource();
 		for (WidgetList.Entry<AbstractWidget> listEntry : this.left.children()) {
 			if (listEntry.getWidget() instanceof PresetEntry presetEntry) {
 				boolean isDefault;

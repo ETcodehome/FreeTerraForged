@@ -3,12 +3,15 @@ package etcodehome.freeterraforged.mixin;
 import net.minecraft.client.gui.screens.worldselection.WorldCreationContext;
 import net.minecraft.client.gui.screens.worldselection.WorldCreationUiState;
 import net.minecraft.core.Holder;
+import net.minecraft.world.level.WorldDataConfiguration;
 import net.minecraft.world.level.levelgen.presets.WorldPreset;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import etcodehome.freeterraforged.data.worldgen.preset.FTFWorldPresetDataPacks;
 import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
 import etcodehome.freeterraforged.world.worldgen.runtime.PreServerWorldgenContext;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPreServerFinalizer;
@@ -42,6 +45,16 @@ public class MixinWorldCreationUiState {
 		CallbackInfo callback
 	) {
 		this.freeterraforged$finalizePreServerGraph();
+	}
+
+	@Inject(method = "tryUpdateDataConfiguration", at = @At("HEAD"), cancellable = true)
+	private void freeterraforged$forceReloadWhenPresetPackPresent(
+		WorldDataConfiguration configuration,
+		CallbackInfoReturnable<Boolean> callback
+	) {
+		if (FTFWorldPresetDataPacks.requiresFullDataPackReload(configuration)) {
+			callback.setReturnValue(false);
+		}
 	}
 
 	// The constructor can select an FTF preset without updating the context's initial dimensions.

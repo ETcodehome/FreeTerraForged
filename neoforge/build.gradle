@@ -7,27 +7,6 @@ architectury {
     neoForge()
 }
 
-def defaultPresetDatagenOutput = project(":fabric").layout.buildDirectory.dir("generated/default-preset-datagen")
-def defaultPresetResourceOutput = layout.buildDirectory.dir("resources/main/ftf_default_preset")
-
-tasks.register("cleanStaleDefaultPresetResources", Delete) {
-    delete(layout.buildDirectory.dir("resources/main/ftf_default_preset"))
-}
-
-tasks.register("syncDefaultPresetPack", Sync) {
-    group = "build"
-    description = "Stages the generated built-in FreeTerraForged preset pack"
-    dependsOn(":fabric:runDefaultPresetData", tasks.named("processResources"))
-    from(defaultPresetDatagenOutput.map { it.dir("ftf_default_preset") })
-    into(defaultPresetResourceOutput)
-    // Sync must run even when sources are unchanged so files removed by datagen are deleted.
-    outputs.upToDateWhen { false }
-}
-
-tasks.matching { ["runClient", "runServer", "runBenchmarkServer", "runClientRenderDoc", "jar", "shadowJar"].contains(it.name) }.configureEach {
-    dependsOn tasks.named("syncDefaultPresetPack")
-}
-
 loom {
     accessWidenerPath = project(":common").loom.accessWidenerPath
     
@@ -51,6 +30,17 @@ loom {
             vmArg "-Dfreeterraforged.benchmark.x=${project.findProperty('ftfBenchmarkX') ?: '100000'}"
             vmArg "-Dfreeterraforged.benchmark.z=${project.findProperty('ftfBenchmarkZ') ?: '100000'}"
             vmArg "-Dfreeterraforged.benchmark.exit=true"
+        }
+        presetTestServer {
+            server()
+            name "Run Headless Preset Validation Server (NeoForge)"
+            runDir "build/preset-test-run"
+            programArg "nogui"
+            vmArg "-Xmx4G"
+            vmArg "-Djava.awt.headless=true"
+            vmArg "-Dfreeterraforged.test.preset=true"
+            vmArg "-Dfreeterraforged.test.preset.exit=true"
+            vmArg "-Dfreeterraforged.test.heightmap.dir=${project.rootDir.absolutePath.replace('\\', '/')}/build/reports/preset-test-heightmaps"
         }
     }
 }
@@ -139,6 +129,31 @@ max-tick-time=-1
     }
 }
 
+tasks.named("runPresetTestServer").configure {
+    doFirst {
+        def testDir = file("build/preset-test-run")
+        delete(testDir)
+        testDir.mkdirs()
+        new File(testDir, "eula.txt").text = "eula=true\n"
+        new File(testDir, "server.properties").text = """\
+level-type=freeterraforged\\:freeterraforged
+level-seed=${project.findProperty('ftfTestSeed') ?: '1337'}
+online-mode=false
+spawn-protection=0
+view-distance=10
+simulation-distance=10
+sync-chunk-writes=false
+max-tick-time=-1
+""".stripIndent()
+    }
+}
+
+tasks.register("runPresetTest") {
+    group = "verification"
+    description = "Runs the headless FreeTerraForged preset persistence and resolution tests"
+    dependsOn("runPresetTestServer")
+}
+
 repositories {
     maven { url "https://api.modrinth.com/maven" }
 }
@@ -146,7 +161,6 @@ repositories {
 evaluationDependsOn(':common')
 
 processResources {
-    dependsOn tasks.named("cleanStaleDefaultPresetResources")
 	inputs.property "neoforgeVersion", rootProject.neoforge_version
     inputs.property "version", project.version
 
