@@ -57,3 +57,9 @@ allprojects {
         withSourcesJar()
     }
 }
+
+tasks.register("runPresetTest") {
+    group = "verification"
+    description = "Runs headless preset validation on both Fabric and NeoForge"
+    dependsOn(":fabric:runPresetTest", ":neoforge:runPresetTest")
+}
