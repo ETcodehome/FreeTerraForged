@@ -408,7 +408,7 @@ public final class HeightmapValidator {
 			Preset initialPreset = Presets.makeLegacyHugeBiomes();
 			FTFWorldPresetDataPacks.exportPresetAsDatapack(presetZip, initialPreset, "FreeTerraForged", server.registryAccess());
 
-			HolderGetter<Noise> noiseLookup = server.registryAccess().lookupOrThrow(FTFRegistries.NOISE);
+			HolderGetter<Noise> noiseLookup = initialPreset.buildPreviewLookups(server.registryAccess()).lookupOrThrow(FTFRegistries.NOISE);
 			long seed = server.overworld().getSeed();
 			BlockPos spawnPos = server.overworld().getSharedSpawnPos();
 			int radiusChunks = DEFAULT_CHUNK_RADIUS;
@@ -474,7 +474,7 @@ public final class HeightmapValidator {
 				violations.add("Session 2 (Upscaled Community default) overwrote world datapack on disk! Found: " + idSession2);
 			}
 
-			try (GeneratorContext ctx2 = new GeneratorContext(diskPresetSession2, noiseLookup, seed)) {
+			try (GeneratorContext ctx2 = new GeneratorContext(diskPresetSession2, diskPresetSession2.buildPreviewLookups(server.registryAccess()).lookupOrThrow(FTFRegistries.NOISE), seed)) {
 				PresetValidationRunner.verifyPresetManagerGroundTruth(diskPresetSession2, "Multi-Run Session 2");
 				Cell cell = new Cell();
 				for (int z = 0; z < height; z++) {
@@ -506,7 +506,8 @@ public final class HeightmapValidator {
 			// Compute hypothetical corrupted seam step if Issue #330 had occurred:
 			int maxCorruptedSeamStep = 0;
 			double sumCorruptedSeamStep = 0.0;
-			try (GeneratorContext ctxCorrupted = new GeneratorContext(Presets.makeCommunityPreset1(), noiseLookup, seed)) {
+			Preset corruptedPreset = Presets.makeCommunityPreset1();
+			try (GeneratorContext ctxCorrupted = new GeneratorContext(corruptedPreset, corruptedPreset.buildPreviewLookups(server.registryAccess()).lookupOrThrow(FTFRegistries.NOISE), seed)) {
 				Cell cell = new Cell();
 				for (int z = 0; z < height; z++) {
 					int worldZ = minZ + z;
@@ -542,7 +543,7 @@ public final class HeightmapValidator {
 			}
 
 			int mismatchesSession3 = 0;
-			try (GeneratorContext ctx3 = new GeneratorContext(diskPresetSession3, noiseLookup, seed)) {
+			try (GeneratorContext ctx3 = new GeneratorContext(diskPresetSession3, diskPresetSession3.buildPreviewLookups(server.registryAccess()).lookupOrThrow(FTFRegistries.NOISE), seed)) {
 				PresetValidationRunner.verifyPresetManagerGroundTruth(diskPresetSession3, "Multi-Run Session 3");
 				Cell cell = new Cell();
 				for (int z = 0; z < height; z++) {
@@ -588,7 +589,7 @@ public final class HeightmapValidator {
 					violations.add("Session 4 (Custom file default) overwrote world datapack on disk! Found: " + idSession4);
 				}
 
-				try (GeneratorContext ctx4 = new GeneratorContext(diskPresetSession4, noiseLookup, seed)) {
+				try (GeneratorContext ctx4 = new GeneratorContext(diskPresetSession4, diskPresetSession4.buildPreviewLookups(server.registryAccess()).lookupOrThrow(FTFRegistries.NOISE), seed)) {
 					PresetValidationRunner.verifyPresetManagerGroundTruth(diskPresetSession4, "Multi-Run Session 4");
 					Cell cell = new Cell();
 					for (int z = 0; z < height; z++) {

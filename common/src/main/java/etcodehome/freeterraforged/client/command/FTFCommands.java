@@ -14,6 +14,10 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.levelgen.RandomState;
@@ -240,9 +244,7 @@ public class FTFCommands {
             SimpleDateFormat fmt = new SimpleDateFormat("ddMMyyyyhhmm");
             File finalFile = new File(String.format("heightmap_%s.png", fmt.format(new Date())));
             ImageIO.write(full, "png", finalFile);
-            context.getSource().sendSystemMessage(Component.literal(
-                    String.format("Successfully generated %s in %.2f seconds", finalFile.getName(), durationSec)
-            ));
+            sendGeneratedImageFeedback(context, finalFile, durationSec);
         } catch (IOException e) {
             throw new RuntimeException("Failed to write final heightmap", e);
         }
@@ -302,12 +304,29 @@ public class FTFCommands {
             SimpleDateFormat fmt = new SimpleDateFormat("ddMMyyyyhhmm");
             File finalFile = new File(String.format("reliefmap_%s.png", fmt.format(new Date())));
             ImageIO.write(full, "png", finalFile);
-            context.getSource().sendSystemMessage(Component.literal(
-                    String.format("Successfully generated %s in %.2f seconds", finalFile.getName(), durationSec)
-            ));
+            sendGeneratedImageFeedback(context, finalFile, durationSec);
         } catch (IOException e) {
             throw new RuntimeException("Failed to write final reliefmap", e);
         }
+    }
+
+    private static void sendGeneratedImageFeedback(CommandContext<CommandSourceStack> context,
+                                                   File imageFile,
+                                                   double durationSec) {
+        String absPath = imageFile.getAbsolutePath();
+        MutableComponent linkComponent = Component.literal(imageFile.getName())
+                .withStyle(style -> style
+                        .withColor(ChatFormatting.AQUA)
+                        .withUnderlined(true)
+                        .withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_FILE, absPath))
+                        .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal("Click to open: " + absPath)))
+                );
+
+        context.getSource().sendSystemMessage(
+                Component.literal("Successfully generated ")
+                        .append(linkComponent)
+                        .append(Component.literal(String.format(" in %.2f seconds", durationSec)))
+        );
     }
 
     public static int computeReliefRGB(int y, int left, int right, int up, int down, int waterLevel) {

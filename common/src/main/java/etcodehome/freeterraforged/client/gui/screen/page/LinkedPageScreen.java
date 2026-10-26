@@ -40,12 +40,12 @@ public abstract class LinkedPageScreen extends Screen {
 		this.previousButton = Button.builder(Component.literal("<<"), (b) -> {
 			this.currentPage.previous().ifPresent(this::setPage);
 		}).bounds(buttonsCenter - (buttonWidth * 2 + (buttonPad * 3)), buttonsRow, buttonWidth, buttonHeight).build();
-		this.previousButton.active = this.currentPage.previous().isPresent();
+		this.previousButton.active = this.currentPage.hasPrevious();
 
 		this.nextButton = Button.builder(Component.literal(">>"), (b) -> {
 			this.currentPage.next().ifPresent(this::setPage);
 		}).bounds(buttonsCenter + buttonWidth + (buttonPad * 3), buttonsRow, buttonWidth, buttonHeight).build();
-		this.nextButton.active = this.currentPage.next().isPresent();
+		this.nextButton.active = this.currentPage.hasNext();
 		
 		this.cancelButton = Button.builder(CommonComponents.GUI_CANCEL, (b) -> {
 			this.onClose();
@@ -111,6 +111,14 @@ public abstract class LinkedPageScreen extends Screen {
 		Optional<Page> previous();
 		
 		Optional<Page> next();
+
+		default boolean hasPrevious() {
+			return this.previous().isPresent();
+		}
+
+		default boolean hasNext() {
+			return this.next().isPresent();
+		}
 		
 		default void onCancel() {
 		}

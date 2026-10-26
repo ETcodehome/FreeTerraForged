@@ -36,6 +36,7 @@ import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.client.data.DefaultPresetArchive;
 import etcodehome.freeterraforged.data.worldgen.preset.FTFWorldPresetDataPacks;
 import etcodehome.freeterraforged.data.worldgen.preset.FTFWorldPresets;
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenDimensionInputs;
@@ -124,6 +125,8 @@ public abstract class MixinCreateWorldScreen {
 
 	@Unique
 	private void freeterraforged$initializeDefaultPreset() {
+		PresetManager.PM.cachedPreset = null;
+		PresetManager.PM.ingestFromPreset(DefaultPresetArchive.getActiveDefaultPreset());
 		this.freeterraforged$syncPresetPackWithWorldType(this.uiState);
 	}
 
@@ -167,7 +170,7 @@ public abstract class MixinCreateWorldScreen {
 
 		boolean needsSync = ftfSelected
 			? (!zipExists || !customPackEnabled)
-			: (zipExists || customPackEnabled);
+			: customPackEnabled;
 
 		if (!needsSync) {
 			return;

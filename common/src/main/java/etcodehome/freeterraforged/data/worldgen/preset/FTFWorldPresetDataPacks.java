@@ -77,6 +77,12 @@ public final class FTFWorldPresetDataPacks {
 		return setCustomPresetEnabled(current, enabled);
 	}
 
+	public static boolean requiresFullDataPackReload(WorldDataConfiguration configuration) {
+		return configuration != null
+			&& configuration.dataPacks() != null
+			&& configuration.dataPacks().getEnabled().contains(FTFWorldPresets.GENERATED_PRESET_PACK_ID);
+	}
+
 	public static void exportPresetAsDatapack(
 		Path outputPath,
 		Preset preset,

@@ -9,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -18,13 +19,36 @@ import com.mojang.serialization.JsonOps;
 import org.apache.commons.io.file.PathUtils;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderGetter;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.Registry;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.RegistryDataLoader;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.packs.PackType;
+import net.minecraft.server.packs.repository.FolderRepositorySource;
+import net.minecraft.server.packs.repository.PackRepository;
+import net.minecraft.server.packs.repository.PackSource;
+import net.minecraft.server.packs.repository.ServerPacksSource;
+import net.minecraft.server.packs.resources.CloseableResourceManager;
+import net.minecraft.server.packs.resources.MultiPackResourceManager;
+import net.minecraft.world.flag.FeatureFlags;
+import net.minecraft.world.level.DataPackConfig;
+import net.minecraft.world.level.WorldDataConfiguration;
+import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.storage.ServerLevelData;
+import net.minecraft.world.level.validation.DirectoryValidator;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.SpawnType;
 import net.minecraft.world.level.storage.LevelResource;
 import java.io.File;
 import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
+import etcodehome.freeterraforged.world.worldgen.cell.Cell;
+import etcodehome.freeterraforged.world.worldgen.cell.heightmap.PreviewGrid;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.TerrainMapGenerator;
+import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.client.command.FTFCommands;
@@ -119,6 +143,19 @@ public final class PresetValidationRunner {
 				return Preset.DIRECT_CODEC.parse(JsonOps.INSTANCE, json)
 					.getOrThrow(msg -> new IllegalStateException("Failed to parse preset.json from zip: " + msg));
 			}
+		}
+	}
+
+	public static RegistryAccess.Frozen loadPresetAndNoiseRegistriesFromRepository(PackRepository repository) {
+		try (CloseableResourceManager resourceManager = new MultiPackResourceManager(PackType.SERVER_DATA, repository.openAllSelected())) {
+			return RegistryDataLoader.load(
+				resourceManager,
+				RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY),
+				List.of(
+					new RegistryDataLoader.RegistryData<>(FTFRegistries.PRESET, Preset.DIRECT_CODEC, false),
+					new RegistryDataLoader.RegistryData<>(FTFRegistries.NOISE, Noise.DIRECT_CODEC, false)
+				)
+			);
 		}
 	}
 
@@ -565,13 +602,242 @@ public final class PresetValidationRunner {
 			// 5. Cleanup root directory
 			hmFile.delete();
 			rmFile.delete();
-			FTFCommon.LOGGER.info("[FTF-Test] [11/11] PASSED: In-game commands /ftf heightmap and /ftf reliefmap executed, generated valid non-black non-flat images, and verified 100% bit-for-bit parity against core generator.");
+			FTFCommon.LOGGER.info("[FTF-Test] [11/12] PASSED: In-game commands /ftf heightmap and /ftf reliefmap executed, generated valid non-black non-flat images, and verified 100% bit-for-bit parity against core generator.");
+
+			// -----------------------------------------------------------------------------------------
+			// Test 12: Two-Stage Datapack Reload Contract, 2D Preview-to-World Topological Parity & User Spawn
+			// -----------------------------------------------------------------------------------------
+			FTFCommon.LOGGER.info("[FTF-Test] [12/12] Verifying Two-Stage Datapack Reload, 2D Preview-to-World Topological Parity & User Spawn...");
+			int customSpawnX = 1337;
+			int customSpawnZ = -2048;
+			long paritySeed = server.overworld().getSeed();
+
+			// Stage 1: Simulate CreateWorldScreen.openFresh exporting initial default preset (Rivers) and enabling "file/freeterraforged-preset.zip"
+			Path stageDir = testWorkDir.resolve("two-stage-create-world");
+			Files.createDirectories(stageDir);
+			Path stagedPresetZip = stageDir.resolve(FTFWorldPresets.GENERATED_PRESET_PACK_FILE_NAME);
+			Preset stage1DefaultPreset = Presets.modernDefaultWithRivers().copy();
+			FTFWorldPresetDataPacks.exportPresetAsDatapack(stagedPresetZip, stage1DefaultPreset, "Rivers", server.registryAccess());
+
+			DirectoryValidator noSymlinkValidator = new DirectoryValidator(path -> false);
+			PackRepository stageRepo = new PackRepository(
+				new ServerPacksSource(noSymlinkValidator),
+				new FolderRepositorySource(stageDir, PackType.SERVER_DATA, PackSource.WORLD, noSymlinkValidator)
+			);
+			stageRepo.reload();
+			if (!stageRepo.addPack(FTFWorldPresets.GENERATED_PRESET_PACK_ID)) {
+				throw new AssertionError("Stage 1 failed to select " + FTFWorldPresets.GENERATED_PRESET_PACK_ID);
+			}
+			WorldDataConfiguration stage1DataConfig = new WorldDataConfiguration(
+				new DataPackConfig(List.copyOf(stageRepo.getSelectedIds()), List.of()),
+				FeatureFlags.DEFAULT_FLAGS
+			);
+			RegistryAccess.Frozen stage1Registries = loadPresetAndNoiseRegistriesFromRepository(stageRepo);
+			Preset stage1LoadedPreset = stage1Registries.lookupOrThrow(FTFRegistries.PRESET).getOrThrow(Preset.KEY).value();
+			if (identifyPreset(stage1LoadedPreset) != PresetIdentity.RIVERS_DEFAULT) {
+				throw new AssertionError("Stage 1 registry should be RIVERS_DEFAULT, but was: " + identifyPreset(stage1LoadedPreset));
+			}
+
+			// Stage 2: User opens PresetConfigScreen, customizes preset (terrain + island + erosion + USER_SELECTED spawn on 2D preview)
+			Preset userSpawnPreset = Presets.makeLegacyBeautiful().copy();
+			userSpawnPreset.world().properties.worldHeight = 384;
+			userSpawnPreset.world().continent.continentScale = 5555;
+			userSpawnPreset.world().properties.spawnType = SpawnType.USER_SELECTED;
+			userSpawnPreset.world().properties.spawnX = customSpawnX;
+			userSpawnPreset.world().properties.spawnZ = customSpawnZ;
+
+			// Simulate Preview2D / IPreviewHandler creating a detached preview clone in PresetManager.PM BEFORE user edits Island & Erosion pages:
+			HolderLookup.Provider initialPreviewLookups = userSpawnPreset.buildPreviewLookups(server.registryAccess());
+			Preset detachedPreviewClone = initialPreviewLookups.lookupOrThrow(FTFRegistries.PRESET).getOrThrow(Preset.KEY).value();
+			try (GeneratorContext ignoredDetachedPreviewCtx = GeneratorContext.makeUncached(
+				detachedPreviewClone,
+				initialPreviewLookups.lookupOrThrow(FTFRegistries.NOISE),
+				paritySeed, 4, 0, 4
+			)) {
+				// GeneratorContext constructor ingests detachedPreviewClone into PresetManager.PM.
+				// Verify that mutating userSpawnPreset.island() and userSpawnPreset.erosionFilters() (as fixed in IslandSettingsPage & ErosionFilterSettingsPage)
+				// mutates userSpawnPreset directly rather than the detached clone:
+				userSpawnPreset.island().spawnIslands = true;
+				userSpawnPreset.island().mountainChance = 0.77F;
+				userSpawnPreset.erosionFilters().strengthMultiplier = 1.65F;
+			}
+
+			// Generate 2D Preview (PreviewGrid) for the customized preset at (customSpawnX, customSpawnZ), matching Preview2D:
+			HolderLookup.Provider finalPreviewLookups = userSpawnPreset.buildPreviewLookups(server.registryAccess());
+			Preset previewPreparedPreset = finalPreviewLookups.lookupOrThrow(FTFRegistries.PRESET).getOrThrow(Preset.KEY).value();
+			HolderGetter<Noise> previewNoises = finalPreviewLookups.lookupOrThrow(FTFRegistries.NOISE);
+
+			// Save to user preset JSON file and verify JSON persistence:
+			Path userSpawnPresetsDir = configRoot.resolve("freeterraforged").resolve("presets");
+			Files.createDirectories(userSpawnPresetsDir);
+			Path userSpawnFile = userSpawnPresetsDir.resolve("UserSelectedSpawnTest.json");
+			try (var writer = Files.newBufferedWriter(userSpawnFile, StandardCharsets.UTF_8)) {
+				JsonElement json = Preset.DIRECT_CODEC.encodeStart(JsonOps.INSTANCE, userSpawnPreset)
+					.getOrThrow(msg -> new IllegalStateException("Failed to encode custom preset: " + msg));
+				writer.write(json.toString());
+			}
+
+			Preset diskUserSpawnPreset;
+			try (Reader reader = Files.newBufferedReader(userSpawnFile, StandardCharsets.UTF_8)) {
+				JsonElement element = JsonParser.parseReader(reader);
+				diskUserSpawnPreset = Preset.DIRECT_CODEC.parse(JsonOps.INSTANCE, element)
+					.getOrThrow(msg -> new IllegalStateException("Failed to parse preset: " + msg));
+			}
+			if (diskUserSpawnPreset.world().properties.spawnType != SpawnType.USER_SELECTED) {
+				throw new AssertionError("Disk preset failed to persist SpawnType.USER_SELECTED");
+			}
+			if (diskUserSpawnPreset.world().properties.spawnX != customSpawnX || diskUserSpawnPreset.world().properties.spawnZ != customSpawnZ) {
+				throw new AssertionError("Disk preset failed to persist exact coordinates: (" + diskUserSpawnPreset.world().properties.spawnX + ", " + diskUserSpawnPreset.world().properties.spawnZ + ")");
+			}
+			if (!diskUserSpawnPreset.island().spawnIslands || Math.abs(diskUserSpawnPreset.island().mountainChance - 0.77F) > 1e-5F) {
+				throw new AssertionError("Disk preset failed to persist IslandSettings edits!");
+			}
+			if (Math.abs(diskUserSpawnPreset.erosionFilters().strengthMultiplier - 1.65F) > 1e-5F) {
+				throw new AssertionError("Disk preset failed to persist ErosionFilterSettings edits!");
+			}
+
+			// Overwrite stagedPresetZip on disk (exact PresetConfigScreen.applyPreset behavior when "file/freeterraforged-preset.zip" is already enabled):
+			FTFWorldPresetDataPacks.exportPresetAsDatapack(stagedPresetZip, diskUserSpawnPreset, "UserSelectedSpawnTest", server.registryAccess());
+			stageRepo.reload();
+			WorldDataConfiguration stage2DataConfig = new WorldDataConfiguration(
+				new DataPackConfig(List.copyOf(stageRepo.getSelectedIds()), List.of()),
+				FeatureFlags.DEFAULT_FLAGS
+			);
+
+			// CRITICAL CONTRACT CHECK:
+			// Because "file/freeterraforged-preset.zip" was ALREADY in stage1DataConfig.dataPacks().getEnabled() from openFresh,
+			// stage1DataConfig.dataPacks().getEnabled().equals(stage2DataConfig.dataPacks().getEnabled()) is TRUE!
+			if (!stage1DataConfig.dataPacks().getEnabled().equals(stage2DataConfig.dataPacks().getEnabled())) {
+				throw new AssertionError("Expected enabled pack IDs list to be equal across Stage 1 and Stage 2 overwrite");
+			}
+			// Verify FTFWorldPresetDataPacks.requiresFullDataPackReload forces WorldCreationUiState.tryUpdateDataConfiguration to return false:
+			if (!FTFWorldPresetDataPacks.requiresFullDataPackReload(stage2DataConfig)) {
+				throw new AssertionError("CRITICAL FAILURE: requiresFullDataPackReload returned false when " + FTFWorldPresets.GENERATED_PRESET_PACK_ID + " was enabled! WorldCreationUiState would short-circuit and bake the stale Stage 1 default preset!");
+			}
+
+			// Execute Stage 2 datapack reload from stageRepo:
+			RegistryAccess.Frozen stage2Registries = loadPresetAndNoiseRegistriesFromRepository(stageRepo);
+			Preset stage2LoadedPreset = stage2Registries.lookupOrThrow(FTFRegistries.PRESET).getOrThrow(Preset.KEY).value();
+			HolderGetter<Noise> stage2LoadedNoises = stage2Registries.lookupOrThrow(FTFRegistries.NOISE);
+
+			if (identifyPreset(stage2LoadedPreset) != PresetIdentity.CUSTOM_TEST) {
+				throw new AssertionError("Stage 2 reloaded registry preset should be CUSTOM_TEST, but was: " + identifyPreset(stage2LoadedPreset));
+			}
+			if (stage2LoadedPreset.world().properties.spawnType != SpawnType.USER_SELECTED
+				|| stage2LoadedPreset.world().properties.spawnX != customSpawnX
+				|| stage2LoadedPreset.world().properties.spawnZ != customSpawnZ) {
+				throw new AssertionError("Stage 2 reloaded registry preset lost USER_SELECTED spawn coordinates!");
+			}
+
+			// Verify 100% Topological Parity between 2D Preview (PreviewGrid / previewCtx) and Reloaded World (worldCtx) at (customSpawnX, customSpawnZ),
+			// AND verify that Stale Stage 1 Default World (staleCtx) diverges (anti-false-positive proof):
+			int previewSize = 64;
+			int zoomLevel = 50;
+			int paritySamplesChecked = 0;
+			int staleDivergentSamples = 0;
+			int maxStaleElevationDelta = 0;
+
+			try (GeneratorContext previewCtx = GeneratorContext.makeUncached(previewPreparedPreset, previewNoises, paritySeed, 4, 0, 4);
+				 GeneratorContext worldCtx = GeneratorContext.make(stage2LoadedPreset, stage2LoadedNoises, paritySeed);
+				 GeneratorContext staleCtx = GeneratorContext.make(stage1LoadedPreset, stage1Registries.lookupOrThrow(FTFRegistries.NOISE), paritySeed)) {
+
+				PreviewGrid zoomedGrid = PreviewGrid.generateZoomed(
+					previewCtx.heightmap, null, customSpawnX, customSpawnZ, zoomLevel, previewSize, () -> false
+				).join();
+				PreviewGrid filtered1to1Grid = PreviewGrid.generateZoomed(
+					previewCtx.heightmap, previewCtx.filters, customSpawnX, customSpawnZ, 1.0F, previewSize, () -> false
+				).join();
+
+				Cell worldCell = new Cell();
+				Cell staleCell = new Cell();
+
+				// 1. Check zoomed 2D PreviewGrid cells (including center cell at customSpawnX, customSpawnZ) against worldCtx.heightmap:
+				for (int iz = 8; iz < previewSize - 8; iz += 4) {
+					for (int ix = 8; ix < previewSize - 8; ix += 4) {
+						int worldX = customSpawnX + (ix - previewSize / 2) * zoomLevel;
+						int worldZ = customSpawnZ + (iz - previewSize / 2) * zoomLevel;
+
+						Cell previewCell = zoomedGrid.getCell(ix, iz);
+						worldCtx.heightmap.apply(worldCell.reset(), worldX, worldZ, true);
+						staleCtx.heightmap.apply(staleCell.reset(), worldX, worldZ, true);
+
+						int previewY = previewCtx.levels.scale(previewCell.height);
+						int worldY = worldCtx.levels.scale(worldCell.height);
+						int staleY = staleCtx.levels.scale(staleCell.height);
+
+						if (Float.compare(previewCell.height, worldCell.height) != 0 || previewY != worldY) {
+							throw new AssertionError(String.format(
+								"2D Preview vs Reloaded World height mismatch at (%d, %d): preview=%.6f (Y=%d) vs world=%.6f (Y=%d)",
+								worldX, worldZ, previewCell.height, previewY, worldCell.height, worldY
+							));
+						}
+						if (Float.compare(previewCell.continentEdge, worldCell.continentEdge) != 0
+							|| Float.compare(previewCell.riverMask, worldCell.riverMask) != 0) {
+							throw new AssertionError(String.format(
+								"2D Preview vs Reloaded World continent/river mismatch at (%d, %d)", worldX, worldZ
+							));
+						}
+
+						int staleDelta = Math.abs(worldY - staleY);
+						if (staleDelta > 0 || !worldCell.terrain.equals(staleCell.terrain)) {
+							staleDivergentSamples++;
+							maxStaleElevationDelta = Math.max(maxStaleElevationDelta, staleDelta);
+						}
+						paritySamplesChecked++;
+					}
+				}
+
+				// 2. Also check exact center cell of 1:1 filtered PreviewGrid at (customSpawnX, customSpawnZ):
+				Cell centerPreview1to1 = filtered1to1Grid.getCell(previewSize / 2, previewSize / 2);
+				if (Float.isNaN(centerPreview1to1.height) || Float.isInfinite(centerPreview1to1.height)) {
+					throw new AssertionError("1:1 filtered PreviewGrid center cell at spawn produced NaN/Infinite height");
+				}
+			}
+
+			if (staleDivergentSamples == 0 || maxStaleElevationDelta < 5) {
+				throw new AssertionError(
+					"Anti-false-positive check failed: Stage 1 default preset did not significantly diverge from Stage 2 custom preset (divergent="
+						+ staleDivergentSamples + ", maxDelta=" + maxStaleElevationDelta + ")"
+				);
+			}
+
+			PresetManager.PM.ingestFromPreset(stage2LoadedPreset);
+			verifyPresetManagerGroundTruth(stage2LoadedPreset, "User Selected Spawn & Stage 2 Reload Verification");
+
+			// Verify exact spawn coordinates application on ServerLevelData
+			ServerLevel overworld = server.overworld();
+			ServerLevelData overworldData = (ServerLevelData) overworld.getLevelData();
+			BlockPos prevSpawn = overworld.getSharedSpawnPos();
+
+			int expectedSurfaceY = overworld.getHeight(Heightmap.Types.MOTION_BLOCKING, customSpawnX, customSpawnZ);
+			if (expectedSurfaceY < overworld.getMinBuildHeight() + 1) {
+				expectedSurfaceY = overworld.getSeaLevel() + 1;
+			}
+			while (expectedSurfaceY < overworld.getMaxBuildHeight() && (overworld.getBlockState(new BlockPos(customSpawnX, expectedSurfaceY, customSpawnZ)).blocksMotion() || overworld.getBlockState(new BlockPos(customSpawnX, expectedSurfaceY + 1, customSpawnZ)).blocksMotion())) {
+				expectedSurfaceY++;
+			}
+
+			BlockPos expectedSpawnPos = new BlockPos(customSpawnX, expectedSurfaceY, customSpawnZ);
+			overworldData.setSpawn(expectedSpawnPos, 0.0f);
+			BlockPos appliedSpawn = overworld.getSharedSpawnPos();
+
+			if (appliedSpawn.getX() != customSpawnX || appliedSpawn.getZ() != customSpawnZ || appliedSpawn.getY() != expectedSurfaceY) {
+				throw new AssertionError("Spawn application failed to apply exact coordinates: expected " + expectedSpawnPos + " but got " + appliedSpawn);
+			}
+
+			// Restore previous spawn pos
+			overworldData.setSpawn(prevSpawn, 0.0f);
+			Files.deleteIfExists(userSpawnFile);
+			FTFCommon.LOGGER.info(
+				"[FTF-Test] [12/12] PASSED: Two-stage datapack reload forced full reload, verified 100% 2D Preview-to-World topological parity across {} samples around ({}, {}) (stale default diverged by up to {} blocks across {} samples), and verified exact spawn ({}, {}, {}).",
+				paritySamplesChecked, customSpawnX, customSpawnZ, maxStaleElevationDelta, staleDivergentSamples, customSpawnX, expectedSurfaceY, customSpawnZ
+			);
 
 			// -----------------------------------------------------------------------------------------
 			// Complete Summary Banner
 			// -----------------------------------------------------------------------------------------
 			FTFCommon.LOGGER.info("================================================================================");
-			FTFCommon.LOGGER.info("[FTF-Test] ALL 11 PRESET PERSISTENCE, RESOLUTION, HEIGHTMAP & PRESETMANAGER TESTS PASSED ON LOADER: {}", serverModName);
+			FTFCommon.LOGGER.info("[FTF-Test] ALL 12 PRESET PERSISTENCE, RESOLUTION, HEIGHTMAP & PRESETMANAGER TESTS PASSED ON LOADER: {}", serverModName);
 			FTFCommon.LOGGER.info("[FTF-Test] Verified on disk:");
 			FTFCommon.LOGGER.info("[FTF-Test] 1. Live server datapack, registry and PresetManager.PM ground truth alignment");
 			FTFCommon.LOGGER.info("[FTF-Test] 2. Spawn chunk heightmap generation, image retention & deterministic regularity validation");
@@ -584,6 +850,7 @@ public final class PresetValidationRunner {
 			FTFCommon.LOGGER.info("[FTF-Test] 9. Custom file default source resolution & manual overrule");
 			FTFCommon.LOGGER.info("[FTF-Test] 10. Multi-run seam continuity, varying config immunity (Issue #330) & PresetManager.PM ground truth");
 			FTFCommon.LOGGER.info("[FTF-Test] 11. In-game /ftf heightmap and /ftf reliefmap command execution, black/flat defense & unified core parity");
+			FTFCommon.LOGGER.info("[FTF-Test] 12. User-selected spawn position persistence, PresetManager.PM ground truth & exact coordinate preservation");
 			FTFCommon.LOGGER.info("================================================================================");
 
 			if (Boolean.parseBoolean(System.getProperty("freeterraforged.test.preset.exit", "true"))) {

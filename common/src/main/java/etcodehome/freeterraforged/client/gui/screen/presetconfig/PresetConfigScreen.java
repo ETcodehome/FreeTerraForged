@@ -21,6 +21,7 @@ import etcodehome.freeterraforged.client.gui.screen.page.LinkedPageScreen;
 import etcodehome.freeterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
 import etcodehome.freeterraforged.data.worldgen.preset.FTFWorldPresetDataPacks;
 import etcodehome.freeterraforged.data.worldgen.preset.FTFWorldPresets;
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
 
 public class PresetConfigScreen extends LinkedPageScreen {
 	private CreateWorldScreen parent;
@@ -101,6 +102,7 @@ public class PresetConfigScreen extends LinkedPageScreen {
 	}
 
 	public SaveResult applyPreset(PresetEntry preset) throws IOException {
+		PresetManager.PM.ingestFromPreset(preset);
 		Pair<Path, PackRepository> path = this.parent.getDataPackSelectionSettings(this.parent.getUiState().getSettings().dataConfiguration());
 		if(path == null) {
 			throw new IOException("Unable to create the temporary datapack repository");

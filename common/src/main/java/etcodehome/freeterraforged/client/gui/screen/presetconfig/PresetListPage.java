@@ -258,10 +258,20 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 		this.left.setRenderSelected(true);
 
 		try {
-			this.rebuildPresets();
+			String initialSelection = PM.cachedPreset != null
+				? PM.cachedPreset.getRawName()
+				: DefaultPresetArchive.getActiveDefaultPresetName();
+			this.rebuildPresets(initialSelection);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+	}
+
+	@Override
+	public boolean hasNext() {
+		return this.left != null
+			&& this.left.getSelected() != null
+			&& this.left.getSelected().getWidget() instanceof PresetEntry;
 	}
 
 	@Override
@@ -295,6 +305,7 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 				} catch (IOException e) {
 					FTFCommon.LOGGER.error("Failed to auto-create preset from template", e);
 				}
+				PM.ingestFromPreset(customEntry);
 				return new WorldSettingsPage(this.screen);
 			}
 			return new WorldSettingsPage(this.screen);
