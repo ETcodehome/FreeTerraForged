@@ -123,10 +123,8 @@ public final class DefaultPresetArchive {
 			}
 
 			Path configRoot = ConfigUtil.getConfigPath().toAbsolutePath().normalize();
-			Path source = Path.of(savedPath);
-			if (!source.isAbsolute()) {
-				source = configRoot.resolve(source);
-			}
+			Path rawSource = Path.of(savedPath);
+			Path source = rawSource.isAbsolute() ? rawSource : configRoot.resolve(rawSource);
 
 			if (Files.isRegularFile(source)) {
 				try (Reader reader = Files.newBufferedReader(source, StandardCharsets.UTF_8)) {
