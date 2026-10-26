@@ -23,6 +23,7 @@ import net.minecraft.world.level.storage.LevelResource;
 import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.client.data.DefaultPresetArchive;
 import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
 import etcodehome.freeterraforged.data.worldgen.preset.FTFWorldPresetDataPacks;
 import etcodehome.freeterraforged.data.worldgen.preset.FTFWorldPresets;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.ContinentType;
@@ -37,6 +38,7 @@ public final class PresetValidationRunner {
 	public enum PresetIdentity {
 		RIVERS_DEFAULT("Rivers (Built-in Fallback Default)"),
 		BEAUTIFUL("Beautiful (Template)"),
+		UPSCALED("Modern - Upscaled Community Preset (Template)"),
 		HUGE_BIOMES("Huge Biomes (Template)"),
 		CUSTOM_TEST("Custom Test Preset"),
 		UNKNOWN("Unknown Preset");
@@ -71,6 +73,11 @@ public final class PresetValidationRunner {
 		if (preset.world().properties.worldHeight == 512
 			&& preset.world().continent.continentType == ContinentType.UPLIFT) {
 			return PresetIdentity.RIVERS_DEFAULT;
+		}
+		if (preset.world().properties.worldHeight == 912
+			&& preset.world().properties.worldDepth == 128
+			&& preset.world().continent.continentScale == 4000) {
+			return PresetIdentity.UPSCALED;
 		}
 		if (preset.world().properties.worldHeight == 320
 			&& preset.world().continent.continentScale == 3000
@@ -107,6 +114,51 @@ public final class PresetValidationRunner {
 		}
 	}
 
+	public static void verifyPresetManagerGroundTruth(Preset expectedPreset, String context) {
+		if (!PresetManager.PM.isLoaded) {
+			throw new AssertionError("[" + context + "] PresetManager.PM.isLoaded is false!");
+		}
+		PresetManager.PM.loadCheck();
+
+		if (expectedPreset == null) {
+			throw new AssertionError("[" + context + "] Expected preset is null");
+		}
+
+		if (PresetManager.PM.worldSettings != expectedPreset.world()) {
+			throw new AssertionError("[" + context + "] PresetManager.PM.worldSettings does not match ground truth preset!");
+		}
+		if (PresetManager.PM.climateSettings != expectedPreset.climate()) {
+			throw new AssertionError("[" + context + "] PresetManager.PM.climateSettings does not match ground truth preset!");
+		}
+		if (PresetManager.PM.terrainSettings != expectedPreset.terrain()) {
+			throw new AssertionError("[" + context + "] PresetManager.PM.terrainSettings does not match ground truth preset!");
+		}
+		if (PresetManager.PM.riverSettings != expectedPreset.rivers()) {
+			throw new AssertionError("[" + context + "] PresetManager.PM.riverSettings does not match ground truth preset!");
+		}
+		if (PresetManager.PM.surfaceSettings != expectedPreset.surface()) {
+			throw new AssertionError("[" + context + "] PresetManager.PM.surfaceSettings does not match ground truth preset!");
+		}
+		if (PresetManager.PM.caveSettings != expectedPreset.caves()) {
+			throw new AssertionError("[" + context + "] PresetManager.PM.caveSettings does not match ground truth preset!");
+		}
+		if (PresetManager.PM.flowSettings != expectedPreset.flow()) {
+			throw new AssertionError("[" + context + "] PresetManager.PM.flowSettings does not match ground truth preset!");
+		}
+		if (PresetManager.PM.islandSettings != expectedPreset.island()) {
+			throw new AssertionError("[" + context + "] PresetManager.PM.islandSettings does not match ground truth preset!");
+		}
+		if (PresetManager.PM.erosionFilterSettings != expectedPreset.erosionFilters()) {
+			throw new AssertionError("[" + context + "] PresetManager.PM.erosionFilterSettings does not match ground truth preset!");
+		}
+		if (PresetManager.PM.miscellaneousSettings != expectedPreset.miscellaneous()) {
+			throw new AssertionError("[" + context + "] PresetManager.PM.miscellaneousSettings does not match ground truth preset!");
+		}
+		if (PresetManager.PM.presentationSettings != expectedPreset.presentation()) {
+			throw new AssertionError("[" + context + "] PresetManager.PM.presentationSettings does not match ground truth preset!");
+		}
+	}
+
 	public static void runAllTests(MinecraftServer server) {
 		String serverModName = server.getServerModName();
 		FTFCommon.LOGGER.info("================================================================================");
@@ -131,7 +183,7 @@ public final class PresetValidationRunner {
 			// -----------------------------------------------------------------------------------------
 			// Test 1: Live Server Verification
 			// -----------------------------------------------------------------------------------------
-			FTFCommon.LOGGER.info("[FTF-Test] [1/8] Verifying Live Server Datapack & Registry Resolution...");
+			FTFCommon.LOGGER.info("[FTF-Test] [1/9] Verifying Live Server Datapack & Registry Resolution...");
 			Path liveWorldDatapacks = server.getWorldPath(LevelResource.DATAPACK_DIR);
 			Path livePackPath = liveWorldDatapacks.resolve(FTFWorldPresets.GENERATED_PRESET_PACK_FILE_NAME);
 
@@ -156,15 +208,25 @@ public final class PresetValidationRunner {
 				if (liveDiskId != liveRegistryId) {
 					throw new AssertionError("Live server disk pack (" + liveDiskId + ") does not match active registry (" + liveRegistryId + ")");
 				}
-				FTFCommon.LOGGER.info("[FTF-Test] [1/8] PASSED: Live server loaded datapack matching active registry.");
+				verifyPresetManagerGroundTruth(liveRegistryPreset, "Live Server Overworld");
+				FTFCommon.LOGGER.info("[FTF-Test] [1/10] PASSED: Live server loaded datapack matching active registry and populated PresetManager.PM ground truth.");
 			} else {
-				FTFCommon.LOGGER.info("[FTF-Test] [1/8] Note: Dedicated server run started without pre-existing world datapack.");
+				FTFCommon.LOGGER.info("[FTF-Test] [1/10] Note: Dedicated server run started without pre-existing world datapack.");
 			}
 
 			// -----------------------------------------------------------------------------------------
-			// Test 2: Fallback / Built-in Default Flow Verification
+			// Test 2: Live Server Spawn Heightmap Generation & Deterministic Regularity Validation Pass
 			// -----------------------------------------------------------------------------------------
-			FTFCommon.LOGGER.info("[FTF-Test] [2/8] Verifying Built-in Default Fallback (Rivers)...");
+			FTFCommon.LOGGER.info("[FTF-Test] [2/10] Generating Spawn Heightmap & Evaluating Terrain Regularity...");
+			HeightmapValidator.ValidationResult heightmapResult = HeightmapValidator.validateLiveServerSpawn(server);
+			FTFCommon.LOGGER.info("[FTF-Test] [2/10] PASSED: Spawn heightmap generated and verified deterministic regularity (span: {} blocks, max step: {} blocks, spikes: 0).",
+				heightmapResult.maxElevationBlocks() - heightmapResult.minElevationBlocks(),
+				heightmapResult.maxAdjacentStepBlocks());
+
+			// -----------------------------------------------------------------------------------------
+			// Test 3: Fallback / Built-in Default Flow Verification
+			// -----------------------------------------------------------------------------------------
+			FTFCommon.LOGGER.info("[FTF-Test] [3/9] Verifying Built-in Default Fallback (Rivers)...");
 			DefaultPresetArchive.setSource(null);
 			if (DefaultPresetArchive.hasSource()) {
 				throw new AssertionError("DefaultPresetArchive should have no source after setSource(null)");
@@ -186,23 +248,23 @@ public final class PresetValidationRunner {
 			if (defaultDiskId != PresetIdentity.RIVERS_DEFAULT) {
 				throw new AssertionError("Datapack on disk should be RIVERS_DEFAULT, but was: " + defaultDiskId);
 			}
-			FTFCommon.LOGGER.info("[FTF-Test] [2/8] PASSED: Built-in default preset correctly saved to world datapack on disk.");
+			FTFCommon.LOGGER.info("[FTF-Test] [3/10] PASSED: Built-in default preset correctly saved to world datapack on disk.");
 
 			// -----------------------------------------------------------------------------------------
-			// Test 3: User Selected Default Preset Flow Verification
+			// Test 4: User Selected Default Preset Flow Verification
 			// -----------------------------------------------------------------------------------------
-			FTFCommon.LOGGER.info("[FTF-Test] [3/8] Verifying User-Selected Default Preset (Beautiful)...");
-			DefaultPresetArchive.setBuiltinSource(FTFTranslationKeys.GUI_BEAUTIFUL_PRESET_NAME);
+			FTFCommon.LOGGER.info("[FTF-Test] [4/10] Verifying User-Selected Default Preset (Upscaled Community)...");
+			DefaultPresetArchive.setBuiltinSource(FTFTranslationKeys.GUI_COMMUNITY1_PRESET_NAME);
 			if (!DefaultPresetArchive.hasSource()) {
 				throw new AssertionError("DefaultPresetArchive should have source after setBuiltinSource()");
 			}
-			if (!DefaultPresetArchive.isBuiltinSource(FTFTranslationKeys.GUI_BEAUTIFUL_PRESET_NAME)) {
-				throw new AssertionError("DefaultPresetArchive should identify Beautiful as builtin source");
+			if (!DefaultPresetArchive.isBuiltinSource(FTFTranslationKeys.GUI_COMMUNITY1_PRESET_NAME)) {
+				throw new AssertionError("DefaultPresetArchive should identify Upscaled Community as builtin source");
 			}
 			Preset userDefault = DefaultPresetArchive.getActiveDefaultPreset();
 			PresetIdentity userDefaultId = identifyPreset(userDefault);
-			if (userDefaultId != PresetIdentity.BEAUTIFUL) {
-				throw new AssertionError("Expected user default to be BEAUTIFUL, but was: " + userDefaultId);
+			if (userDefaultId != PresetIdentity.UPSCALED) {
+				throw new AssertionError("Expected user default to be UPSCALED, but was: " + userDefaultId);
 			}
 
 			Path testWorldUserDefaultDatapacks = testWorkDir.resolve("world-user-default/datapacks");
@@ -210,19 +272,19 @@ public final class PresetValidationRunner {
 			FTFWorldPresetDataPacks.exportPresetAsDatapack(userDefaultPackPath, userDefault, "FreeTerraForged", server.registryAccess());
 			Preset userDefaultDiskPreset = readPresetFromDatapackZip(userDefaultPackPath);
 			PresetIdentity userDefaultDiskId = identifyPreset(userDefaultDiskPreset);
-			if (userDefaultDiskId != PresetIdentity.BEAUTIFUL) {
-				throw new AssertionError("Datapack on disk should be BEAUTIFUL, but was: " + userDefaultDiskId);
+			if (userDefaultDiskId != PresetIdentity.UPSCALED) {
+				throw new AssertionError("Datapack on disk should be UPSCALED, but was: " + userDefaultDiskId);
 			}
 			if (userDefaultDiskId == PresetIdentity.RIVERS_DEFAULT) {
 				throw new AssertionError("User default was overruled by built-in fallback default!");
 			}
-			FTFCommon.LOGGER.info("[FTF-Test] [3/8] PASSED: User-selected default preset correctly saved to world datapack on disk and overrides fallback.");
+			FTFCommon.LOGGER.info("[FTF-Test] [4/10] PASSED: User-selected default preset correctly saved to world datapack on disk and overrides fallback.");
 
 			// -----------------------------------------------------------------------------------------
-			// Test 4: Manual Selection Overrules User Default AND Built-in Default (CRITICAL)
+			// Test 5: Manual Selection Overrules User Default AND Built-in Default (CRITICAL)
 			// -----------------------------------------------------------------------------------------
-			FTFCommon.LOGGER.info("[FTF-Test] [4/8] Verifying Manual Selection (Huge Biomes) Overrules User Default & Fallback...");
-			// Default is still Beautiful, fallback is still Rivers.
+			FTFCommon.LOGGER.info("[FTF-Test] [5/10] Verifying Manual Selection (Huge Biomes) Overrules User Default & Fallback...");
+			// Default is still Upscaled Community, fallback is still Rivers.
 			// User manually selects Huge Biomes in PresetListPage:
 			Preset manualSelection = Presets.makeLegacyHugeBiomes();
 			PresetIdentity manualId = identifyPreset(manualSelection);
@@ -246,18 +308,21 @@ public final class PresetValidationRunner {
 			if (manualSavedId != PresetIdentity.HUGE_BIOMES) {
 				throw new AssertionError("World datapack on disk should be HUGE_BIOMES, but was: " + manualSavedId);
 			}
-			if (manualSavedId == PresetIdentity.BEAUTIFUL) {
-				throw new AssertionError("CRITICAL FAILURE: User default preset overruled manually selected preset!");
+			if (manualSavedId == PresetIdentity.UPSCALED) {
+				throw new AssertionError("CRITICAL FAILURE: User default preset (UPSCALED) overruled manually selected preset!");
 			}
 			if (manualSavedId == PresetIdentity.RIVERS_DEFAULT) {
 				throw new AssertionError("CRITICAL FAILURE: Built-in fallback preset overruled manually selected preset!");
 			}
-			FTFCommon.LOGGER.info("[FTF-Test] [4/8] PASSED: Manually selected preset is saved to world folder and NEVER overruled by user default or fallback.");
+			// Ingest manual selection and empirically verify PresetManager.PM ground truth:
+			PresetManager.PM.ingestFromPreset(manualSavedPreset);
+			verifyPresetManagerGroundTruth(manualSavedPreset, "Manual Preset Selection (Huge Biomes)");
+			FTFCommon.LOGGER.info("[FTF-Test] [5/10] PASSED: Manually selected preset is saved to world folder and populates PresetManager.PM ground truth.");
 
 			// -----------------------------------------------------------------------------------------
-			// Test 5: World Type Switching / Cycling Does NOT Overrule Manual Selection
+			// Test 6: World Type Switching / Cycling Does NOT Overrule Manual Selection
 			// -----------------------------------------------------------------------------------------
-			FTFCommon.LOGGER.info("[FTF-Test] [5/8] Verifying World Type Switching / Cycling Preserves Manual Preset...");
+			FTFCommon.LOGGER.info("[FTF-Test] [6/10] Verifying World Type Switching / Cycling Preserves Manual Preset...");
 			// With clientStagedPack containing HUGE_BIOMES:
 			// In updated MixinCreateWorldScreen, switching away from FTF does NOT delete clientStagedPack.
 			// Verify file still exists:
@@ -277,12 +342,12 @@ public final class PresetValidationRunner {
 			if (cycledId != PresetIdentity.HUGE_BIOMES) {
 				throw new AssertionError("World type cycling caused manual selection to be overwritten! Expected HUGE_BIOMES, found: " + cycledId);
 			}
-			FTFCommon.LOGGER.info("[FTF-Test] [5/8] PASSED: World type cycling preserves manual preset without overwrite.");
+			FTFCommon.LOGGER.info("[FTF-Test] [6/10] PASSED: World type cycling preserves manual preset without overwrite.");
 
 			// -----------------------------------------------------------------------------------------
-			// Test 6: Dedicated Server Successive Run Verification
+			// Test 7: Dedicated Server Successive Run Verification
 			// -----------------------------------------------------------------------------------------
-			FTFCommon.LOGGER.info("[FTF-Test] [6/8] Verifying Dedicated Server Successive Run Preservation...");
+			FTFCommon.LOGGER.info("[FTF-Test] [7/10] Verifying Dedicated Server Successive Run Preservation...");
 			// With manualWorldPack containing HUGE_BIOMES on disk:
 			// Simulate dedicated server startup logic from MixinDedicatedServerProperties:
 			Path serverDatapacksDir = testWorkDir.resolve("world-manual/datapacks");
@@ -297,12 +362,15 @@ public final class PresetValidationRunner {
 			if (serverSuccessiveId != PresetIdentity.HUGE_BIOMES) {
 				throw new AssertionError("Dedicated server successive run overwrote existing manual preset! Found: " + serverSuccessiveId);
 			}
-			FTFCommon.LOGGER.info("[FTF-Test] [6/8] PASSED: Successive server runs preserve existing manual preset on disk.");
+			// Verify PresetManager.PM ground truth upon world reboot:
+			PresetManager.PM.ingestFromPreset(serverSuccessivePreset);
+			verifyPresetManagerGroundTruth(serverSuccessivePreset, "Dedicated Server Successive Run");
+			FTFCommon.LOGGER.info("[FTF-Test] [7/10] PASSED: Successive server runs preserve existing manual preset on disk and in PresetManager.PM.");
 
 			// -----------------------------------------------------------------------------------------
-			// Test 7: Re-create World Flow Verification
+			// Test 8: Re-create World Flow Verification
 			// -----------------------------------------------------------------------------------------
-			FTFCommon.LOGGER.info("[FTF-Test] [7/8] Verifying Re-create World Flow...");
+			FTFCommon.LOGGER.info("[FTF-Test] [8/10] Verifying Re-create World Flow...");
 			// Old world has manualWorldPack (HUGE_BIOMES).
 			// Simulate Minecraft copying old datapacks to recreate tempDataPackDir:
 			Path recreateTempDir = testWorkDir.resolve("recreate-temp");
@@ -328,12 +396,14 @@ public final class PresetValidationRunner {
 			if (recreatedId != PresetIdentity.HUGE_BIOMES) {
 				throw new AssertionError("Re-create world overwrote manual preset! Found: " + recreatedId);
 			}
-			FTFCommon.LOGGER.info("[FTF-Test] [7/8] PASSED: Re-created worlds preserve original preset on disk.");
+			PresetManager.PM.ingestFromPreset(recreatedPreset);
+			verifyPresetManagerGroundTruth(recreatedPreset, "Re-create World Flow");
+			FTFCommon.LOGGER.info("[FTF-Test] [8/10] PASSED: Re-created worlds preserve original preset on disk and in PresetManager.PM.");
 
 			// -----------------------------------------------------------------------------------------
-			// Test 8: Custom File-Based Default Preset Source Verification
+			// Test 9: Custom File-Based Default Preset Source Verification
 			// -----------------------------------------------------------------------------------------
-			FTFCommon.LOGGER.info("[FTF-Test] [8/8] Verifying Custom File-Based Default Preset Source...");
+			FTFCommon.LOGGER.info("[FTF-Test] [9/9] Verifying Custom File-Based Default Preset Source...");
 			Path customPresetsDir = configRoot.resolve("freeterraforged").resolve("presets");
 			Files.createDirectories(customPresetsDir);
 			Path customPresetFile = customPresetsDir.resolve("ValidationTestCustom.json");
@@ -376,22 +446,40 @@ public final class PresetValidationRunner {
 
 			// Clean up custom preset file
 			Files.deleteIfExists(customPresetFile);
-			FTFCommon.LOGGER.info("[FTF-Test] [8/8] PASSED: Custom file-based default correctly resolves and is overrulable by manual selection.");
+			FTFCommon.LOGGER.info("[FTF-Test] [9/10] PASSED: Custom file-based default correctly resolves and is overrulable by manual selection.");
+
+			// -----------------------------------------------------------------------------------------
+			// Test 10: Multi-Run Seam Continuity & Varying Config Immunity Verification (Issue #330)
+			// -----------------------------------------------------------------------------------------
+			FTFCommon.LOGGER.info("[FTF-Test] [10/10] Verifying Multi-Run Seam Continuity & Varying Config Immunity (Issue #330)...");
+			HeightmapValidator.MultiRunContinuityResult multiRunResult = HeightmapValidator.validateMultiRunContinuity(server, testWorkDir);
+			if (!multiRunResult.passed()) {
+				throw new AssertionError("Multi-run continuity validation failed: " + multiRunResult.violations());
+			}
+			FTFCommon.LOGGER.info(
+				"[FTF-Test] [10/10] PASSED: Multi-run world generation is 100% continuous and immune to varying config setups (max seam step: {} blocks, hypothetical corrupted step: {} blocks, {}/{} identical samples).",
+				multiRunResult.maxActualSeamStepBlocks(),
+				multiRunResult.maxCorruptedSeamStepBlocks(),
+				multiRunResult.identicalBlockSamples(),
+				multiRunResult.totalBlockSamplesVerified()
+			);
 
 			// -----------------------------------------------------------------------------------------
 			// Complete Summary Banner
 			// -----------------------------------------------------------------------------------------
 			FTFCommon.LOGGER.info("================================================================================");
-			FTFCommon.LOGGER.info("[FTF-Test] ALL 8 PRESET PERSISTENCE & RESOLUTION TESTS PASSED ON LOADER: {}", serverModName);
+			FTFCommon.LOGGER.info("[FTF-Test] ALL 10 PRESET PERSISTENCE, RESOLUTION, HEIGHTMAP & PRESETMANAGER TESTS PASSED ON LOADER: {}", serverModName);
 			FTFCommon.LOGGER.info("[FTF-Test] Verified on disk:");
-			FTFCommon.LOGGER.info("[FTF-Test] 1. Live server datapack and registry alignment");
-			FTFCommon.LOGGER.info("[FTF-Test] 2. Built-in default fallback (Rivers)");
-			FTFCommon.LOGGER.info("[FTF-Test] 3. User default preset configuration (Beautiful)");
-			FTFCommon.LOGGER.info("[FTF-Test] 4. Manual selection (Huge Biomes) overrules user default and fallback");
-			FTFCommon.LOGGER.info("[FTF-Test] 5. World type cycling preserves manual preset");
-			FTFCommon.LOGGER.info("[FTF-Test] 6. Dedicated server successive runs preserve manual preset");
-			FTFCommon.LOGGER.info("[FTF-Test] 7. Re-create world flow preserves manual preset");
-			FTFCommon.LOGGER.info("[FTF-Test] 8. Custom file default source resolution & manual overrule");
+			FTFCommon.LOGGER.info("[FTF-Test] 1. Live server datapack, registry and PresetManager.PM ground truth alignment");
+			FTFCommon.LOGGER.info("[FTF-Test] 2. Spawn chunk heightmap generation, image retention & deterministic regularity validation");
+			FTFCommon.LOGGER.info("[FTF-Test] 3. Built-in default fallback (Rivers)");
+			FTFCommon.LOGGER.info("[FTF-Test] 4. User default preset configuration (Upscaled Community)");
+			FTFCommon.LOGGER.info("[FTF-Test] 5. Manual selection (Huge Biomes) overrules user default, fallback & populates PresetManager.PM");
+			FTFCommon.LOGGER.info("[FTF-Test] 6. World type cycling preserves manual preset");
+			FTFCommon.LOGGER.info("[FTF-Test] 7. Dedicated server successive runs preserve manual preset on disk and in PresetManager.PM");
+			FTFCommon.LOGGER.info("[FTF-Test] 8. Re-create world flow preserves manual preset on disk and in PresetManager.PM");
+			FTFCommon.LOGGER.info("[FTF-Test] 9. Custom file default source resolution & manual overrule");
+			FTFCommon.LOGGER.info("[FTF-Test] 10. Multi-run seam continuity, varying config immunity (Issue #330) & PresetManager.PM ground truth");
 			FTFCommon.LOGGER.info("================================================================================");
 
 			if (Boolean.parseBoolean(System.getProperty("freeterraforged.test.preset.exit", "true"))) {

@@ -40,6 +40,7 @@ loom {
             vmArg "-Djava.awt.headless=true"
             vmArg "-Dfreeterraforged.test.preset=true"
             vmArg "-Dfreeterraforged.test.preset.exit=true"
+            vmArg "-Dfreeterraforged.test.heightmap.dir=${project.rootDir.absolutePath.replace('\\', '/')}/build/reports/preset-test-heightmaps"
         }
     }
 }
@@ -136,7 +137,7 @@ tasks.named("runPresetTestServer").configure {
         new File(testDir, "eula.txt").text = "eula=true\n"
         new File(testDir, "server.properties").text = """\
 level-type=freeterraforged\\:freeterraforged
-level-seed=-7442486958049957310
+level-seed=${project.findProperty('ftfTestSeed') ?: '228'}
 online-mode=false
 spawn-protection=0
 view-distance=10
