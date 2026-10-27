@@ -1,0 +1,96 @@
+
+name: Build FreeTerraForged
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Mod
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up J21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Chmod Gradle executable
+        run: chmod +x ./gradlew
+
+      - name: Build mod
+        run: ./gradlew build --no-daemon
+
+      - name: Prepare artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION=$(grep '^mod_version=' gradle.properties | cut -d= -f2-)
+          SHA="${GITHUB_SHA:0:6}"
+          FILENAME="freeterraforged-${VERSION}-${SHA}.jar"
+
+          echo "Mod version: ${VERSION}"
+          echo "Commit: ${GITHUB_SHA}"
+          echo "Artifact filename: ${FILENAME}"
+
+          mkdir -p dist/fabric dist/neoforge
+
+          find_jar() {
+            local dir="$1"
+
+            find "$dir" -maxdepth 1 -type f \
+              -name 'freeterraforged-*.jar' \
+              ! -name '*-sources.jar' \
+              ! -name '*-dev.jar' \
+              ! -name '*-javadoc.jar' \
+              ! -name '*-shadow.jar' \
+              -print -quit
+          }
+
+          FABRIC_JAR=$(find_jar fabric/build/libs)
+          NEOFORGE_JAR=$(find_jar neoforge/build/libs)
+
+          if [[ -z "$FABRIC_JAR" ]]; then
+            echo "::error::Fabric JAR not found"
+            ls -la fabric/build/libs/ || true
+            exit 1
+          fi
+
+          if [[ -z "$NEOFORGE_JAR" ]]; then
+            echo "::error::NeoForge JAR not found"
+            ls -la neoforge/build/libs/ || true
+            exit 1
+          fi
+
+          cp "$FABRIC_JAR" "dist/fabric/$FILENAME"
+          cp "$NEOFORGE_JAR" "dist/neoforge/$FILENAME"
+
+          echo "Prepared artifacts:"
+          ls -lh dist/fabric dist/neoforge
+
+      - name: Upload Fabric artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: freeterraforged-fabric-${{ github.sha }}
+          path: dist/fabric/*.jar
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload NeoForge artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: freeterraforged-neoforge-${{ github.sha }}
+          path: dist/neoforge/*.jar
+          if-no-files-found: error
+          retention-days: 30
