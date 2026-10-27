@@ -674,13 +674,6 @@ public interface IPreviewHandler {
         if (button == 1) {
             if (updateLegend((int) mouseX, (int) mouseY) && !state.hoveredCoords.isEmpty()) {
                 playClickSound();
-                WorldSettings.Properties props = page().preset.getPreset().world().properties;
-                if (props.spawnType == SpawnType.CONTINENT_CENTER) {
-                    props.spawnType = SpawnType.USER_SELECTED;
-                    if (page() instanceof WorldSettingsPage worldPage) {
-                        worldPage.spawnType.setValue(SpawnType.USER_SELECTED);
-                    }
-                }
                 page().setPreviewNavigation(state.hoveredCoordX, state.hoveredCoordZ);
                 regenerate();
                 return true;

@@ -4,6 +4,7 @@ import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.util.Seed;
 
 import net.minecraft.core.HolderGetter;
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.world.worldgen.cell.filter.TerrainFilters;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap;
@@ -29,6 +30,7 @@ public class GeneratorContext implements AutoCloseable {
     
     public GeneratorContext(Preset preset, HolderGetter<Noise> noiseLookup, long seed) {
         this.preset = preset;
+        PresetManager.PM.ingestFromPreset(preset);
         this.levels = new Levels(preset.world().properties);
         this.noiseLookup = noiseLookup;
         this.seed = new Seed(seed);
