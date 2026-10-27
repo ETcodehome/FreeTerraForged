@@ -36,7 +36,7 @@ public class Datapacks {
 	public static DataGenerator makeMudSwamps(RegistryAccess registryAccess, Path dataGenPath, Path dataGenOutputPath) {
 		DataGenerator dataGenerator = new DataGenerator(dataGenPath, SharedConstants.getCurrentVersion(), true);
 		PackGenerator packGenerator = dataGenerator.new PackGenerator(true, "Mud Swamps", new PackOutput(dataGenOutputPath));
-		CompletableFuture<HolderLookup.Provider> lookup = CompletableFuture.supplyAsync(() -> {
+		CompletableFuture<RegistrySetBuilder.PatchedRegistries> lookup = CompletableFuture.supplyAsync(() -> {
 			RegistrySetBuilder builder = new RegistrySetBuilder();
 			builder.add(Registries.CONFIGURED_FEATURE, (ctx) -> {
 				FeatureUtils.register(ctx, PresetConfiguredFeatures.SWAMP_SURFACE, FTFFeatures.SWAMP_SURFACE, new SwampSurfaceFeature.Config(Blocks.CLAY.defaultBlockState(), Blocks.GRAVEL.defaultBlockState(), Blocks.MUD.defaultBlockState()));
@@ -47,7 +47,7 @@ public class Datapacks {
 			factory.addCodec(FTFRegistries.BIOME_MODIFIER, BiomeModifier.DIRECT_CODEC);
 			factory.addCodec(FTFRegistries.STRUCTURE_RULE, StructureRule.DIRECT_CODEC);
 			factory.addCodec(FTFRegistries.PRESET, Preset.DIRECT_CODEC);
-			return builder.buildPatch(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), registryAccess,factory).patches();
+			return builder.buildPatch(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), registryAccess,factory);
 		});
 		packGenerator.addProvider((output) -> {
 			return DataGenUtil.createRegistryProvider(output, lookup);
@@ -61,16 +61,16 @@ public class Datapacks {
 	public static DataGenerator makePreset(Preset preset, HolderLookup.Provider registries, Path dataGenPath, Path dataGenOutputPath, String presetName) {
 		DataGenerator dataGenerator = new DataGenerator(dataGenPath, SharedConstants.getCurrentVersion(), true);
 		PackGenerator packGenerator = dataGenerator.new PackGenerator(true, presetName, new PackOutput(dataGenOutputPath));
-		CompletableFuture<HolderLookup.Provider> lookup = CompletableFuture.supplyAsync(() -> preset.buildPatch(registries));
+		CompletableFuture<RegistrySetBuilder.PatchedRegistries> lookup = CompletableFuture.supplyAsync(() -> preset.buildPatchedRegistries(registries));
 		
 		packGenerator.addProvider((output) -> {
 			return DataGenUtil.createRegistryProvider(output, lookup);
 		});
 		packGenerator.addProvider((output) -> {
-			return new FTFDensityFunctionTagsProvider(output, lookup);
+			return new FTFDensityFunctionTagsProvider(output, lookup.thenApply(RegistrySetBuilder.PatchedRegistries::patches));
 		});
 		packGenerator.addProvider((output) -> {
-			return new FTFBlockTagsProvider(preset, output, lookup);
+			return new FTFBlockTagsProvider(preset, output, lookup.thenApply(RegistrySetBuilder.PatchedRegistries::patches));
 		});
 		packGenerator.addProvider((output) -> {
 			return PackMetadataGenerator.forFeaturePack(output, Component.translatable(FTFTranslationKeys.PRESET_METADATA_DESCRIPTION));

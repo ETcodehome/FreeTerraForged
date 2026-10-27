@@ -7,9 +7,12 @@ import java.util.function.Function;
 
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
+import etcodehome.freeterraforged.world.worldgen.IChunkCellsHolder;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.river.RiverCarverSettings;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
+import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 import etcodehome.freeterraforged.world.worldgen.surface.FTFSurfaceSystem;
 import etcodehome.freeterraforged.world.worldgen.surface.rule.StrataRule;
 import org.spongepowered.asm.mixin.Implements;
@@ -18,6 +21,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import net.minecraft.core.BlockPos;
@@ -30,6 +34,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.levelgen.NoiseChunk;
 import net.minecraft.world.level.levelgen.PositionalRandomFactory;
 import net.minecraft.world.level.levelgen.RandomState;
@@ -42,8 +47,10 @@ import etcodehome.freeterraforged.FTFCommon;
 @Implements(@Interface(iface = FTFSurfaceSystem.class, prefix = FTFCommon.MOD_ID + "$FTFSurfaceSystem$"))
 class MixinSurfaceSystem {
 	private static final ResourceLocation GEOLOGY_RANDOM = FTFCommon.location("geology");
+	private static final int[] NEIGHBOR_X = {0, 0, 1, -1};
+	private static final int[] NEIGHBOR_Z = {-1, 1, 0, 0};
 	private RandomState randomState;
-	private Map<ResourceLocation, List<List<StrataRule.Layer>>> strata;
+	private volatile Map<ResourceLocation, List<List<StrataRule.Layer>>> strata;
 
 	@Inject(
 			at = @At("TAIL"),
@@ -51,7 +58,26 @@ class MixinSurfaceSystem {
 	)
 	public void SurfaceSystem(RandomState randomState, BlockState blockState, int i, PositionalRandomFactory positionalRandomFactory, CallbackInfo callback) {
 		this.randomState = randomState;
-		this.strata = new ConcurrentHashMap<>();
+	}
+
+	// Sanitize Y parameter passed into getBand to prevent negative array indexing in Badlands terracotta bands
+	@ModifyVariable(
+			method = "getBand",
+			at = @At("HEAD"),
+			ordinal = 1,
+			argsOnly = true
+	)
+	private int freeterraforged$safeYForBadlandsBand(int y) {
+		return Math.floorMod(y, 192) + 3840;
+	}
+
+	@ModifyVariable(
+			method = "buildSurface",
+			at = @At("HEAD"),
+			argsOnly = true
+	)
+	private SurfaceRules.RuleSource freeterraforged$optimizeSurfaceRule(SurfaceRules.RuleSource ruleSource) {
+		return etcodehome.freeterraforged.world.worldgen.surface.rule.FastStrataSequenceRule.optimize(ruleSource);
 	}
 
 	// INJECT AT HEAD to carve out rivers and lakes before surface rules run
@@ -63,26 +89,76 @@ class MixinSurfaceSystem {
 		if ((Object) randomState instanceof FTFRandomState ftfRandomState) {
 			GeneratorContext genCtx = ftfRandomState.generatorContext();
 			if (genCtx != null) {
-				this.freeterraforged$placeRiverWater(chunk, biomeManager, genCtx);
+				if (!WorldgenPerfTracker.ACTIVE) {
+					this.freeterraforged$placeRiverWater(chunk, biomeManager, genCtx, noiseChunk);
+				} else {
+					long t0 = System.nanoTime();
+					this.freeterraforged$placeRiverWater(chunk, biomeManager, genCtx, noiseChunk);
+					WorldgenPerfTracker.stats().surfaceRiverWaterNanos += (System.nanoTime() - t0);
+				}
 			}
 		}
 	}
 
 	public List<List<StrataRule.Layer>> freeterraforged$FTFSurfaceSystem$getOrCreateStrata(ResourceLocation name, Function<RandomSource, List<List<StrataRule.Layer>>> strata) {
-		return this.strata.computeIfAbsent(name, (k) -> {
+		return this.freeterraforged$strata().computeIfAbsent(name, (k) -> {
 			PositionalRandomFactory factory = this.randomState.getOrCreateRandomFactory(GEOLOGY_RANDOM);
 			return strata.apply(factory.fromHashOf(k));
 		});
 	}
 
 	@Unique
-	private void freeterraforged$placeRiverWater(ChunkAccess chunk, BiomeManager biomeManager, GeneratorContext genCtx) {
-		var chunkPos = chunk.getPos();
-		var tile = genCtx.cache.provideAtChunk(chunkPos.x, chunkPos.z);
-		var reader = tile.getChunkReader(chunkPos.x, chunkPos.z);
-		var levels = genCtx.generator.getHeightmap().levels();
+	private Map<ResourceLocation, List<List<StrataRule.Layer>>> freeterraforged$strata() {
+		Map<ResourceLocation, List<List<StrataRule.Layer>>> current = this.strata;
+		if (current != null) {
+			return current;
+		}
+		synchronized (this) {
+			current = this.strata;
+			if (current == null) {
+				current = new ConcurrentHashMap<>();
+				this.strata = current;
+			}
+		}
+		return current;
+	}
 
+	@Unique
+	private void freeterraforged$placeRiverWater(ChunkAccess chunk, BiomeManager biomeManager, GeneratorContext genCtx, NoiseChunk noiseChunk) {
+		var chunkPos = chunk.getPos();
+		int minBlockX = chunkPos.getMinBlockX();
+		int minBlockZ = chunkPos.getMinBlockZ();
+		IChunkCellsHolder holder = chunk instanceof IChunkCellsHolder h ? h : null;
+		Cell[] chunkCells = holder != null ? holder.freeterraforged$getOrCreateChunkCells(genCtx) : null;
+
+		Cell neighborScratch = new Cell();
+		java.util.function.BiFunction<Integer, Integer, Cell> cellGetter = (gx, gz) -> {
+			int lx = gx - minBlockX;
+			int lz = gz - minBlockZ;
+			if (chunkCells != null && lx >= -1 && lx <= 16 && lz >= -1 && lz <= 16
+					&& (chunkCells.length >= etcodehome.freeterraforged.world.worldgen.cell.filter.ChunkFilterGrid.HOLDER_ARRAY_LENGTH
+						|| (lx >= 0 && lx < 16 && lz >= 0 && lz < 16))) {
+				return etcodehome.freeterraforged.world.worldgen.cell.filter.ChunkFilterGrid.getPaddedCell(chunkCells, lx, lz);
+			}
+			boolean perfActive = WorldgenPerfTracker.isActive();
+			WorldgenPerfTracker.ThreadStats ts = perfActive ? WorldgenPerfTracker.threadStats() : null;
+			WorldgenPerfTracker.ApplyCellCaller prevCaller = null;
+			if (ts != null) {
+				prevCaller = ts.currentCaller;
+				ts.currentCaller = WorldgenPerfTracker.ApplyCellCaller.SURFACE_RIVER;
+			}
+			try {
+				return CellSampler.getCachedOrLookup(genCtx.lookup, gx, gz, false);
+			} finally {
+				if (ts != null) {
+					ts.currentCaller = prevCaller;
+				}
+			}
+		};
+
+		var levels = genCtx.heightmap.levels();
 		float oceanLevel = levels.water;
+		int oceanY = levels.scale(oceanLevel);
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 		BlockState water = Blocks.WATER.defaultBlockState();
 		BlockState flowingWater = water.setValue(BlockStateProperties.LEVEL, 1);
@@ -91,11 +167,16 @@ class MixinSurfaceSystem {
 		// Iterate over the 16x16 chunk exactly once
 		for (int localX = 0; localX < 16; localX++) {
 			for (int localZ = 0; localZ < 16; localZ++) {
-				int globalX = chunkPos.getMinBlockX() + localX;
-				int globalZ = chunkPos.getMinBlockZ() + localZ;
+				int globalX = minBlockX + localX;
+				int globalZ = minBlockZ + localZ;
 
-				Cell cell = reader.getCell(localX, localZ);
-				boolean isWaterCell = (cell.terrain.isRiver() || cell.terrain.isLake() || cell.terrain.isWetland()) && cell.riverWaterLevel > 0;
+				Cell cell = chunkCells != null
+					? chunkCells[localZ * 16 + localX]
+					: genCtx.lookup.lookup(globalX, globalZ);
+				// Wetland basins always hold water. Their riverWaterLevel is the continental uplift offset,
+				// which is exactly 0 on the lowest water table step, so it can't double as the "has water" flag.
+				boolean isWaterCell = cell.terrain.isWetland()
+						|| ((cell.terrain.isRiver() || cell.terrain.isLake()) && cell.riverWaterLevel > 0);
 				int scaledY = levels.scale(cell.height);
 
 				if (isWaterCell) {
@@ -107,27 +188,23 @@ class MixinSurfaceSystem {
 							) + oceanLevel
 					);
 
-					if (waterY < levels.scale(levels.water)) waterY = levels.scale(levels.water);
+					if (waterY < oceanY) waterY = oceanY;
 
 					if (waterY > scaledY) {
 						boolean isTransitionColumn = false;
 						boolean multiBlockDrop = false;
 						int lowestNeighborWaterY = waterY;
 
-						int[] dx = {0, 0, 1, -1};
-						int[] dz = {-1, 1, 0, 0};
-
 						// Check neighbors to determine if we are an edge/waterfall
 						for (int i = 0; i < 4; i++) {
-							int nx = globalX + dx[i];
-							int nz = globalZ + dz[i];
+							int nx = globalX + NEIGHBOR_X[i];
+							int nz = globalZ + NEIGHBOR_Z[i];
 
-							var neighborTile = genCtx.cache.provideAtChunk(nx >> 4, nz >> 4);
-							var neighborReader = neighborTile.getChunkReader(nx >> 4, nz >> 4);
-							var neighborCell = neighborReader.getCell(nx & 0xF, nz & 0xF);
+							var neighborCell = cellGetter.apply(nx, nz);
 
 							// Only consider the neighbor's water height if it is actually a water cell
-							boolean nIsWaterCell = (neighborCell.terrain.isRiver() || neighborCell.terrain.isLake() || neighborCell.terrain.isWetland()) && neighborCell.riverWaterLevel > 0;
+							boolean nIsWaterCell = neighborCell.terrain.isWetland()
+									|| ((neighborCell.terrain.isRiver() || neighborCell.terrain.isLake()) && neighborCell.riverWaterLevel > 0);
 							if (nIsWaterCell) {
 								int nWaterY = levels.scale(
 										(ContinentalHydrology.getComplexWaterHeight(
@@ -137,7 +214,7 @@ class MixinSurfaceSystem {
 										) + levels.water
 								);
 
-								if (nWaterY < levels.scale(levels.water)) nWaterY = levels.scale(levels.water);
+								if (nWaterY < oceanY) nWaterY = oceanY;
 
 								if (nWaterY < waterY) {
 									isTransitionColumn = true;
@@ -191,8 +268,6 @@ class MixinSurfaceSystem {
 				} else {
 
 					// GASKET LOGIC
-					int oceanY = levels.scale(levels.water);
-
 					// Only run gasket logic if this land cell is above ocean level
 					if (scaledY >= oceanY) {
 
@@ -200,14 +275,10 @@ class MixinSurfaceSystem {
 						int maxNeighborWaterY = scaledY;
 
 						// Check neighbors for water and record the strongest mask influence
-						int[] dx = {0, 0, 1, -1};
-						int[] dz = {-1, 1, 0, 0};
 						for (int i = 0; i < 4; i++) {
-							int nx = globalX + dx[i];
-							int nz = globalZ + dz[i];
-							var neighborTile = genCtx.cache.provideAtChunk(nx >> 4, nz >> 4);
-							var neighborReader = neighborTile.getChunkReader(nx >> 4, nz >> 4);
-							var neighborCell = neighborReader.getCell(nx & 0xF, nz & 0xF);
+							int nx = globalX + NEIGHBOR_X[i];
+							int nz = globalZ + NEIGHBOR_Z[i];
+							var neighborCell = cellGetter.apply(nx, nz);
 
 							if ((neighborCell.terrain.isRiver() || neighborCell.terrain.isLake())) {
 								int nWaterY = levels.scale(

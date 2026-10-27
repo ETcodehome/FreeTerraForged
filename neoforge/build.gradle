@@ -1,5 +1,5 @@
 plugins {
-    id "com.github.johnrengelman.shadow" version "7.1.2"
+    id "com.gradleup.shadow" version "9.2.2"
 }
 
 architectury {
@@ -14,16 +14,45 @@ loom {
         client {
             ideConfigGenerated(true)
         }
+        server {
+            // Remove "nogui" so the vanilla Swing interface opens for standard dev runs
+            programArgs.remove("nogui")
+        }
+        benchmarkServer {
+            server()
+            name "Run Headless Worldgen Benchmark Server (NeoForge)"
+            runDir "build/benchmark-run"
+            programArg "nogui"
+            vmArg "-Xmx4G"
+            vmArg "-Djava.awt.headless=true"
+            vmArg "-Dfreeterraforged.benchmark.auto=true"
+            vmArg "-Dfreeterraforged.benchmark.radius=${project.findProperty('ftfBenchmarkRadius') ?: '10'}"
+            vmArg "-Dfreeterraforged.benchmark.x=${project.findProperty('ftfBenchmarkX') ?: '100000'}"
+            vmArg "-Dfreeterraforged.benchmark.z=${project.findProperty('ftfBenchmarkZ') ?: '100000'}"
+            vmArg "-Dfreeterraforged.benchmark.exit=true"
+        }
+        presetTestServer {
+            server()
+            name "Run Headless Preset Validation Server (NeoForge)"
+            runDir "build/preset-test-run"
+            programArg "nogui"
+            vmArg "-Xmx4G"
+            vmArg "-Djava.awt.headless=true"
+            vmArg "-Dfreeterraforged.test.preset=true"
+            vmArg "-Dfreeterraforged.test.preset.exit=true"
+            vmArg "-Dfreeterraforged.test.heightmap.dir=${project.rootDir.absolutePath.replace('\\', '/')}/build/reports/preset-test-heightmaps"
+        }
     }
 }
 
 configurations {
     common
     shadowCommon
+    productionServerInstaller
     compileClasspath.extendsFrom common
-    runtimeClasspath.extendsFrom common
-    developmentNeoForge.extendsFrom common
 }
+
+loom.mods.main.configuration(configurations.common)
 
 repositories {
     maven { url "https://maven.neoforged.net/releases/" }
@@ -31,11 +60,98 @@ repositories {
 
 dependencies {
     neoForge "net.neoforged:neoforge:$rootProject.neoforge_version"
-    common(project(path: ":common", configuration: "namedElements")) { transitive false }
+    common(project(path: ":common", configuration: "transformProductionNeoForge")) { transitive false }
     shadowCommon(project(path: ":common", configuration: "transformProductionNeoForge")) { transitive false }
-    modApi "dev.architectury:architectury-neoforge:${rootProject.architectury_version}"
     modCompileOnly "maven.modrinth:biolith:3.0.14-neoforge"
-    modCompileOnly "maven.modrinth:lithostitched:1.7.13-neoforge-21.1"
+    modCompileOnly "maven.modrinth:lithostitched:1.8.0+beta4-neoforge-21.1"
+    productionServerInstaller "net.neoforged:neoforge:$rootProject.neoforge_version:installer"
+}
+
+def productionServerDir = file("run")
+def productionServerArguments = file("run/libraries/net/neoforged/neoforge/${rootProject.neoforge_version}/unix_args.txt")
+def productionJava = javaToolchains.launcherFor {
+    languageVersion = JavaLanguageVersion.of(21)
+}
+
+tasks.register("installProductionServer", Exec) {
+    group = "neoforge"
+    description = "Installs the production NeoForge server runtime"
+    inputs.files(configurations.productionServerInstaller)
+    outputs.file(productionServerArguments)
+    workingDir productionServerDir
+    onlyIf { !productionServerArguments.isFile() }
+    doFirst {
+        productionServerDir.mkdirs()
+        commandLine productionJava.get().executablePath.asFile,
+            "-jar",
+            configurations.productionServerInstaller.singleFile,
+            "--install-server",
+            productionServerDir
+    }
+}
+
+tasks.register("prodServer", Exec) {
+    group = "neoforge"
+    description = "Runs the remapped production artifact with an installed NeoForge server"
+    dependsOn "installProductionServer", "remapJar"
+    workingDir productionServerDir
+    doFirst {
+        def modsDir = file("run/mods")
+        modsDir.mkdirs()
+        copy {
+            from tasks.remapJar.archiveFile
+            into modsDir
+            rename { "freeterraforged-production.jar" }
+        }
+        commandLine productionJava.get().executablePath.asFile,
+            "-Xmx4G",
+            "@libraries/net/neoforged/neoforge/${rootProject.neoforge_version}/unix_args.txt",
+            "nogui"
+    }
+}
+
+tasks.named("runBenchmarkServer").configure {
+    doFirst {
+        def benchDir = file("build/benchmark-run")
+        delete(new File(benchDir, "world"))
+        benchDir.mkdirs()
+        new File(benchDir, "eula.txt").text = "eula=true\n"
+        new File(benchDir, "server.properties").text = """\
+level-type=freeterraforged\\:freeterraforged
+level-seed=${project.findProperty('ftfBenchmarkSeed') ?: '-7442486958049957310'}
+online-mode=false
+spawn-protection=0
+view-distance=10
+simulation-distance=10
+sync-chunk-writes=false
+max-tick-time=-1
+""".stripIndent()
+    }
+}
+
+tasks.named("runPresetTestServer").configure {
+    doFirst {
+        def testDir = file("build/preset-test-run")
+        delete(testDir)
+        testDir.mkdirs()
+        new File(testDir, "eula.txt").text = "eula=true\n"
+        new File(testDir, "server.properties").text = """\
+level-type=freeterraforged\\:freeterraforged
+level-seed=${project.findProperty('ftfTestSeed') ?: '1337'}
+online-mode=false
+spawn-protection=0
+view-distance=10
+simulation-distance=10
+sync-chunk-writes=false
+max-tick-time=-1
+""".stripIndent()
+    }
+}
+
+tasks.register("runPresetTest") {
+    group = "verification"
+    description = "Runs the headless FreeTerraForged preset persistence and resolution tests"
+    dependsOn("runPresetTestServer")
 }
 
 repositories {
@@ -45,9 +161,7 @@ repositories {
 evaluationDependsOn(':common')
 
 processResources {
-
-    from project(":common").file("src/main/resources")
-
+	inputs.property "neoforgeVersion", rootProject.neoforge_version
     inputs.property "version", project.version
 
     // Prevent duplicate file errors if files exist in multiple places
@@ -64,6 +178,10 @@ shadowJar {
 
     configurations = [project.configurations.shadowCommon]
     archiveClassifier.set("shadow")
+}
+
+shadow {
+    addShadowVariantIntoJavaComponent = false
 }
 
 remapJar {
@@ -86,10 +204,4 @@ sourcesJar {
     def commonSources = project(":common").sourcesJar
     dependsOn commonSources
     from commonSources.archiveFile.map { zipTree(it) }
-}
-
-components.java {
-    withVariantsFromConfiguration(project.configurations.shadowRuntimeElements) {
-        skip()
-    }
 }

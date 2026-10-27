@@ -40,20 +40,21 @@ public abstract class LinkedPageScreen extends Screen {
 		this.previousButton = Button.builder(Component.literal("<<"), (b) -> {
 			this.currentPage.previous().ifPresent(this::setPage);
 		}).bounds(buttonsCenter - (buttonWidth * 2 + (buttonPad * 3)), buttonsRow, buttonWidth, buttonHeight).build();
-		this.previousButton.active = this.currentPage.previous().isPresent();
+		this.previousButton.active = this.currentPage.hasPrevious();
 
 		this.nextButton = Button.builder(Component.literal(">>"), (b) -> {
 			this.currentPage.next().ifPresent(this::setPage);
 		}).bounds(buttonsCenter + buttonWidth + (buttonPad * 3), buttonsRow, buttonWidth, buttonHeight).build();
-		this.nextButton.active = this.currentPage.next().isPresent();
+		this.nextButton.active = this.currentPage.hasNext();
 		
 		this.cancelButton = Button.builder(CommonComponents.GUI_CANCEL, (b) -> {
 			this.onClose();
 		}).bounds(buttonsCenter - buttonWidth - buttonPad, buttonsRow, buttonWidth, buttonHeight).build();
 
 		this.doneButton = Button.builder(CommonComponents.GUI_DONE, (b) -> {
-			this.onDone();
-			this.onClose();
+			if(this.onDone() == SaveResult.CLOSE) {
+				this.onClose();
+			}
 		}).bounds(buttonsCenter + buttonPad, buttonsRow, buttonWidth, buttonHeight).build();
 		
 		this.currentPage.init();
@@ -92,8 +93,14 @@ public abstract class LinkedPageScreen extends Screen {
 		this.currentPage.onCancel();
 	}
 	
-	public void onDone() {
-		this.currentPage.onSave();
+	public SaveResult onDone() {
+		return this.currentPage.onSave();
+	}
+
+	public enum SaveResult {
+		CLOSE,
+		SCREEN_TRANSITION,
+		STAY_OPEN
 	}
 	
 	public interface Page {
@@ -104,11 +111,20 @@ public abstract class LinkedPageScreen extends Screen {
 		Optional<Page> previous();
 		
 		Optional<Page> next();
+
+		default boolean hasPrevious() {
+			return this.previous().isPresent();
+		}
+
+		default boolean hasNext() {
+			return this.next().isPresent();
+		}
 		
 		default void onCancel() {
 		}
 		
-		default void onSave() {
+		default SaveResult onSave() {
+			return SaveResult.CLOSE;
 		}
 	}
 }

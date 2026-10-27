@@ -1,5 +1,4 @@
 {
-  
   "required": true,
   "package": "etcodehome.freeterraforged.fabric.mixin",
   "minVersion": "0.8",
@@ -8,10 +7,7 @@
   	"MixinPresetEditor"
   ],
   "mixins": [
-    "MixinBiolithTerraBlenderCompat",
-    "MixinChunkStatusTasks",
-    "MixinMinecraftServer",
-    "MixinBiomeModificationImpl"
+		"MixinMinecraftServer"
   ],
   "injectors": {
     "defaultRequire": 1

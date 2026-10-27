@@ -18,10 +18,12 @@ import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 public class PresetSurfaceRuleData {
     
     public static SurfaceRules.RuleSource overworld(Preset preset, HolderGetter<DensityFunction> densityFunctions, HolderGetter<Noise> noise) {
+		var base = new etcodehome.freeterraforged.world.worldgen.surface.rule.InheritedSurfaceRule(SurfaceRuleData.overworld(),
+			etcodehome.freeterraforged.world.worldgen.surface.rule.InheritedSurfaceRule.BIOME_DOMAINS);
 		if (preset.miscellaneous().strataDecorator) {
-			return SurfaceRules.sequence(SurfaceRuleData.overworld(), makeStrataRule(noise));
+			return SurfaceRules.sequence(base, makeStrataRule(noise));
 		}
-		return SurfaceRules.sequence(SurfaceRuleData.overworld());
+		return SurfaceRules.sequence(base);
     }
     
 	private static SurfaceRules.RuleSource makeStrataRule(HolderGetter<Noise> noise) {

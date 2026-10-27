@@ -1,8 +1,6 @@
 package etcodehome.freeterraforged.neoforge.mixin;
 
 import java.net.Proxy;
-import java.util.Collection;
-
 import org.spongepowered.asm.mixin.Implements;
 import org.spongepowered.asm.mixin.Interface;
 import org.spongepowered.asm.mixin.Mixin;
@@ -21,14 +19,12 @@ import net.minecraft.server.packs.repository.PackRepository;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.world.level.storage.LevelStorageSource;
 import etcodehome.freeterraforged.server.FTFMinecraftServer;
-import etcodehome.freeterraforged.world.worldgen.feature.ore.DynamicOrePlan;
 import etcodehome.freeterraforged.world.worldgen.feature.template.template.FeatureTemplateManager;
 
 @Implements(@Interface(iface = FTFMinecraftServer.class, prefix = "freeterraforged$FTFMinecraftServer$"))
 @Mixin(MinecraftServer.class)
 public class MixinMinecraftServer {
 	private FeatureTemplateManager templateManager;
-	private volatile DynamicOrePlan dynamicOrePlan = DynamicOrePlan.empty();
 
 	@Inject(
 		method = "<init>(Ljava/lang/Thread;Lnet/minecraft/world/level/storage/LevelStorageSource$LevelStorageAccess;Lnet/minecraft/server/packs/repository/PackRepository;Lnet/minecraft/server/WorldStem;Ljava/net/Proxy;Lcom/mojang/datafixers/DataFixer;Lnet/minecraft/server/Services;Lnet/minecraft/server/level/progress/ChunkProgressListenerFactory;)V",
@@ -40,23 +36,6 @@ public class MixinMinecraftServer {
 
 	public FeatureTemplateManager freeterraforged$FTFMinecraftServer$getFeatureTemplateManager() {
 		return this.templateManager;
-	}
-
-	public DynamicOrePlan freeterraforged$FTFMinecraftServer$getDynamicOrePlan() {
-		return this.dynamicOrePlan;
-	}
-
-	public void freeterraforged$FTFMinecraftServer$publishDynamicOrePlan(DynamicOrePlan plan) {
-		this.dynamicOrePlan = plan;
-	}
-
-	@Inject(
-		method = { "lambda$reloadResources$30" },
-		require = 0,
-		at = @At("TAIL")
-	)
-	private void lambda$reloadResources$26(Collection collection, MinecraftServer.ReloadableResources arg, CallbackInfo callback) {
-		this.templateManager.onReload(this.getResourceManager());
 	}
 
 	@Shadow

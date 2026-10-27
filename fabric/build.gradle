@@ -1,5 +1,5 @@
 plugins {
-    id "com.github.johnrengelman.shadow" version "7.1.2"
+    id "com.gradleup.shadow" version "9.2.2"
 }
 
 architectury {
@@ -14,33 +14,109 @@ loom {
             // Remove "nogui" so the vanilla Swing interface opens
             programArgs.remove("nogui")
         }
+        benchmarkServer {
+            server()
+            name "Run Headless Worldgen Benchmark Server"
+            runDir "build/benchmark-run"
+            programArg "nogui"
+            vmArg "-Xmx4G"
+            vmArg "-Djava.awt.headless=true"
+            vmArg "-Dfreeterraforged.benchmark.auto=true"
+            vmArg "-Dfreeterraforged.benchmark.radius=${project.findProperty('ftfBenchmarkRadius') ?: '10'}"
+            vmArg "-Dfreeterraforged.benchmark.x=${project.findProperty('ftfBenchmarkX') ?: '100000'}"
+            vmArg "-Dfreeterraforged.benchmark.z=${project.findProperty('ftfBenchmarkZ') ?: '100000'}"
+            vmArg "-Dfreeterraforged.benchmark.exit=true"
+        }
+        presetTestServer {
+            server()
+            name "Run Headless Preset Validation Server (Fabric)"
+            runDir "build/preset-test-run"
+            programArg "nogui"
+            vmArg "-Xmx4G"
+            vmArg "-Djava.awt.headless=true"
+            vmArg "-Dfreeterraforged.test.preset=true"
+            vmArg "-Dfreeterraforged.test.preset.exit=true"
+            vmArg "-Dfreeterraforged.test.heightmap.dir=${project.rootDir.absolutePath.replace('\\', '/')}/build/reports/preset-test-heightmaps"
+        }
     }
 }
 
 configurations {
     common
     shadowCommon
+    architecturyTransformerClasspath
     compileClasspath.extendsFrom common
     runtimeClasspath.extendsFrom common
     developmentFabric.extendsFrom common
+    architecturyTransformerClasspath.extendsFrom compileClasspath
 }
 
 dependencies {
     modImplementation "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}"
     modApi("net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}") { exclude group: 'net.fabricmc', module: 'fabric-loader' }
-    modApi "dev.architectury:architectury-fabric:${rootProject.architectury_version}"
     modCompileOnly "maven.modrinth:biolith:3.0.14-fabric"
-    // The Fabric artifact declares a v1 class-tweaker through the legacy access-widener key,
-    // which this Loom version cannot parse. The shared implementation is identical and the
-    // NeoForge artifact is already Mojang-mapped, so use it only as the compile-time API.
-    compileOnly "maven.modrinth:lithostitched:1.7.13-neoforge-21.1"
+    architecturyTransformerClasspath "com.github.glitchfiend:TerraBlender-neoforge:${rootProject.minecraft_version}-${rootProject.terrablender_version}"
+    architecturyTransformerClasspath "maven.modrinth:biolith:3.0.14-neoforge"
+    architecturyTransformerClasspath "maven.modrinth:lithostitched:1.8.0+beta4-neoforge-21.1"
     common(project(path: ":common", configuration: "namedElements")) { transitive false }
     shadowCommon(project(path: ":common", configuration: "transformProductionFabric")) { transitive false }
-    compileOnly "dev.architectury:architectury-injectables:1.0.13"
+}
+
+tasks.register("prodServer", net.fabricmc.loom.task.prod.ServerProductionRunTask) {
+    group = "fabric"
+    description = "Runs the remapped production artifact with Fabric's production server launcher"
+    loaderVersion = rootProject.fabric_loader_version
+    minecraftVersion = rootProject.minecraft_version
+    runDir = file("run")
+    jvmArgs.add("-Xmx4G")
 }
 
 repositories {
     maven { url "https://api.modrinth.com/maven" }
+}
+
+tasks.named("runBenchmarkServer").configure {
+    doFirst {
+        def benchDir = file("build/benchmark-run")
+        delete(new File(benchDir, "world"))
+        benchDir.mkdirs()
+        new File(benchDir, "eula.txt").text = "eula=true\n"
+        new File(benchDir, "server.properties").text = """\
+level-type=freeterraforged\\:freeterraforged
+level-seed=${project.findProperty('ftfBenchmarkSeed') ?: '-7442486958049957310'}
+online-mode=false
+spawn-protection=0
+view-distance=10
+simulation-distance=10
+sync-chunk-writes=false
+max-tick-time=-1
+""".stripIndent()
+    }
+}
+
+tasks.named("runPresetTestServer").configure {
+    doFirst {
+        def testDir = file("build/preset-test-run")
+        delete(testDir)
+        testDir.mkdirs()
+        new File(testDir, "eula.txt").text = "eula=true\n"
+        new File(testDir, "server.properties").text = """\
+level-type=freeterraforged\\:freeterraforged
+level-seed=${project.findProperty('ftfTestSeed') ?: '1337'}
+online-mode=false
+spawn-protection=0
+view-distance=10
+simulation-distance=10
+sync-chunk-writes=false
+max-tick-time=-1
+""".stripIndent()
+    }
+}
+
+tasks.register("runPresetTest") {
+    group = "verification"
+    description = "Runs the headless FreeTerraForged preset persistence and resolution tests"
+    dependsOn("runPresetTestServer")
 }
 
 processResources {
@@ -58,6 +134,10 @@ shadowJar {
     archiveClassifier.set("dev-shadow")
 }
 
+shadow {
+    addShadowVariantIntoJavaComponent = false
+}
+
 remapJar {
     injectAccessWidener = true
     input.set shadowJar.archiveFile
@@ -73,10 +153,4 @@ sourcesJar {
     def commonSources = project(":common").sourcesJar
     dependsOn commonSources
     from commonSources.archiveFile.map { zipTree(it) }
-}
-
-components.java {
-    withVariantsFromConfiguration(project.configurations.shadowRuntimeElements) {
-        skip()
-    }
 }

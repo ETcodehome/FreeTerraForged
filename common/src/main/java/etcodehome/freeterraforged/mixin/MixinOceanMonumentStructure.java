@@ -18,6 +18,8 @@ import net.minecraft.world.level.levelgen.structure.StructurePiece;
 import net.minecraft.world.level.levelgen.structure.pieces.PiecesContainer;
 import net.minecraft.world.level.levelgen.structure.pieces.StructurePiecesBuilder;
 import net.minecraft.world.level.levelgen.structure.structures.OceanMonumentStructure;
+import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
+import etcodehome.freeterraforged.world.worldgen.structure.OceanMonumentBuildingFix;
 
 @Mixin(OceanMonumentStructure.class)
 public class MixinOceanMonumentStructure {
@@ -30,6 +32,9 @@ public class MixinOceanMonumentStructure {
 		Structure.GenerationContext context,
 		CallbackInfo ci
 	) {
+		if(!((Object) context.randomState() instanceof FTFRandomState randomState) || !randomState.isTerraForged()) {
+			return;
+		}
 		List<StructurePiece> pieces = ((StructurePiecesBuilderAccessor) builder).ftf$getPieces();
 		if (pieces.isEmpty()) {
 			return;

@@ -25,10 +25,10 @@ import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
 import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfiguration;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
+import etcodehome.freeterraforged.world.worldgen.IChunkCellsHolder;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
 import etcodehome.freeterraforged.world.worldgen.feature.DecorateSnowFeature.Config;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
@@ -57,26 +57,37 @@ public class DecorateSnowFeature extends Feature<Config> {
 			int chunkX = chunkPos.x;
 			int chunkZ = chunkPos.z;
 			ChunkAccess chunk = level.getChunk(chunkX, chunkZ);
-			Tile.Chunk tileChunk = generatorContext.cache.provideAtChunk(chunkX, chunkZ).getChunkReader(chunkX, chunkZ);
-			etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap heightmap = generatorContext.generator.getHeightmap();
+			etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap heightmap = generatorContext.heightmap;
 			Levels levels = heightmap.levels();
 			Noise rand = Noises.white(heightmap.climate().randomSeed(), 1);
 			BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 			Config config = placeContext.config();
-			ErodeFeature.Config erodeConfig = config.erodeConfig();
-			
-			for(int x = 0; x < 16; x++) {
-				for(int z = 0; z < 16; z++) {
-		        	Cell cell = tileChunk.getCell(x, z);
+			ScreeFeature.Config erodeConfig = config.erodeConfig();
+			Cell fallbackCell = new Cell();
+			IChunkCellsHolder cellsHolder = chunk instanceof IChunkCellsHolder h ? h : null;
+			Cell[] chunkCells = cellsHolder != null ? cellsHolder.freeterraforged$getOrCreateChunkCells(generatorContext) : null;
+
+			for(int z = 0; z < 16; z++) {
+				for(int x = 0; x < 16; x++) {
+					int worldX = chunkPos.getBlockX(x);
+					int worldZ = chunkPos.getBlockZ(z);
+					Cell cell;
+					if (chunkCells != null) {
+						cell = chunkCells[z * 16 + x];
+					} else {
+						cell = fallbackCell.reset();
+						generatorContext.lookup.applyCell(cell, worldX, worldZ, false, false);
+					}
 					int scaledY = levels.scale(cell.height);
 			        int surfaceY = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
 			        if(scaledY == surfaceY && scaledY >= generator.getSeaLevel()) {
-		        		int worldX = chunkPos.getBlockX(x);
-		        		int worldZ = chunkPos.getBlockZ(z);
 				        pos.set(worldX, surfaceY, worldZ);
 				        
 				        if(config.erode) {
 				        	if(level.getBiome(pos).value().getTemperature(pos) <= 0.25) {
+					            if (cell.gradient == 0.0F) {
+					                generatorContext.lookup.computeSteepness(cell, worldX, worldZ);
+					            }
 					            float var = -ColumnDecorator.sampleNoise(worldX, worldZ, 16, 0);
 					            float hNoise = rand.compute(worldX, worldZ, 4) * erodeConfig.heightModifier();
 					            float sNoise = rand.compute(worldX, worldZ, 5) * erodeConfig.slopeModifier();
@@ -115,14 +126,14 @@ public class DecorateSnowFeature extends Feature<Config> {
 			        }
 				}
 			}
-	        return true;
+				return true;
 		} else {
 			// Gracefully abort generation if the active dimension context is missing or non-FreeTerraForged
 			return false;
 		}
 	}
 
-    private static boolean snowErosion(ErodeFeature.Config erodeConfig, float x, float z, float steepness, float height) {
+    private static boolean snowErosion(ScreeFeature.Config erodeConfig, float x, float z, float steepness, float height) {
         return steepness > erodeConfig.rockSteepness() || (steepness > SNOW_ROCK_STEEPNESS && height > SNOW_ROCK_HEIGHT) || (steepness > erodeConfig.dirtSteepness() && height > ColumnDecorator.sampleNoise(x, z, erodeConfig.dirtVar(), erodeConfig.dirtMin()));
     }
 
@@ -198,11 +209,11 @@ public class DecorateSnowFeature extends Feature<Config> {
         return property.getPossibleValues().stream().max(Integer::compareTo).orElse(0);
     }
 
-	public record Config(boolean erode, boolean smooth, ErodeFeature.Config erodeConfig) implements FeatureConfiguration {
+	public record Config(boolean erode, boolean smooth, ScreeFeature.Config erodeConfig) implements FeatureConfiguration {
 		public static final Codec<Config> CODEC = RecordCodecBuilder.create(instance -> instance.group(
 			Codec.BOOL.fieldOf("erode").forGetter(Config::erode),
 			Codec.BOOL.fieldOf("smooth").forGetter(Config::smooth),
-			ErodeFeature.Config.CODEC.fieldOf("erode_config").forGetter(Config::erodeConfig)
+			ScreeFeature.Config.CODEC.fieldOf("erode_config").forGetter(Config::erodeConfig)
 		).apply(instance, Config::new));
 	}
 }

@@ -2,27 +2,41 @@ package etcodehome.freeterraforged.world.worldgen.cell.heightmap;
 
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
+import etcodehome.freeterraforged.world.worldgen.cell.CellLookup;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.TileCache;
+import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 
-public class WorldLookup {
-	private float waterLevel;
-	private float beachLevel;
-	private TileCache cache;
-	private Heightmap heightmap;
-	private Levels levels;
+public class WorldLookup implements CellLookup {
+	private static final ThreadLocal<Cell> SCRATCH_NEIGHBOR = ThreadLocal.withInitial(Cell::new);
+
+	private final GeneratorContext context;
+	private final float waterLevel;
+	private final float beachLevel;
+	private final Heightmap heightmap;
+	private final Levels levels;
 	
 	public WorldLookup(GeneratorContext context) {
-		this.cache = context.cache;
-		this.heightmap = context.generator.getHeightmap();
+		this.context = context;
+		this.heightmap = context.heightmap;
 		this.waterLevel = context.levels.water;
 		this.beachLevel = context.levels.water(5);
 		this.levels = context.levels;
 	}
+
+	public GeneratorContext getContext() {
+		return this.context;
+	}
 	
 	public Heightmap getHeightmap() {
 		return this.heightmap;
+	}
+
+	@Override
+	public Cell lookup(int blockX, int blockZ) {
+		Cell cell = new Cell();
+		this.applyCell(cell, blockX, blockZ, false, false);
+		this.computeSteepness(cell, blockX, blockZ);
+		return cell;
 	}
 
 	public boolean applyCell(Cell cell, int x, int z, boolean applyClimate) {
@@ -30,44 +44,76 @@ public class WorldLookup {
 	}
 
 	public boolean applyCell(Cell cell, int x, int z, boolean load, boolean applyClimate) {
-		if (load && this.computeAccurate(cell, x, z)) {
-			return true;
-		}
-		if (this.computeCached(cell, x, z)) {
-			return true;
-		}
-		return this.compute(cell, x, z, applyClimate);
-	}
-
-	private boolean computeAccurate(Cell cell, int x, int z) {
-		if (this.cache == null) {
-			return false;
-		}
-		int rx = this.cache.chunkToTile(x >> 4);
-		int rz = this.cache.chunkToTile(z >> 4);
-		Tile tile = this.cache.provide(rx, rz);
-		Cell c = tile.lookup(x, z);
-		if (c != null) {
-			cell.copyFrom(c);
-		}
-		return cell.terrain != null;
-	}
-
-	private boolean computeCached(Cell cell, int x, int z) {
-		if (this.cache == null) {
-			return false;
-		}
-		int rx = this.cache.chunkToTile(x >> 4);
-		int rz = this.cache.chunkToTile(z >> 4);
-		Tile tile = this.cache.provideIfPresent(rx, rz);
-		if (tile != null) {
-			Cell c = tile.lookup(x, z);
-			if (c != null) {
-				cell.copyFrom(c);
+		if (this.context != null && this.context.filteredChunkCache != null) {
+			Cell cached = this.context.filteredChunkCache.getExistingFilteredCell(x, z);
+			if (cached == null && load) {
+				Cell[] chunkCells = this.context.filteredChunkCache.getFilteredChunk(x >> 4, z >> 4);
+				if (chunkCells != null) {
+					cached = etcodehome.freeterraforged.world.worldgen.cell.filter.ChunkFilterGrid.getPaddedCell(
+						chunkCells, x & 15, z & 15
+					);
+				}
 			}
-			return cell.terrain != null;
+			if (cached != null) {
+				cell.copyFrom(cached);
+				if (load && cell.gradient == 0.0F) {
+					this.computeSteepness(cell, x, z);
+				}
+				return false;
+			}
 		}
-		return false;
+
+		if (!WorldgenPerfTracker.ACTIVE) {
+			boolean res = this.compute(cell, x, z, applyClimate);
+			if (load) {
+				this.computeSteepness(cell, x, z);
+			}
+			return res;
+		}
+		WorldgenPerfTracker.ThreadStats ts = WorldgenPerfTracker.stats();
+		long t0 = System.nanoTime();
+		boolean res = this.compute(cell, x, z, applyClimate);
+		if (load) {
+			this.computeSteepness(cell, x, z);
+		}
+		long elapsed = System.nanoTime() - t0;
+		if (!ts.insideGridInit) {
+			ts.standaloneApplyCellCount++;
+			ts.standaloneApplyCellNanos += elapsed;
+			int callerIdx = ts.currentCaller.ordinal();
+			ts.callerCounts[callerIdx]++;
+			ts.callerNanos[callerIdx] += elapsed;
+		}
+		return res;
+	}
+
+	public void applyBiomeRegion(Cell cell, int x, int z) {
+		if (!WorldgenPerfTracker.ACTIVE) {
+			this.heightmap.applyBiomeRegion(cell, x, z);
+			return;
+		}
+		WorldgenPerfTracker.ThreadStats ts = WorldgenPerfTracker.stats();
+		long t0 = System.nanoTime();
+		this.heightmap.applyBiomeRegion(cell, x, z);
+		ts.applyBiomeRegionCount++;
+		ts.applyBiomeRegionNanos += (System.nanoTime() - t0);
+	}
+
+	public void computeSteepness(Cell cell, int cx, int cz) {
+		float totalHeightDif = 0.0F;
+		Cell neighbour = SCRATCH_NEIGHBOR.get();
+		for (int dz = -1; dz <= 1; ++dz) {
+			for (int dx = -1; dx <= 1; ++dx) {
+				if (dx != 0 || dz != 0) {
+					int x = cx + dx;
+					int z = cz + dz;
+					this.compute(neighbour.reset(), x, z, false);
+					float height = Math.max(neighbour.height, this.waterLevel);
+					totalHeightDif += Math.abs(cell.height - height);
+				}
+			}
+		}
+		cell.gradient = totalHeightDif * (10.0F * 15.0F / 8.0F);
 	}
 
 	private boolean compute(Cell cell, int x, int z, boolean applyClimate) {

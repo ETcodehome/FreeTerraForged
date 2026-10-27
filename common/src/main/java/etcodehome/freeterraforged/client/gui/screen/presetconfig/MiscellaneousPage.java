@@ -7,7 +7,6 @@ import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.network.chat.Component;
 import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
 import etcodehome.freeterraforged.client.gui.screen.page.LinkedPageScreen.Page;
-import etcodehome.freeterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.MiscellaneousSettings;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 
@@ -25,8 +24,8 @@ public class MiscellaneousPage extends PresetEditorPage {
 	private Slider mountainBiomeUsage;
 	private Slider volcanoBiomeUsage;
 	
-	public MiscellaneousPage(PresetConfigScreen screen, PresetEntry preset) {
-		super(screen, preset);
+	public MiscellaneousPage(PresetConfigScreen screen) {
+		super(screen);
 	}
 
 	@Override
@@ -97,7 +96,7 @@ public class MiscellaneousPage extends PresetEditorPage {
 	
 	@Override
 	public Optional<Page> previous() {
-		return Optional.of(new FilterSettingsPage(this.screen, this.preset));
+		return Optional.of(new ErosionFilterSettingsPage(this.screen));
 	}
 
 	@Override

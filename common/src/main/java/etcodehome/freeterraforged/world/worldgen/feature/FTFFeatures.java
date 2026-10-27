@@ -14,7 +14,7 @@ public class FTFFeatures {
 	public static final Feature<BushFeature.Config> BUSH = register("bush", new BushFeature(BushFeature.Config.CODEC));
 	public static final Feature<DiskConfiguration> DISK = register("disk", new DiskFeature(DiskConfiguration.CODEC));
 	public static final Feature<ChanceFeature.Config> CHANCE = register("chance", new ChanceFeature(ChanceFeature.Config.CODEC));
-	public static final Feature<ErodeFeature.Config> ERODE = register("erode", new ErodeFeature(ErodeFeature.Config.CODEC));
+	public static final Feature<ScreeFeature.Config> ERODE = register("erode", new ScreeFeature(ScreeFeature.Config.CODEC));
 	public static final Feature<DecorateSnowFeature.Config> DECORATE_SNOW = register("decorate_snow", new DecorateSnowFeature(DecorateSnowFeature.Config.CODEC));
 	public static final Feature<SwampSurfaceFeature.Config> SWAMP_SURFACE = register("swamp_surface", new SwampSurfaceFeature(SwampSurfaceFeature.Config.CODEC));
 	public static final Feature<NoneFeatureConfiguration> RIVER_GASKET = register("river_gasket", new RiverGasketFeature(NoneFeatureConfiguration.CODEC));

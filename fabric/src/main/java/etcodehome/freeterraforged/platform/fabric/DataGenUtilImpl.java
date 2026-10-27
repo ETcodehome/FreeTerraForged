@@ -2,7 +2,9 @@ package etcodehome.freeterraforged.platform.fabric;
 
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.HashSet;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
@@ -19,6 +21,7 @@ import net.fabricmc.fabric.api.event.registry.DynamicRegistries;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.Registry;
+import net.minecraft.core.RegistrySetBuilder;
 import net.minecraft.data.CachedOutput;
 import net.minecraft.data.DataProvider;
 import net.minecraft.data.PackOutput;
@@ -30,8 +33,8 @@ import etcodehome.freeterraforged.mixin.MixinRegistrySetBuilder$EmptyTagLookup;
 
 public class DataGenUtilImpl {
 
-	public static DataProvider createRegistryProvider(PackOutput output, CompletableFuture<HolderLookup.Provider> providerLookup) {
-		return new Provider(output, providerLookup);
+	public static DataProvider createRegistryProvider(PackOutput output, CompletableFuture<RegistrySetBuilder.PatchedRegistries> registries) {
+		return new Provider(output, registries.thenApply(RegistrySetBuilder.PatchedRegistries::patches));
 	}
 
 	// a port of the forge patches to RegistriesDatapackGenerator
@@ -71,7 +74,14 @@ public class DataGenUtilImpl {
 					}
 				}
 	            RegistryOps<JsonElement> ops = RegistryOps.create(JsonOps.INSTANCE, new HolderLookupAdapterButWithCursedPatchForOwnerJuggling(provider));
-	            return CompletableFuture.allOf(DynamicRegistries.getDynamicRegistries().stream().flatMap(arg3 -> this.dumpRegistryCap(arg, provider, ops, arg3).stream()).toArray(CompletableFuture[]::new));
+	            Set<ResourceKey<? extends Registry<?>>> emitted = new HashSet<>();
+	            Stream<RegistryDataLoader.RegistryData<?>> registries = Stream.concat(
+	                RegistryDataLoader.WORLDGEN_REGISTRIES.stream(),
+	                DynamicRegistries.getDynamicRegistries().stream()
+	            ).filter(registry -> emitted.add(registry.key()));
+	            return CompletableFuture.allOf(registries
+	                .flatMap(registry -> this.dumpRegistryCap(arg, provider, ops, registry).stream())
+	                .toArray(CompletableFuture[]::new));
 	        });
 	    }
 

@@ -1,96 +1,78 @@
 package etcodehome.freeterraforged.mixin;
 
-import java.util.OptionalInt;
-
-import etcodehome.freeterraforged.world.worldgen.ChunkFlowField;
-import etcodehome.freeterraforged.world.worldgen.IFlowFieldHolder;
-import etcodehome.freeterraforged.world.worldgen.FTFChunk;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import net.minecraft.core.Holder;
-import net.minecraft.core.QuartPos;
-import net.minecraft.core.SectionPos;
-import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.LevelHeightAccessor;
-import net.minecraft.world.level.biome.Biome;
-import net.minecraft.world.level.biome.BiomeResolver;
-import net.minecraft.world.level.biome.Climate;
+import org.jetbrains.annotations.Nullable;
 import net.minecraft.world.level.chunk.ChunkAccess;
-import net.minecraft.world.level.chunk.LevelChunkSection;
-import net.minecraft.world.level.chunk.PalettedContainer;
+import etcodehome.freeterraforged.world.worldgen.IFlowFieldHolder;
+import etcodehome.freeterraforged.world.worldgen.ChunkFlowField;
+import etcodehome.freeterraforged.world.worldgen.IChunkCellsHolder;
+import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
+import etcodehome.freeterraforged.world.worldgen.cell.Cell;
+import etcodehome.freeterraforged.world.worldgen.cell.filter.ChunkFilterGrid;
 
 @Mixin(ChunkAccess.class)
-public abstract class MixinChunkAccess implements FTFChunk, LevelHeightAccessor, IFlowFieldHolder {
+public abstract class MixinChunkAccess implements IFlowFieldHolder, IChunkCellsHolder {
+	@Unique
+	@Nullable
+	private volatile ChunkFlowField freeterraforged$flowField;
 
 	@Unique
-	private final ChunkFlowField freeterraforged$flowField = new ChunkFlowField();
+	@Nullable
+	private volatile Cell[] freeterraforged$chunkCells;
 
 	@Override
 	public ChunkFlowField freeterraforged$getFlowField() {
 		return this.freeterraforged$flowField;
 	}
 
-	private OptionalInt maxHeight = OptionalInt.empty();
-
 	@Override
-	public void setMaxHeight(int maxHeight) {
-		this.maxHeight = OptionalInt.of(maxHeight);
-	}
-
-	@Override
-	public OptionalInt getMaxHeight() {
-		return this.maxHeight;
-	}
-	
-	@Inject(
-		method = "fillBiomesFromNoise",
-		at = @At("HEAD"),
-		cancellable = true
-	)
-	public void fillBiomesFromNoise(BiomeResolver biomeResolver, Climate.Sampler sampler, CallbackInfo callback) {
-		if(this.maxHeight.isEmpty()) {
-			return;
+	public ChunkFlowField freeterraforged$getOrCreateFlowField() {
+		ChunkFlowField current = this.freeterraforged$flowField;
+		if (current != null) {
+			return current;
 		}
-		
-		ChunkPos chunkPos = this.getPos();
-		int quartX = QuartPos.fromBlock(chunkPos.getMinBlockX());
-		int quartZ = QuartPos.fromBlock(chunkPos.getMinBlockZ());
-		LevelHeightAccessor levelHeightAccessor = this.getHeightAccessorForGeneration();
-		
-		int maxHeight = this.maxHeight.getAsInt();
-		int highestSectionY = SectionPos.blockToSectionCoord(maxHeight) + 1;
-		int maxSectionY = levelHeightAccessor.getMaxSection();
-
-		for (int sectionY = levelHeightAccessor.getMinSection(); sectionY < Math.min(highestSectionY + 1, maxSectionY); sectionY++) {
-			LevelChunkSection levelChunkSection = this.getSection(this.getSectionIndexFromSectionY(sectionY));
-			int quartY = QuartPos.fromSection(sectionY);
-			levelChunkSection.fillBiomesFromNoise(biomeResolver, sampler, quartX, quartY, quartZ);
-		}
-		
-		if(highestSectionY < maxSectionY) {
-			LevelChunkSection highestChunkSection = this.getSection(this.getSectionIndexFromSectionY(highestSectionY));
-			PalettedContainer<Holder<Biome>> highestBiomes = (PalettedContainer<Holder<Biome>>) highestChunkSection.getBiomes();
-			
-			for(int sectionY = highestSectionY; sectionY < maxSectionY; sectionY++) {
-				LevelChunkSection levelChunkSection = this.getSection(this.getSectionIndexFromSectionY(sectionY));
-				LevelChunkSectionAccessor accessor = (LevelChunkSectionAccessor) levelChunkSection;
-				accessor.setBiomes(highestBiomes.copy());
+		synchronized (this) {
+			current = this.freeterraforged$flowField;
+			if (current == null) {
+				current = new ChunkFlowField();
+				this.freeterraforged$flowField = current;
 			}
 		}
-		callback.cancel();
+		return current;
 	}
 
-	@Shadow
-	public abstract LevelHeightAccessor getHeightAccessorForGeneration();
+	@Override
+	@Nullable
+	public Cell[] freeterraforged$getChunkCells() {
+		return this.freeterraforged$chunkCells;
+	}
 
-	@Shadow
-	public abstract ChunkPos getPos();
-	
-	@Shadow
-	public abstract LevelChunkSection getSection(int i);
+	@Override
+	public void freeterraforged$setChunkCells(Cell[] cells) {
+		this.freeterraforged$chunkCells = cells;
+	}
+
+	@Override
+	public Cell[] freeterraforged$getOrCreateChunkCells(GeneratorContext context) {
+		Cell[] current = this.freeterraforged$chunkCells;
+		if (current != null) {
+			return current;
+		}
+		synchronized (this) {
+			current = this.freeterraforged$chunkCells;
+			if (current == null) {
+				ChunkAccess chunk = (ChunkAccess) (Object) this;
+				current = context.filteredChunkCache.getFilteredChunk(chunk.getPos().x, chunk.getPos().z);
+				this.freeterraforged$chunkCells = current;
+			}
+		}
+		return current;
+	}
+
+	@Override
+	public Cell freeterraforged$getCell(int localX, int localZ, GeneratorContext context) {
+		Cell[] cells = this.freeterraforged$getOrCreateChunkCells(context);
+		return cells[(localZ & 15) * 16 + (localX & 15)];
+	}
 }

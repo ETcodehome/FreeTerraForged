@@ -1,17 +1,14 @@
 package etcodehome.freeterraforged.world.worldgen.feature.chance;
 
-import com.mojang.serialization.MapCodec;
-import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
-import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
-import org.jetbrains.annotations.Nullable;
-
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-
+import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
+import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
+import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.SectionPos;
 import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
+import org.jetbrains.annotations.Nullable;
 
 class ElevationChanceModifier extends RangeChanceModifier {
 	public static final MapCodec<ElevationChanceModifier> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
@@ -37,10 +34,9 @@ class ElevationChanceModifier extends RangeChanceModifier {
 		if((Object) placeCtx.level().getLevel().getChunkSource().randomState() instanceof FTFRandomState ftfRandomState && (generatorContext = ftfRandomState.generatorContext()) != null) {
 			int x = pos.getX();
 			int z = pos.getZ();
-			int chunkX = SectionPos.blockToSectionCoord(x);
-			int chunkZ = SectionPos.blockToSectionCoord(z);
-			Tile.Chunk chunk = generatorContext.cache.provideAtChunk(chunkX, chunkZ).getChunkReader(chunkX, chunkZ);
-			return ftfRandomState.generatorContext().generator.getHeightmap().levels().elevation(chunk.getCell(x, z).height);
+			Cell cell = new Cell();
+			generatorContext.lookup.applyCell(cell, x, z, false, false);
+			return generatorContext.heightmap.levels().elevation(cell.height);
 		} else {
 			throw new UnsupportedOperationException();
 		}

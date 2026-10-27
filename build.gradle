@@ -1,6 +1,6 @@
 plugins {
     id "architectury-plugin" version "3.4.164"
-    id "dev.architectury.loom" version "1.11.445" apply false
+    id "dev.architectury.loom" version "1.11.458" apply false
 }
 
 architectury {
@@ -31,7 +31,9 @@ allprojects {
     apply plugin: "architectury-plugin"
     apply plugin: "maven-publish"
 
-    archivesBaseName = rootProject.archives_base_name
+    base {
+        archivesName = rootProject.archives_base_name
+    }
     version = rootProject.mod_version
     group = rootProject.maven_group
 
@@ -54,4 +56,10 @@ allprojects {
         }
         withSourcesJar()
     }
+}
+
+tasks.register("runPresetTest") {
+    group = "verification"
+    description = "Runs headless preset validation on both Fabric and NeoForge"
+    dependsOn(":fabric:runPresetTest", ":neoforge:runPresetTest")
 }
