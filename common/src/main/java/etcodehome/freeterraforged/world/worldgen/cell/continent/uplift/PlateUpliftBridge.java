@@ -36,9 +36,9 @@ public class PlateUpliftBridge {
     protected final float jitter;
     protected final float frequency;
     protected final int tectonicSeed;
-    protected float tectonicPlateUplift;
-    protected float tectonicRounding;
-    protected float saddleHeight;
+    protected volatile float tectonicPlateUplift;
+    protected volatile float tectonicRounding;
+    protected volatile float saddleHeight;
 
     private static final class BridgeScratch {
         final float[] neighborX = new float[8];
@@ -101,10 +101,6 @@ public class PlateUpliftBridge {
      * strictly preserving the original slope to 0.0 along borders where rivers flow to ocean.
      */
     public float computeSmoothVoronoiGradient(Cell cell, float rawX, float rawY) {
-        if (cell.terrain != null && (cell.terrain.isShallowOcean() || cell.terrain.isDeepOcean())) {
-            return 0.0F;
-        }
-
         float x = rawX * this.frequency;
         float y = rawY * this.frequency;
 
@@ -152,7 +148,6 @@ public class PlateUpliftBridge {
             }
         }
 
-        float s0Sq = cellPointX * cellPointX + cellPointY * cellPointY;
         int minIndex = -1;
         float minGradient = Float.MAX_VALUE;
 
@@ -169,13 +164,13 @@ public class PlateUpliftBridge {
                 s.len[i] = len;
                 s.nx[i] = dx * inv;
                 s.ny[i] = dy * inv;
-                s.mx[i] = (cellPointX + px2) * 0.5F;
-                s.my[i] = (cellPointY + py2) * 0.5F;
+                float mx = (cellPointX + px2) * 0.5F;
+                float my = (cellPointY + py2) * 0.5F;
+                s.mx[i] = mx;
+                s.my[i] = my;
 
-                float siSq = px2 * px2 + py2 * py2;
-                float baseHalfDiff = 0.5F * (siSq - s0Sq);
-                float h_x = baseHalfDiff - (x * dx + y * dy);
-                float h_c = baseHalfDiff - (cellPointX * dx + cellPointY * dy);
+                float h_c = 0.5F * lenSq;
+                float h_x = (mx - x) * dx + (my - y) * dy;
 
                 if (h_c > 0.00001F) {
                     float planeValue = h_x / h_c;
@@ -210,8 +205,8 @@ public class PlateUpliftBridge {
 
         // Progress r along the sector towards the bridged edge: 0.0 at cell center peak, 1.0 at Voronoi edge
         float r = 1.0F - clampedMin;
-        if (r <= 1.0e-5F) {
-            return 1.0F;
+        if (r <= 0.01F) {
+            return clampedMin;
         }
 
         // Clip bisector minIndex symmetrically using the union bounding box of cell and neighbor
@@ -271,8 +266,16 @@ public class PlateUpliftBridge {
             }
         }
 
+        if (!ok || lo >= hi) {
+            return clampedMin;
+        }
+
+        // Clamp unbounded edges to a generous radius relative to Delaunay length
+        lo = Math.max(lo, -3.0F * s.len[minIndex]);
+        hi = Math.min(hi, 3.0F * s.len[minIndex]);
+
         // Hard cutoff threshold: sectors of the peak pyramid less than 20 degrees wide never bridge
-        if (!ok || lo >= hi || lo <= -1.0e8F || hi >= 1.0e8F || isSectorTooThin(lo, hi, s.len[minIndex])) {
+        if (lo >= hi || isSectorTooThin(lo, hi, s.len[minIndex])) {
             return clampedMin;
         }
 
@@ -293,7 +296,7 @@ public class PlateUpliftBridge {
         }
 
         float fraction;
-        if (this.tectonicRounding <= 0.0F || Math.abs(t_mid) < 1.0e-5F) {
+        if (this.tectonicRounding <= 0.0F || Math.abs(t_mid) < 1.0e-4F) {
             fraction = Math.abs(uEdge);
         } else {
             // Circumcircle through Peak 1 (-halfL, 0), Chord intersection (0, t_mid), and Peak 2 (+halfL, 0)

@@ -29,8 +29,8 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
 
     protected WorldSettings.Continent continentSettings;
 
-    protected float bridgeChance;
-    protected float bridgeReach;
+    protected volatile float bridgeChance;
+    protected volatile float bridgeReach;
     protected PlateUpliftBridge plateUpliftBridge;
     private final int bridgeSeed;
 
@@ -278,36 +278,40 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
             return bestSq == Float.MAX_VALUE ? 4.0F : bestSq;
         }
 
-        // Fast path 2: single-pass check if all 8 neighbors are unbridged (isolated island).
-        // If an open bridged border is found, break early to run the bridged boundary path.
-        // Otherwise, bestSq is already computed over all 8 closed borders with zero duplicate passes.
-        boolean anyOpen = false;
-        float bestSq = Float.MAX_VALUE;
+        // Fast path 2: single-pass check if any neighbor is bridged within bridgeReach.
+        // If an open bridged border is within bridgeReach, run the bridged boundary path.
+        // Otherwise, bestClosedSq is already computed over all closed borders.
+        boolean anyOpenNear = false;
+        float bestClosedSq = Float.MAX_VALUE;
+        float reach = this.bridgeReach;
         for (int i = 0; i < 8; i++) {
             int cx2 = cellX + NBR_DX[i];
             int cy2 = cellY + NBR_DY[i];
-            if (this.canBridge(cx2, cy2) && this.bridgeRoll(cellX, cellY, cx2, cy2) < this.bridgeChance) {
-                anyOpen = true;
-                break;
-            }
             NoiseUtil.Vec2f vec2 = NoiseUtil.cell(this.seed, cx2, cy2);
             float px2 = cx2 + vec2.x() * this.jitter;
             float py2 = cy2 + vec2.y() * this.jitter;
+            boolean open = this.canBridge(cx2, cy2) && this.bridgeRoll(cellX, cellY, cx2, cy2) < this.bridgeChance;
             float dist = getDistance(x, y, ax, ay, px2, py2);
-            if (dist < bestSq) {
-                bestSq = dist;
+            if (open) {
+                // An open border influences coastal shaping only if the sample point is within bridgeReach
+                if (dist < reach * reach) {
+                    anyOpenNear = true;
+                }
+            } else if (dist < bestClosedSq) {
+                bestClosedSq = dist;
             }
         }
-        if (!anyOpen) {
-            return bestSq == Float.MAX_VALUE ? 4.0F : bestSq;
+        if (!anyOpenNear) {
+            return bestClosedSq == Float.MAX_VALUE ? 4.0F : bestClosedSq;
         }
 
-        // Bridged landmass path: evaluate the true closed Voronoi polygon segments in the 3x3 window around (xi, yi).
+        // Bridged landmass path: evaluate the true closed Voronoi polygon segments in the 3x3 window around (cellX, cellY).
+        // Anchoring to (cellX, cellY) ensures candidate cells remain strictly continuous without integer-grid jumps.
         BoundaryScratch s = SCRATCH.get();
-        int xi = NoiseUtil.floor(x);
-        int yi = NoiseUtil.floor(y);
+        int xi = cellX;
+        int yi = cellY;
 
-        // Precompute the 5x5 grid points, landMask, and canBridge bitmask centered at (xi, yi)
+        // Precompute the 5x5 grid points, landMask, and canBridge bitmask centered at (cellX, cellY)
         int idx = 0;
         int landMask = 0;
         int canBridgeMask = 0;
@@ -328,7 +332,7 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
             }
         }
 
-        bestSq = Float.MAX_VALUE;
+        float bestSq = Float.MAX_VALUE;
 
         // Iterate over the 3x3 cells (grid indices cdx=1..3, cdy=1..3 in the 5x5 array)
         for (int cdy = 1; cdy <= 3; cdy++) {
@@ -450,20 +454,70 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
 
     @Override
     public float getEdgeValue(float x, float z) {
-        try (Resource<Cell> resource = Cell.getResource()) {
-            Cell cell = resource.get();
-            this.apply(cell, x, z);
-            return cell.continentEdge;
+        float wx = this.warp.getX(x, z, 0);
+        float wy = this.warp.getZ(x, z, 0);
+        float px = wx * this.frequency;
+        float py = wy * this.frequency;
+        int xi = NoiseUtil.floor(px);
+        int yi = NoiseUtil.floor(py);
+        int cellX = xi;
+        int cellY = yi;
+        float cellPointX = px;
+        float cellPointY = py;
+        float nearest = Float.MAX_VALUE;
+
+        for (int cy = yi - 1; cy <= yi + 1; ++cy) {
+            for (int cx = xi - 1; cx <= xi + 1; ++cx) {
+                NoiseUtil.Vec2f vec = NoiseUtil.cell(this.seed, cx, cy);
+                float cpx = cx + vec.x() * this.jitter;
+                float cpy = cy + vec.y() * this.jitter;
+                float dist2 = Line.distSq(px, py, cpx, cpy);
+                if (dist2 < nearest) {
+                    cellPointX = cpx;
+                    cellPointY = cpy;
+                    cellX = cx;
+                    cellY = cy;
+                    nearest = dist2;
+                }
+            }
         }
+
+        if (this.shouldSkip(cellX, cellY)) {
+            return 0.0F;
+        }
+
+        nearest = this.getBoundaryDistanceSq(px, py, cellX, cellY, cellPointX, cellPointY);
+        return this.getDistanceValue(px, py, cellX, cellY, nearest);
     }
 
     @Override
     public long getNearestCenter(float x, float z) {
-        try (Resource<Cell> resource = Cell.getResource()) {
-            Cell cell = resource.get();
-            this.apply(cell, x, z);
-            return PosUtil.pack(cell.continentX, cell.continentZ);
+        float wx = this.warp.getX(x, z, 0);
+        float wy = this.warp.getZ(x, z, 0);
+        float px = wx * this.frequency;
+        float py = wy * this.frequency;
+        int xi = NoiseUtil.floor(px);
+        int yi = NoiseUtil.floor(py);
+        float nearest = Float.MAX_VALUE;
+        float bestPx = px;
+        float bestPy = py;
+
+        for (int cy = yi - 1; cy <= yi + 1; ++cy) {
+            for (int cx = xi - 1; cx <= xi + 1; ++cx) {
+                NoiseUtil.Vec2f vec = NoiseUtil.cell(this.seed, cx, cy);
+                float cpx = cx + vec.x() * this.jitter;
+                float cpy = cy + vec.y() * this.jitter;
+                float dist2 = Line.distSq(px, py, cpx, cpy);
+                if (dist2 < nearest) {
+                    nearest = dist2;
+                    bestPx = cpx;
+                    bestPy = cpy;
+                }
+            }
         }
+        int cx = Math.round(bestPx / this.frequency);
+        int cz = Math.round(bestPy / this.frequency);
+        return PosUtil.pack(cx, cz);
     }
 
     @Override
