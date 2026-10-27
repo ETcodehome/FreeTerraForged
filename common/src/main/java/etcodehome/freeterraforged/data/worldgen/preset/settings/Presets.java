@@ -59,7 +59,7 @@ public class Presets {
 			FlowSettings.makeDefault(),
 			IslandSettings.makeDefault(),
 			ErosionFilterSettings.makeDefault(),
-			new MiscellaneousSettings(true, 600, true, true, true, false, true, true, true, true, true, 0.4F, 0.4F),
+			new MiscellaneousSettings(true, 600, true, true, true, false, true, true, true, true, true, 0.4F, 0.4F, false),
 			PresentationSettings.makeDefault()
 		);
 	}
@@ -104,7 +104,7 @@ public class Presets {
 			FlowSettings.makeDefault(),
 			IslandSettings.makeDefault(),
 			ErosionFilterSettings.makeDefault(),
-			new MiscellaneousSettings(false, 600, false, true, false, false, false, false, true, true, true, 1.0F, 0.75F),
+			new MiscellaneousSettings(false, 600, false, true, false, false, false, false, true, true, true, 1.0F, 0.75F, false),
 			PresentationSettings.makeDefault()
 		);
 	}
@@ -149,7 +149,7 @@ public class Presets {
 			FlowSettings.makeDefault(),
 			IslandSettings.makeDefault(),
 			ErosionFilterSettings.makeDefault(),
-			new MiscellaneousSettings(true, 684, true, true, true, false, true, true, true, true, false, 0.853F, 0.855F),
+			new MiscellaneousSettings(true, 684, true, true, true, false, true, true, true, true, false, 0.853F, 0.855F, false),
 			PresentationSettings.makeDefault()
 		); 
 	}
@@ -194,7 +194,7 @@ public class Presets {
 			FlowSettings.makeDefault(),
 			IslandSettings.makeDefault(),
 			ErosionFilterSettings.makeDefault(),
-			new MiscellaneousSettings(true, 600, false, true, true, false, true, true, true, true, true, 1.0F, 0.75F),
+			new MiscellaneousSettings(true, 600, false, true, true, false, true, true, true, true, true, 1.0F, 0.75F, false),
 			PresentationSettings.makeDefault()
 		);
 	}
@@ -239,7 +239,7 @@ public class Presets {
 			FlowSettings.makeDefault(),
 			IslandSettings.makeDefault(),
 			ErosionFilterSettings.makeDefault(),
-			new MiscellaneousSettings(true, 721, true, true, true, false, true, true, true, true, false, 0.902F, 0.945F),
+			new MiscellaneousSettings(true, 721, true, true, true, false, true, true, true, true, false, 0.902F, 0.945F, false),
 			PresentationSettings.makeDefault()
 		);
 	}
@@ -464,7 +464,8 @@ public class Presets {
 						false,
 						false,
 						0.85438144F,
-						0.855F),
+						0.855F,
+						false),
 				PresentationSettings.makeDefault()
 		);
 	}

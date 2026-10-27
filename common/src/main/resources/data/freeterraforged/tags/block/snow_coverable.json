@@ -1,23 +1,15 @@
 {
   "replace": false,
   "values": [
-    {
-      "id": "#minecraft:small_flowers",
-      "required": false
-    },
     "minecraft:short_grass",
     "minecraft:fern",
     "minecraft:pink_petals",
     {
+      "id": "#minecraft:small_flowers",
+      "required": false
+    },
+    {
       "id": "minecraft:wildflowers",
-      "required": false
-    },
-    {
-      "id": "vanillabackport:wildflowers",
-      "required": false
-    },
-    {
-      "id": "#nomansland:flowerbeds",
       "required": false
     }
   ]

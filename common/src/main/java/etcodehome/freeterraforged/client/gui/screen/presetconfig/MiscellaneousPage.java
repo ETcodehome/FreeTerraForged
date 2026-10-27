@@ -12,6 +12,7 @@ import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 
 public class MiscellaneousPage extends PresetEditorPage {
 	private CycleButton<Boolean> smoothLayerDecorator;
+	private CycleButton<Boolean> snowCoversSmallPlants;
 	private Slider strataRegionSize;
 	private CycleButton<Boolean> strataDecorator;
 	private CycleButton<Boolean> oreCompatibleStoneOnly;
@@ -42,6 +43,9 @@ public class MiscellaneousPage extends PresetEditorPage {
 		
 		this.smoothLayerDecorator = PresetWidgets.createToggle(miscellaneous.smoothLayerDecorator, FTFTranslationKeys.GUI_BUTTON_SMOOTH_LAYER_DECORATOR, (button, value) -> {
 			miscellaneous.smoothLayerDecorator = value;
+		});
+		this.snowCoversSmallPlants = PresetWidgets.createToggle(miscellaneous.snowCoversSmallPlants, FTFTranslationKeys.GUI_BUTTON_SNOW_COVERS_SMALL_PLANTS, (button, value) -> {
+			miscellaneous.snowCoversSmallPlants = value;
 		});
 		this.strataRegionSize = PresetWidgets.createIntSlider(miscellaneous.strataRegionSize, 50, 1000, FTFTranslationKeys.GUI_SLIDER_STRATA_REGION_SIZE, (slider, value) -> {
 			miscellaneous.strataRegionSize = (int) slider.scaleValue(value);
@@ -81,6 +85,7 @@ public class MiscellaneousPage extends PresetEditorPage {
 		});
 		
 		this.left.addWidget(this.smoothLayerDecorator);
+		this.left.addWidget(this.snowCoversSmallPlants);
 		this.left.addWidget(this.strataRegionSize);
 		this.left.addWidget(this.strataDecorator);
 		this.left.addWidget(this.oreCompatibleStoneOnly);

@@ -32,12 +32,12 @@ public class FTFBlockTagsProvider extends IntrinsicHolderTagsProvider<Block> {
 		this.tag(FTFBlockTags.CLAY).add(Blocks.CLAY);
 		this.tag(FTFBlockTags.SEDIMENT).add(Blocks.SAND, Blocks.GRAVEL);
 		this.tag(FTFBlockTags.ERODIBLE).add(Blocks.SNOW_BLOCK).add(Blocks.POWDER_SNOW).add(Blocks.GRAVEL).addOptionalTag(BlockTags.DIRT.location());
+		// Small plants that the opt-in "snow covers small plants" setting may replace with smoothed snow.
+		// minecraft:wildflowers is vanilla from 1.21.5 and is also registered under the minecraft namespace by backport mods on 1.21.1.
 		this.tag(FTFBlockTags.SNOW_COVERABLE)
 			.add(Blocks.SHORT_GRASS, Blocks.FERN, Blocks.PINK_PETALS)
 			.addOptionalTag(BlockTags.SMALL_FLOWERS.location())
-			.addOptional(ResourceLocation.parse("minecraft:wildflowers"))
-			.addOptional(ResourceLocation.parse("vanillabackport:wildflowers"))
-			.addOptionalTag(ResourceLocation.parse("nomansland:flowerbeds"));
+			.addOptional(ResourceLocation.withDefaultNamespace("wildflowers"));
 		
 //		if(!miscellaneousSettings.oreCompatibleStoneOnly) {
 			this.tag(FTFBlockTags.ROCK).add(Blocks.GRANITE, Blocks.ANDESITE, Blocks.STONE, Blocks.DIORITE);

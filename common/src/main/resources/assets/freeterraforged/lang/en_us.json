@@ -70,6 +70,8 @@
   "freeterraforged.gui.button.randomize.seed.tooltip": "Reroll a random world seed",
   "freeterraforged.gui.button.smoothLayerDecorator": "Smooth Layer Decorator",
   "freeterraforged.gui.button.smoothLayerDecorator.tooltip": "Modifies layer block levels (ie snow) to fit the terrain",
+  "freeterraforged.gui.button.snowCoversSmallPlants": "Snow Covers Small Plants",
+  "freeterraforged.gui.button.snowCoversSmallPlants.tooltip": "Requires Smooth Layer Decorator. Where smoothed snow is deeper than a single layer, small flowers and grass are replaced by snow during generation (the plants are removed). Install a snow-layering mod such as Snow! Real Magic to keep plants inside snow instead.",
   "freeterraforged.gui.button.spawnType": "Spawn Type",
   "freeterraforged.gui.button.spawnType.tooltip": "Set whether spawn should be close to x=0,z=0 or the centre of the nearest continent",
   "freeterraforged.gui.button.stoneErosion": "Plain Stone Erosion",
