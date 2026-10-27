@@ -75,6 +75,7 @@ public final class FTFTranslationKeys {
 	public static final String GUI_BUTTON_SALT = resolve("gui.button.salt");
 	public static final String GUI_BUTTON_DISABLED = resolve("gui.button.disabled");
 	public static final String GUI_BUTTON_SMOOTH_LAYER_DECORATOR = resolve("gui.button.smoothLayerDecorator");
+	public static final String GUI_BUTTON_SNOW_COVERS_SMALL_PLANTS = resolve("gui.button.snowCoversSmallPlants");
 	public static final String GUI_BUTTON_STRATA_DECORATOR = resolve("gui.button.strataDecorator");
 	public static final String GUI_BUTTON_ORE_COMPATIBLE_STONE_ONLY = resolve("gui.button.oreCompatibleStoneOnly");
 	public static final String GUI_BUTTON_EROSION_DECORATOR = resolve("gui.button.erosionDecorator");

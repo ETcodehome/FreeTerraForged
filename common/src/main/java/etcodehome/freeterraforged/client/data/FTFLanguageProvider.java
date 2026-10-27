@@ -72,6 +72,7 @@ public final class FTFLanguageProvider {
 			this.add(FTFTranslationKeys.GUI_BUTTON_SALT, "Salt");
 			this.add(FTFTranslationKeys.GUI_BUTTON_DISABLED, "Disabled");
 			this.add(FTFTranslationKeys.GUI_BUTTON_SMOOTH_LAYER_DECORATOR, "Smooth Layer Decorator");
+			this.add(FTFTranslationKeys.GUI_BUTTON_SNOW_COVERS_SMALL_PLANTS, "Snow Covers Small Plants");
 			this.add(FTFTranslationKeys.GUI_BUTTON_STRATA_DECORATOR, "Strata Decorator");
 			this.add(FTFTranslationKeys.GUI_BUTTON_ORE_COMPATIBLE_STONE_ONLY, "Ore Compatible Stone Only");
 			this.add(FTFTranslationKeys.GUI_BUTTON_EROSION_DECORATOR, "Erosion Decorator");
@@ -235,6 +236,7 @@ public final class FTFLanguageProvider {
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_BUTTON_SALT), "A random seed value for the structure.");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_BUTTON_DISABLED), "Prevent this structure from generating.");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_BUTTON_SMOOTH_LAYER_DECORATOR), "Modifies layer block levels (ie snow) to fit the terrain");
+			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_BUTTON_SNOW_COVERS_SMALL_PLANTS), "Requires Smooth Layer Decorator. Where smoothed snow is deeper than a single layer, small flowers and grass are replaced by snow during generation (the plants are removed). Install a snow-layering mod such as Snow! Real Magic to keep plants inside snow instead.");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_BUTTON_STRATA_DECORATOR), "Generates strata (rock layers) instead of just stone");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_BUTTON_ORE_COMPATIBLE_STONE_ONLY), "Only use stone types that ores can generate in");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_BUTTON_EROSION_DECORATOR), "Replace surface materials where erosion has occurred");

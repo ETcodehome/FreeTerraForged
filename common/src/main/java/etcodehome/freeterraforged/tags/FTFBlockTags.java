@@ -11,6 +11,7 @@ public final class FTFBlockTags {
 	public static final TagKey<Block> CLAY = resolve("clay");
 	public static final TagKey<Block> SEDIMENT = resolve("sediment");
 	public static final TagKey<Block> ERODIBLE = resolve("erodible");
+	public static final TagKey<Block> SNOW_COVERABLE = resolve("snow_coverable");
 
     private static TagKey<Block> resolve(String path) {
 	return TagKey.create(Registries.BLOCK, FTFCommon.location(path));
