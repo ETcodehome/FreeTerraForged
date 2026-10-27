@@ -1,0 +1,100 @@
+name: Build FreeTerraForged
+
+on:
+  push:
+    branches:
+      - '1.21.1_unstable'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Mod
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # Fix potential CRLF line endings on gradlew committed from Windows
+      - name: Normalize Gradle Executable
+        run: |
+          sed -i 's/\r$//' ./gradlew
+          chmod +x ./gradlew
+
+      # Caches Gradle dependencies, wrapper, and build metadata
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build Mod
+        run: ./gradlew build --no-daemon
+
+      - name: Prepare Artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Safely extract versions stripping \r
+          VERSION=$(grep '^mod_version=' gradle.properties | cut -d= -f2- | tr -d '\r')
+          MC_VERSION=$(grep '^minecraft_version=' gradle.properties | cut -d= -f2- | tr -d '\r')
+          SHA="${GITHUB_SHA:0:7}"
+
+          echo "Mod version: ${VERSION}"
+          echo "Minecraft version: ${MC_VERSION}"
+          echo "Commit: ${GITHUB_SHA}"
+
+          mkdir -p dist
+
+          find_jar() {
+            local dir="$1"
+            find "$dir" -maxdepth 1 -type f \
+              -name 'freeterraforged-*.jar' \
+              ! -name '*-sources.jar' \
+              ! -name '*-dev*.jar' \
+              ! -name '*-javadoc.jar' \
+              ! -name '*-shadow.jar'
+          }
+
+          FABRIC_JAR=$(find_jar fabric/build/libs)
+          NEOFORGE_JAR=$(find_jar neoforge/build/libs)
+
+          if [[ -z "$FABRIC_JAR" ]]; then
+            echo "::error::Fabric JAR not found"
+            ls -la fabric/build/libs/ || true
+            exit 1
+          fi
+
+          if [[ -z "$NEOFORGE_JAR" ]]; then
+            echo "::error::NeoForge JAR not found"
+            ls -la neoforge/build/libs/ || true
+            exit 1
+          fi
+
+          # Name both artifacts ftf-unstable with platform and MC version
+          cp "$FABRIC_JAR" "dist/ftf-unstable-${VERSION}+mc${MC_VERSION}-fabric-${SHA}.jar"
+          cp "$NEOFORGE_JAR" "dist/ftf-unstable-${VERSION}+mc${MC_VERSION}-neoforge-${SHA}.jar"
+
+          echo "Prepared artifacts:"
+          ls -lh dist/
+
+      - name: Upload Mod Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ftf-unstable-${{ github.sha }}
+          path: dist/*.jar
+          if-no-files-found: error
+          retention-days: 30
