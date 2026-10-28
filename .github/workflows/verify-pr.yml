@@ -9,14 +9,40 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
+  issues: write
 
 jobs:
+  # When a fresh commit is pushed, automatically strip the verify-build label so
+  # incremental WIP commits don't trigger heavy builds until a reviewer re-approves.
+  reset-label:
+    name: Reset Verification on Push
+    if: github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'verify-build')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove verify-build Label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.issues.removeLabel({
+                ...context.repo,
+                issue_number: context.payload.pull_request.number,
+                name: 'verify-build'
+              });
+              console.log('Removed verify-build label following new commit push.');
+            } catch (err) {
+              // Ignore 404 if label was already removed
+              if (err.status !== 404) {
+                throw err;
+              }
+            }
+
   preset-test:
     name: Verify Presets (Fabric & NeoForge)
-    # Only execute if the PR has the 'verify-build' label attached
-    if: contains(github.event.pull_request.labels.*.name, 'verify-build')
+    # Only execute when the label is explicitly attached by a reviewer
+    if: github.event.action == 'labeled' && github.event.label.name == 'verify-build'
     runs-on: ubuntu-latest
 
     steps:
@@ -26,7 +52,7 @@ jobs:
           fetch-depth: 1
 
       - name: Set up Java 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
@@ -55,6 +81,58 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      # Publishes visual PNGs to an isolated orphan branch for direct raw inline rendering
+      - name: Publish Visual Assets to Verification Branch
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          PR_NUM="${{ github.event.pull_request.number }}"
+          REPORT_DIR="build/reports/preset-test-heightmaps"
+
+          if [ ! -d "$REPORT_DIR" ]; then
+            echo "No reports directory found; skipping asset publication."
+            exit 0
+          fi
+
+          TEMP_DIR=$(mktemp -d)
+          cd "$TEMP_DIR"
+
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          REPO_URL="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+
+          if git clone --depth 1 --branch verification-assets "$REPO_URL" repo 2>/dev/null; then
+            cd repo
+          else
+            mkdir repo && cd repo
+            git init
+            git remote add origin "$REPO_URL"
+            git checkout --orphan verification-assets
+          fi
+
+          mkdir -p "pr-${PR_NUM}"
+
+          # Case-insensitive copy to predictable asset filenames
+          FABRIC_IMG=$(find "$GITHUB_WORKSPACE/$REPORT_DIR" -type f -iname "*fabric*_visual.png" | head -n 1)
+          NEOFORGE_IMG=$(find "$GITHUB_WORKSPACE/$REPORT_DIR" -type f -iname "*neoforge*_visual.png" | head -n 1)
+
+          if [ -n "$FABRIC_IMG" ]; then
+            cp "$FABRIC_IMG" "pr-${PR_NUM}/fabric_visual.png"
+          fi
+          if [ -n "$NEOFORGE_IMG" ]; then
+            cp "$NEOFORGE_IMG" "pr-${PR_NUM}/neoforge_visual.png"
+          fi
+
+          git add "pr-${PR_NUM}"
+          if ! git diff --cached --quiet; then
+            git commit -m "Update visual assets for PR #${PR_NUM} [skip ci]"
+            git push origin verification-assets
+          else
+            echo "Visual assets unchanged."
+          fi
+
       # Publishes clean mobile-friendly report to Step Summary ("Details" link) and as a PR comment
       - name: Publish Test Report & PR Summary
         if: always()
@@ -74,46 +152,97 @@ jobs:
             summaryText += `* **Commit:** [\`${sha}\`](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/commit/${context.sha})\n`;
             summaryText += `* **Run Logs & Artifacts:** [View Full Run Details](${runUrl})\n\n`;
 
+            // Inline image preview table
+            if (prNumber) {
+              const rawBase = `https://raw.githubusercontent.com/${context.repo.owner}/${context.repo.repo}/verification-assets/pr-${prNumber}`;
+              const fabricImg = `${rawBase}/fabric_visual.png?v=${sha}`;
+              const neoforgeImg = `${rawBase}/neoforge_visual.png?v=${sha}`;
+
+              summaryText += `### 🌄 Generated Worldgen Relief Maps\n\n`;
+              summaryText += `<table>\n<tr>\n`;
+              summaryText += `<th align="center" width="50%">Fabric Shaded Relief</th>\n`;
+              summaryText += `<th align="center" width="50%">NeoForge Shaded Relief</th>\n`;
+              summaryText += `</tr>\n<tr>\n`;
+              summaryText += `<td align="center"><a href="${fabricImg}"><img src="${fabricImg}" width="100%" alt="Fabric Relief Map" /></a></td>\n`;
+              summaryText += `<td align="center"><a href="${neoforgeImg}"><img src="${neoforgeImg}" width="100%" alt="NeoForge Relief Map" /></a></td>\n`;
+              summaryText += `</tr>\n</table>\n\n`;
+            }
+
             if (fs.existsSync(reportDir)) {
               const files = fs.readdirSync(reportDir);
               const txtReports = files.filter(f => f.endsWith('_report.txt'));
 
               if (txtReports.length > 0) {
                 reportFound = true;
-                summaryText += `| Loader | Preset | Spawn Position | Elevation Span | Status |\n`;
-                summaryText += `| :--- | :--- | :--- | :--- | :--- |\n`;
-
-                const detailedSections = [];
+                const heightmapReports = [];
+                const seamReports = [];
 
                 for (const file of txtReports) {
                   const content = fs.readFileSync(path.join(reportDir, file), 'utf8');
-                  const isFabric = file.includes('Fabric');
+                  const isFabric = content.toLowerCase().includes('loader: fabric') || file.toLowerCase().includes('fabric');
                   const loaderName = isFabric ? 'Fabric' : 'NeoForge';
                   const passed = content.includes('Outcome: PASSED');
                   const statusIcon = passed ? '✅ PASSED' : '❌ FAILED';
 
-                  // Parse quick table metrics
-                  const spawnMatch = content.match(/Spawn Chunk:\s*(\([^)]+\)\s*\[[^\]]+\])/);
-                  const spanMatch = content.match(/Elevation Span:\s*([^\n]+)/);
-                  const presetMatch = content.match(/Preset:\s*([^\n]+)/);
+                  if (content.includes('Heightmap Validation Report') || file.startsWith('heightmap_')) {
+                    const spawnMatch = content.match(/Spawn Chunk:\s*([^\r\n]+)/);
+                    const spanMatch = content.match(/Elevation Span:\s*([^\r\n]+)/);
+                    const presetMatch = content.match(/Preset:\s*([^\r\n]+)/);
+                    const maxStepMatch = content.match(/Max Adjacent Step:\s*([^\r\n]+)/);
 
-                  const spawnStr = spawnMatch ? spawnMatch[1] : 'N/A';
-                  const spanStr = spanMatch ? spanMatch[1] : 'N/A';
-                  const presetStr = presetMatch ? presetMatch[1] : 'ftf';
+                    heightmapReports.push({
+                      loader: loaderName,
+                      preset: presetMatch ? presetMatch[1].trim() : 'ftf',
+                      spawn: spawnMatch ? spawnMatch[1].trim() : 'N/A',
+                      elevation: spanMatch ? spanMatch[1].trim() : 'N/A',
+                      maxStep: maxStepMatch ? maxStepMatch[1].trim() : 'N/A',
+                      status: statusIcon,
+                      content: content.trim()
+                    });
+                  } else if (content.includes('Seam Continuity Report') || file.startsWith('seam_continuity_')) {
+                    const presetMatch = content.match(/World Base Preset:\s*([^\r\n]+)/);
+                    const seamStepMatch = content.match(/Actual Max Seam Step:\s*([^\r\n]+)/);
+                    const parityMatch = content.match(/Session 3 vs Baseline:\s*([^\r\n]+)/);
+                    const pmMatch = content.match(/PM\.loadCheck\(\):\s*([^\r\n]+)/);
 
-                  summaryText += `| **${loaderName}** | \`${presetStr}\` | ${spawnStr} | ${spanStr} | ${statusIcon} |\n`;
-
-                  detailedSections.push({
-                    loader: loaderName,
-                    status: statusIcon,
-                    content: content.trim()
-                  });
+                    seamReports.push({
+                      loader: loaderName,
+                      preset: presetMatch ? presetMatch[1].trim() : 'Huge Biomes',
+                      seamStep: seamStepMatch ? seamStepMatch[1].trim() : 'N/A',
+                      parity: parityMatch ? parityMatch[1].trim() : 'Identical',
+                      pm: pmMatch ? pmMatch[1].trim() : 'PASSED',
+                      status: statusIcon,
+                      content: content.trim()
+                    });
+                  }
                 }
 
-                summaryText += `\n`;
+                if (heightmapReports.length > 0) {
+                  summaryText += `#### 🏔️ Spawn Heightmap & Elevation Regularity\n\n`;
+                  summaryText += `| Loader | Preset | Spawn Chunk | Elevation Span | Max Step | Status |\n`;
+                  summaryText += `| :--- | :--- | :--- | :--- | :--- | :--- |\n`;
+                  for (const r of heightmapReports) {
+                    summaryText += `| **${r.loader}** | \`${r.preset}\` | ${r.spawn} | ${r.elevation} | ${r.maxStep} | ${r.status} |\n`;
+                  }
+                  summaryText += `\n`;
+                }
 
-                for (const sec of detailedSections) {
-                  summaryText += `<details>\n<summary><b>📊 Detailed Report: ${sec.loader} (${sec.status})</b></summary>\n\n\`\`\`text\n${sec.content}\n\`\`\`\n</details>\n\n`;
+                if (seamReports.length > 0) {
+                  summaryText += `#### 🌐 Multi-Run Seam Continuity (Issue #330 Leak Defense)\n\n`;
+                  summaryText += `| Loader | World Preset | Seam Step | Bit Parity | PresetManager Ground Truth | Status |\n`;
+                  summaryText += `| :--- | :--- | :--- | :--- | :--- | :--- |\n`;
+                  for (const r of seamReports) {
+                    summaryText += `| **${r.loader}** | \`${r.preset}\` | ${r.seamStep} | ${r.parity} | ${r.pm} | ${r.status} |\n`;
+                  }
+                  summaryText += `\n`;
+                }
+
+                summaryText += `### 📄 Detailed Validation Logs\n\n`;
+                for (const r of heightmapReports) {
+                  summaryText += `<details>\n<summary><b>📊 Heightmap Validation: ${r.loader} (${r.status})</b></summary>\n\n\`\`\`text\n${r.content}\n\`\`\`\n</details>\n\n`;
+                }
+                for (const r of seamReports) {
+                  summaryText += `<details>\n<summary><b>📊 Seam Continuity: ${r.loader} (${r.status})</b></summary>\n\n\`\`\`text\n${r.content}\n\`\`\`\n</details>\n\n`;
                 }
               }
             }
