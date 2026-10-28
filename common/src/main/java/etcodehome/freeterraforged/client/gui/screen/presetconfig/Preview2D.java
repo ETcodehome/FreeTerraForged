@@ -17,8 +17,8 @@ import net.minecraft.resources.ResourceLocation;
 import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.SpawnType;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.filter.TerrainCeiling;
+import etcodehome.freeterraforged.world.worldgen.cell.heightmap.PreviewGrid;
+import etcodehome.freeterraforged.world.worldgen.cell.heightmap.TerrainCeiling;
 
 public class Preview2D extends Button implements IPreviewHandler {
     public static final int SIZE = IPreviewHandler.SIZE;
@@ -120,9 +120,9 @@ public class Preview2D extends Button implements IPreviewHandler {
     }
 
     @Override
-    public int[] createRasterData(Tile tile, BiomePreview.Sidecar biomes, RenderMode mode, Levels levels, WorldSettings.Properties properties, RasterParams params) {
+    public int[] createRasterData(PreviewGrid tile, BiomePreview.Sidecar biomes, RenderMode mode, Levels levels, WorldSettings.Properties properties, RasterParams params) {
         int stroke = 2;
-        int tileWidth = tile.getBlockSize().size();
+        int tileWidth = tile.size();
         int heightLimit = TerrainCeiling.buildLimitHeight(properties, TerrainCeiling.isEnabled(this.page.preset.getPreset()));
         int[] pixels = new int[tileWidth * tileWidth];
         tile.iterate((cell, bx, bz) -> {
@@ -227,9 +227,9 @@ public class Preview2D extends Button implements IPreviewHandler {
         if (props.spawnType == SpawnType.USER_SELECTED || props.spawnType == SpawnType.CONTINENT_CENTER) {
             int currentZoom = this.getZoom();
 
-            if (this.state.tile != null) {
-                float relX = (float) (props.spawnX - this.state.centerX) / (this.state.tile.getBlockSize().size() * currentZoom);
-                float relZ = (float) (props.spawnZ - this.state.centerZ) / (this.state.tile.getBlockSize().size() * currentZoom);
+            if (this.state.grid != null) {
+                float relX = (float) (props.spawnX - this.state.centerX) / (this.state.grid.size() * currentZoom);
+                float relZ = (float) (props.spawnZ - this.state.centerZ) / (this.state.grid.size() * currentZoom);
 
                 int markerX = this.getX() + (this.width / 2) + (int) (relX * this.width);
                 int markerY = this.getY() + (this.height / 2) + (int) (relZ * this.height);
@@ -254,22 +254,22 @@ public class Preview2D extends Button implements IPreviewHandler {
     @Override
     public boolean updateLegend(int mx, int my) {
         Levels levels = this.state.frameLevels;
-        if (this.state.tile != null && levels != null) {
+        if (this.state.grid != null && levels != null) {
             int left = this.getX();
             int top = this.getY();
             float size = this.width;
 
             int currentZoom = this.getZoom();
-            int width = Math.max(1, this.state.tile.getBlockSize().size() * currentZoom);
-            int height = Math.max(1, this.state.tile.getBlockSize().size() * currentZoom);
+            int width = Math.max(1, this.state.grid.size() * currentZoom);
+            int height = Math.max(1, this.state.grid.size() * currentZoom);
             this.state.legendValues[0] = width + "x" + height;
             if (mx >= left && mx <= left + size && my >= top && my <= top + size) {
                 float fx = (mx - left) / size;
                 float fz = (my - top) / size;
-                int maxIndex = this.state.tile.getBlockSize().size() - 1;
+                int maxIndex = this.state.grid.size() - 1;
                 int ix = Math.max(0, Math.min(maxIndex, NoiseUtil.round(fx * maxIndex)));
                 int iz = Math.max(0, Math.min(maxIndex, NoiseUtil.round(fz * maxIndex)));
-                Cell cell = this.state.tile.lookup(ix, iz);
+                Cell cell = this.state.grid.lookup(ix, iz);
                 this.state.legendValues[1] = IPreviewHandler.getTerrainName(cell);
                 String biomeId = this.state.biomes == null ? null : this.state.biomes.legendId(ix, iz);
                 PreviewDetails.Detail detail = PreviewDetails.forCell(
@@ -279,8 +279,8 @@ public class Preview2D extends Button implements IPreviewHandler {
                 this.state.legendValues[2] = detail.value();
                 this.state.legendValues[3] = getSpawnCoords();
 
-                int dx = (ix - (this.state.tile.getBlockSize().size() / 2)) * currentZoom;
-                int dz = (iz - (this.state.tile.getBlockSize().size() / 2)) * currentZoom;
+                int dx = (ix - (this.state.grid.size() / 2)) * currentZoom;
+                int dz = (iz - (this.state.grid.size() / 2)) * currentZoom;
 
                 this.state.hoveredCoords = (this.state.centerX + dx) + ":" + (this.state.centerZ + dz);
                 this.state.hoveredCoordX = this.state.centerX + dx;

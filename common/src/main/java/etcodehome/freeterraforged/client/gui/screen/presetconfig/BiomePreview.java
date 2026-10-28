@@ -20,7 +20,7 @@ import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.biome.BiomePreviewResolver;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
+import etcodehome.freeterraforged.world.worldgen.cell.heightmap.PreviewGrid;
 import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementConfig;
 import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementConfigSnapshot;
 import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementPlan;
@@ -67,14 +67,14 @@ final class BiomePreview implements AutoCloseable {
     }
 
     Sidecar resolve(
-        Tile tile,
+        PreviewGrid tile,
         int centerX,
         int centerZ,
         int zoom,
         Levels levels,
         BooleanSupplier cancelled
     ) {
-        int size = tile.getBlockSize().size();
+        int size = tile.size();
         short[] indices = new short[size * size];
         short[] overrideIndices = new short[size * size];
         byte[] hatchPhases = new byte[size * size];
@@ -160,14 +160,14 @@ final class BiomePreview implements AutoCloseable {
 
     Sidecar resolveCached(
         PreviewComputationCache cache,
-        Tile tile,
+        PreviewGrid tile,
         int centerX,
         int centerZ,
         int zoom,
         Levels levels,
         BooleanSupplier cancelled
     ) {
-        int size = tile.getBlockSize().size();
+        int size = tile.size();
         PreviewComputationCache.SidecarKey key = new PreviewComputationCache.SidecarKey(
             this.cacheKey,
             centerX,

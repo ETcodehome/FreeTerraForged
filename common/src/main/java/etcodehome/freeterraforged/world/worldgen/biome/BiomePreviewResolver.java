@@ -29,7 +29,7 @@ import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
+import etcodehome.freeterraforged.world.worldgen.cell.heightmap.PreviewGrid;
 import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementConfigSnapshot;
 import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementPlan;
 import etcodehome.freeterraforged.world.worldgen.runtime.CapabilityState;
@@ -309,24 +309,24 @@ public final class BiomePreviewResolver implements AutoCloseable {
 		return selected;
 	}
 
-	public Climate.Sampler tileClimateSampler(Tile tile, int centerX, int centerZ, int zoom) {
+	public Climate.Sampler tileClimateSampler(PreviewGrid tile, int centerX, int centerZ, int zoom) {
 		return this.tileRequest(tile, centerX, centerZ, zoom).climateSampler();
 	}
 
-	public Climate.Sampler tileClimateSamplerAtOrigin(Tile tile, int originX, int originZ, int zoom) {
+	public Climate.Sampler tileClimateSamplerAtOrigin(PreviewGrid tile, int originX, int originZ, int zoom) {
 		return this.tileRequestAtOrigin(tile, originX, originZ, zoom).climateSampler();
 	}
 
-	public TileBiomeRequest tileRequest(Tile tile, int centerX, int centerZ, int zoom) {
+	public TileBiomeRequest tileRequest(PreviewGrid tile, int centerX, int centerZ, int zoom) {
 		if (zoom <= 0) {
 			throw new IllegalArgumentException("Preview zoom must be positive");
 		}
-		float originX = centerX - tile.getBlockSize().size() * (float) zoom / 2.0F;
-		float originZ = centerZ - tile.getBlockSize().size() * (float) zoom / 2.0F;
+		float originX = centerX - tile.size() * (float) zoom / 2.0F;
+		float originZ = centerZ - tile.size() * (float) zoom / 2.0F;
 		return this.tileRequestAtOrigin(tile, originX, originZ, zoom);
 	}
 
-	public TileBiomeRequest tileRequestAtOrigin(Tile tile, int originX, int originZ, int zoom) {
+	public TileBiomeRequest tileRequestAtOrigin(PreviewGrid tile, int originX, int originZ, int zoom) {
 		if (zoom <= 0) {
 			throw new IllegalArgumentException("Preview zoom must be positive");
 		}
@@ -334,7 +334,7 @@ public final class BiomePreviewResolver implements AutoCloseable {
 	}
 
 	public ResolvedTile resolveSurfaceTile(
-		Tile tile,
+		PreviewGrid tile,
 		int centerX,
 		int centerZ,
 		int zoom,
@@ -347,7 +347,7 @@ public final class BiomePreviewResolver implements AutoCloseable {
 		if (zoom <= 0) {
 			throw new IllegalArgumentException("Preview zoom must be positive");
 		}
-		int size = tile.getBlockSize().size();
+		int size = tile.size();
 		int halfSize = size / 2;
 		int[] quartXs = new int[size];
 		int[] quartZs = new int[size];
@@ -401,9 +401,9 @@ public final class BiomePreviewResolver implements AutoCloseable {
 		return new ResolvedTile(size, selections);
 	}
 
-	private TileBiomeRequest tileRequestAtOrigin(Tile tile, float originX, float originZ, int zoom) {
+	private TileBiomeRequest tileRequestAtOrigin(PreviewGrid tile, float originX, float originZ, int zoom) {
 		var heightmap = this.generatorContext.lookup.getHeightmap();
-		PreviewTileClimateSampler.TileLookup tileLookup = new PreviewTileClimateSampler.TileLookup(
+		PreviewTileClimateSampler.GridLookup tileLookup = new PreviewTileClimateSampler.GridLookup(
 			tile, this.generatorContext.lookup, originX, originZ, zoom
 		);
 		Climate.Sampler sampler = new Climate.Sampler(
@@ -422,11 +422,11 @@ public final class BiomePreviewResolver implements AutoCloseable {
 	}
 
 	public final class TileBiomeRequest {
-		private final PreviewTileClimateSampler.TileLookup tileLookup;
+		private final PreviewTileClimateSampler.GridLookup tileLookup;
 		private final Climate.Sampler sampler;
 
 		private TileBiomeRequest(
-			PreviewTileClimateSampler.TileLookup tileLookup,
+			PreviewTileClimateSampler.GridLookup tileLookup,
 			Climate.Sampler sampler
 		) {
 			this.tileLookup = tileLookup;

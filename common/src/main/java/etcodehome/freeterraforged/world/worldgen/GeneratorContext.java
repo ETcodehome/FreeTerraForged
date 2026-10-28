@@ -1,15 +1,17 @@
 package etcodehome.freeterraforged.world.worldgen;
 
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.TileCache;
 import etcodehome.freeterraforged.world.worldgen.util.Seed;
-import org.jetbrains.annotations.Nullable;
 
 import net.minecraft.core.HolderGetter;
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
+import etcodehome.freeterraforged.world.worldgen.cell.filter.TerrainFilters;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap;
+import etcodehome.freeterraforged.world.worldgen.cell.heightmap.FilteredChunkCache;
+import etcodehome.freeterraforged.world.worldgen.cell.heightmap.RawChunkCache;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.WorldLookup;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.generation.TileGenerator;
+import etcodehome.freeterraforged.world.worldgen.feature.ScreeNoises;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 
 public class GeneratorContext implements AutoCloseable {
@@ -19,81 +21,52 @@ public class GeneratorContext implements AutoCloseable {
     public final Levels levels;
     public Preset preset;
     public HolderGetter<Noise> noiseLookup;
-    public TileGenerator generator;
-    @Nullable
-    public TileCache cache;
+    public Heightmap heightmap;
+    public RawChunkCache rawChunkCache;
+    public FilteredChunkCache filteredChunkCache;
+    public ScreeNoises screeNoises;
+    public TerrainFilters filters;
     public WorldLookup lookup;
     
-    public GeneratorContext(Preset preset, HolderGetter<Noise> noiseLookup, long seed, int tileSize, int tileBorder, int batchCount, @Nullable TileCache cache) {
+    public GeneratorContext(Preset preset, HolderGetter<Noise> noiseLookup, long seed) {
         this.preset = preset;
+        PresetManager.PM.ingestFromPreset(preset);
         this.levels = new Levels(preset.world().properties);
         this.noiseLookup = noiseLookup;
         this.seed = new Seed(seed);
-		Heightmap heightmap = Heightmap.make(this);
-		try {
-			this.generator = new TileGenerator(heightmap, new WorldFilters(this), tileSize, tileBorder, batchCount);
-		} catch (RuntimeException | Error failure) {
-			try {
-				heightmap.close();
-			} catch (RuntimeException | Error cleanupFailure) {
-				failure.addSuppressed(cleanupFailure);
-			}
-			throw failure;
-		}
-        this.cache = cache;
+        this.heightmap = Heightmap.make(this);
+        this.rawChunkCache = new RawChunkCache(this);
+        this.filteredChunkCache = new FilteredChunkCache(this);
+        this.screeNoises = new ScreeNoises(this.heightmap.climate().randomSeed(), this.levels);
+        this.filters = new TerrainFilters(this);
         this.lookup = new WorldLookup(this);
     }
 
+    public Heightmap getHeightmap() {
+        return this.heightmap;
+    }
+
+    public static GeneratorContext make(Preset preset, HolderGetter<Noise> noiseLookup, long seed) {
+        return new GeneratorContext(preset, noiseLookup, seed);
+    }
+
     public static GeneratorContext makeCached(Preset preset, HolderGetter<Noise> noiseLookup, long seed, int tileSize, int batchCount, boolean queue) {
-    	GeneratorContext ctx = makeUncached(preset, noiseLookup, seed, tileSize, 2, batchCount);
-		try {
-			ctx.cache = new TileCache(tileSize, queue, ctx.generator);
-			ctx.lookup = new WorldLookup(ctx);
-			return ctx;
-		} catch (RuntimeException | Error failure) {
-			try {
-				ctx.close();
-			} catch (RuntimeException | Error cleanupFailure) {
-				failure.addSuppressed(cleanupFailure);
-			}
-			throw failure;
-		}
+        return make(preset, noiseLookup, seed);
     }
     
     public static GeneratorContext makeUncached(Preset preset, HolderGetter<Noise> noiseLookup, long seed, int tileSize, int tileBorder, int batchCount) {
-    	return new GeneratorContext(preset, noiseLookup, seed, tileSize, tileBorder, batchCount, null);
+        return make(preset, noiseLookup, seed);
     }
 
 	@Override
 	public void close() {
 		this.biomeSurfaceEnvelope.clear();
-		TileCache owned = this.cache;
-		this.cache = null;
-		Throwable failure = null;
-		if (owned != null) {
-			try {
-				owned.close();
-			} catch (RuntimeException | Error cacheFailure) {
-				failure = cacheFailure;
-			}
+		if (this.filteredChunkCache != null) {
+			this.filteredChunkCache.clear();
 		}
-		try {
-			this.generator.close();
-		} catch (RuntimeException | Error generatorFailure) {
-			if (failure == null) {
-				failure = generatorFailure;
-			} else if (generatorFailure instanceof Error && !(failure instanceof Error)) {
-				generatorFailure.addSuppressed(failure);
-				failure = generatorFailure;
-			} else {
-				failure.addSuppressed(generatorFailure);
-			}
+		if (this.rawChunkCache != null) {
+			this.rawChunkCache.clear();
 		}
-		if (failure instanceof RuntimeException runtime) {
-			throw runtime;
-		}
-		if (failure instanceof Error error) {
-			throw error;
-		}
+		this.heightmap.close();
 	}
 }

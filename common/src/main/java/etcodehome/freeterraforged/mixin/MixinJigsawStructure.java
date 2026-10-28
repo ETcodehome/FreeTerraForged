@@ -1,8 +1,6 @@
 package etcodehome.freeterraforged.mixin;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import com.mojang.datafixers.util.Either;
@@ -39,11 +37,11 @@ import net.minecraft.world.level.levelgen.structure.pools.alias.PoolAliasLookup;
 import net.minecraft.world.level.levelgen.structure.structures.JigsawStructure;
 import net.minecraft.world.level.levelgen.structure.templatesystem.LiquidSettings;
 
-import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.TileCache;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
+import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
+import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPlans.StructureAdaptation;
 
@@ -187,9 +185,15 @@ public class MixinJigsawStructure {
 		StructurePiecesBuilder builder,
 		GeneratorContext generatorContext
 	) {
-		Map<Long, TileCache.Lease> chunks = new HashMap<>();
+		int maxSuspension = Integer.MIN_VALUE;
+		WorldgenPerfTracker.ApplyCellCaller prevCaller = null;
+		WorldgenPerfTracker.ThreadStats ts = null;
+		if (WorldgenPerfTracker.ACTIVE) {
+			ts = WorldgenPerfTracker.stats();
+			prevCaller = ts.currentCaller;
+			ts.currentCaller = WorldgenPerfTracker.ApplyCellCaller.STRUCTURES;
+		}
 		try {
-			int maxSuspension = Integer.MIN_VALUE;
 			for (var piece : builder.build().pieces()) {
 				if (!(piece instanceof PoolElementStructurePiece poolPiece)) {
 					continue;
@@ -200,29 +204,28 @@ public class MixinJigsawStructure {
 
 				BoundingBox box = poolPiece.getBoundingBox();
 				int groundPlane = box.minY() + poolPiece.getGroundLevelDelta();
-				for (int x = box.minX() - ftf$BURY_RADIUS + 1; x <= box.maxX() + ftf$BURY_RADIUS - 1; x++) {
-					for (int z = box.minZ() - ftf$BURY_RADIUS + 1; z <= box.maxZ() + ftf$BURY_RADIUS - 1; z++) {
+				int minX = box.minX() - ftf$BURY_RADIUS + 1;
+				int maxX = box.maxX() + ftf$BURY_RADIUS - 1;
+				int minZ = box.minZ() - ftf$BURY_RADIUS + 1;
+				int maxZ = box.maxZ() + ftf$BURY_RADIUS - 1;
+				for (int x = minX; x <= maxX; x += 2) {
+					for (int z = minZ; z <= maxZ; z += 2) {
 						if (!ftf$isInsideBurySupport(box, x, z)) {
 							continue;
 						}
-						int chunkX = SectionPos.blockToSectionCoord(x);
-						int chunkZ = SectionPos.blockToSectionCoord(z);
-						long chunkKey = ChunkPos.asLong(chunkX, chunkZ);
-						TileCache.Lease lease = chunks.computeIfAbsent(
-							chunkKey,
-							ignored -> generatorContext.cache.acquireAtChunk(chunkX, chunkZ)
-						);
-						Tile.Chunk chunk = lease.tile().getChunkReader(chunkX, chunkZ);
+						Cell cell = CellSampler.getCachedOrLookup(generatorContext.lookup, x, z, false);
 						maxSuspension = Math.max(
 							maxSuspension,
-							groundPlane - generatorContext.levels.scale(chunk.getCell(x, z).height)
+							groundPlane - generatorContext.levels.scale(cell.height)
 						);
 					}
 				}
 			}
 			return maxSuspension == Integer.MIN_VALUE ? 0 : maxSuspension;
 		} finally {
-			ftf$closeTileLeases(chunks);
+			if (ts != null) {
+				ts.currentCaller = prevCaller;
+			}
 		}
 	}
 
@@ -231,28 +234,6 @@ public class MixinJigsawStructure {
 		int dx = Math.max(0, Math.max(box.minX() - x, x - box.maxX()));
 		int dz = Math.max(0, Math.max(box.minZ() - z, z - box.maxZ()));
 		return dx * dx + dz * dz < ftf$BURY_RADIUS * ftf$BURY_RADIUS;
-	}
-
-	@Unique
-	private static void ftf$closeTileLeases(Map<Long, TileCache.Lease> leases) {
-		Throwable failure = null;
-		for (TileCache.Lease lease : leases.values()) {
-			try {
-				lease.close();
-			} catch (RuntimeException | Error closeFailure) {
-				if (failure == null) {
-					failure = closeFailure;
-				} else {
-					failure.addSuppressed(closeFailure);
-				}
-			}
-		}
-		if (failure instanceof RuntimeException runtimeFailure) {
-			throw runtimeFailure;
-		}
-		if (failure instanceof Error error) {
-			throw error;
-		}
 	}
 
 	@Unique
@@ -399,19 +380,44 @@ public class MixinJigsawStructure {
 			return false;
 		}
 		GeneratorContext context = rtfRandomState.generatorContext();
-		Map<Long, TileCache.Lease> chunks = new HashMap<>();
+		WorldgenPerfTracker.ApplyCellCaller prevCaller = null;
+		WorldgenPerfTracker.ThreadStats ts = null;
+		if (WorldgenPerfTracker.ACTIVE) {
+			ts = WorldgenPerfTracker.stats();
+			prevCaller = ts.currentCaller;
+			ts.currentCaller = WorldgenPerfTracker.ApplyCellCaller.STRUCTURES;
+		}
 		try {
 			for (var piece : builder.build().pieces()) {
 				BoundingBox box = piece.getBoundingBox();
-				for (int x = box.minX(); x <= box.maxX(); x++) {
-					for (int z = box.minZ(); z <= box.maxZ(); z++) {
-						int chunkX = SectionPos.blockToSectionCoord(x);
-						int chunkZ = SectionPos.blockToSectionCoord(z);
-						long key = ChunkPos.asLong(chunkX, chunkZ);
-						TileCache.Lease lease = chunks.computeIfAbsent(
-							key, ignored -> context.cache.acquireAtChunk(chunkX, chunkZ)
-						);
-						if (lease.tile().getChunkReader(chunkX, chunkZ).getCell(x, z).terrain.isRiver()) {
+				int minX = box.minX();
+				int maxX = box.maxX();
+				int minZ = box.minZ();
+				int maxZ = box.maxZ();
+				for (int x = minX; x <= maxX; x += 4) {
+					for (int z = minZ; z <= maxZ; z += 4) {
+						Cell cell = CellSampler.getCachedOrLookup(context.lookup, x, z, false);
+						if (cell.terrain.isRiver()) {
+							return true;
+						}
+					}
+					if ((maxZ - minZ) % 4 != 0) {
+						Cell cell = CellSampler.getCachedOrLookup(context.lookup, x, maxZ, false);
+						if (cell.terrain.isRiver()) {
+							return true;
+						}
+					}
+				}
+				if ((maxX - minX) % 4 != 0) {
+					for (int z = minZ; z <= maxZ; z += 4) {
+						Cell cell = CellSampler.getCachedOrLookup(context.lookup, maxX, z, false);
+						if (cell.terrain.isRiver()) {
+							return true;
+						}
+					}
+					if ((maxZ - minZ) % 4 != 0) {
+						Cell cell = CellSampler.getCachedOrLookup(context.lookup, maxX, maxZ, false);
+						if (cell.terrain.isRiver()) {
 							return true;
 						}
 					}
@@ -419,7 +425,9 @@ public class MixinJigsawStructure {
 			}
 			return false;
 		} finally {
-			ftf$closeTileLeases(chunks);
+			if (ts != null) {
+				ts.currentCaller = prevCaller;
+			}
 		}
 	}
 
@@ -433,15 +441,20 @@ public class MixinJigsawStructure {
 			return false;
 		}
 
-		int chunkX = SectionPos.blockToSectionCoord(x);
-		int chunkZ = SectionPos.blockToSectionCoord(z);
-		int localX = x & 15;
-		int localZ = z & 15;
-
-		try (var lease = generatorContext.cache.acquireAtChunk(chunkX, chunkZ)) {
-			Tile.Chunk tileChunk = lease.tile().getChunkReader(chunkX, chunkZ);
-			Cell cell = tileChunk.getCell(localX, localZ);
+		WorldgenPerfTracker.ApplyCellCaller prevCaller = null;
+		WorldgenPerfTracker.ThreadStats ts = null;
+		if (WorldgenPerfTracker.ACTIVE) {
+			ts = WorldgenPerfTracker.stats();
+			prevCaller = ts.currentCaller;
+			ts.currentCaller = WorldgenPerfTracker.ApplyCellCaller.STRUCTURES;
+		}
+		try {
+			Cell cell = CellSampler.getCachedOrLookup(generatorContext.lookup, x, z, false);
 			return cell.terrain.isRiver();
+		} finally {
+			if (ts != null) {
+				ts.currentCaller = prevCaller;
+			}
 		}
 	}
 
