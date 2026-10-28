@@ -10,6 +10,7 @@ concurrency:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   preset-test:
@@ -53,3 +54,99 @@ jobs:
           path: build/reports/preset-test-heightmaps/
           if-no-files-found: ignore
           retention-days: 7
+
+      # Publishes clean mobile-friendly report to Step Summary ("Details" link) and as a PR comment
+      - name: Publish Test Report & PR Summary
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const prNumber = context.payload.pull_request?.number;
+            const reportDir = 'build/reports/preset-test-heightmaps';
+            const sha = context.sha.substring(0, 7);
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            let reportFound = false;
+            let summaryText = `### 🗺️ FreeTerraForged Preset Verification Summary\n\n`;
+            summaryText += `* **Commit:** [\`${sha}\`](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/commit/${context.sha})\n`;
+            summaryText += `* **Run Logs & Artifacts:** [View Full Run Details](${runUrl})\n\n`;
+
+            if (fs.existsSync(reportDir)) {
+              const files = fs.readdirSync(reportDir);
+              const txtReports = files.filter(f => f.endsWith('_report.txt'));
+
+              if (txtReports.length > 0) {
+                reportFound = true;
+                summaryText += `| Loader | Preset | Spawn Position | Elevation Span | Status |\n`;
+                summaryText += `| :--- | :--- | :--- | :--- | :--- |\n`;
+
+                const detailedSections = [];
+
+                for (const file of txtReports) {
+                  const content = fs.readFileSync(path.join(reportDir, file), 'utf8');
+                  const isFabric = file.includes('Fabric');
+                  const loaderName = isFabric ? 'Fabric' : 'NeoForge';
+                  const passed = content.includes('Outcome: PASSED');
+                  const statusIcon = passed ? '✅ PASSED' : '❌ FAILED';
+
+                  // Parse quick table metrics
+                  const spawnMatch = content.match(/Spawn Chunk:\s*(\([^)]+\)\s*\[[^\]]+\])/);
+                  const spanMatch = content.match(/Elevation Span:\s*([^\n]+)/);
+                  const presetMatch = content.match(/Preset:\s*([^\n]+)/);
+
+                  const spawnStr = spawnMatch ? spawnMatch[1] : 'N/A';
+                  const spanStr = spanMatch ? spanMatch[1] : 'N/A';
+                  const presetStr = presetMatch ? presetMatch[1] : 'ftf';
+
+                  summaryText += `| **${loaderName}** | \`${presetStr}\` | ${spawnStr} | ${spanStr} | ${statusIcon} |\n`;
+
+                  detailedSections.push({
+                    loader: loaderName,
+                    status: statusIcon,
+                    content: content.trim()
+                  });
+                }
+
+                summaryText += `\n`;
+
+                for (const sec of detailedSections) {
+                  summaryText += `<details>\n<summary><b>📊 Detailed Report: ${sec.loader} (${sec.status})</b></summary>\n\n\`\`\`text\n${sec.content}\n\`\`\`\n</details>\n\n`;
+                }
+              }
+            }
+
+            if (!reportFound) {
+              summaryText += `⚠️ *No report files found. The test suite may have encountered an early build/startup failure. Check the [Run Logs](${runUrl}) for details.*\n\n`;
+            }
+
+            summaryText += `---\n*Generated automatically by FreeTerraForged Preset CI.*`;
+
+            // 1. Write to the "Details" page at the bottom of the PR
+            await core.summary.addRaw(summaryText).write();
+
+            // 2. Post or update a sticky comment on the PR conversation thread
+            if (prNumber) {
+              const { data: comments } = await github.rest.issues.listComments({
+                ...context.repo,
+                issue_number: prNumber
+              });
+
+              const botComment = comments.find(c => c.body.includes('FreeTerraForged Preset Verification Summary'));
+
+              if (botComment) {
+                await github.rest.issues.updateComment({
+                  ...context.repo,
+                  comment_id: botComment.id,
+                  body: summaryText
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  ...context.repo,
+                  issue_number: prNumber,
+                  body: summaryText
+                });
+              }
+            }
