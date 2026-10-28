@@ -12,10 +12,10 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  statuses: write
 
 jobs:
-  # When a fresh commit is pushed, automatically strip the verify-build label so
-  # incremental WIP commits don't trigger heavy builds until a reviewer re-approves.
+  # Automatically resets the verification label whenever a new commit is pushed to the PR
   reset-label:
     name: Reset Verification on Push
     if: github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'verify-build')
@@ -38,12 +38,17 @@ jobs:
               }
             }
 
+  # Executes Fabric and NeoForge verification in parallel matrix runners
   preset-test:
-    name: Verify Presets (Fabric & NeoForge)
+    name: Verify Presets (${{ matrix.loader }})
     # Only execute when the label is explicitly attached by a reviewer
     if: github.event.action == 'labeled' && github.event.label.name == 'verify-build'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      matrix:
+        loader: [fabric, neoforge]
+      fail-fast: false
 
     steps:
       - name: Checkout Source
@@ -63,28 +68,69 @@ jobs:
           sed -i 's/\r$//' ./gradlew
           chmod +x ./gradlew
 
-      # Caches Gradle & Loom dependencies between PR runs
+      # Caches Gradle dependencies
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # Executes :fabric:runPresetTest and :neoforge:runPresetTest sequentially
+      # Caches Loom jar transformations and workspace cache per loader
+      - name: Cache Loom Workspace
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/loom-cache
+            .gradle/loom-cache
+            fabric/.gradle/loom-cache
+            neoforge/.gradle/loom-cache
+          key: ${{ runner.os }}-loom-${{ matrix.loader }}-${{ hashFiles('**/libs.versions.toml', '**/*.gradle*', 'gradle.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-loom-${{ matrix.loader }}-
+            ${{ runner.os }}-loom-
+
+      # Executes :fabric:runPresetTest or :neoforge:runPresetTest in parallel
       - name: Run Headless Preset Validation
         id: run_preset_test
-        run: ./gradlew runPresetTest --no-daemon
+        run: ./gradlew :${{ matrix.loader }}:runPresetTest --no-daemon
 
-      # Uploads visual heightmap & reliefmap PNGs generated during the test
-      - name: Upload Test Heightmaps
+      # Uploads visual heightmaps & test report files from this loader
+      - name: Upload Test Outputs (${{ matrix.loader }})
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pr-${{ github.event.pull_request.number }}-heightmaps
+          name: preset-test-artifacts-${{ matrix.loader }}
           path: build/reports/preset-test-heightmaps/
           if-no-files-found: ignore
           retention-days: 7
 
+  # Consolidates matrix results, pushes visual assets, and publishes the executive report
+  publish-report:
+    name: Publish Executive Verification Report
+    needs: preset-test
+    if: always() && github.event.action == 'labeled' && github.event.label.name == 'verify-build'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Download Matrix Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded-artifacts/
+
+      - name: Consolidate Matrix Outputs
+        run: |
+          mkdir -p build/reports/preset-test-heightmaps
+          if [ -d "downloaded-artifacts" ]; then
+            find downloaded-artifacts -type f -exec cp -f {} build/reports/preset-test-heightmaps/ \;
+          fi
+          echo "Consolidated test outputs:"
+          ls -la build/reports/preset-test-heightmaps/ || true
+
       # Publishes visual PNGs to an isolated orphan branch for direct raw inline rendering
       - name: Publish Visual Assets to Verification Branch
-        if: always()
         shell: bash
         run: |
           set -euo pipefail
@@ -164,7 +210,6 @@ jobs:
 
       # Rigorous Verification Validator & Executive Report Generator
       - name: Validate Test Results & Publish Executive Report
-        if: always()
         uses: actions/github-script@v7
         with:
           script: |
@@ -174,45 +219,41 @@ jobs:
             const prNumber = context.payload.pull_request?.number;
             const reportDir = 'build/reports/preset-test-heightmaps';
             const sha = context.sha.substring(0, 7);
+            const commitUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/commit/${context.sha}`;
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            const testStepSuccess = '${{ steps.run_preset_test.outcome }}' === 'success';
 
             const failures = [];
             const parsedSuites = [];
 
-            if (!testStepSuccess) {
-              failures.push("Gradle task execution (`./gradlew runPresetTest`) exited with a non-zero exit code.");
-            }
-
-            // Default order of all real tests in the suite (no explicit numbering)
-            const allTests = [
-              'Live Server Datapack & Registry Resolution',
-              'Spawn Chunk Heightmap & Regularity',
-              'Built-in Default Fallback (Rivers)',
-              'User-Selected Default Preset (Upscaled Community)',
-              'Manual Preset Selection Overrule (Huge Biomes)',
-              'World Type Cycling Preservation',
-              'Dedicated Server Successive Run Preservation',
-              'Re-create World Flow Preservation',
-              'Custom File-Based Default Preset Resolution',
-              'Multi-Run Seam Continuity (Issue #330)',
-              'In-Game Command Execution & Parity (/ftf commands)',
-              'Two-Stage Datapack Reload & User Spawn Persistence'
+            // Base tokens representing the 12 core test suites in canonical execution order
+            const baseTestTokens = [
+              'presetValidation.checkSynchronizedRegistry',
+              'presetValidation.spawnChunkRegularity',
+              'presetValidation.builtinRiversFallback',
+              'presetValidation.userSelectedDefault',
+              'presetValidation.manualSelectionOverrule',
+              'presetValidation.worldTypeCycling',
+              'presetValidation.successiveRunPreservation',
+              'presetValidation.recreateWorldFlow',
+              'presetValidation.customFileResolution',
+              'presetValidation.multiRunSeamContinuity',
+              'presetValidation.inGameCommandParity',
+              'presetValidation.twoStageReloadSpawnPersistence'
             ];
 
             const detailedReports = [];
 
             if (!fs.existsSync(reportDir)) {
-              failures.push(`Expected report directory '${reportDir}' was not generated. Headless server suite may have crashed during bootstrap.`);
+              failures.push(`Expected report directory '${reportDir}' was not found. Headless server suites may have failed during bootstrap.`);
             } else {
               const files = fs.readdirSync(reportDir);
               const txtReports = files.filter(f => f.endsWith('_report.txt'));
 
-              // 1. First parse structured suite_summary reports
+              // 1. Parse structured suite_summary reports
               for (const file of txtReports) {
                 const content = fs.readFileSync(path.join(reportDir, file), 'utf8');
                 const isFabric = content.toLowerCase().includes('loader: fabric') || file.toLowerCase().includes('fabric');
-                const loaderName = isFabric ? 'Fabric' : 'NeoForge';
+                const loaderName = isFabric ? 'fabric' : 'neoforge';
 
                 if (content.includes('FreeTerraForged Test Execution Report')) {
                   const entries = content.split('[Test Entry]').slice(1);
@@ -222,21 +263,21 @@ jobs:
                     const notesMatch = entry.match(/Notes:\s*([^\r\n]+)/);
                     const errorMatch = entry.match(/Error:\s*([^\r\n]+)/);
 
-                    const testName = nameMatch ? nameMatch[1].trim() : 'Unknown Test';
+                    const testToken = nameMatch ? nameMatch[1].trim() : 'unknownTest';
                     const passed = outcomeMatch ? outcomeMatch[1].trim() === 'PASSED' : false;
                     const notes = notesMatch ? notesMatch[1].trim() : '';
                     const error = errorMatch ? errorMatch[1].trim() : '';
 
                     if (!passed) {
-                      failures.push(`${loaderName} ${testName} failed: ${error || 'Test failure recorded.'}`);
+                      failures.push(`${testToken} failed: ${error || 'Test failure recorded.'}`);
                     }
 
                     parsedSuites.push({
-                      name: testName,
+                      token: testToken,
                       loader: loaderName,
-                      target: notes || (passed ? 'Verified' : error),
+                      notes: notes || (passed ? 'Verified' : error),
                       passed,
-                      statusText: passed ? '✓ PASSED' : '✗ FAILED',
+                      error,
                       log: entry.trim()
                     });
                   }
@@ -249,126 +290,129 @@ jobs:
                   failures.push(`${loaderName} WATCHDOG TIMEOUT on ${failedStep}: ${reason}`);
 
                   parsedSuites.push({
-                    name: `Watchdog Timeout (${failedStep})`,
+                    token: `watchdogTimeout.${failedStep}.${loaderName}`,
                     loader: loaderName,
-                    target: `Failure: ${reason}`,
+                    notes: `Failure: ${reason}`,
                     passed: false,
-                    statusText: '✗ TIMEOUT',
+                    error: reason,
                     log: content.trim()
                   });
                 } else {
-                  // Keep detailed specialized reports (heightmap, continuity, commands) for diagnostic logs
                   detailedReports.push({ file, content, loaderName });
                 }
               }
             }
 
-            // Dynamically register any new tests found in the execution reports that weren't in default list
-            for (const s of parsedSuites) {
-              if (!allTests.includes(s.name) && !s.name.startsWith('Watchdog Timeout')) {
-                allTests.push(s.name);
-              }
-            }
-
-            // Assert that all real tests ran and passed on both loaders
-            for (const testName of allTests) {
-              for (const loader of ['Fabric', 'NeoForge']) {
-                const found = parsedSuites.find(s => s.name === testName && s.loader === loader);
+            // Ensure all 24 tokens exist in parsedSuites (12 tests x 2 loaders)
+            for (const base of baseTestTokens) {
+              for (const loader of ['fabric', 'neoforge']) {
+                const expectedToken = `${base}.${loader}`;
+                const found = parsedSuites.find(s => s.token === expectedToken);
                 if (!found) {
-                  failures.push(`Missing expected test run: "${testName}" on ${loader}.`);
+                  failures.push(`Missing expected test execution: ${expectedToken}`);
                 }
               }
             }
 
             const overallPassed = failures.length === 0;
 
-            // --- BUILD EXECUTIVE REPORT ---
+            // Asset URL Base for visual PNGs
+            const rawBase = `https://raw.githubusercontent.com/${context.repo.owner}/${context.repo.repo}/verification-assets/pr-${prNumber}`;
+
+            // Visual image mapping per token
+            const tokenImageMap = {
+              'presetValidation.spawnChunkRegularity.fabric': [
+                { file: 'fabric_spawn_relief.png', title: 'Fabric Spawn Relief Preview', label: 'Relief' },
+                { file: 'fabric_spawn_raw.png', title: 'Fabric Spawn Raw Heightmap', label: 'Raw' }
+              ],
+              'presetValidation.spawnChunkRegularity.neoforge': [
+                { file: 'neoforge_spawn_relief.png', title: 'NeoForge Spawn Relief Preview', label: 'Relief' },
+                { file: 'neoforge_spawn_raw.png', title: 'NeoForge Spawn Raw Heightmap', label: 'Raw' }
+              ],
+              'presetValidation.multiRunSeamContinuity.fabric': [
+                { file: 'fabric_seam_relief.png', title: 'Fabric Seam Continuity Relief Preview', label: 'Seam Relief' },
+                { file: 'fabric_seam_raw.png', title: 'Fabric Seam Continuity Raw Heightmap', label: 'Seam Raw' }
+              ],
+              'presetValidation.multiRunSeamContinuity.neoforge': [
+                { file: 'neoforge_seam_relief.png', title: 'NeoForge Seam Continuity Relief Preview', label: 'Seam Relief' },
+                { file: 'neoforge_seam_raw.png', title: 'NeoForge Seam Continuity Raw Heightmap', label: 'Seam Raw' }
+              ],
+              'presetValidation.inGameCommandParity.fabric': [
+                { file: 'fabric_command_relief.png', title: 'Fabric /ftf reliefmap Command', label: 'Cmd Relief' },
+                { file: 'fabric_command_raw.png', title: 'Fabric /ftf heightmap Command', label: 'Cmd Raw' }
+              ],
+              'presetValidation.inGameCommandParity.neoforge': [
+                { file: 'neoforge_command_relief.png', title: 'NeoForge /ftf reliefmap Command', label: 'Cmd Relief' },
+                { file: 'neoforge_command_raw.png', title: 'NeoForge /ftf heightmap Command', label: 'Cmd Raw' }
+              ]
+            };
+
+            // Build Executive Markdown Alert Callout
             let report = '';
+            const totalExpected = baseTestTokens.length * 2;
+            const passedCount = parsedSuites.filter(s => s.passed && baseTestTokens.some(b => s.token.startsWith(b))).length;
+
             if (overallPassed) {
-              report += `## 🗺️ FreeTerraForged Verification Report: ✓ PASSED\n\n`;
+              report += `> [!NOTE]\n`;
+              report += `> **FreeTerraForged Verification: PASSED**\n`;
+              report += `> Commit: [\`${sha}\`](${commitUrl}) | Run: [#${context.runId}](${runUrl}) | Parallel Matrix: ${passedCount} / ${totalExpected} Suites Verified\n\n`;
             } else {
-              report += `## 🗺️ FreeTerraForged Verification Report: ✗ FAILED\n\n`;
-            }
-
-            const totalExpected = allTests.length * 2;
-            const passedCount = parsedSuites.filter(s => s.passed && allTests.includes(s.name)).length;
-            report += `> **Commit:** [\`${sha}\`](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/commit/${context.sha}) | **Run:** [#${context.runId}](${runUrl}) | **Suites Verified:** ${passedCount} / ${totalExpected}\n\n`;
-
-            if (!overallPassed) {
               report += `> [!CAUTION]\n`;
-              report += `> **Verification Failures Detected:**\n`;
+              report += `> **FreeTerraForged Verification: FAILED**\n`;
+              report += `> Commit: [\`${sha}\`](${commitUrl}) | Run: [#${context.runId}](${runUrl}) | Failures detected in verification suite (${passedCount} / ${totalExpected} passed)\n`;
+              report += `>\n`;
+              report += `> **Failures:**\n`;
               for (const f of failures) {
                 report += `> - ${f}\n`;
               }
               report += `\n`;
             }
 
-            // Asset URL Base
-            const rawBase = `https://raw.githubusercontent.com/${context.repo.owner}/${context.repo.repo}/verification-assets/pr-${prNumber}`;
+            // Table without headers:
+            // Columns:
+            // 1. pass / fail checkmark / cross (:white_check_mark: / :x:)
+            // 2. test token (`presetValidation.<name>.<loader>`)
+            // 3. build metric (inline images + metric text)
+            report += `| | | |\n`;
+            report += `| :---: | :--- | :--- |\n`;
 
-            // Image mappings for inlining in the per-test line summary
-            const imageMap = {
-              'Spawn Chunk Heightmap & Regularity_Fabric': [
-                { file: 'fabric_spawn_relief.png', title: 'Fabric Spawn Relief Preview', label: 'Relief' },
-                { file: 'fabric_spawn_raw.png', title: 'Fabric Spawn Raw Heightmap', label: 'Raw' }
-              ],
-              'Spawn Chunk Heightmap & Regularity_NeoForge': [
-                { file: 'neoforge_spawn_relief.png', title: 'NeoForge Spawn Relief Preview', label: 'Relief' },
-                { file: 'neoforge_spawn_raw.png', title: 'NeoForge Spawn Raw Heightmap', label: 'Raw' }
-              ],
-              'Multi-Run Seam Continuity (Issue #330)_Fabric': [
-                { file: 'fabric_seam_relief.png', title: 'Fabric Seam Continuity Relief Preview', label: 'Seam Relief' },
-                { file: 'fabric_seam_raw.png', title: 'Fabric Seam Continuity Raw Heightmap', label: 'Seam Raw' }
-              ],
-              'Multi-Run Seam Continuity (Issue #330)_NeoForge': [
-                { file: 'neoforge_seam_relief.png', title: 'NeoForge Seam Continuity Relief Preview', label: 'Seam Relief' },
-                { file: 'neoforge_seam_raw.png', title: 'NeoForge Seam Continuity Raw Heightmap', label: 'Seam Raw' }
-              ],
-              'In-Game Command Execution & Parity (/ftf commands)_Fabric': [
-                { file: 'fabric_command_relief.png', title: 'Fabric /ftf reliefmap In-Game Command', label: 'Cmd Relief' },
-                { file: 'fabric_command_raw.png', title: 'Fabric /ftf heightmap In-Game Command', label: 'Cmd Raw' }
-              ],
-              'In-Game Command Execution & Parity (/ftf commands)_NeoForge': [
-                { file: 'neoforge_command_relief.png', title: 'NeoForge /ftf reliefmap In-Game Command', label: 'Cmd Relief' },
-                { file: 'neoforge_command_raw.png', title: 'NeoForge /ftf heightmap In-Game Command', label: 'Cmd Raw' }
-              ]
-            };
+            for (const base of baseTestTokens) {
+              for (const loader of ['fabric', 'neoforge']) {
+                const token = `${base}.${loader}`;
+                const suite = parsedSuites.find(s => s.token === token);
+                const images = tokenImageMap[token] || [];
 
-            // Test Suite Execution Matrix (Cross-loader runs of each test grouped together)
-            report += `| image results (if applicable) | test name | loader env | target configuration notes | clean pass/fail indication |\n`;
-            report += `| :---: | :--- | :---: | :--- | :---: |\n`;
+                const isPass = suite ? suite.passed : false;
+                const statusIcon = isPass ? ':white_check_mark:' : ':x:';
 
-            for (const testName of allTests) {
-              for (const loader of ['Fabric', 'NeoForge']) {
-                const suiteData = parsedSuites.find(s => s.name === testName && s.loader === loader);
-                const key = `${testName}_${loader}`;
-                const images = imageMap[key] || [];
-
-                let imgHtml = '—';
-                if (prNumber && images.length > 0) {
-                  imgHtml = images.map(img =>
-                    `<a href="${rawBase}/${img.file}?v=${sha}"><img src="${rawBase}/${img.file}?v=${sha}" width="90" title="${img.title}" alt="${img.label}" /></a>`
-                  ).join('&nbsp;');
+                let metricContent = suite ? suite.notes : 'Test execution not recorded';
+                if (!isPass && suite && suite.error) {
+                  metricContent = `Error: ${suite.error}`;
                 }
 
-                const targetNotes = suiteData ? suiteData.target : 'Test execution not found';
-                const status = suiteData ? `\`${suiteData.statusText}\`` : '`✗ NOT RUN`';
+                if (prNumber && images.length > 0) {
+                  const imgHtml = images.map(img =>
+                    `<a href="${rawBase}/${img.file}?v=${sha}"><img src="${rawBase}/${img.file}?v=${sha}" width="90" title="${img.title}" alt="${img.label}" /></a>`
+                  ).join('&nbsp;');
+                  metricContent = `${imgHtml}<br />${metricContent}`;
+                }
 
-                report += `| ${imgHtml} | **${testName}** | **${loader}** | ${targetNotes} | ${status} |\n`;
+                report += `| ${statusIcon} | \`${token}\` | ${metricContent} |\n`;
               }
             }
 
-            // Include any unexpected watchdog timeout rows if present
-            const timeouts = parsedSuites.filter(s => s.name.startsWith('Watchdog Timeout'));
-            for (const t of timeouts) {
-              report += `| — | **${t.name}** | **${t.loader}** | ${t.target} | \`${t.statusText}\` |\n`;
+            // Any unexpected watchdog timeouts or extra tests
+            const extras = parsedSuites.filter(s => !baseTestTokens.some(b => s.token.startsWith(b)));
+            for (const ex of extras) {
+              const icon = ex.passed ? ':white_check_mark:' : ':x:';
+              report += `| ${icon} | \`${ex.token}\` | ${ex.notes} |\n`;
             }
 
             report += `\n`;
 
             // Collapsible Detailed Logs
-            if (detailedReports.length > 0 || parsedSuites.length > 0) {
-              report += `<details>\n<summary><b>🔍 Detailed Diagnostic Logs (${parsedSuites.length} test records, ${detailedReports.length} reports)</b></summary>\n\n`;
+            if (detailedReports.length > 0) {
+              report += `<details>\n<summary><b>🔍 Detailed Diagnostic Logs (${detailedReports.length} reports)</b></summary>\n\n`;
               for (const d of detailedReports) {
                 report += `#### ${d.loaderName}: ${d.file}\n\n\`\`\`text\n${d.content.trim()}\n\`\`\`\n\n`;
               }
@@ -377,51 +421,17 @@ jobs:
 
             report += `---\n*Artifacts: [Download Raw Heightmaps & Diagnostic Outputs](${runUrl})*`;
 
-            // 1. Write to GitHub Step Summary (opens from "Details" on the PR verification check)
+            // 1. Write to GitHub Step Summary
             await core.summary.addRaw(report).write();
 
-            // 2. Post or update the sticky comment on the PR conversation thread
+            // 2. Post or update the sticky comment on PR
             if (prNumber) {
               const { data: comments } = await github.rest.issues.listComments({
                 ...context.repo,
                 issue_number: prNumber
               });
 
-              const botComment = comments.find(c => c.body.includes('FreeTerraForged Verification Report:'));
-
-              if (botComment) {
-                await github.rest.issues.updateComment({
-                  ...context.repo,
-                  comment_id: botComment.id,
-                  body: report
-                });
-              } else {
-                await github.rest.issues.createComment({
-                  ...context.repo,
-                  issue_number: prNumber,
-                  body: report
-                });
-              }
-            }
-
-            // STRICT ENFORCEMENT: Fail the GitHub Actions job if verification failed or missing
-            if (!overallPassed) {
-              core.setFailed(`Preset Verification Failed: ${failures.join('; ')}`);
-            }
-
-            report += `---\n*Artifacts: [Download Raw Heightmaps & Diagnostic Outputs](${runUrl})*`;
-
-            // 1. Write to GitHub Step Summary (opens from "Details" on the PR verification check)
-            await core.summary.addRaw(report).write();
-
-            // 2. Post or update the sticky comment on the PR conversation thread
-            if (prNumber) {
-              const { data: comments } = await github.rest.issues.listComments({
-                ...context.repo,
-                issue_number: prNumber
-              });
-
-              const botComment = comments.find(c => c.body.includes('FreeTerraForged Verification Report:'));
+              const botComment = comments.find(c => c.body.includes('FreeTerraForged Verification'));
 
               if (botComment) {
                 await github.rest.issues.updateComment({

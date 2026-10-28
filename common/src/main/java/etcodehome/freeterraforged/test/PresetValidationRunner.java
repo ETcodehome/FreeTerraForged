@@ -209,6 +209,9 @@ public final class PresetValidationRunner {
 
 	public static void runAllTests(MinecraftServer server) {
 		String serverModName = server.getServerModName();
+		String loader = serverModName.toLowerCase().replaceAll("[^a-z0-9]", "");
+		if (loader.contains("fabric")) loader = "fabric";
+		else if (loader.contains("neoforge")) loader = "neoforge";
 		FTFCommon.LOGGER.info("================================================================================");
 		FTFCommon.LOGGER.info("[FTF-Test] STARTING HEADLESS PRESET VALIDATION SUITE (Server loader: {})", serverModName);
 		FTFCommon.LOGGER.info("================================================================================");
@@ -239,7 +242,7 @@ public final class PresetValidationRunner {
 			// -----------------------------------------------------------------------------------------
 			// Live Server Datapack & Registry Resolution
 			// -----------------------------------------------------------------------------------------
-			currentTestName = "Live Server Datapack & Registry Resolution";
+			currentTestName = "presetValidation.checkSynchronizedRegistry." + loader;
 			watchdog.setStep(currentTestName);
 			FTFCommon.LOGGER.info("[FTF-Test] Verifying Live Server Datapack & Registry Resolution...");
 			Path liveWorldDatapacks = server.getWorldPath(LevelResource.DATAPACK_DIR);
@@ -277,7 +280,7 @@ public final class PresetValidationRunner {
 			// -----------------------------------------------------------------------------------------
 			// Spawn Chunk Heightmap & Regularity
 			// -----------------------------------------------------------------------------------------
-			currentTestName = "Spawn Chunk Heightmap & Regularity";
+			currentTestName = "presetValidation.spawnChunkRegularity." + loader;
 			watchdog.setStep(currentTestName);
 			FTFCommon.LOGGER.info("[FTF-Test] Generating Spawn Heightmap & Evaluating Terrain Regularity...");
 			HeightmapValidator.ValidationResult heightmapResult = HeightmapValidator.validateLiveServerSpawn(server);
@@ -291,7 +294,7 @@ public final class PresetValidationRunner {
 			// -----------------------------------------------------------------------------------------
 			// Built-in Default Fallback (Rivers)
 			// -----------------------------------------------------------------------------------------
-			currentTestName = "Built-in Default Fallback (Rivers)";
+			currentTestName = "presetValidation.builtinRiversFallback." + loader;
 			watchdog.setStep(currentTestName);
 			FTFCommon.LOGGER.info("[FTF-Test] Verifying Built-in Default Fallback (Rivers)...");
 			DefaultPresetArchive.setSource(null);
@@ -321,7 +324,7 @@ public final class PresetValidationRunner {
 			// -----------------------------------------------------------------------------------------
 			// User-Selected Default Preset (Upscaled Community)
 			// -----------------------------------------------------------------------------------------
-			currentTestName = "User-Selected Default Preset (Upscaled Community)";
+			currentTestName = "presetValidation.userSelectedDefault." + loader;
 			watchdog.setStep(currentTestName);
 			FTFCommon.LOGGER.info("[FTF-Test] Verifying User-Selected Default Preset (Upscaled Community)...");
 			DefaultPresetArchive.setBuiltinSource(FTFTranslationKeys.GUI_COMMUNITY1_PRESET_NAME);
@@ -354,7 +357,7 @@ public final class PresetValidationRunner {
 			// -----------------------------------------------------------------------------------------
 			// Manual Preset Selection Overrule (Huge Biomes)
 			// -----------------------------------------------------------------------------------------
-			currentTestName = "Manual Preset Selection Overrule (Huge Biomes)";
+			currentTestName = "presetValidation.manualSelectionOverrule." + loader;
 			watchdog.setStep(currentTestName);
 			FTFCommon.LOGGER.info("[FTF-Test] Verifying Manual Selection (Huge Biomes) Overrules User Default & Fallback...");
 			// Default is still Upscaled Community, fallback is still Rivers.
@@ -396,7 +399,7 @@ public final class PresetValidationRunner {
 			// -----------------------------------------------------------------------------------------
 			// World Type Cycling Preservation
 			// -----------------------------------------------------------------------------------------
-			currentTestName = "World Type Cycling Preservation";
+			currentTestName = "presetValidation.worldTypeCycling." + loader;
 			watchdog.setStep(currentTestName);
 			FTFCommon.LOGGER.info("[FTF-Test] Verifying World Type Switching / Cycling Preserves Manual Preset...");
 			// With clientStagedPack containing HUGE_BIOMES:
@@ -424,7 +427,7 @@ public final class PresetValidationRunner {
 			// -----------------------------------------------------------------------------------------
 			// Dedicated Server Successive Run Preservation
 			// -----------------------------------------------------------------------------------------
-			currentTestName = "Dedicated Server Successive Run Preservation";
+			currentTestName = "presetValidation.successiveRunPreservation." + loader;
 			watchdog.setStep(currentTestName);
 			FTFCommon.LOGGER.info("[FTF-Test] Verifying Dedicated Server Successive Run Preservation...");
 			// With manualWorldPack containing HUGE_BIOMES on disk:
@@ -450,7 +453,7 @@ public final class PresetValidationRunner {
 			// -----------------------------------------------------------------------------------------
 			// Re-create World Flow Preservation
 			// -----------------------------------------------------------------------------------------
-			currentTestName = "Re-create World Flow Preservation";
+			currentTestName = "presetValidation.recreateWorldFlow." + loader;
 			watchdog.setStep(currentTestName);
 			FTFCommon.LOGGER.info("[FTF-Test] Verifying Re-create World Flow...");
 			// Old world has manualWorldPack (HUGE_BIOMES).
@@ -486,7 +489,7 @@ public final class PresetValidationRunner {
 			// -----------------------------------------------------------------------------------------
 			// Custom File-Based Default Preset Resolution
 			// -----------------------------------------------------------------------------------------
-			currentTestName = "Custom File-Based Default Preset Resolution";
+			currentTestName = "presetValidation.customFileResolution." + loader;
 			watchdog.setStep(currentTestName);
 			FTFCommon.LOGGER.info("[FTF-Test] Verifying Custom File-Based Default Preset Source...");
 			Path customPresetsDir = configRoot.resolve("freeterraforged").resolve("presets");
@@ -537,7 +540,7 @@ public final class PresetValidationRunner {
 			// -----------------------------------------------------------------------------------------
 			// Multi-Run Seam Continuity (Issue #330)
 			// -----------------------------------------------------------------------------------------
-			currentTestName = "Multi-Run Seam Continuity (Issue #330)";
+			currentTestName = "presetValidation.multiRunSeamContinuity." + loader;
 			watchdog.setStep(currentTestName);
 			FTFCommon.LOGGER.info("[FTF-Test] Verifying Multi-Run Seam Continuity & Varying Config Immunity (Issue #330)...");
 			HeightmapValidator.MultiRunContinuityResult multiRunResult = HeightmapValidator.validateMultiRunContinuity(server, testWorkDir);
@@ -559,7 +562,7 @@ public final class PresetValidationRunner {
 			// -----------------------------------------------------------------------------------------
 			// In-Game Command Execution & Parity (/ftf commands)
 			// -----------------------------------------------------------------------------------------
-			currentTestName = "In-Game Command Execution & Parity (/ftf commands)";
+			currentTestName = "presetValidation.inGameCommandParity." + loader;
 			watchdog.setStep(currentTestName);
 			FTFCommon.LOGGER.info("[FTF-Test] Verifying In-Game /ftf heightmap & /ftf reliefmap Command Execution...");
 
@@ -641,7 +644,6 @@ public final class PresetValidationRunner {
 				Path reportDir = HeightmapValidator.resolveReportDirectory();
 				Files.createDirectories(reportDir);
 				String timestamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
-				String loader = serverModName.replaceAll("[^a-zA-Z0-9_-]", "_");
 				Files.copy(hmFile.toPath(), reportDir.resolve(String.format("heightmap_%s_ingame_command_%s.png", loader, timestamp)), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
 				Files.copy(rmFile.toPath(), reportDir.resolve(String.format("reliefmap_%s_ingame_command_%s.png", loader, timestamp)), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
 
@@ -670,7 +672,7 @@ public final class PresetValidationRunner {
 			// -----------------------------------------------------------------------------------------
 			// Two-Stage Datapack Reload & User Spawn Persistence
 			// -----------------------------------------------------------------------------------------
-			currentTestName = "Two-Stage Datapack Reload & User Spawn Persistence";
+			currentTestName = "presetValidation.twoStageReloadSpawnPersistence." + loader;
 			watchdog.setStep(currentTestName);
 			FTFCommon.LOGGER.info("[FTF-Test] Verifying Two-Stage Datapack Reload, 2D Preview-to-World Topological Parity & User Spawn...");
 			int customSpawnX = 1337;
