@@ -33,7 +33,6 @@ jobs:
               });
               console.log('Removed verify-build label following new commit push.');
             } catch (err) {
-              // Ignore 404 if label was already removed
               if (err.status !== 404) {
                 throw err;
               }
@@ -69,6 +68,7 @@ jobs:
 
       # Executes :fabric:runPresetTest and :neoforge:runPresetTest sequentially
       - name: Run Headless Preset Validation
+        id: run_preset_test
         run: ./gradlew runPresetTest --no-daemon
 
       # Uploads visual heightmap & reliefmap PNGs generated during the test
@@ -114,15 +114,22 @@ jobs:
 
           mkdir -p "pr-${PR_NUM}"
 
-          # Case-insensitive copy to predictable asset filenames
-          FABRIC_IMG=$(find "$GITHUB_WORKSPACE/$REPORT_DIR" -type f -iname "*fabric*_visual.png" | head -n 1)
-          NEOFORGE_IMG=$(find "$GITHUB_WORKSPACE/$REPORT_DIR" -type f -iname "*neoforge*_visual.png" | head -n 1)
-
-          if [ -n "$FABRIC_IMG" ]; then
-            cp "$FABRIC_IMG" "pr-${PR_NUM}/fabric_visual.png"
+          # Explicit mapping of specific test outputs
+          FABRIC_SPAWN=$(find "$GITHUB_WORKSPACE/$REPORT_DIR" -type f -iname "*fabric*ftf*_visual.png" 2>/dev/null | head -n 1)
+          if [ -z "$FABRIC_SPAWN" ]; then
+            FABRIC_SPAWN=$(find "$GITHUB_WORKSPACE/$REPORT_DIR" -type f -iname "*fabric*_visual.png" ! -iname "*continuity*" 2>/dev/null | head -n 1)
           fi
-          if [ -n "$NEOFORGE_IMG" ]; then
-            cp "$NEOFORGE_IMG" "pr-${PR_NUM}/neoforge_visual.png"
+
+          NEOFORGE_SPAWN=$(find "$GITHUB_WORKSPACE/$REPORT_DIR" -type f -iname "*neoforge*ftf*_visual.png" 2>/dev/null | head -n 1)
+          if [ -z "$NEOFORGE_SPAWN" ]; then
+            NEOFORGE_SPAWN=$(find "$GITHUB_WORKSPACE/$REPORT_DIR" -type f -iname "*neoforge*_visual.png" ! -iname "*continuity*" 2>/dev/null | head -n 1)
+          fi
+
+          if [ -n "$FABRIC_SPAWN" ]; then
+            cp "$FABRIC_SPAWN" "pr-${PR_NUM}/fabric_spawn_relief.png"
+          fi
+          if [ -n "$NEOFORGE_SPAWN" ]; then
+            cp "$NEOFORGE_SPAWN" "pr-${PR_NUM}/neoforge_spawn_relief.png"
           fi
 
           git add "pr-${PR_NUM}"
@@ -133,8 +140,8 @@ jobs:
             echo "Visual assets unchanged."
           fi
 
-      # Publishes clean mobile-friendly report to Step Summary ("Details" link) and as a PR comment
-      - name: Publish Test Report & PR Summary
+      # Rigorous Verification Validator & Executive Report Generator
+      - name: Validate Test Results & Publish Executive Report
         if: always()
         uses: actions/github-script@v7
         with:
@@ -146,136 +153,180 @@ jobs:
             const reportDir = 'build/reports/preset-test-heightmaps';
             const sha = context.sha.substring(0, 7);
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const testStepSuccess = '${{ steps.run_preset_test.outcome }}' === 'success';
 
-            let reportFound = false;
-            let summaryText = `### 🗺️ FreeTerraForged Preset Verification Summary\n\n`;
-            summaryText += `* **Commit:** [\`${sha}\`](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/commit/${context.sha})\n`;
-            summaryText += `* **Run Logs & Artifacts:** [View Full Run Details](${runUrl})\n\n`;
+            const failures = [];
+            const parsedSuites = [];
 
-            // Inline image preview table
-            if (prNumber) {
-              const rawBase = `https://raw.githubusercontent.com/${context.repo.owner}/${context.repo.repo}/verification-assets/pr-${prNumber}`;
-              const fabricImg = `${rawBase}/fabric_visual.png?v=${sha}`;
-              const neoforgeImg = `${rawBase}/neoforge_visual.png?v=${sha}`;
-
-              summaryText += `### 🌄 Generated Worldgen Relief Maps\n\n`;
-              summaryText += `<table>\n<tr>\n`;
-              summaryText += `<th align="center" width="50%">Fabric Shaded Relief</th>\n`;
-              summaryText += `<th align="center" width="50%">NeoForge Shaded Relief</th>\n`;
-              summaryText += `</tr>\n<tr>\n`;
-              summaryText += `<td align="center"><a href="${fabricImg}"><img src="${fabricImg}" width="100%" alt="Fabric Relief Map" /></a></td>\n`;
-              summaryText += `<td align="center"><a href="${neoforgeImg}"><img src="${neoforgeImg}" width="100%" alt="NeoForge Relief Map" /></a></td>\n`;
-              summaryText += `</tr>\n</table>\n\n`;
+            if (!testStepSuccess) {
+              failures.push("Gradle task execution (`./gradlew runPresetTest`) exited with a non-zero exit code.");
             }
 
-            if (fs.existsSync(reportDir)) {
+            if (!fs.existsSync(reportDir)) {
+              failures.push(`Expected report directory '${reportDir}' was not generated. Headless server suite may have crashed during bootstrap.`);
+            } else {
               const files = fs.readdirSync(reportDir);
               const txtReports = files.filter(f => f.endsWith('_report.txt'));
 
-              if (txtReports.length > 0) {
-                reportFound = true;
-                const heightmapReports = [];
-                const seamReports = [];
+              for (const file of txtReports) {
+                const content = fs.readFileSync(path.join(reportDir, file), 'utf8');
+                const isFabric = content.toLowerCase().includes('loader: fabric') || file.toLowerCase().includes('fabric');
+                const loaderName = isFabric ? 'Fabric' : 'NeoForge';
+                const passed = content.includes('Outcome: PASSED');
 
-                for (const file of txtReports) {
-                  const content = fs.readFileSync(path.join(reportDir, file), 'utf8');
-                  const isFabric = content.toLowerCase().includes('loader: fabric') || file.toLowerCase().includes('fabric');
-                  const loaderName = isFabric ? 'Fabric' : 'NeoForge';
-                  const passed = content.includes('Outcome: PASSED');
-                  const statusIcon = passed ? '✅ PASSED' : '❌ FAILED';
+                if (content.includes('Heightmap Validation Report')) {
+                  const spawnMatch = content.match(/Spawn Chunk:\s*([^\r\n]+)/);
+                  const spanMatch = content.match(/Elevation Span:\s*([^\r\n]+)/);
+                  const presetMatch = content.match(/Preset:\s*([^\r\n]+)/);
+                  const maxStepMatch = content.match(/Max Adjacent Step:\s*([^\r\n]+)/);
 
-                  if (content.includes('Heightmap Validation Report') || file.startsWith('heightmap_')) {
-                    const spawnMatch = content.match(/Spawn Chunk:\s*([^\r\n]+)/);
-                    const spanMatch = content.match(/Elevation Span:\s*([^\r\n]+)/);
-                    const presetMatch = content.match(/Preset:\s*([^\r\n]+)/);
-                    const maxStepMatch = content.match(/Max Adjacent Step:\s*([^\r\n]+)/);
+                  const preset = presetMatch ? presetMatch[1].trim() : 'ftf';
+                  const spawn = spawnMatch ? spawnMatch[1].trim() : 'Unknown';
+                  const span = spanMatch ? spanMatch[1].trim() : 'Unknown';
+                  const maxStep = maxStepMatch ? maxStepMatch[1].trim() : 'Unknown';
 
-                    heightmapReports.push({
-                      loader: loaderName,
-                      preset: presetMatch ? presetMatch[1].trim() : 'ftf',
-                      spawn: spawnMatch ? spawnMatch[1].trim() : 'N/A',
-                      elevation: spanMatch ? spanMatch[1].trim() : 'N/A',
-                      maxStep: maxStepMatch ? maxStepMatch[1].trim() : 'N/A',
-                      status: statusIcon,
-                      content: content.trim()
-                    });
-                  } else if (content.includes('Seam Continuity Report') || file.startsWith('seam_continuity_')) {
-                    const presetMatch = content.match(/World Base Preset:\s*([^\r\n]+)/);
-                    const seamStepMatch = content.match(/Actual Max Seam Step:\s*([^\r\n]+)/);
-                    const parityMatch = content.match(/Session 3 vs Baseline:\s*([^\r\n]+)/);
-                    const pmMatch = content.match(/PM\.loadCheck\(\):\s*([^\r\n]+)/);
-
-                    seamReports.push({
-                      loader: loaderName,
-                      preset: presetMatch ? presetMatch[1].trim() : 'Huge Biomes',
-                      seamStep: seamStepMatch ? seamStepMatch[1].trim() : 'N/A',
-                      parity: parityMatch ? parityMatch[1].trim() : 'Identical',
-                      pm: pmMatch ? pmMatch[1].trim() : 'PASSED',
-                      status: statusIcon,
-                      content: content.trim()
-                    });
+                  if (!passed) {
+                    failures.push(`${loaderName} Spawn Heightmap Validation failed.`);
                   }
-                }
 
-                if (heightmapReports.length > 0) {
-                  summaryText += `#### 🏔️ Spawn Heightmap & Elevation Regularity\n\n`;
-                  summaryText += `| Loader | Preset | Spawn Chunk | Elevation Span | Max Step | Status |\n`;
-                  summaryText += `| :--- | :--- | :--- | :--- | :--- | :--- |\n`;
-                  for (const r of heightmapReports) {
-                    summaryText += `| **${r.loader}** | \`${r.preset}\` | ${r.spawn} | ${r.elevation} | ${r.maxStep} | ${r.status} |\n`;
+                  parsedSuites.push({
+                    suite: 'Spawn Heightmap & Regularity',
+                    loader: loaderName,
+                    target: `Preset \`${preset}\` @ ${spawn}`,
+                    metrics: `Span: ${span}, Max Step: ${maxStep}`,
+                    passed,
+                    statusText: passed ? '✓ PASSED' : '✗ FAILED',
+                    log: content.trim()
+                  });
+                } else if (content.includes('Multi-Run Seam Continuity Report')) {
+                  const presetMatch = content.match(/World Base Preset:\s*([^\r\n]+)/);
+                  const seamStepMatch = content.match(/Actual Max Seam Step:\s*([^\r\n]+)/);
+                  const parityMatch = content.match(/Session 3 vs Baseline:\s*([^\r\n]+)/);
+                  const pmMatch = content.match(/PM\.loadCheck\(\):\s*([^\r\n]+)/);
+
+                  const preset = presetMatch ? presetMatch[1].trim() : 'Huge Biomes';
+                  const seamStep = seamStepMatch ? seamStepMatch[1].trim() : 'Unknown';
+                  const parity = parityMatch ? parityMatch[1].trim() : 'Identical';
+                  const pm = pmMatch ? pmMatch[1].trim() : 'PASSED';
+
+                  if (!passed) {
+                    failures.push(`${loaderName} Multi-Run Seam Continuity failed.`);
                   }
-                  summaryText += `\n`;
-                }
 
-                if (seamReports.length > 0) {
-                  summaryText += `#### 🌐 Multi-Run Seam Continuity (Issue #330 Leak Defense)\n\n`;
-                  summaryText += `| Loader | World Preset | Seam Step | Bit Parity | PresetManager Ground Truth | Status |\n`;
-                  summaryText += `| :--- | :--- | :--- | :--- | :--- | :--- |\n`;
-                  for (const r of seamReports) {
-                    summaryText += `| **${r.loader}** | \`${r.preset}\` | ${r.seamStep} | ${r.parity} | ${r.pm} | ${r.status} |\n`;
-                  }
-                  summaryText += `\n`;
-                }
-
-                summaryText += `### 📄 Detailed Validation Logs\n\n`;
-                for (const r of heightmapReports) {
-                  summaryText += `<details>\n<summary><b>📊 Heightmap Validation: ${r.loader} (${r.status})</b></summary>\n\n\`\`\`text\n${r.content}\n\`\`\`\n</details>\n\n`;
-                }
-                for (const r of seamReports) {
-                  summaryText += `<details>\n<summary><b>📊 Seam Continuity: ${r.loader} (${r.status})</b></summary>\n\n\`\`\`text\n${r.content}\n\`\`\`\n</details>\n\n`;
+                  parsedSuites.push({
+                    suite: 'Multi-Run Seam Continuity',
+                    loader: loaderName,
+                    target: `Preset \`${preset}\` (Issue #330)`,
+                    metrics: `Seam Step: ${seamStep}, Parity: ${parity}`,
+                    passed,
+                    statusText: passed ? '✓ PASSED' : '✗ FAILED',
+                    log: content.trim()
+                  });
                 }
               }
             }
 
-            if (!reportFound) {
-              summaryText += `⚠️ *No report files found. The test suite may have encountered an early build/startup failure. Check the [Run Logs](${runUrl}) for details.*\n\n`;
+            // Verify that all 4 expected suites were executed
+            const expectedSuites = [
+              { suite: 'Spawn Heightmap & Regularity', loader: 'Fabric' },
+              { suite: 'Spawn Heightmap & Regularity', loader: 'NeoForge' },
+              { suite: 'Multi-Run Seam Continuity', loader: 'Fabric' },
+              { suite: 'Multi-Run Seam Continuity', loader: 'NeoForge' }
+            ];
+
+            for (const exp of expectedSuites) {
+              const found = parsedSuites.find(s => s.suite === exp.suite && s.loader === exp.loader);
+              if (!found) {
+                failures.push(`Missing expected test run: ${exp.suite} on ${exp.loader}.`);
+              }
             }
 
-            summaryText += `---\n*Generated automatically by FreeTerraForged Preset CI.*`;
+            const overallPassed = failures.length === 0;
 
-            // 1. Write to the "Details" page at the bottom of the PR
-            await core.summary.addRaw(summaryText).write();
+            // --- BUILD EXECUTIVE REPORT ---
+            let report = '';
+            if (overallPassed) {
+              report += `## 🗺️ FreeTerraForged Verification Report: ✓ PASSED\n\n`;
+            } else {
+              report += `## 🗺️ FreeTerraForged Verification Report: ✗ FAILED\n\n`;
+            }
 
-            // 2. Post or update a sticky comment on the PR conversation thread
+            report += `> **Commit:** [\`${sha}\`](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/commit/${context.sha}) | **Run:** [#${context.runId}](${runUrl}) | **Suites Verified:** ${parsedSuites.filter(s => s.passed).length} / ${expectedSuites.length}\n\n`;
+
+            if (!overallPassed) {
+              report += `> [!CAUTION]\n`;
+              report += `> **Verification Failures Detected:**\n`;
+              for (const f of failures) {
+                report += `> - ${f}\n`;
+              }
+              report += `\n`;
+            }
+
+            // Image-First Visibility: Visual Shaded Relief Map Cards
+            if (prNumber) {
+              const rawBase = `https://raw.githubusercontent.com/${context.repo.owner}/${context.repo.repo}/verification-assets/pr-${prNumber}`;
+              const fabricImg = `${rawBase}/fabric_spawn_relief.png?v=${sha}`;
+              const neoforgeImg = `${rawBase}/neoforge_spawn_relief.png?v=${sha}`;
+
+              report += `### 🌄 Worldgen Shaded Relief Previews (Live Spawn)\n\n`;
+              report += `<table>\n<tr>\n`;
+              report += `<th align="center" width="50%">Fabric Shaded Relief</th>\n`;
+              report += `<th align="center" width="50%">NeoForge Shaded Relief</th>\n`;
+              report += `</tr>\n<tr>\n`;
+              report += `<td align="center"><a href="${fabricImg}"><img src="${fabricImg}" width="100%" alt="Fabric Spawn Relief" /></a></td>\n`;
+              report += `<td align="center"><a href="${neoforgeImg}"><img src="${neoforgeImg}" width="100%" alt="NeoForge Spawn Relief" /></a></td>\n`;
+              report += `</tr>\n</table>\n\n`;
+            }
+
+            // Test Suite Execution Matrix
+            report += `### 📋 Test Suite Execution Matrix\n\n`;
+            report += `| Test Suite | Loader | Target Configuration | Key Metrics | Outcome |\n`;
+            report += `| :--- | :--- | :--- | :--- | :--- |\n`;
+
+            for (const s of parsedSuites) {
+              report += `| **${s.suite}** | **${s.loader}** | ${s.target} | ${s.metrics} | \`${s.statusText}\` |\n`;
+            }
+            report += `\n`;
+
+            // Collapsible Detailed Logs
+            if (parsedSuites.length > 0) {
+              report += `<details>\n<summary><b>🔍 Detailed Diagnostic Logs (${parsedSuites.length} suites)</b></summary>\n\n`;
+              for (const s of parsedSuites) {
+                report += `#### ${s.loader}: ${s.suite} (${s.statusText})\n\n\`\`\`text\n${s.log}\n\`\`\`\n\n`;
+              }
+              report += `</details>\n\n`;
+            }
+
+            report += `---\n*Artifacts: [Download Raw Heightmaps & Diagnostic Outputs](${runUrl})*`;
+
+            // 1. Write to GitHub Step Summary (opens from "Details" on the PR verification check)
+            await core.summary.addRaw(report).write();
+
+            // 2. Post or update the sticky comment on the PR conversation thread
             if (prNumber) {
               const { data: comments } = await github.rest.issues.listComments({
                 ...context.repo,
                 issue_number: prNumber
               });
 
-              const botComment = comments.find(c => c.body.includes('FreeTerraForged Preset Verification Summary'));
+              const botComment = comments.find(c => c.body.includes('FreeTerraForged Verification Report:'));
 
               if (botComment) {
                 await github.rest.issues.updateComment({
                   ...context.repo,
                   comment_id: botComment.id,
-                  body: summaryText
+                  body: report
                 });
               } else {
                 await github.rest.issues.createComment({
                   ...context.repo,
                   issue_number: prNumber,
-                  body: summaryText
+                  body: report
                 });
               }
+            }
+
+            // STRICT ENFORCEMENT: Fail the GitHub Actions job if verification failed or missing
+            if (!overallPassed) {
+              core.setFailed(`Preset Verification Failed: ${failures.join('; ')}`);
             }
