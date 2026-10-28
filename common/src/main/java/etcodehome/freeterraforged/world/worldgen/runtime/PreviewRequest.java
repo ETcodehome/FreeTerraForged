@@ -19,6 +19,7 @@ public record PreviewRequest(
 	long resourceRevision,
 	String resourceLayerFingerprint,
 	TagEpoch tagEpoch,
+	BiomeReplacementConfigSnapshot biomeReplacementConfig,
 	WorldgenContributionRevision.Snapshot contributionRevision
 ) implements WorldgenOwner {
 	public PreviewRequest {
@@ -33,6 +34,9 @@ public record PreviewRequest(
 		}
 		resourceLayerFingerprint = Objects.requireNonNull(resourceLayerFingerprint, "resourceLayerFingerprint");
 		tagEpoch = Objects.requireNonNull(tagEpoch, "tagEpoch");
+		biomeReplacementConfig = Objects.requireNonNull(
+			biomeReplacementConfig, "biomeReplacementConfig"
+		);
 		contributionRevision = Objects.requireNonNull(contributionRevision, "contributionRevision");
 		if (!contributionRevision.dimension().equals(dimension.location())) {
 			throw new IllegalArgumentException("Contribution revision belongs to a different dimension");
@@ -48,11 +52,13 @@ public record PreviewRequest(
 		String settingsIdentity,
 		String resourceLayerFingerprint,
 		TagEpoch tagEpoch,
+		BiomeReplacementConfigSnapshot biomeReplacementConfig,
 		WorldgenContributionRevision.Snapshot contributionRevision
 	) {
 		return new PreviewRequest(
 			UUID.randomUUID(), dimension, seed, registries, lookups, selectedStem,
-			settingsIdentity, 0L, resourceLayerFingerprint, tagEpoch, contributionRevision
+			settingsIdentity, 0L, resourceLayerFingerprint, tagEpoch,
+			biomeReplacementConfig, contributionRevision
 		);
 	}
 

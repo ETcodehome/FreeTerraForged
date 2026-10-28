@@ -29,6 +29,7 @@ import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 import etcodehome.freeterraforged.world.worldgen.FlowSettingsSnapshot;
 import etcodehome.freeterraforged.world.worldgen.IFlowSettingsHolder;
+import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementConfigStore;
 import etcodehome.freeterraforged.world.worldgen.runtime.TagEpoch;
 import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenEpoch;
@@ -91,6 +92,7 @@ public class MixinChunkMap {
 				resourceRevision
 			),
 			new TagEpoch(0L, WorldgenFingerprints.tags(serverLevel.registryAccess())),
+			BiomeReplacementConfigStore.capture(),
 			WorldgenContributionRevision.snapshot(dimension, providerCatalog)
 		);
 		try {
