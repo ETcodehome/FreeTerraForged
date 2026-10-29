@@ -30,5 +30,7 @@ public interface WorldgenOwner {
 
 	TagEpoch tagEpoch();
 
+	BiomeReplacementConfigSnapshot biomeReplacementConfig();
+
 	WorldgenContributionRevision.Snapshot contributionRevision();
 }

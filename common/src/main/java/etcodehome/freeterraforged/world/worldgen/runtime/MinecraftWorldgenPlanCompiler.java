@@ -145,11 +145,12 @@ public final class MinecraftWorldgenPlanCompiler {
 		WorldgenPlan negotiated = compiler.compile(base, purpose, cancelled);
 		checkCancelled(cancelled);
 		WorldgenPlan selected = finalizeSelectionPipeline(
-			materializeCandidateOwnership(negotiated), purpose
+			applyBiomeReplacementRemovals(materializeCandidateOwnership(negotiated)), purpose
 		);
 		checkCancelled(cancelled);
 		WorldgenPlan plan = materializeGraphDependentFacets(base, selected, purpose);
 		checkCancelled(cancelled);
+		logBiomeReplacementPlan(plan, purpose);
 		if (FTFCommon.LOGGER.isDebugEnabled()) {
 			Map<CapabilityState, Long> states = plan.report().nodes().stream().collect(
 				java.util.stream.Collectors.groupingBy(
@@ -159,11 +160,12 @@ public final class MinecraftWorldgenPlanCompiler {
 				)
 			);
 			FTFCommon.LOGGER.debug(
-				"Compiled worldgen plan owner={} type={} purpose={} tag_epoch={} contribution_epoch={} elapsed_ms={} capability_nodes={} states={}",
+				"Compiled worldgen plan owner={} type={} purpose={} tag_epoch={} biome_replacement_revision={} contribution_epoch={} elapsed_ms={} capability_nodes={} states={}",
 				owner.id(),
 				owner.type(),
 				purpose,
 				owner.tagEpoch().sequence(),
+				owner.biomeReplacementConfig().revision(),
 				owner.contributionRevision().revisions(),
 				String.format(java.util.Locale.ROOT, "%.3f", (System.nanoTime() - started) / 1_000_000.0D),
 				plan.report().nodes().size(),
@@ -171,6 +173,56 @@ public final class MinecraftWorldgenPlanCompiler {
 			);
 		}
 		return plan;
+	}
+
+	private static void logBiomeReplacementPlan(
+		WorldgenPlan plan,
+		WorldgenCompilationPurpose purpose
+	) {
+		WorldgenPlans.BiomeReplacement facet = plan.biomeReplacement();
+		BiomeReplacementPlan replacement = facet.plan();
+		BiomeReplacementConfigSnapshot config = replacement.config();
+		String summary =
+			"Compiled biome replacement plan owner={} type={} purpose={} dimension={} config_revision={} "
+				+ "origin={} decisions={} removals={} fingerprint={}";
+		Object[] summaryArguments = {
+			plan.owner().id(), plan.owner().type(), purpose, plan.owner().dimension().location(),
+			config.revision(), config.origin(), replacement.decisionCount(),
+			replacement.removals().size(), config.fingerprint()
+		};
+		if (purpose == WorldgenCompilationPurpose.WORLDGEN || replacement.active()) {
+			FTFCommon.LOGGER.info(summary, summaryArguments);
+		} else {
+			FTFCommon.LOGGER.debug(summary, summaryArguments);
+		}
+		if (purpose == WorldgenCompilationPurpose.WORLDGEN
+			&& config.origin() == BiomeReplacementConfigSnapshot.Origin.MIGRATED_LEGACY) {
+			FTFCommon.LOGGER.info(
+				"Migrated config/{} into authoritative FTF destination {}; subsequent legacy edits are not merged",
+				BiomeReplacementConfigStore.LEGACY_FILE_NAME, config.path()
+			);
+		} else if (purpose == WorldgenCompilationPurpose.WORLDGEN && config.legacyFilePresent()) {
+			FTFCommon.LOGGER.info(
+				"FTF biome replacement uses authoritative destination {}; config/{} is present but ignored by this owner plan",
+				config.path(), BiomeReplacementConfigStore.LEGACY_FILE_NAME
+			);
+		}
+		for (BiomeReplacementConfig.Diagnostic diagnostic : replacement.diagnostics()) {
+			String line = diagnostic.line() == 0 ? "" : " line=" + diagnostic.line();
+			String message = "Biome replacement diagnostic [" + diagnostic.code() + "]"
+				+ line + ": " + diagnostic.message();
+			switch (diagnostic.severity()) {
+				case ERROR -> FTFCommon.LOGGER.error(message);
+				case WARNING -> FTFCommon.LOGGER.warn(message);
+				case INFO -> {
+					if (purpose == WorldgenCompilationPurpose.WORLDGEN) {
+						FTFCommon.LOGGER.info(message);
+					} else {
+						FTFCommon.LOGGER.debug(message);
+					}
+				}
+			}
+		}
 	}
 
 	private static void checkCancelled(BooleanSupplier cancelled) {
@@ -279,6 +331,26 @@ public final class MinecraftWorldgenPlanCompiler {
 			Optional.empty()
 		);
 
+		WorldgenPlans.BiomeReplacement replacementPlan = compileFacet(
+			WorldgenFacet.BIOME_REPLACEMENT,
+			() -> new WorldgenPlans.BiomeReplacement(
+				descriptor(
+					WorldgenFacet.BIOME_REPLACEMENT,
+					CapabilityState.NORMALIZED,
+					"Owner-captured native rules are bound to the frozen biome registry and tag snapshot"
+				),
+				BiomeReplacementCompiler.compile(owner)
+			),
+			failure -> new WorldgenPlans.BiomeReplacement(
+				failure,
+				new BiomeReplacementPlan(
+					owner.biomeReplacementConfig(), owner.dimension().location(),
+					Map.of(), java.util.Set.of(), java.util.Set.of(),
+					owner.biomeReplacementConfig().config().diagnostics()
+				)
+			)
+		);
+
 		WorldgenPlans.DensitySettings densityPlan;
 		WorldgenPlans.Surface surfacePlan;
 		if (!purpose.includes(WorldgenFacet.DENSITY_SETTINGS)) {
@@ -346,16 +418,16 @@ public final class MinecraftWorldgenPlanCompiler {
 		);
 
 		List<WorldgenPlans.DomainPlan> plans = List.of(
-			biomePlan, providerPlan, decorationPlan, spatialPlan, samplerPlan,
+			biomePlan, providerPlan, decorationPlan, spatialPlan, samplerPlan, replacementPlan,
 			densityPlan, surfacePlan, carverPlan, featurePlan, structurePlan
 		);
 		plans.forEach(plan -> reports.add(plan.descriptor().report(owner)));
 		addCarverReports(owner, carverPlan, reports);
 		addFeatureReports(owner, featurePlan, reports);
 		addStructureReports(owner, structurePlan, reports);
-		WorldgenExecution execution = WorldgenExecution.serial().withQueryMode(
-			WorldgenFacet.SAMPLER_DECORATION, WorldgenQueryMode.ISOLATED_PARALLEL_READ
-		);
+		WorldgenExecution execution = WorldgenExecution.serial()
+			.withQueryMode(WorldgenFacet.SAMPLER_DECORATION, WorldgenQueryMode.ISOLATED_PARALLEL_READ)
+			.withQueryMode(WorldgenFacet.BIOME_REPLACEMENT, WorldgenQueryMode.ISOLATED_PARALLEL_READ);
 		if (directInput.isPresent()) {
 			execution = execution
 				.withQueryMode(WorldgenFacet.PROVIDER_SELECTION, directInput.orElseThrow().queryMode())
@@ -363,7 +435,7 @@ public final class MinecraftWorldgenPlanCompiler {
 				.withQueryMode(WorldgenFacet.SPATIAL_OWNERSHIP, WorldgenQueryMode.ISOLATED_PARALLEL_READ);
 		}
 		return new WorldgenPlan(
-			owner, biomePlan, providerPlan, decorationPlan, spatialPlan, samplerPlan,
+			owner, biomePlan, providerPlan, decorationPlan, spatialPlan, samplerPlan, replacementPlan,
 			densityPlan, surfacePlan, carverPlan, featurePlan, structurePlan,
 			execution, new WorldgenCapabilityReport(reports, execution)
 		);
@@ -472,7 +544,8 @@ public final class MinecraftWorldgenPlanCompiler {
 		return new WorldgenPlan(
 			owner, selected.biomeComposition(), selected.providerSelection(),
 			selected.selectionDecoration(), selected.spatialOwnership(), selected.samplerDecoration(),
-			selected.densitySettings(), selected.surface(), carvers, features, selected.structures(),
+			selected.biomeReplacement(), selected.densitySettings(), selected.surface(), carvers, features,
+			selected.structures(),
 			selected.execution(), new WorldgenCapabilityReport(
 				reports, selected.execution(), selected.report().providerDiagnostics()
 			)
@@ -610,6 +683,94 @@ public final class MinecraftWorldgenPlanCompiler {
 		);
 	}
 
+	static WorldgenPlan applyBiomeReplacementRemovals(WorldgenPlan plan) {
+		WorldgenPlans.BiomeReplacement replacementFacet = plan.biomeReplacement();
+		if (replacementFacet.descriptor().state() == CapabilityState.UNAVAILABLE) {
+			return plan;
+		}
+		BiomeReplacementPlan replacement = replacementFacet.plan();
+		if (replacement.removals().isEmpty()) {
+			return plan;
+		}
+		WorldgenPlans.ProviderSelection providers = plan.providerSelection();
+		if (providers.directInput().isPresent()) {
+			List<String> removedOutputs = providers.directInput().orElseThrow().possibleOutputs().stream()
+				.filter(replacement::isRemoved)
+				.map(MinecraftWorldgenPlanCompiler::biomeId)
+				.sorted()
+				.toList();
+			if (!removedOutputs.isEmpty()) {
+				throw new IllegalStateException(
+					"Biome removal is unsupported for direct custom source "
+						+ providers.directInput().orElseThrow().id() + " because it declares removed output(s) "
+						+ removedOutputs + " without a provider-base fallback contract"
+				);
+			}
+			return plan;
+		}
+
+		List<WorldgenPlans.ProviderDomain> filteredDomains = new ArrayList<>();
+		for (WorldgenPlans.ProviderDomain domain : providers.providers()) {
+			Climate.ParameterList<Holder<Biome>> filtered = filterRequiredCandidateTable(
+				domain.candidates(), replacement, "required provider domain " + domain.id()
+			);
+			filteredDomains.add(filtered == domain.candidates()
+				? domain
+				: new WorldgenPlans.ProviderDomain(
+					domain.id(), domain.weight(), filtered, domain.registrationOrder()
+				));
+		}
+		Optional<Climate.ParameterList<Holder<Biome>>> filteredFallback = providers.fallback()
+			.map(table -> filterRequiredCandidateTable(
+				table, replacement, "the required provider fallback table"
+			));
+		WorldgenPlans.ProviderSelection filteredProviders = new WorldgenPlans.ProviderSelection(
+			providers.descriptor(), providers.salt(), filteredDomains,
+			providers.rootCompositionDomain(), filteredFallback, providers.deferredPlaceholder()
+		);
+
+		WorldgenPlans.BiomeComposition composition = plan.biomeComposition();
+		List<Pair<Climate.ParameterPoint, Holder<Biome>>> filteredEntries = composition.entries().stream()
+			.filter(entry -> !replacement.isRemoved(entry.getSecond()))
+			.toList();
+		WorldgenPlans.BiomeComposition filteredComposition = composition;
+		if (filteredEntries.size() != composition.entries().size()) {
+			if (filteredEntries.isEmpty()) {
+				throw new IllegalStateException("Biome removal empties the selected root composition");
+			}
+			filteredComposition = new WorldgenPlans.BiomeComposition(
+				composition.descriptor(), filteredEntries, composition.stages(),
+				Optional.of(BiomeCandidateRoot.fromEntries(filteredEntries))
+			);
+		}
+		return new WorldgenPlan(
+			plan.owner(), filteredComposition, filteredProviders, plan.selectionDecoration(),
+			plan.spatialOwnership(), plan.samplerDecoration(), plan.biomeReplacement(),
+			plan.densitySettings(), plan.surface(), plan.carvers(), plan.placedFeatures(),
+			plan.structures(), plan.execution(), plan.report()
+		);
+	}
+
+	static Climate.ParameterList<Holder<Biome>> filterRequiredCandidateTable(
+		Climate.ParameterList<Holder<Biome>> table,
+		BiomeReplacementPlan replacement,
+		String description
+	) {
+		List<Pair<Climate.ParameterPoint, Holder<Biome>>> filtered = table.values().stream()
+			.filter(entry -> !replacement.isRemoved(entry.getSecond()))
+			.toList();
+		if (filtered.isEmpty()) {
+			throw new IllegalStateException("Biome removal empties " + description);
+		}
+		return filtered.size() == table.values().size()
+			? table
+			: new Climate.ParameterList<>(filtered);
+	}
+
+	private static String biomeId(Holder<Biome> biome) {
+		return biome.unwrapKey().map(key -> key.location().toString()).orElse("<unregistered>");
+	}
+
 	private static WorldgenPlan replaceSelectionMaterialization(
 		WorldgenPlan plan,
 		WorldgenPlans.BiomeComposition composition,
@@ -645,7 +806,8 @@ public final class MinecraftWorldgenPlanCompiler {
 		}
 		return new WorldgenPlan(
 			plan.owner(), composition, providers,
-			plan.selectionDecoration(), spatial, plan.samplerDecoration(), plan.densitySettings(),
+			plan.selectionDecoration(), spatial, plan.samplerDecoration(), plan.biomeReplacement(),
+			plan.densitySettings(),
 			plan.surface(), plan.carvers(), plan.placedFeatures(), plan.structures(), execution,
 			new WorldgenCapabilityReport(reports, execution, plan.report().providerDiagnostics())
 		);
@@ -705,7 +867,7 @@ public final class MinecraftWorldgenPlanCompiler {
 			}
 			return new WorldgenPlan(
 				plan.owner(), plan.biomeComposition(), plan.providerSelection(), selection,
-				plan.spatialOwnership(), sampler, plan.densitySettings(),
+				plan.spatialOwnership(), sampler, plan.biomeReplacement(), plan.densitySettings(),
 				plan.surface(), plan.carvers(), plan.placedFeatures(), plan.structures(), execution,
 				new WorldgenCapabilityReport(reports, execution, plan.report().providerDiagnostics())
 			);
@@ -759,7 +921,8 @@ public final class MinecraftWorldgenPlanCompiler {
 		}
 		return new WorldgenPlan(
 			plan.owner(), plan.biomeComposition(), plan.providerSelection(),
-			finalized, plan.spatialOwnership(), plan.samplerDecoration(), plan.densitySettings(),
+			finalized, plan.spatialOwnership(), plan.samplerDecoration(), plan.biomeReplacement(),
+			plan.densitySettings(),
 			plan.surface(), plan.carvers(), plan.placedFeatures(), plan.structures(), execution,
 			new WorldgenCapabilityReport(reports, execution, plan.report().providerDiagnostics())
 		);

@@ -7,6 +7,8 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.world.level.WorldDataConfiguration;
 import net.minecraft.world.level.dimension.LevelStem;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
+import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementConfigSnapshot;
+import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementConfigStore;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenCapabilityDiscovery;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenContributionRevision;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenFingerprints;
@@ -62,6 +64,7 @@ final class PreviewRequestKeyFactory implements AutoCloseable {
 					: WorldgenCapabilityDiscovery.discover(PreviewRequestKeyFactory.class.getClassLoader());
 		WorldDataConfiguration dataConfiguration = input.dataConfiguration();
 		String settingsIdentity = WorldgenSettingsIdentity.describe(selectedStem.generator());
+		BiomeReplacementConfigSnapshot biomeReplacementConfig = BiomeReplacementConfigStore.capture();
 		String tagFingerprint = this.current != null
 			&& this.current.registrySnapshot() == registries
 			? this.current.tagFingerprint()
@@ -69,7 +72,7 @@ final class PreviewRequestKeyFactory implements AutoCloseable {
 
 		if (this.current != null && this.current.sameInputs(
 			input.seed(), presetFingerprint, dataConfiguration, settingsIdentity,
-			tagFingerprint, registries, selectedStem, providers
+			tagFingerprint, biomeReplacementConfig, registries, selectedStem, providers
 		)) {
 			WorldgenContributionRevision.Snapshot contributions = WorldgenContributionRevision.snapshot(
 				LevelStem.OVERWORLD, this.current.providers()
@@ -86,7 +89,7 @@ final class PreviewRequestKeyFactory implements AutoCloseable {
 		this.requireActive(cancelled);
 		this.current = new BiomePreview.CacheKey(
 			input.seed(), presetFingerprint, dataConfiguration, settingsIdentity,
-			tagFingerprint, contributions, registries, selectedStem, providers,
+			tagFingerprint, biomeReplacementConfig, contributions, registries, selectedStem, providers,
 			this.advanceGeneration()
 		);
 		return this.current;

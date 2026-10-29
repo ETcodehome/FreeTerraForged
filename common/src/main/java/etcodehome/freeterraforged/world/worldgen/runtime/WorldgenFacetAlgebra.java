@@ -23,6 +23,7 @@ public final class WorldgenFacetAlgebra {
 		kinds.put(WorldgenFacet.SAMPLER_DECORATION, EnumSet.of(
 			WorldgenContributionKind.ORDERED_TRANSFORM
 		));
+		kinds.put(WorldgenFacet.BIOME_REPLACEMENT, Set.of());
 		kinds.put(WorldgenFacet.SURFACE, EnumSet.of(
 			WorldgenContributionKind.UNIQUE_ROOT,
 			WorldgenContributionKind.ORDERED_TRANSFORM

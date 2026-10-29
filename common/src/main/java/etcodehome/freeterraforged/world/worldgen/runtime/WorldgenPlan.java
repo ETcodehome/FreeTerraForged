@@ -9,6 +9,7 @@ public record WorldgenPlan(
 	WorldgenPlans.SelectionDecoration selectionDecoration,
 	WorldgenPlans.SpatialOwnership spatialOwnership,
 	WorldgenPlans.SamplerDecoration samplerDecoration,
+	WorldgenPlans.BiomeReplacement biomeReplacement,
 	WorldgenPlans.DensitySettings densitySettings,
 	WorldgenPlans.Surface surface,
 	WorldgenPlans.Carvers carvers,
@@ -24,6 +25,7 @@ public record WorldgenPlan(
 		selectionDecoration = Objects.requireNonNull(selectionDecoration, "selectionDecoration");
 		spatialOwnership = Objects.requireNonNull(spatialOwnership, "spatialOwnership");
 		samplerDecoration = Objects.requireNonNull(samplerDecoration, "samplerDecoration");
+		biomeReplacement = Objects.requireNonNull(biomeReplacement, "biomeReplacement");
 		densitySettings = Objects.requireNonNull(densitySettings, "densitySettings");
 		surface = Objects.requireNonNull(surface, "surface");
 		carvers = Objects.requireNonNull(carvers, "carvers");
@@ -43,6 +45,7 @@ public record WorldgenPlan(
 			case SELECTION_DECORATION -> this.selectionDecoration;
 			case SPATIAL_OWNERSHIP -> this.spatialOwnership;
 			case SAMPLER_DECORATION -> this.samplerDecoration;
+			case BIOME_REPLACEMENT -> this.biomeReplacement;
 			case DENSITY_SETTINGS -> this.densitySettings;
 			case SURFACE -> this.surface;
 			case CARVERS -> this.carvers;
