@@ -993,6 +993,16 @@ public final class PresetValidationRunner {
 				sb.append("\n");
 			}
 			Files.writeString(summaryFile, sb.toString(), StandardCharsets.UTF_8);
+
+			// Automatically compile and write paired local HTML report
+			try {
+				Path htmlReport = LocalTestReportGenerator.generate(reportDir);
+				if (htmlReport != null) {
+					FTFCommon.LOGGER.info("[FTF-Test] Local HTML verification report generated: {}", htmlReport.toUri());
+				}
+			} catch (Throwable t) {
+				FTFCommon.LOGGER.warn("[FTF-Test] Failed to generate local HTML report: {}", t.getMessage());
+			}
 		} catch (Exception e) {
 			FTFCommon.LOGGER.warn("[FTF-Test] Failed to archive suite summary: {}", e.getMessage());
 		}
@@ -1081,6 +1091,10 @@ public final class PresetValidationRunner {
 						String timestamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
 						Path reportFile = reportDir.resolve(String.format("timeout_%s_%s_report.txt", loader, timestamp));
 						Files.writeString(reportFile, dump.toString(), StandardCharsets.UTF_8);
+						try {
+							LocalTestReportGenerator.generate(reportDir);
+						} catch (Throwable ignored) {
+						}
 					} catch (Exception io) {
 						FTFCommon.LOGGER.error("[FTF-Test] Failed to write timeout report file: {}", io.getMessage());
 					}
