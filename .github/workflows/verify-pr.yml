@@ -330,11 +330,9 @@ jobs:
             const passedCount = parsedSuites.filter(s => s.passed && baseTestTokens.some(b => s.token.startsWith(b))).length;
 
             if (overallPassed) {
-              report += `![Pass](https://img.shields.io/badge/verification-passed-brightgreen?style=for-the-badge)\n\n`;
-              report += `Commit: [\`${sha}\`](${commitUrl}) | Run: [#${context.runId}](${runUrl}) | ${passedCount} / ${totalExpected} Tests Run\n\n`;
+              report += `![Pass](https://img.shields.io/badge/verification-passed-brightgreen?style=for-the-badge)&nbsp;&nbsp;Commit: [\`${sha}\`](${commitUrl}) | Run: [#${context.runId}](${runUrl}) | ${passedCount} / ${totalExpected} Tests Run\n\n`;
             } else {
-              report += `![Fail](https://img.shields.io/badge/verification-failed-red?style=for-the-badge)\n\n`;
-              report += `Commit: [\`${sha}\`](${commitUrl}) | Run: [#${context.runId}](${runUrl}) | ${passedCount} / ${totalExpected} Tests Run\n\n`;
+              report += `![Fail](https://img.shields.io/badge/verification-failed-red?style=for-the-badge)&nbsp;&nbsp;Commit: [\`${sha}\`](${commitUrl}) | Run: [#${context.runId}](${runUrl}) | ${passedCount} / ${totalExpected} Tests Run\n\n`;
               report += `> [!CAUTION]\n`;
               report += `> **Failures:**\n`;
               for (const f of failures) {
