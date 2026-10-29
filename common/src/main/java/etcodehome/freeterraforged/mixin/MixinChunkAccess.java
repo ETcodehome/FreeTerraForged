@@ -2,29 +2,24 @@ package etcodehome.freeterraforged.mixin;
 
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import org.jetbrains.annotations.Nullable;
 import net.minecraft.world.level.chunk.ChunkAccess;
-import net.minecraft.world.level.levelgen.NoiseChunk;
 import etcodehome.freeterraforged.world.worldgen.IFlowFieldHolder;
 import etcodehome.freeterraforged.world.worldgen.ChunkFlowField;
-import etcodehome.freeterraforged.world.worldgen.NoiseChunkHolder;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.NoiseChunkTileOwner;
+import etcodehome.freeterraforged.world.worldgen.IChunkCellsHolder;
+import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
+import etcodehome.freeterraforged.world.worldgen.cell.Cell;
+import etcodehome.freeterraforged.world.worldgen.cell.filter.ChunkFilterGrid;
 
 @Mixin(ChunkAccess.class)
-public abstract class MixinChunkAccess implements IFlowFieldHolder, NoiseChunkHolder {
-	@Shadow @Nullable protected NoiseChunk noiseChunk;
-
+public abstract class MixinChunkAccess implements IFlowFieldHolder, IChunkCellsHolder {
 	@Unique
 	@Nullable
 	private volatile ChunkFlowField freeterraforged$flowField;
+
 	@Unique
-	private int freeterraforged$tileStageDepth;
-	@Unique
-	private int freeterraforged$attachedTileStageDepth;
+	@Nullable
+	private volatile Cell[] freeterraforged$chunkCells;
 
 	@Override
 	public ChunkFlowField freeterraforged$getFlowField() {
@@ -48,67 +43,36 @@ public abstract class MixinChunkAccess implements IFlowFieldHolder, NoiseChunkHo
 	}
 
 	@Override
-	public NoiseChunk freeterraforged$getNoiseChunk() {
-		return this.noiseChunk;
+	@Nullable
+	public Cell[] freeterraforged$getChunkCells() {
+		return this.freeterraforged$chunkCells;
 	}
 
 	@Override
-	public synchronized void freeterraforged$beginNoiseChunkTileStage() {
-		this.freeterraforged$tileStageDepth++;
-		try {
-			this.freeterraforged$attachPendingTileStages();
-		} catch (RuntimeException | Error failure) {
-			this.freeterraforged$tileStageDepth--;
-			throw failure;
-		}
+	public void freeterraforged$setChunkCells(Cell[] cells) {
+		this.freeterraforged$chunkCells = cells;
 	}
 
 	@Override
-	public synchronized void freeterraforged$endNoiseChunkTileStage() {
-		if (this.freeterraforged$tileStageDepth <= 0) {
-			throw new IllegalStateException("NoiseChunk tile-stage ownership underflow");
+	public Cell[] freeterraforged$getOrCreateChunkCells(GeneratorContext context) {
+		Cell[] current = this.freeterraforged$chunkCells;
+		if (current != null) {
+			return current;
 		}
-		this.freeterraforged$tileStageDepth--;
-		if (this.freeterraforged$attachedTileStageDepth > this.freeterraforged$tileStageDepth) {
-			this.freeterraforged$attachedTileStageDepth--;
-			if (this.noiseChunk instanceof NoiseChunkTileOwner owner) {
-				owner.freeterraforged$endTileStage();
-			} else {
-				throw new IllegalStateException("Attached NoiseChunk does not expose tile ownership");
+		synchronized (this) {
+			current = this.freeterraforged$chunkCells;
+			if (current == null) {
+				ChunkAccess chunk = (ChunkAccess) (Object) this;
+				current = context.filteredChunkCache.getFilteredChunk(chunk.getPos().x, chunk.getPos().z);
+				this.freeterraforged$chunkCells = current;
 			}
 		}
+		return current;
 	}
 
-	@Inject(method = "getOrCreateNoiseChunk", at = @At("RETURN"))
-	private synchronized void freeterraforged$attachCreatedNoiseChunk(
-		java.util.function.Function<ChunkAccess, NoiseChunk> factory,
-		CallbackInfoReturnable<NoiseChunk> callback
-	) {
-		this.freeterraforged$attachPendingTileStages();
+	@Override
+	public Cell freeterraforged$getCell(int localX, int localZ, GeneratorContext context) {
+		Cell[] cells = this.freeterraforged$getOrCreateChunkCells(context);
+		return cells[(localZ & 15) * 16 + (localX & 15)];
 	}
-
-	@Unique
-	private void freeterraforged$attachPendingTileStages() {
-		if (!(this.noiseChunk instanceof NoiseChunkTileOwner owner)) {
-			return;
-		}
-		int initialDepth = this.freeterraforged$attachedTileStageDepth;
-		try {
-			while (this.freeterraforged$attachedTileStageDepth < this.freeterraforged$tileStageDepth) {
-				owner.freeterraforged$beginTileStage();
-				this.freeterraforged$attachedTileStageDepth++;
-			}
-		} catch (RuntimeException | Error failure) {
-			while (this.freeterraforged$attachedTileStageDepth > initialDepth) {
-				this.freeterraforged$attachedTileStageDepth--;
-				try {
-					owner.freeterraforged$endTileStage();
-				} catch (RuntimeException | Error cleanupFailure) {
-					failure.addSuppressed(cleanupFailure);
-				}
-			}
-			throw failure;
-		}
-	}
-
 }

@@ -398,6 +398,7 @@ public final class WorldgenPlanCompiler {
 			require(plans, WorldgenFacet.SELECTION_DECORATION, WorldgenPlans.SelectionDecoration.class),
 			require(plans, WorldgenFacet.SPATIAL_OWNERSHIP, WorldgenPlans.SpatialOwnership.class),
 			require(plans, WorldgenFacet.SAMPLER_DECORATION, WorldgenPlans.SamplerDecoration.class),
+			require(plans, WorldgenFacet.BIOME_REPLACEMENT, WorldgenPlans.BiomeReplacement.class),
 			require(plans, WorldgenFacet.DENSITY_SETTINGS, WorldgenPlans.DensitySettings.class),
 			require(plans, WorldgenFacet.SURFACE, WorldgenPlans.Surface.class),
 			require(plans, WorldgenFacet.CARVERS, WorldgenPlans.Carvers.class),
@@ -632,6 +633,9 @@ public final class WorldgenPlanCompiler {
 			case WorldgenPlans.SpatialOwnership ignored -> new WorldgenPlans.SpatialOwnership(descriptor, Optional.empty());
 			case WorldgenPlans.SamplerDecoration sampler -> new WorldgenPlans.SamplerDecoration(
 				descriptor, sampler.queryPolicy(), Optional.empty()
+			);
+			case WorldgenPlans.BiomeReplacement replacement -> new WorldgenPlans.BiomeReplacement(
+				descriptor, replacement.plan()
 			);
 			case WorldgenPlans.DensitySettings ignored -> new WorldgenPlans.DensitySettings(descriptor, Optional.empty());
 			case WorldgenPlans.Surface ignored -> new WorldgenPlans.Surface(descriptor, Optional.empty());

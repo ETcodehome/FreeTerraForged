@@ -18,6 +18,7 @@ import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
 import etcodehome.freeterraforged.world.worldgen.structure.rule.StructureRule;
 import etcodehome.freeterraforged.world.worldgen.structure.rule.StructureRules;
 import etcodehome.freeterraforged.world.worldgen.surface.rule.FTFSurfaceRules;
+import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementConfigStore;
 import etcodehome.freeterraforged.world.worldgen.runtime.FTFChunkGenerators;
 import etcodehome.freeterraforged.world.worldgen.biome.modifier.BiomeModifier;
 import org.apache.logging.log4j.LogManager;
@@ -34,6 +35,7 @@ public class FTFCommon {
 	public static final Logger LOGGER = LogManager.getLogger("FreeTerraForged");
 
 	public static void bootstrap() {
+		BiomeReplacementConfigStore.initialize();
 		FTFChunkGenerators.bootstrap();
 		FTFBuiltInRegistries.bootstrap();
 		TemplatePlacements.bootstrap();

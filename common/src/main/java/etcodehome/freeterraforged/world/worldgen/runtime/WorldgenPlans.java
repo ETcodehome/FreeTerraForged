@@ -44,8 +44,8 @@ public final class WorldgenPlans {
 	}
 
 	public sealed interface DomainPlan permits BiomeComposition, ProviderSelection,
-		SelectionDecoration, SpatialOwnership, SamplerDecoration, DensitySettings, Surface,
-		Carvers, PlacedFeatures, Structures {
+		SelectionDecoration, SpatialOwnership, SamplerDecoration, BiomeReplacement,
+		DensitySettings, Surface, Carvers, PlacedFeatures, Structures {
 		PlanDescriptor descriptor();
 
 		default WorldgenFacet facet() {
@@ -714,6 +714,16 @@ public final class WorldgenPlans {
 		public SamplerInputs {
 			preset = Objects.requireNonNull(preset, "preset");
 			generatorContext = Objects.requireNonNull(generatorContext, "generatorContext");
+		}
+	}
+
+	public record BiomeReplacement(
+		PlanDescriptor descriptor,
+		BiomeReplacementPlan plan
+	) implements DomainPlan {
+		public BiomeReplacement {
+			descriptor = validateDescriptor(descriptor, WorldgenFacet.BIOME_REPLACEMENT);
+			plan = Objects.requireNonNull(plan, "plan");
 		}
 	}
 

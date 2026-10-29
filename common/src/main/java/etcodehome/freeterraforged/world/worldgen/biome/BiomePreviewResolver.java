@@ -29,7 +29,9 @@ import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
+import etcodehome.freeterraforged.world.worldgen.cell.heightmap.PreviewGrid;
+import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementConfigSnapshot;
+import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementPlan;
 import etcodehome.freeterraforged.world.worldgen.runtime.CapabilityState;
 import etcodehome.freeterraforged.world.worldgen.runtime.MinecraftWorldgenPlanCompiler;
 import etcodehome.freeterraforged.world.worldgen.runtime.MinecraftBiomeSourceGraphs;
@@ -87,13 +89,14 @@ public final class BiomePreviewResolver implements AutoCloseable {
 		String settingsIdentity,
 		String resourceLayerFingerprint,
 		String tagFingerprint,
+		BiomeReplacementConfigSnapshot biomeReplacementConfig,
 		WorldgenContributionRevision.Snapshot contributionRevision,
 		WorldgenProviderCatalog providers
 	) {
 		return create(
 			registries, provider, dimension, dimensionType, activeGenerator, preset,
 			generatorContext, seed, settingsIdentity, resourceLayerFingerprint,
-			tagFingerprint, contributionRevision, providers, () -> false
+			tagFingerprint, biomeReplacementConfig, contributionRevision, providers, () -> false
 		);
 	}
 
@@ -109,16 +112,18 @@ public final class BiomePreviewResolver implements AutoCloseable {
 		String settingsIdentity,
 		String resourceLayerFingerprint,
 		String tagFingerprint,
+		BiomeReplacementConfigSnapshot biomeReplacementConfig,
 		WorldgenContributionRevision.Snapshot contributionRevision,
 		WorldgenProviderCatalog providers,
 		BooleanSupplier cancelled
 	) {
+		Objects.requireNonNull(biomeReplacementConfig, "biomeReplacementConfig");
 		Objects.requireNonNull(providers, "providers");
 		Objects.requireNonNull(cancelled, "cancelled");
 		return providers.inAcquisitionSession(cancelled, () -> createAcquired(
 			registries, provider, dimension, dimensionType, activeGenerator, preset,
 			generatorContext, seed, settingsIdentity, resourceLayerFingerprint,
-			tagFingerprint, contributionRevision, providers, cancelled
+			tagFingerprint, biomeReplacementConfig, contributionRevision, providers, cancelled
 		));
 	}
 
@@ -134,6 +139,7 @@ public final class BiomePreviewResolver implements AutoCloseable {
 		String settingsIdentity,
 		String resourceLayerFingerprint,
 		String tagFingerprint,
+		BiomeReplacementConfigSnapshot biomeReplacementConfig,
 		WorldgenContributionRevision.Snapshot contributionRevision,
 		WorldgenProviderCatalog providers,
 		BooleanSupplier cancelled
@@ -193,6 +199,7 @@ public final class BiomePreviewResolver implements AutoCloseable {
 				settingsIdentity,
 				resourceLayerFingerprint,
 				new TagEpoch(0L, tagFingerprint),
+				biomeReplacementConfig,
 				contributionRevision
 			);
 			WorldgenPlan plan = MinecraftWorldgenPlanCompiler.compile(
@@ -302,24 +309,24 @@ public final class BiomePreviewResolver implements AutoCloseable {
 		return selected;
 	}
 
-	public Climate.Sampler tileClimateSampler(Tile tile, int centerX, int centerZ, int zoom) {
+	public Climate.Sampler tileClimateSampler(PreviewGrid tile, int centerX, int centerZ, int zoom) {
 		return this.tileRequest(tile, centerX, centerZ, zoom).climateSampler();
 	}
 
-	public Climate.Sampler tileClimateSamplerAtOrigin(Tile tile, int originX, int originZ, int zoom) {
+	public Climate.Sampler tileClimateSamplerAtOrigin(PreviewGrid tile, int originX, int originZ, int zoom) {
 		return this.tileRequestAtOrigin(tile, originX, originZ, zoom).climateSampler();
 	}
 
-	public TileBiomeRequest tileRequest(Tile tile, int centerX, int centerZ, int zoom) {
+	public TileBiomeRequest tileRequest(PreviewGrid tile, int centerX, int centerZ, int zoom) {
 		if (zoom <= 0) {
 			throw new IllegalArgumentException("Preview zoom must be positive");
 		}
-		float originX = centerX - tile.getBlockSize().size() * (float) zoom / 2.0F;
-		float originZ = centerZ - tile.getBlockSize().size() * (float) zoom / 2.0F;
+		float originX = centerX - tile.size() * (float) zoom / 2.0F;
+		float originZ = centerZ - tile.size() * (float) zoom / 2.0F;
 		return this.tileRequestAtOrigin(tile, originX, originZ, zoom);
 	}
 
-	public TileBiomeRequest tileRequestAtOrigin(Tile tile, int originX, int originZ, int zoom) {
+	public TileBiomeRequest tileRequestAtOrigin(PreviewGrid tile, int originX, int originZ, int zoom) {
 		if (zoom <= 0) {
 			throw new IllegalArgumentException("Preview zoom must be positive");
 		}
@@ -327,7 +334,7 @@ public final class BiomePreviewResolver implements AutoCloseable {
 	}
 
 	public ResolvedTile resolveSurfaceTile(
-		Tile tile,
+		PreviewGrid tile,
 		int centerX,
 		int centerZ,
 		int zoom,
@@ -340,7 +347,7 @@ public final class BiomePreviewResolver implements AutoCloseable {
 		if (zoom <= 0) {
 			throw new IllegalArgumentException("Preview zoom must be positive");
 		}
-		int size = tile.getBlockSize().size();
+		int size = tile.size();
 		int halfSize = size / 2;
 		int[] quartXs = new int[size];
 		int[] quartZs = new int[size];
@@ -356,17 +363,18 @@ public final class BiomePreviewResolver implements AutoCloseable {
 			));
 		}
 
-		@SuppressWarnings("unchecked")
-		Holder<Biome>[] biomes = new Holder[Math.multiplyExact(size, size)];
+		BiomeReplacementPlan.PreviewSelection[] selections =
+			new BiomeReplacementPlan.PreviewSelection[Math.multiplyExact(size, size)];
 		PreviewQueryExecutor.resolve(
-			biomes,
+			selections,
 			size,
 			size,
 			this.supportsParallelTileQueries(),
 			ThreadPools.previewParallelism(),
 			() -> {
 				TileBiomeRequest request = this.tileRequest(tile, centerX, centerZ, zoom);
-				PreviewQuartCache quartCache = zoom < QuartPos.SIZE ? new PreviewQuartCache() : null;
+				PreviewQuartCache<BiomeReplacementPlan.PreviewSelection> quartCache =
+					zoom < QuartPos.SIZE ? new PreviewQuartCache<>() : null;
 				return (x, z) -> {
 					int quartX = quartXs[x];
 					int quartZ = quartZs[z];
@@ -375,25 +383,27 @@ public final class BiomePreviewResolver implements AutoCloseable {
 					);
 					int quartY = QuartPos.fromBlock(surfaceY(cell, levels));
 					if (quartCache == null) {
-						return request.resolveQuartInCell(quartX, quartY, quartZ, cell);
+						return request.resolveDetailedQuartInCell(quartX, quartY, quartZ, cell);
 					}
-					Holder<Biome> biome = quartCache.get(quartX, quartY, quartZ);
-					if (biome == null) {
-						biome = request.resolveQuartInCell(quartX, quartY, quartZ, cell);
-						quartCache.put(quartX, quartY, quartZ, biome);
+					BiomeReplacementPlan.PreviewSelection selection = quartCache.get(
+						quartX, quartY, quartZ
+					);
+					if (selection == null) {
+						selection = request.resolveDetailedQuartInCell(quartX, quartY, quartZ, cell);
+						quartCache.put(quartX, quartY, quartZ, selection);
 					}
-					return biome;
+					return selection;
 				};
 			},
 			cancelled,
 			ThreadPools.WORLD_GEN
 		);
-		return new ResolvedTile(size, biomes);
+		return new ResolvedTile(size, selections);
 	}
 
-	private TileBiomeRequest tileRequestAtOrigin(Tile tile, float originX, float originZ, int zoom) {
+	private TileBiomeRequest tileRequestAtOrigin(PreviewGrid tile, float originX, float originZ, int zoom) {
 		var heightmap = this.generatorContext.lookup.getHeightmap();
-		PreviewTileClimateSampler.TileLookup tileLookup = new PreviewTileClimateSampler.TileLookup(
+		PreviewTileClimateSampler.GridLookup tileLookup = new PreviewTileClimateSampler.GridLookup(
 			tile, this.generatorContext.lookup, originX, originZ, zoom
 		);
 		Climate.Sampler sampler = new Climate.Sampler(
@@ -412,11 +422,11 @@ public final class BiomePreviewResolver implements AutoCloseable {
 	}
 
 	public final class TileBiomeRequest {
-		private final PreviewTileClimateSampler.TileLookup tileLookup;
+		private final PreviewTileClimateSampler.GridLookup tileLookup;
 		private final Climate.Sampler sampler;
 
 		private TileBiomeRequest(
-			PreviewTileClimateSampler.TileLookup tileLookup,
+			PreviewTileClimateSampler.GridLookup tileLookup,
 			Climate.Sampler sampler
 		) {
 			this.tileLookup = tileLookup;
@@ -433,6 +443,17 @@ public final class BiomePreviewResolver implements AutoCloseable {
 		private Holder<Biome> resolveQuartInCell(int quartX, int quartY, int quartZ, Cell cell) {
 			return BiomePreviewResolver.this.resolveQuartInCell(
 				quartX, quartY, quartZ, this.sampler, cell
+			);
+		}
+
+		private BiomeReplacementPlan.PreviewSelection resolveDetailedQuartInCell(
+			int quartX,
+			int quartY,
+			int quartZ,
+			Cell cell
+		) {
+			return BiomePreviewResolver.this.biomeSelection.resolveDetailedInCell(
+				quartX, quartY, quartZ, this.sampler, cell.biomeRegionX, cell.biomeRegionZ
 			);
 		}
 
@@ -467,7 +488,8 @@ public final class BiomePreviewResolver implements AutoCloseable {
 			WorldgenFacet.PROVIDER_SELECTION,
 			WorldgenFacet.SELECTION_DECORATION,
 			WorldgenFacet.SPATIAL_OWNERSHIP,
-			WorldgenFacet.SAMPLER_DECORATION
+			WorldgenFacet.SAMPLER_DECORATION,
+			WorldgenFacet.BIOME_REPLACEMENT
 		);
 	}
 
@@ -485,11 +507,11 @@ public final class BiomePreviewResolver implements AutoCloseable {
 
 	public static final class ResolvedTile {
 		private final int size;
-		private final Holder<Biome>[] biomes;
+		private final BiomeReplacementPlan.PreviewSelection[] selections;
 
-		private ResolvedTile(int size, Holder<Biome>[] biomes) {
+		private ResolvedTile(int size, BiomeReplacementPlan.PreviewSelection[] selections) {
 			this.size = size;
-			this.biomes = biomes;
+			this.selections = selections;
 		}
 
 		public int size() {
@@ -497,9 +519,13 @@ public final class BiomePreviewResolver implements AutoCloseable {
 		}
 
 		public Holder<Biome> biomeAt(int x, int z) {
+			return this.selectionAt(x, z).finalBiome();
+		}
+
+		public BiomeReplacementPlan.PreviewSelection selectionAt(int x, int z) {
 			Objects.checkIndex(x, this.size);
 			Objects.checkIndex(z, this.size);
-			return this.biomes[z * this.size + x];
+			return this.selections[z * this.size + x];
 		}
 	}
 

@@ -16,8 +16,8 @@ import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.resources.ResourceLocation;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.SpawnType;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.filter.TerrainCeiling;
+import etcodehome.freeterraforged.world.worldgen.cell.heightmap.PreviewGrid;
+import etcodehome.freeterraforged.world.worldgen.cell.heightmap.TerrainCeiling;
 
 public class Preview3D extends Button implements IPreviewHandler {
     public static final int SIZE = IPreviewHandler.SIZE;
@@ -72,6 +72,8 @@ public class Preview3D extends Button implements IPreviewHandler {
     @Override
     public void onRenderModeChanged(RenderMode mode) {
         this.currentMode = mode;
+        this.lastHoveredIx = -1;
+        this.lastHoveredIz = -1;
     }
 
     @Override
@@ -122,14 +124,14 @@ public class Preview3D extends Button implements IPreviewHandler {
     }
 
     @Override
-    public int[] createRasterData(Tile activeTile, BiomePreview.Sidecar activeBiomes, RenderMode mode, Levels levels, WorldSettings.Properties properties, RasterParams params) {
+    public int[] createRasterData(PreviewGrid activeTile, BiomePreview.Sidecar activeBiomes, RenderMode mode, Levels levels, WorldSettings.Properties properties, RasterParams params) {
         int width = params.width;
         int height = params.height;
         if (activeTile == null || width <= 0 || height <= 0) return new int[0];
         int[] pixels = new int[width * height];
         java.util.Arrays.fill(pixels, 0xFF000000);
 
-        int tileSize = activeTile.getBlockSize().size();
+        int tileSize = activeTile.size();
         float rawBlockW = calculateBlockWidth(width, height, tileSize);
         int halfW = Math.max(1, (int) (rawBlockW / 2.0f));
         int halfH = Math.max(1, halfW / 2);
@@ -171,10 +173,21 @@ public class Preview3D extends Button implements IPreviewHandler {
                 int isoX = centerVisualX + (dx - dz) * halfW;
                 int isoY = centerVisualY + (dx + dz) * halfH;
                 int renderY = isoY - Math.round(effectiveHeight * heightScale);
+                boolean showOverride = mode == RenderMode.BIOME && activeBiomes != null
+                        && activeBiomes.hasOverride(ix, iz);
                 int topColor = jitteredColor;
-                int leftColor = getSideColor(jitteredColor, 0.75f, true, ix, iz, tileSize);
-                int rightColor = getSideColor(jitteredColor, 0.60f, false, ix, iz, tileSize);
+                int sideBaseColor = showOverride
+                        ? BiomePreviewColors.overrideTint(jitteredColor)
+                        : jitteredColor;
+                int leftColor = getSideColor(sideBaseColor, 0.75f, true, ix, iz, tileSize);
+                int rightColor = getSideColor(sideBaseColor, 0.60f, false, ix, iz, tileSize);
                 fillPixelRect(pixels, width, isoX, renderY, isoX + blockW, renderY + blockH, topColor);
+                if (showOverride) {
+                    fillHatchedRect(
+                            pixels, width, isoX, renderY, isoX + blockW, renderY + blockH,
+                            BiomePreviewColors.hatch(topColor), activeBiomes.hatchPhase(ix, iz)
+                    );
+                }
                 fillPixelRect(pixels, width, isoX, renderY + blockH, isoX + halfW, isoY + blockH, leftColor);
                 fillPixelRect(pixels, width, isoX + halfW, renderY + blockH, isoX + blockW, isoY + blockH, rightColor);
             }
@@ -217,6 +230,29 @@ public class Preview3D extends Button implements IPreviewHandler {
         for (int y = startY; y < endY; y++) {
             for (int x = startX; x < endX; x++) {
                 pixels[y * width + x] = nativeColor;
+            }
+        }
+    }
+
+    private static void fillHatchedRect(
+            int[] pixels,
+            int width,
+            int xStart,
+            int yStart,
+            int xEnd,
+            int yEnd,
+            int nativeColor,
+            int phase
+    ) {
+        int startX = Math.max(0, xStart);
+        int endX = Math.min(width, xEnd);
+        int startY = Math.max(0, yStart);
+        int endY = Math.min(pixels.length / width, yEnd);
+        for (int y = startY; y < endY; y++) {
+            for (int x = startX; x < endX; x++) {
+                if (Math.floorMod((x - xStart) + (y - yStart) + phase, 6) < 2) {
+                    pixels[y * width + x] = nativeColor;
+                }
             }
         }
     }
@@ -297,7 +333,7 @@ public class Preview3D extends Button implements IPreviewHandler {
             return;
         }
 
-        if (this.state.tile != null && this.needsTextureRefresh) {
+        if (this.state.grid != null && this.needsTextureRefresh) {
             this.uploadPendingTexture();
         }
 
@@ -333,8 +369,8 @@ public class Preview3D extends Button implements IPreviewHandler {
 
         if (props.spawnType == SpawnType.USER_SELECTED || props.spawnType == SpawnType.CONTINENT_CENTER) {
             int zoomValue = this.getZoom();
-            Tile activeTile = this.state.tile;
-            int tileSize = activeTile != null ? activeTile.getBlockSize().size() : 0;
+            PreviewGrid activeTile = this.state.grid;
+            int tileSize = activeTile != null ? activeTile.size() : 0;
 
             if (tileSize > 0) {
                 int activeCX = this.state.centerX;
@@ -393,14 +429,14 @@ public class Preview3D extends Button implements IPreviewHandler {
     @Override
     public boolean updateLegend(int mx, int my) {
         Levels levels = this.state.frameLevels;
-        Tile activeTile = this.state.tile;
+        PreviewGrid activeTile = this.state.grid;
         BiomePreview.Sidecar activeBiomes = this.state.biomes;
         if (activeTile != null && levels != null) {
             int left = this.getX();
             int top = this.getY();
 
             int zoomValue = this.getZoom();
-            int tileSize = activeTile.getBlockSize().size();
+            int tileSize = activeTile.size();
 
             int totalWidth = Math.max(1, tileSize * zoomValue);
             int totalHeight = Math.max(1, tileSize * zoomValue);
@@ -436,7 +472,7 @@ public class Preview3D extends Button implements IPreviewHandler {
 
                     Cell cell = activeTile.lookup(ix, iz);
                     this.state.legendValues[1] = IPreviewHandler.getTerrainName(cell);
-                    String biomeId = activeBiomes == null ? null : activeBiomes.id(ix, iz);
+                    String biomeId = activeBiomes == null ? null : activeBiomes.legendId(ix, iz);
                     PreviewDetails.Detail detail = PreviewDetails.forCell(
                             getRenderMode(), cell,
                             levels,

@@ -57,3 +57,28 @@ allprojects {
         withSourcesJar()
     }
 }
+
+tasks.register("generatePresetTestReport") {
+    group = "verification"
+    description = "Generates a paired local HTML report from test outputs in build/reports/preset-test-heightmaps"
+    doLast {
+        def reportDir = file("build/reports/preset-test-heightmaps")
+        if (!reportDir.exists() || !reportDir.isDirectory()) {
+            logger.lifecycle("[FTF-Test] No report directory found at: ${reportDir.absolutePath}. Run preset tests first.")
+            return
+        }
+        def generatorSource = file("common/src/main/java/etcodehome/freeterraforged/test/LocalTestReportGenerator.java")
+        if (generatorSource.exists()) {
+            project.exec {
+                commandLine("java", generatorSource.absolutePath, reportDir.absolutePath)
+            }
+        }
+    }
+}
+
+tasks.register("runPresetTest") {
+    group = "verification"
+    description = "Runs headless preset validation on both Fabric and NeoForge"
+    dependsOn(":fabric:runPresetTest", ":neoforge:runPresetTest")
+    finalizedBy("generatePresetTestReport")
+}
