@@ -67,7 +67,7 @@ public final class WorldgenRuntimeBinding {
 	void reject(WorldgenEpoch attempted, Throwable failure) {
 		this.reject(
 			attempted.id(), attempted.resourceRevision(), attempted.resourceLayerFingerprint(), attempted.tagEpoch(),
-			attempted.contributionRevision(), failure
+			attempted.biomeReplacementConfig(), attempted.contributionRevision(), failure
 		);
 	}
 
@@ -76,11 +76,12 @@ public final class WorldgenRuntimeBinding {
 		long resourceRevision,
 		String resourceLayerFingerprint,
 		TagEpoch tags,
+		BiomeReplacementConfigSnapshot biomeReplacementConfig,
 		WorldgenContributionRevision.Snapshot contributions,
 		Throwable failure
 	) {
 		this.rejection.set(new RejectedPublication(
-			owner, resourceRevision, resourceLayerFingerprint, tags, contributions,
+			owner, resourceRevision, resourceLayerFingerprint, tags, biomeReplacementConfig, contributions,
 			CapabilityFailure.of("plan_replacement_rejected", failure)
 		));
 	}
@@ -159,6 +160,7 @@ public final class WorldgenRuntimeBinding {
 		long resourceRevision,
 		String resourceLayerFingerprint,
 		TagEpoch tags,
+		BiomeReplacementConfigSnapshot biomeReplacementConfig,
 		WorldgenContributionRevision.Snapshot contributions,
 		CapabilityFailure failure
 	) {
@@ -171,6 +173,9 @@ public final class WorldgenRuntimeBinding {
 				resourceLayerFingerprint, "resourceLayerFingerprint"
 			);
 			tags = Objects.requireNonNull(tags, "tags");
+			biomeReplacementConfig = Objects.requireNonNull(
+				biomeReplacementConfig, "biomeReplacementConfig"
+			);
 			contributions = Objects.requireNonNull(contributions, "contributions");
 			failure = Objects.requireNonNull(failure, "failure");
 		}

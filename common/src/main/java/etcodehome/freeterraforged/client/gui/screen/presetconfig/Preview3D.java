@@ -72,6 +72,8 @@ public class Preview3D extends Button implements IPreviewHandler {
     @Override
     public void onRenderModeChanged(RenderMode mode) {
         this.currentMode = mode;
+        this.lastHoveredIx = -1;
+        this.lastHoveredIz = -1;
     }
 
     @Override
@@ -171,10 +173,21 @@ public class Preview3D extends Button implements IPreviewHandler {
                 int isoX = centerVisualX + (dx - dz) * halfW;
                 int isoY = centerVisualY + (dx + dz) * halfH;
                 int renderY = isoY - Math.round(effectiveHeight * heightScale);
+                boolean showOverride = mode == RenderMode.BIOME && activeBiomes != null
+                        && activeBiomes.hasOverride(ix, iz);
                 int topColor = jitteredColor;
-                int leftColor = getSideColor(jitteredColor, 0.75f, true, ix, iz, tileSize);
-                int rightColor = getSideColor(jitteredColor, 0.60f, false, ix, iz, tileSize);
+                int sideBaseColor = showOverride
+                        ? BiomePreviewColors.overrideTint(jitteredColor)
+                        : jitteredColor;
+                int leftColor = getSideColor(sideBaseColor, 0.75f, true, ix, iz, tileSize);
+                int rightColor = getSideColor(sideBaseColor, 0.60f, false, ix, iz, tileSize);
                 fillPixelRect(pixels, width, isoX, renderY, isoX + blockW, renderY + blockH, topColor);
+                if (showOverride) {
+                    fillHatchedRect(
+                            pixels, width, isoX, renderY, isoX + blockW, renderY + blockH,
+                            BiomePreviewColors.hatch(topColor), activeBiomes.hatchPhase(ix, iz)
+                    );
+                }
                 fillPixelRect(pixels, width, isoX, renderY + blockH, isoX + halfW, isoY + blockH, leftColor);
                 fillPixelRect(pixels, width, isoX + halfW, renderY + blockH, isoX + blockW, isoY + blockH, rightColor);
             }
@@ -217,6 +230,29 @@ public class Preview3D extends Button implements IPreviewHandler {
         for (int y = startY; y < endY; y++) {
             for (int x = startX; x < endX; x++) {
                 pixels[y * width + x] = nativeColor;
+            }
+        }
+    }
+
+    private static void fillHatchedRect(
+            int[] pixels,
+            int width,
+            int xStart,
+            int yStart,
+            int xEnd,
+            int yEnd,
+            int nativeColor,
+            int phase
+    ) {
+        int startX = Math.max(0, xStart);
+        int endX = Math.min(width, xEnd);
+        int startY = Math.max(0, yStart);
+        int endY = Math.min(pixels.length / width, yEnd);
+        for (int y = startY; y < endY; y++) {
+            for (int x = startX; x < endX; x++) {
+                if (Math.floorMod((x - xStart) + (y - yStart) + phase, 6) < 2) {
+                    pixels[y * width + x] = nativeColor;
+                }
             }
         }
     }
@@ -436,7 +472,7 @@ public class Preview3D extends Button implements IPreviewHandler {
 
                     Cell cell = activeTile.lookup(ix, iz);
                     this.state.legendValues[1] = IPreviewHandler.getTerrainName(cell);
-                    String biomeId = activeBiomes == null ? null : activeBiomes.id(ix, iz);
+                    String biomeId = activeBiomes == null ? null : activeBiomes.legendId(ix, iz);
                     PreviewDetails.Detail detail = PreviewDetails.forCell(
                             getRenderMode(), cell,
                             levels,

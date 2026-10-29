@@ -278,7 +278,12 @@ public final class LithostitchedCapabilityProvider implements WorldgenCapability
 				Optional<String> preServerFailure = LithostitchedInjectionBridge.preServerFailure(selected);
 				boolean mechanismSource = LithostitchedInjectionBridge.isInjectorSource(selected);
 				if (captured.isPresent()) {
-					return new Acquisition(captured, mechanismSource, true, preServerFailure);
+					return new Acquisition(
+						Optional.of(withoutBiomeReplacerInjectors(
+							captured.orElseThrow(), context.owner().dimension()
+						)),
+						mechanismSource, true, preServerFailure
+					);
 				}
 				if (preServerFailure.isPresent()) {
 					return new Acquisition(Optional.empty(), mechanismSource, true, preServerFailure);
@@ -302,7 +307,9 @@ public final class LithostitchedCapabilityProvider implements WorldgenCapability
 						context.owner().dimension(),
 						generator.generatorSettings().value(),
 						context.owner().seed()
-					);
+					).map(value -> withoutBiomeReplacerInjectors(
+						value, context.owner().dimension()
+					));
 				context.checkCancelled();
 				return new Acquisition(snapshot, mechanismSource, true, Optional.empty());
 			});
@@ -311,6 +318,27 @@ public final class LithostitchedCapabilityProvider implements WorldgenCapability
 		} catch (Exception failure) {
 			throw new IllegalStateException("Failed acquiring owner-local Lithostitched data", failure);
 		}
+	}
+
+	private static LithostitchedInjectionBridge.Snapshot withoutBiomeReplacerInjectors(
+		LithostitchedInjectionBridge.Snapshot snapshot,
+		ResourceKey<LevelStem> dimension
+	) {
+		List<LithostitchedInjectionBridge.CapturedInjector> retained = snapshot.injectors().stream()
+			.filter(injector -> !injector.id().getNamespace().equals("biome_replacer"))
+			.toList();
+		int suppressed = snapshot.injectors().size() - retained.size();
+		if (suppressed == 0) {
+			return snapshot;
+		}
+		FTFCommon.LOGGER.info(
+			"Suppressed {} Biome Replacer Lithostitched injector(s) from FTF-owned dimension {}; native biome replacement remains the sole FTF authority",
+			suppressed, dimension.location()
+		);
+		return new LithostitchedInjectionBridge.Snapshot(
+			snapshot.mechanismVersion(), snapshot.seed(), snapshot.baseRoot(), retained,
+			snapshot.regions(), snapshot.cloneFailures(), snapshot.nativeRegionFunctionPresent()
+		);
 	}
 
 	private record Acquisition(

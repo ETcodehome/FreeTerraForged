@@ -612,6 +612,7 @@ public interface IPreviewHandler {
 
         Font renderer = Minecraft.getInstance().font;
         float maxWidth = (widget().getWidth() - 4) / scale;
+        int row = 0;
 
         for (int i = 0; i < labels.length && i < values.length; i++) {
             Component label = labels[i];
@@ -624,13 +625,10 @@ public interface IPreviewHandler {
                 labelStr = labelStr.substring(0, labelStr.length() - 1);
             }
 
-            String line = buildLegendLine(labelStr, value);
-            while (line.length() > 0 && renderer.width(line) > maxWidth) {
-                line = line.substring(0, line.length() - 1);
+            for (String line : wrapLegendLine(renderer, buildLegendLine(labelStr, value), maxWidth)) {
+                int x = legendLineX(renderer, line, maxWidth);
+                guiGraphics.drawString(renderer, line, x, row++ * lineHeight, color);
             }
-
-            int x = legendLineX(renderer, line, maxWidth);
-            guiGraphics.drawString(renderer, line, x, i * lineHeight, color);
         }
 
         pose.popPose();
@@ -639,6 +637,33 @@ public interface IPreviewHandler {
         if (!hoveredCoords.isEmpty()) {
             guiGraphics.drawCenteredString(renderer, hoveredCoords, mx, my - 10, 0xFFFFFF);
         }
+    }
+
+    private static java.util.List<String> wrapLegendLine(Font font, String value, float maxWidth) {
+        if (value.isEmpty() || font.width(value) <= maxWidth) {
+            return java.util.List.of(value);
+        }
+
+        java.util.ArrayList<String> lines = new java.util.ArrayList<>();
+        String remaining = value;
+        while (!remaining.isEmpty()) {
+            if (font.width(remaining) <= maxWidth) {
+                lines.add(remaining);
+                break;
+            }
+
+            int split = remaining.length();
+            while (split > 1 && font.width(remaining.substring(0, split)) > maxWidth) {
+                split--;
+            }
+            int wordBoundary = remaining.lastIndexOf(' ', split - 1);
+            if (wordBoundary > 0) {
+                split = wordBoundary;
+            }
+            lines.add(remaining.substring(0, split));
+            remaining = remaining.substring(split).stripLeading();
+        }
+        return lines;
     }
 
     default String getSpawnCoords() {

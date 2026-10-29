@@ -21,7 +21,8 @@ public final class WorldgenBiomeSelection {
 		WorldgenFacet.PROVIDER_SELECTION,
 		WorldgenFacet.SELECTION_DECORATION,
 		WorldgenFacet.SPATIAL_OWNERSHIP,
-		WorldgenFacet.SAMPLER_DECORATION
+		WorldgenFacet.SAMPLER_DECORATION,
+		WorldgenFacet.BIOME_REPLACEMENT
 	);
 
 	private WorldgenBiomeSelection() {
@@ -36,7 +37,8 @@ public final class WorldgenBiomeSelection {
 		plan.biomeComposition().entries().forEach(entry -> possible.add(entry.getSecond()));
 		plan.providerSelection().directInput().ifPresent(input -> possible.addAll(input.possibleOutputs()));
 		possible.addAll(plan.selectionDecoration().possibleOutputs());
-		if (possible.isEmpty()) {
+		Set<Holder<Biome>> transformed = plan.biomeReplacement().plan().transformPossible(possible);
+		if (transformed.isEmpty()) {
 			throw new IllegalStateException(
 				"FTF candidate-provider plan exposes no possible biomes; biome_composition="
 					+ describe(plan.biomeComposition().descriptor()) + ", provider_selection="
@@ -44,7 +46,7 @@ public final class WorldgenBiomeSelection {
 					+ describe(plan.selectionDecoration().descriptor())
 			);
 		}
-		return Collections.unmodifiableSet(possible);
+		return Collections.unmodifiableSet(transformed);
 	}
 
 	private static String describe(PlanDescriptor descriptor) {
@@ -58,6 +60,7 @@ public final class WorldgenBiomeSelection {
 		requireAvailable(plan.selectionDecoration().descriptor());
 		requireAvailable(plan.spatialOwnership().descriptor());
 		requireAvailable(plan.samplerDecoration().descriptor());
+		requireAvailable(plan.biomeReplacement().descriptor());
 		if (plan.providerSelection().directInput().isPresent()) {
 			if (!plan.providerSelection().providers().isEmpty()
 				|| !plan.selectionDecoration().stages().isEmpty()
@@ -125,6 +128,7 @@ public final class WorldgenBiomeSelection {
 		private final WorldgenPlans.SelectionDecoration decoration;
 		private final WorldgenPlans.SpatialResolver spatialResolver;
 		private final WorldgenPlans.SamplerDecoration samplerDecoration;
+		private final BiomeReplacementPlan replacement;
 		private final WorldgenExecution execution;
 		private final boolean isolatedParallelRead;
 		private final Set<Holder<Biome>> possibleBiomes;
@@ -136,6 +140,7 @@ public final class WorldgenBiomeSelection {
 			this.decoration = plan.selectionDecoration();
 			this.spatialResolver = plan.spatialOwnership().resolver().orElse(null);
 			this.samplerDecoration = plan.samplerDecoration();
+			this.replacement = plan.biomeReplacement().plan();
 			this.execution = plan.execution();
 			this.isolatedParallelRead = this.execution.supportsIsolatedParallelRead(QUERY_FACETS);
 			this.possibleBiomes = Set.copyOf(possibleBiomes);
@@ -174,7 +179,9 @@ public final class WorldgenBiomeSelection {
 			Climate.Sampler sampler
 		) {
 			if (this.directInput != null) {
-				return this.directInput.resolve(quartX, quartY, quartZ, sampler);
+				return this.replacement.apply(
+					this.directInput.resolve(quartX, quartY, quartZ, sampler), null
+				);
 			}
 			FTFClimateSampler rtfSampler = requireOwnedSampler(sampler);
 			ClimateQuerySemantics querySemantics = rtfSampler.climateQuerySemantics();
@@ -233,7 +240,9 @@ public final class WorldgenBiomeSelection {
 			long biomeCellZ
 		) {
 			if (this.directInput != null) {
-				return this.directInput.resolve(quartX, quartY, quartZ, sampler);
+				return this.replacement.apply(
+					this.directInput.resolve(quartX, quartY, quartZ, sampler), null
+				);
 			}
 			FTFClimateSampler rtfSampler = requireOwnedSampler(sampler);
 			ClimateQuerySemantics querySemantics = rtfSampler.climateQuerySemantics();
@@ -249,6 +258,57 @@ public final class WorldgenBiomeSelection {
 			);
 		}
 
+		public BiomeReplacementPlan.PreviewSelection resolveDetailedInCell(
+			int quartX,
+			int quartY,
+			int quartZ,
+			Climate.Sampler sampler,
+			long biomeCellX,
+			long biomeCellZ
+		) {
+			if (this.isolatedParallelRead) {
+				return this.resolveDetailedOwnedInCell(
+					quartX, quartY, quartZ, sampler, biomeCellX, biomeCellZ
+				);
+			}
+			return this.execution.execute(
+				QUERY_FACETS,
+				() -> this.resolveDetailedOwnedInCell(
+					quartX, quartY, quartZ, sampler, biomeCellX, biomeCellZ
+				)
+			);
+		}
+
+		private BiomeReplacementPlan.PreviewSelection resolveDetailedOwnedInCell(
+			int quartX,
+			int quartY,
+			int quartZ,
+			Climate.Sampler sampler,
+			long biomeCellX,
+			long biomeCellZ
+		) {
+			if (this.directInput != null) {
+				return this.replacement.describe(
+					this.directInput.resolve(quartX, quartY, quartZ, sampler), null
+				);
+			}
+			FTFClimateSampler rtfSampler = requireOwnedSampler(sampler);
+			GeneratorContext generatorContext = rtfSampler.climateQuerySemantics().surfaceContext();
+			if (generatorContext == null) {
+				throw new IllegalStateException("FTF biome selection requires its owned sampler context");
+			}
+			WorldgenPlans.SpatialResult spatial = this.requireSpatialResolver()
+				.resolve(biomeCellX, biomeCellZ);
+			Climate.TargetPoint target = this.samplerDecoration.sample(
+				sampler, quartX, quartY, quartZ
+			);
+			WorldgenPlans.ProviderResult selection = this.providerSelection(spatial, target);
+			Holder<Biome> decorated = this.decoration.apply(
+				selection, spatial, selection.target(), quartX, quartY, quartZ, sampler, generatorContext
+			);
+			return this.replacement.describe(decorated, selection.baseBiome());
+		}
+
 		private Holder<Biome> select(
 			WorldgenPlans.SpatialResult spatial,
 			Climate.TargetPoint target,
@@ -257,6 +317,17 @@ public final class WorldgenBiomeSelection {
 			int quartZ,
 			Climate.Sampler sampler,
 			GeneratorContext generatorContext
+		) {
+			WorldgenPlans.ProviderResult selection = this.providerSelection(spatial, target);
+			Holder<Biome> decorated = this.decoration.apply(
+				selection, spatial, selection.target(), quartX, quartY, quartZ, sampler, generatorContext
+			);
+			return this.replacement.apply(decorated, selection.baseBiome());
+		}
+
+		private WorldgenPlans.ProviderResult providerSelection(
+			WorldgenPlans.SpatialResult spatial,
+			Climate.TargetPoint target
 		) {
 			ResourceLocation spatialDomain = spatial.domain();
 			WorldgenPlans.ProviderResult selection;
@@ -273,9 +344,7 @@ public final class WorldgenBiomeSelection {
 						+ spatial.cellX() + "," + spatial.cellZ()
 				);
 			}
-			return this.decoration.apply(
-				selection, spatial, selection.target(), quartX, quartY, quartZ, sampler, generatorContext
-			);
+			return selection;
 		}
 
 		private WorldgenPlans.SpatialResolver requireSpatialResolver() {

@@ -10,7 +10,8 @@ public enum WorldgenCompilationPurpose {
 		WorldgenFacet.PROVIDER_SELECTION,
 		WorldgenFacet.SELECTION_DECORATION,
 		WorldgenFacet.SPATIAL_OWNERSHIP,
-		WorldgenFacet.SAMPLER_DECORATION
+		WorldgenFacet.SAMPLER_DECORATION,
+		WorldgenFacet.BIOME_REPLACEMENT
 	));
 
 	private final Set<WorldgenFacet> facets;
