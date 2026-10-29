@@ -31,7 +31,8 @@ public final class LocalTestReportGenerator {
 		"presetValidation.customFileResolution",
 		"presetValidation.multiRunSeamContinuity",
 		"presetValidation.inGameCommandParity",
-		"presetValidation.twoStageReloadSpawnPersistence"
+		"presetValidation.twoStageReloadSpawnPersistence",
+		"presetValidation.snowCoverCompatibility"
 	);
 
 	public static void main(String[] args) {

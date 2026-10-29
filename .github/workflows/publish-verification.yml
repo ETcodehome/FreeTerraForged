@@ -158,7 +158,7 @@ jobs:
             const failures = [];
             const parsedSuites = [];
 
-            // Base tokens representing the 12 core test suites in canonical execution order
+            // Base tokens representing the core test suites in canonical execution order
             const baseTestTokens = [
               'presetValidation.checkSynchronizedRegistry',
               'presetValidation.spawnChunkRegularity',
@@ -171,7 +171,8 @@ jobs:
               'presetValidation.customFileResolution',
               'presetValidation.multiRunSeamContinuity',
               'presetValidation.inGameCommandParity',
-              'presetValidation.twoStageReloadSpawnPersistence'
+              'presetValidation.twoStageReloadSpawnPersistence',
+              'presetValidation.snowCoverCompatibility'
             ];
 
             const detailedReports = [];
@@ -236,7 +237,7 @@ jobs:
               }
             }
 
-            // Ensure all 24 tokens exist in parsedSuites (12 tests x 2 loaders)
+            // Ensure every base token exists in parsedSuites for both loaders
             for (const base of baseTestTokens) {
               for (const loader of ['fabric', 'neoforge']) {
                 const expectedToken = `${base}.${loader}`;
