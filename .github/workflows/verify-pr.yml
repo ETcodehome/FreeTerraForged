@@ -341,10 +341,11 @@ jobs:
               report += `\n`;
             }
 
-            // Compact 2-column true HTML table definition:
+            // Compact 3-column true HTML table definition:
             // Columns:
-            // 1. diff-highlighted test token with sub line visibility (+ green for pass, - red for fail)
-            // 2. build metric (inline images + <sub>metric text</sub>)
+            // 1. clean tick / cross indicating pass / fail (<sub>:white_check_mark:</sub> / <sub>:x:</sub>)
+            // 2. plain sub-wrapped test token string (<sub>${token}</sub>)
+            // 3. build metric (inline images + <sub>metric text</sub>)
             report += `<table>\n<tbody>\n`;
 
             for (const base of baseTestTokens) {
@@ -354,7 +355,7 @@ jobs:
                 const images = tokenImageMap[token] || [];
 
                 const isPass = suite ? suite.passed : false;
-                const diffFlag = isPass ? '+' : '-';
+                const statusIcon = isPass ? ':white_check_mark:' : ':x:';
 
                 let metricContent = suite ? suite.notes : 'Test execution not recorded';
                 if (!isPass && suite && suite.error) {
@@ -371,15 +372,15 @@ jobs:
                   metricCell = `<sub>${metricContent}</sub>`;
                 }
 
-                report += `<tr>\n<td><sub><pre lang="diff"><code>${diffFlag} ${token}</code></pre></sub></td>\n<td>${metricCell}</td>\n</tr>\n`;
+                report += `<tr>\n<td align="center"><sub>${statusIcon}</sub></td>\n<td><sub>${token}</sub></td>\n<td>${metricCell}</td>\n</tr>\n`;
               }
             }
 
             // Any unexpected watchdog timeouts or extra tests
             const extras = parsedSuites.filter(s => !baseTestTokens.some(b => s.token.startsWith(b)));
             for (const ex of extras) {
-              const diffFlag = ex.passed ? '+' : '-';
-              report += `<tr>\n<td><sub><pre lang="diff"><code>${diffFlag} ${ex.token}</code></pre></sub></td>\n<td><sub>${ex.notes}</sub></td>\n</tr>\n`;
+              const statusIcon = ex.passed ? ':white_check_mark:' : ':x:';
+              report += `<tr>\n<td align="center"><sub>${statusIcon}</sub></td>\n<td><sub>${ex.token}</sub></td>\n<td><sub>${ex.notes}</sub></td>\n</tr>\n`;
             }
 
             report += `</tbody>\n</table>\n\n`;
