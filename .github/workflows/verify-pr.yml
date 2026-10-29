@@ -341,12 +341,11 @@ jobs:
               report += `\n`;
             }
 
-            // Compact 2-column table without headers:
+            // Compact 2-column true HTML table definition:
             // Columns:
-            // 1. test token pill with status background (green for pass, red for fail)
+            // 1. diff-highlighted test token with sub line visibility (+ green for pass, - red for fail)
             // 2. build metric (inline images + <sub>metric text</sub>)
-            report += `| | |\n`;
-            report += `| :--- | :--- |\n`;
+            report += `<table>\n<tbody>\n`;
 
             for (const base of baseTestTokens) {
               for (const loader of ['fabric', 'neoforge']) {
@@ -355,9 +354,7 @@ jobs:
                 const images = tokenImageMap[token] || [];
 
                 const isPass = suite ? suite.passed : false;
-                const badgeColor = isPass ? 'brightgreen' : 'red';
-                const safeToken = encodeURIComponent(token.replace(/-/g, '--').replace(/_/g, '__'));
-                const tokenBadge = `<img src="https://img.shields.io/badge/-${safeToken}-${badgeColor}?style=flat-square" alt="${token}" />`;
+                const diffFlag = isPass ? '+' : '-';
 
                 let metricContent = suite ? suite.notes : 'Test execution not recorded';
                 if (!isPass && suite && suite.error) {
@@ -374,20 +371,18 @@ jobs:
                   metricCell = `<sub>${metricContent}</sub>`;
                 }
 
-                report += `| ${tokenBadge} | ${metricCell} |\n`;
+                report += `<tr>\n<td><sub><pre lang="diff"><code>${diffFlag} ${token}</code></pre></sub></td>\n<td>${metricCell}</td>\n</tr>\n`;
               }
             }
 
             // Any unexpected watchdog timeouts or extra tests
             const extras = parsedSuites.filter(s => !baseTestTokens.some(b => s.token.startsWith(b)));
             for (const ex of extras) {
-              const badgeColor = ex.passed ? 'brightgreen' : 'red';
-              const safeToken = encodeURIComponent(ex.token.replace(/-/g, '--').replace(/_/g, '__'));
-              const tokenBadge = `<img src="https://img.shields.io/badge/-${safeToken}-${badgeColor}?style=flat-square" alt="${ex.token}" />`;
-              report += `| ${tokenBadge} | <sub>${ex.notes}</sub> |\n`;
+              const diffFlag = ex.passed ? '+' : '-';
+              report += `<tr>\n<td><sub><pre lang="diff"><code>${diffFlag} ${ex.token}</code></pre></sub></td>\n<td><sub>${ex.notes}</sub></td>\n</tr>\n`;
             }
 
-            report += `\n`;
+            report += `</tbody>\n</table>\n\n`;
 
             // Collapsible Detailed Logs
             if (detailedReports.length > 0) {
