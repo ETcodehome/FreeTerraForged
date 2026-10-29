@@ -357,6 +357,7 @@ jobs:
 
                 const isPass = suite ? suite.passed : false;
                 const statusIcon = isPass ? ':white_check_mark:' : ':x:';
+                const diffFlag = isPass ? '+' : '-';
 
                 let metricContent = suite ? suite.notes : 'Test execution not recorded';
                 if (!isPass && suite && suite.error) {
@@ -373,7 +374,7 @@ jobs:
                   metricCell = `<sub>${metricContent}</sub>`;
                 }
 
-                report += `| ${statusIcon} | <sub>\`${token}\`</sub> | ${metricCell} |\n`;
+                report += `| ${statusIcon} | <sub><pre lang="diff"><code>${diffFlag} ${token}</code></pre></sub> | ${metricCell} |\n`;
               }
             }
 
@@ -381,7 +382,8 @@ jobs:
             const extras = parsedSuites.filter(s => !baseTestTokens.some(b => s.token.startsWith(b)));
             for (const ex of extras) {
               const icon = ex.passed ? ':white_check_mark:' : ':x:';
-              report += `| ${icon} | <sub>\`${ex.token}\`</sub> | <sub>${ex.notes}</sub> |\n`;
+              const diffFlag = ex.passed ? '+' : '-';
+              report += `| ${icon} | <sub><pre lang="diff"><code>${diffFlag} ${ex.token}</code></pre></sub> | <sub>${ex.notes}</sub> |\n`;
             }
 
             report += `\n`;
