@@ -330,14 +330,12 @@ jobs:
             const passedCount = parsedSuites.filter(s => s.passed && baseTestTokens.some(b => s.token.startsWith(b))).length;
 
             if (overallPassed) {
-              report += `> [!NOTE]\n`;
-              report += `> **FreeTerraForged Verification: PASSED**\n`;
-              report += `> Commit: [\`${sha}\`](${commitUrl}) | Run: [#${context.runId}](${runUrl}) | Parallel Matrix: ${passedCount} / ${totalExpected} Suites Verified\n\n`;
+              report += `![Pass](https://img.shields.io/badge/verification-passed-brightgreen?style=for-the-badge)\n\n`;
+              report += `Commit: [\`${sha}\`](${commitUrl}) | Run: [#${context.runId}](${runUrl}) | ${passedCount} / ${totalExpected} Tests Run\n\n`;
             } else {
+              report += `![Fail](https://img.shields.io/badge/verification-failed-red?style=for-the-badge)\n\n`;
+              report += `Commit: [\`${sha}\`](${commitUrl}) | Run: [#${context.runId}](${runUrl}) | ${passedCount} / ${totalExpected} Tests Run\n\n`;
               report += `> [!CAUTION]\n`;
-              report += `> **FreeTerraForged Verification: FAILED**\n`;
-              report += `> Commit: [\`${sha}\`](${commitUrl}) | Run: [#${context.runId}](${runUrl}) | Failures detected in verification suite (${passedCount} / ${totalExpected} passed)\n`;
-              report += `>\n`;
               report += `> **Failures:**\n`;
               for (const f of failures) {
                 report += `> - ${f}\n`;
@@ -348,8 +346,8 @@ jobs:
             // Table without headers:
             // Columns:
             // 1. pass / fail checkmark / cross (:white_check_mark: / :x:)
-            // 2. test token (`presetValidation.<name>.<loader>`)
-            // 3. build metric (inline images + metric text)
+            // 2. test token (<sub>`presetValidation.<name>.<loader>`</sub>)
+            // 3. build metric (inline images + <sub>metric text</sub>)
             report += `| | | |\n`;
             report += `| :---: | :--- | :--- |\n`;
 
@@ -367,14 +365,17 @@ jobs:
                   metricContent = `Error: ${suite.error}`;
                 }
 
+                let metricCell = '';
                 if (prNumber && images.length > 0) {
                   const imgHtml = images.map(img =>
                     `<a href="${rawBase}/${img.file}?v=${sha}"><img src="${rawBase}/${img.file}?v=${sha}" width="90" title="${img.title}" alt="${img.label}" /></a>`
                   ).join('&nbsp;');
-                  metricContent = `${imgHtml}<br />${metricContent}`;
+                  metricCell = `${imgHtml}<br /><sub>${metricContent}</sub>`;
+                } else {
+                  metricCell = `<sub>${metricContent}</sub>`;
                 }
 
-                report += `| ${statusIcon} | \`${token}\` | ${metricContent} |\n`;
+                report += `| ${statusIcon} | <sub>\`${token}\`</sub> | ${metricCell} |\n`;
               }
             }
 
@@ -382,7 +383,7 @@ jobs:
             const extras = parsedSuites.filter(s => !baseTestTokens.some(b => s.token.startsWith(b)));
             for (const ex of extras) {
               const icon = ex.passed ? ':white_check_mark:' : ':x:';
-              report += `| ${icon} | \`${ex.token}\` | ${ex.notes} |\n`;
+              report += `| ${icon} | <sub>\`${ex.token}\`</sub> | <sub>${ex.notes}</sub> |\n`;
             }
 
             report += `\n`;
@@ -408,7 +409,11 @@ jobs:
                 issue_number: prNumber
               });
 
-              const botComment = comments.find(c => c.body.includes('FreeTerraForged Verification'));
+              const botComment = comments.find(c =>
+                c.body.includes('verification-passed') ||
+                c.body.includes('verification-failed') ||
+                c.body.includes('FreeTerraForged Verification')
+              );
 
               if (botComment) {
                 await github.rest.issues.updateComment({
