@@ -1,7 +1,7 @@
 name: PR Preset Verification
 
 on:
-  pull_request:
+  pull_request_target:
     types: [labeled]
 
 concurrency:
@@ -31,6 +31,7 @@ jobs:
       - name: Checkout Source
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
           fetch-depth: 1
 
       - name: Set up Java 21
@@ -90,6 +91,7 @@ jobs:
       - name: Checkout Source
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
           fetch-depth: 1
 
       - name: Download Matrix Artifacts
@@ -195,8 +197,9 @@ jobs:
 
             const prNumber = context.payload.pull_request?.number;
             const reportDir = 'build/reports/preset-test-heightmaps';
-            const sha = context.sha.substring(0, 7);
-            const commitUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/commit/${context.sha}`;
+            const headSha = context.payload.pull_request?.head?.sha || context.sha;
+            const sha = headSha.substring(0, 7);
+            const commitUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/commit/${headSha}`;
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
 
             const failures = [];
