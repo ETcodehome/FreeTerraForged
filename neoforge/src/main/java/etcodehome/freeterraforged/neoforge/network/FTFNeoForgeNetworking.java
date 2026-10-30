@@ -9,6 +9,10 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import etcodehome.freeterraforged.client.network.FTFClientPayloadHandler;
 import etcodehome.freeterraforged.network.FlowFieldSyncPayload;
 import etcodehome.freeterraforged.network.FlowSettingsSyncPayload;
+import etcodehome.freeterraforged.network.PreviewLocateRequestPayload;
+import etcodehome.freeterraforged.network.PreviewLocationPayload;
+import etcodehome.freeterraforged.server.command.PreviewLocateHandler;
+import net.minecraft.server.level.ServerPlayer;
 
 @EventBusSubscriber(modid = "freeterraforged")
 public class FTFNeoForgeNetworking {
@@ -28,6 +32,12 @@ public class FTFNeoForgeNetworking {
 				context.enqueueWork(() ->
 						FTFClientPayloadHandler.handleFlowSettingsSync(payload, context.player())
 				)
+		);
+		registrar.playToClient(PreviewLocationPayload.TYPE, PreviewLocationPayload.CODEC, (payload, context) ->
+			context.enqueueWork(() -> FTFClientPayloadHandler.handlePreviewLocation(payload))
+		);
+		registrar.playToServer(PreviewLocateRequestPayload.TYPE, PreviewLocateRequestPayload.CODEC, (payload, context) ->
+			context.enqueueWork(() -> PreviewLocateHandler.handle(payload, (ServerPlayer) context.player()))
 		);
     }
 }
