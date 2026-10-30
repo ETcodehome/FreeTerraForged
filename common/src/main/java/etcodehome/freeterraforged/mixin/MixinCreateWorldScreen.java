@@ -130,12 +130,31 @@ public abstract class MixinCreateWorldScreen {
 		this.freeterraforged$syncPresetPackWithWorldType(this.uiState);
 	}
 
-	@Inject(method = "init", at = @At("TAIL"))
-	private void freeterraforged$syncPresetPackAfterRecreate(CallbackInfo callback) {
-		if (this.recreated) {
+	@Inject(method = "render", at = @At("HEAD"))
+	private void freeterraforged$clearSyncingStateOnRender(net.minecraft.client.gui.GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo callback) {
+		this.freeterraforged$syncingPresetPack = false;
+		if (this.freeterraforged$pendingPresetPackSync) {
 			this.freeterraforged$pendingPresetPackSync = false;
 			this.freeterraforged$syncPresetPackWithWorldType(this.uiState);
 		}
+	}
+
+	@Inject(method = "init", at = @At("HEAD"))
+	private void freeterraforged$resetSyncingStateOnInit(CallbackInfo callback) {
+		this.freeterraforged$syncingPresetPack = false;
+	}
+
+	@Inject(method = "init", at = @At("TAIL"))
+	private void freeterraforged$syncPresetPackAfterRecreate(CallbackInfo callback) {
+		if (this.recreated || this.freeterraforged$pendingPresetPackSync) {
+			this.freeterraforged$pendingPresetPackSync = false;
+			this.freeterraforged$syncPresetPackWithWorldType(this.uiState);
+		}
+	}
+
+	@Inject(method = "onClose", at = @At("HEAD"))
+	private void freeterraforged$resetSyncingStateOnClose(CallbackInfo callback) {
+		this.freeterraforged$syncingPresetPack = false;
 	}
 
 	@Unique
@@ -232,6 +251,17 @@ public abstract class MixinCreateWorldScreen {
 			.filter(FTFWorldPresets.FREETERRAFORGED::equals)
 			.isPresent();
 		if (!ftfSelected) {
+			WorldDataConfiguration configuration = this.uiState.getSettings().dataConfiguration();
+			if (configuration.dataPacks().getEnabled().contains(FTFWorldPresets.GENERATED_PRESET_PACK_ID)) {
+				this.uiState.setSettings(new WorldCreationContext(
+					this.uiState.getSettings().options(),
+					this.uiState.getSettings().datapackDimensions(),
+					this.uiState.getSettings().selectedDimensions(),
+					this.uiState.getSettings().worldgenRegistries(),
+					this.uiState.getSettings().dataPackResources(),
+					FTFWorldPresetDataPacks.setCustomPresetEnabled(configuration, false)
+				));
+			}
 			Pair<Path, PackRepository> selection = this.getDataPackSelectionSettings(this.uiState.getSettings().dataConfiguration());
 			if (selection != null) {
 				Path presetZipPath = selection.getFirst().resolve(FTFWorldPresets.GENERATED_PRESET_PACK_FILE_NAME);

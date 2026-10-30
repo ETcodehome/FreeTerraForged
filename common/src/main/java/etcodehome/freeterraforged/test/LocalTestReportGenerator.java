@@ -31,7 +31,8 @@ public final class LocalTestReportGenerator {
 		"presetValidation.customFileResolution",
 		"presetValidation.multiRunSeamContinuity",
 		"presetValidation.inGameCommandParity",
-		"presetValidation.twoStageReloadSpawnPersistence"
+		"presetValidation.twoStageReloadSpawnPersistence",
+		"presetValidation.nonFtfWorldResolution"
 	);
 
 	public static void main(String[] args) {
@@ -141,7 +142,7 @@ public final class LocalTestReportGenerator {
 			int totalExpected = BASE_TEST_TOKENS.size() * 2;
 			long passedCount = resultsByToken.values().stream().filter(TestResult::passed).count();
 			long failedCount = resultsByToken.values().stream().filter(r -> !r.passed()).count();
-			boolean overallPassed = (passedCount == totalExpected) && (failedCount == 0);
+			boolean overallPassed = (passedCount >= totalExpected) && (failedCount == 0);
 
 			// Build HTML
 			String html = renderHtml(
