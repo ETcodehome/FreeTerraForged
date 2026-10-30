@@ -1,20 +1,15 @@
 package etcodehome.freeterraforged.server.command;
 
-import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.jetbrains.annotations.Nullable;
 
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
-import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -24,11 +19,11 @@ import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
 import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
-import etcodehome.freeterraforged.world.worldgen.cell.Cell;
-import etcodehome.freeterraforged.world.worldgen.cell.heightmap.WorldLookup;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.Terrain;
-import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
 import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
+import etcodehome.freeterraforged.world.worldgen.search.LocateSearchSettings;
+import etcodehome.freeterraforged.world.worldgen.search.TerrainLocateSearch;
+import etcodehome.freeterraforged.world.worldgen.search.TerrainSearchTargets;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -45,47 +40,16 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 
 /**
- * {@code /ftf locate terrain <terrain> [radius]} finds the nearest point of an FTF terrain type.
+ * {@code /ftf locate terrain <terrain>} finds a sampled point of an FTF terrain type.
  *
- * <p>The world's terrain is sampled on a grid by a small pool of worker threads and the answer is reported back on the
- * server thread, so the server keeps ticking while the search runs. Sampling goes through {@link WorldLookup#applyCell}
- * without loading, so it reuses terrain tiles that already exist but never creates or waits on new ones.
+ * <p>The world's terrain is sampled on a preset-derived lattice by a bounded worker pool and the answer is reported
+ * back on the server thread, so the server keeps ticking while the search runs. Targets whose identity can be changed
+ * by terrain filters use the same authoritative filter pipeline as chunk generation; all other targets use the exact
+ * raw-heightmap identity as a cheaper equivalent path.
  */
 public final class LocateTerrainCommand {
-	public static final int DEFAULT_RADIUS = 10_000;
-	public static final int MAX_RADIUS = 25_000;
-	/** Grid spacing in blocks. Thin terrain (rivers, beaches, volcano pipes) is sampled twice as densely. */
-	private static final int STEP = 32;
-	private static final int FINE_STEP = 16;
-	private static final long TIMEOUT_SECONDS = 60L;
-	private static final int WORKERS = Math.max(1, Runtime.getRuntime().availableProcessors() / 2);
-	private static final ThreadPoolExecutor EXECUTOR = createExecutor();
-
-	private record RunningSearch(CompletableFuture<ParallelGridSearch.Result> future, String terrainName) {}
+	private record RunningSearch(CompletableFuture<TerrainLocateSearch.Result> future, String terrainName) {}
 	private static final AtomicReference<RunningSearch> ACTIVE_SEARCH = new AtomicReference<>();
-
-	/** Every terrain a lookup can report. Island beaches are reported as beaches, so they are left out. */
-	private static final List<Terrain> TERRAINS = List.of(
-		TerrainType.DEEP_OCEAN,
-		TerrainType.SHALLOW_OCEAN,
-		TerrainType.COAST,
-		TerrainType.BEACH,
-		TerrainType.RIVER,
-		TerrainType.WETLAND,
-		TerrainType.FLATS,
-		TerrainType.BADLANDS,
-		TerrainType.PLATEAU,
-		TerrainType.HILLS,
-		TerrainType.MOUNTAINS_1,
-		TerrainType.MOUNTAINS_2,
-		TerrainType.MOUNTAINS_3,
-		TerrainType.MOUNTAIN_CHAIN,
-		TerrainType.VOLCANO,
-		TerrainType.VOLCANO_PIPE,
-		TerrainType.ISLAND,
-		TerrainType.ISLAND_MOUNTAINS,
-		TerrainType.MUSHROOM_FIELDS
-	);
 
 	public static final ResourceKey<Level> FTF_DIMENSION = ResourceKey.create(
 		Registries.DIMENSION,
@@ -185,17 +149,11 @@ public final class LocateTerrainCommand {
 			)
 			.then(Commands.literal("terrain")
 				.then(Commands.argument("terrain", StringArgumentType.word())
-					.suggests((context, builder) -> SharedSuggestionProvider.suggest(TERRAINS.stream().map(Terrain::getName), builder))
-					.executes(context -> locate(context.getSource(), StringArgumentType.getString(context, "terrain"), DEFAULT_RADIUS))
-					.then(Commands.argument("radius", IntegerArgumentType.integer(STEP, MAX_RADIUS))
-						.executes(context -> locate(
-							context.getSource(),
-							StringArgumentType.getString(context, "terrain"),
-							IntegerArgumentType.getInteger(context, "radius")
-						))
-					)
+					.suggests((context, builder) -> SharedSuggestionProvider.suggest(TerrainSearchTargets.names(), builder))
+					.executes(context -> locate(context.getSource(), StringArgumentType.getString(context, "terrain")))
 				)
-			);
+			)
+			.then(LocateBiomeCommand.build());
 	}
 
 	public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
@@ -207,25 +165,32 @@ public final class LocateTerrainCommand {
 
 	private static int cancel(CommandSourceStack source) {
 		RunningSearch active = ACTIVE_SEARCH.getAndSet(null);
-		if (active == null || active.future.isDone()) {
+		String biome = LocateBiomeCommand.cancelActive();
+		boolean terrainActive = active != null && !active.future.isDone();
+		if (!terrainActive && biome == null) {
 			source.sendFailure(Component.translatableWithFallback(
 				KEY + "no_active_search",
-				"No terrain search is currently in progress."
+				"No FTF locate search is currently in progress."
 			));
 			return 0;
 		}
-		active.future.cancel(true);
+		if (terrainActive) {
+			active.future.cancel(true);
+		}
+		String targets = terrainActive && biome != null
+			? active.terrainName + " and " + biome
+			: terrainActive ? active.terrainName : biome;
 		source.sendSuccess(() -> Component.translatableWithFallback(
 			KEY + "cancelled",
-			"Cancelled active terrain search for %s.",
-			active.terrainName
+			"Cancelled active FTF locate search for %s.",
+			targets
 		), false);
 		return Command.SINGLE_SUCCESS;
 	}
 
-	private static int locate(CommandSourceStack source, String name, int radius) throws CommandSyntaxException {
-		Terrain target = TerrainType.get(name);
-		if (target == null || !TERRAINS.contains(target)) {
+	private static int locate(CommandSourceStack source, String name) throws CommandSyntaxException {
+		Terrain target = TerrainSearchTargets.get(name);
+		if (target == null) {
 			throw ERROR_UNKNOWN_TERRAIN.create(name);
 		}
 		TargetLevel targetLevel = findTargetLevel(source);
@@ -245,22 +210,18 @@ public final class LocateTerrainCommand {
 			return 0;
 		}
 
-		WorldLookup lookup = context.lookup;
 		BlockPos origin = BlockPos.containing(source.getPosition());
 		MinecraftServer server = source.getServer();
-		int step = isThin(target) ? FINE_STEP : STEP;
 		long start = System.nanoTime();
-		source.sendSuccess(() -> Component.translatableWithFallback(KEY + "searching", "Searching for %s within %s blocks...", target.getName(), radius), false);
+		source.sendSuccess(() -> Component.translatableWithFallback(
+			KEY + "searching",
+			"Searching outward for %s for up to %s seconds...",
+			target.getName(),
+			LocateSearchSettings.TIME_LIMIT_SECONDS
+		), false);
 
-		CompletableFuture<ParallelGridSearch.Result> future = ParallelGridSearch.findNearest(
-			origin.getX(),
-			origin.getZ(),
-			step,
-			radius,
-			() -> terrainTest(lookup, target),
-			EXECUTOR,
-			WORKERS,
-			start + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS)
+		CompletableFuture<TerrainLocateSearch.Result> future = TerrainLocateSearch.findFirst(
+			context, target, origin
 		);
 
 		RunningSearch search = new RunningSearch(future, target.getName());
@@ -285,19 +246,47 @@ public final class LocateTerrainCommand {
 		return Command.SINGLE_SUCCESS;
 	}
 
-	private static ParallelGridSearch.PointTest terrainTest(WorldLookup lookup, Terrain target) {
-		Cell cell = new Cell();
-		return (x, z) -> {
-			lookup.applyCell(cell.reset(), x, z, false);
-			return cell.terrain == target;
+	static CompletableFuture<BlockPos> findForPreview(
+		GeneratorContext context,
+		BlockPos origin,
+		String name
+	) {
+		Terrain target = TerrainSearchTargets.get(name);
+		if (target == null) {
+			return CompletableFuture.failedFuture(new IllegalArgumentException("Unknown terrain type: " + name));
+		}
+		CompletableFuture<TerrainLocateSearch.Result> search = TerrainLocateSearch.findFirst(
+			context, target, origin
+		);
+		CompletableFuture<BlockPos> transformed = search.thenApply(found -> {
+			if (found.match() == null && found.timedOut()) {
+				throw new IllegalStateException(
+					"The search for terrain " + name + " timed out after "
+						+ LocateSearchSettings.TIME_LIMIT_SECONDS + " seconds"
+				);
+			}
+			TerrainLocateSearch.Match match = found.match();
+			return match == null ? null : new BlockPos(match.x(), origin.getY(), match.z());
+		});
+		CompletableFuture<BlockPos> result = new CompletableFuture<>() {
+			@Override
+			public boolean cancel(boolean mayInterruptIfRunning) {
+				search.cancel(mayInterruptIfRunning);
+				transformed.cancel(mayInterruptIfRunning);
+				return super.cancel(mayInterruptIfRunning);
+			}
 		};
+		transformed.whenComplete((position, failure) -> {
+			if (failure == null) {
+				result.complete(position);
+			} else {
+				result.completeExceptionally(failure);
+			}
+		});
+		return result;
 	}
 
-	private static boolean isThin(Terrain terrain) {
-		return terrain == TerrainType.RIVER || terrain == TerrainType.BEACH || terrain == TerrainType.VOLCANO_PIPE;
-	}
-
-	private static void report(CommandSourceStack source, ServerLevel targetLevel, Terrain target, @Nullable ParallelGridSearch.Result result, @Nullable Throwable error, long elapsedNanos) {
+	private static void report(CommandSourceStack source, ServerLevel targetLevel, Terrain target, @Nullable TerrainLocateSearch.Result result, @Nullable Throwable error, long elapsedNanos) {
 		String name = target.getName();
 		if (error instanceof CancellationException) {
 			source.sendSuccess(() -> Component.translatableWithFallback(KEY + "search_cancelled", "Searching for %s was cancelled.", name), false);
@@ -312,13 +301,22 @@ public final class LocateTerrainCommand {
 			source.sendFailure(Component.translatableWithFallback(KEY + "failed", "Searching for %s failed; see the server log for details", name));
 			return;
 		}
-		FTFCommon.LOGGER.info("Locating terrain {} took {} ms ({} samples on {} threads)", name, TimeUnit.NANOSECONDS.toMillis(elapsedNanos), result.samples(), WORKERS);
+		FTFCommon.LOGGER.info(
+			"Locating terrain {} took {} ms ({} samples, step {})",
+			name,
+			TimeUnit.NANOSECONDS.toMillis(elapsedNanos),
+			result.samples(),
+			result.resolution().horizontalStep()
+		);
 
-		ParallelGridSearch.Match match = result.match();
+		TerrainLocateSearch.Match match = result.match();
 		if (match == null) {
 			source.sendFailure(result.timedOut()
-				? Component.translatableWithFallback(KEY + "timed_out", "Could not find %s within %s blocks before the search timed out", name, result.searchedRadius())
-				: Component.translatableWithFallback(KEY + "not_found", "Could not find %s within %s blocks", name, result.searchedRadius()));
+				? Component.translatableWithFallback(
+					KEY + "timed_out", "Could not find %s before the %s-second search limit", name,
+					LocateSearchSettings.TIME_LIMIT_SECONDS
+				)
+				: Component.translatableWithFallback(KEY + "not_found", "Could not find %s in the searchable world", name));
 			return;
 		}
 		int distance = (int) Math.sqrt((double) match.distanceSq());
@@ -330,20 +328,8 @@ public final class LocateTerrainCommand {
 				.withColor(ChatFormatting.GREEN)
 				.withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, tpCommand))
 				.withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.translatable("chat.coordinates.tooltip"))));
-		source.sendSuccess(() -> Component.translatableWithFallback(KEY + "success", "The nearest %s is at %s (%s blocks away)", name, coordinates, distance), false);
-		if (result.timedOut()) {
-			source.sendSuccess(() -> Component.translatableWithFallback(KEY + "inexact", "The search timed out, so a closer %s may exist", name), false);
-		}
-	}
-
-	private static ThreadPoolExecutor createExecutor() {
-		AtomicInteger threads = new AtomicInteger();
-		ThreadPoolExecutor executor = new ThreadPoolExecutor(WORKERS, WORKERS, 30L, TimeUnit.SECONDS, new LinkedBlockingQueue<>(), task -> {
-			Thread thread = new Thread(task, "FTF-Locate-" + threads.incrementAndGet());
-			thread.setDaemon(true);
-			return thread;
-		});
-		executor.allowCoreThreadTimeOut(true);
-		return executor;
+		source.sendSuccess(() -> Component.translatableWithFallback(
+			KEY + "success", "Found sampled %s terrain at %s (%s blocks away)", name, coordinates, distance
+		), false);
 	}
 }

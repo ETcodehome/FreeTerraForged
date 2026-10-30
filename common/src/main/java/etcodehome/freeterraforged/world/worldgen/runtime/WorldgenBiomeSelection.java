@@ -2,6 +2,7 @@ package etcodehome.freeterraforged.world.worldgen.runtime;
 
 import java.util.Collections;
 import java.util.LinkedHashSet;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -254,6 +255,59 @@ public final class WorldgenBiomeSelection {
 				.resolve(biomeCellX, biomeCellZ);
 			return this.select(
 				spatial, this.samplerDecoration.sample(sampler, quartX, quartY, quartZ),
+				quartX, quartY, quartZ, sampler, generatorContext
+			);
+		}
+
+		/**
+		 * Resolves an FTF candidate from a target already produced by this plan's sampler-decoration stage.
+		 * Locate uses this to classify a cave stage and select its biome without sampling every coordinate twice.
+		 */
+		public Holder<Biome> resolveSampledInCell(
+			int quartX,
+			int quartY,
+			int quartZ,
+			Climate.Sampler sampler,
+			Climate.TargetPoint target,
+			long biomeCellX,
+			long biomeCellZ
+		) {
+			if (this.directInput != null) {
+				throw new IllegalStateException(
+					"A direct custom biome source cannot resolve from a pre-sampled FTF target"
+				);
+			}
+			if (this.isolatedParallelRead) {
+				return this.resolveSampledOwnedInCell(
+					quartX, quartY, quartZ, sampler, target, biomeCellX, biomeCellZ
+				);
+			}
+			return this.execution.execute(
+				QUERY_FACETS,
+				() -> this.resolveSampledOwnedInCell(
+					quartX, quartY, quartZ, sampler, target, biomeCellX, biomeCellZ
+				)
+			);
+		}
+
+		private Holder<Biome> resolveSampledOwnedInCell(
+			int quartX,
+			int quartY,
+			int quartZ,
+			Climate.Sampler sampler,
+			Climate.TargetPoint target,
+			long biomeCellX,
+			long biomeCellZ
+		) {
+			FTFClimateSampler rtfSampler = requireOwnedSampler(sampler);
+			GeneratorContext generatorContext = rtfSampler.climateQuerySemantics().surfaceContext();
+			if (generatorContext == null) {
+				throw new IllegalStateException("FTF biome selection requires its owned sampler context");
+			}
+			WorldgenPlans.SpatialResult spatial = this.requireSpatialResolver()
+				.resolve(biomeCellX, biomeCellZ);
+			return this.select(
+				spatial, Objects.requireNonNull(target, "sampled climate target"),
 				quartX, quartY, quartZ, sampler, generatorContext
 			);
 		}

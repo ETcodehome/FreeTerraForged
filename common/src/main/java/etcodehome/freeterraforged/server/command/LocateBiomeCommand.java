@@ -1,0 +1,322 @@
+package etcodehome.freeterraforged.server.command;
+
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Stream;
+
+import org.jetbrains.annotations.Nullable;
+
+import com.mojang.brigadier.Command;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.context.ParsedCommandNode;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.exceptions.DynamicCommandExceptionType;
+import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
+import com.mojang.brigadier.tree.ArgumentCommandNode;
+
+import etcodehome.freeterraforged.FTFCommon;
+import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
+import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPlan;
+import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenRuntimeBinding;
+import etcodehome.freeterraforged.world.worldgen.search.BiomeLocateSearch;
+import etcodehome.freeterraforged.world.worldgen.search.BiomeSearchTarget;
+import etcodehome.freeterraforged.world.worldgen.search.FTFBiomeLocateQuery;
+import etcodehome.freeterraforged.world.worldgen.search.LocateSearchSettings;
+import net.minecraft.ChatFormatting;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
+import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.commands.arguments.ResourceOrTagKeyArgument;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.ComponentUtils;
+import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.levelgen.RandomState;
+
+/** FTF-plan-aware, chunk-free biome locator. */
+public final class LocateBiomeCommand {
+    private static final String KEY = FTFCommon.MOD_ID + ".commands.locate.biome.";
+    private static final AtomicReference<RunningSearch> ACTIVE_SEARCH = new AtomicReference<>();
+    private static final DynamicCommandExceptionType ERROR_INVALID_TARGET = new DynamicCommandExceptionType(
+        value -> Component.translatableWithFallback(KEY + "invalid", "Invalid biome or biome tag: %s", value)
+    );
+    private static final SimpleCommandExceptionType ERROR_NOT_FTF = new SimpleCommandExceptionType(
+        Component.translatableWithFallback(KEY + "not_ftf", "No FreeTerraForged dimension is available")
+    );
+
+    private LocateBiomeCommand() {
+    }
+
+    static LiteralArgumentBuilder<CommandSourceStack> build() {
+        return Commands.literal("biome")
+            .then(Commands.argument("biome", ResourceOrTagKeyArgument.resourceOrTagKey(Registries.BIOME))
+                .suggests((context, builder) -> {
+                    var biomes = context.getSource().registryAccess().lookupOrThrow(Registries.BIOME);
+                    return SharedSuggestionProvider.suggest(Stream.concat(
+                        biomes.listElementIds().map(key -> key.location().toString()),
+                        biomes.listTagIds().map(tag -> "#" + tag.location())
+                    ), builder);
+                })
+                .executes(context -> locate(context.getSource(), biomeTarget(context)))
+            );
+    }
+
+    private static ResourceOrTagKeyArgument.Result<Biome> biomeTarget(
+        com.mojang.brigadier.context.CommandContext<CommandSourceStack> context
+    ) throws CommandSyntaxException {
+		String rawTarget = rawArgument(context, "biome");
+		try {
+			BiomeSearchTarget.parse(rawTarget);
+		} catch (IllegalArgumentException invalid) {
+			throw ERROR_INVALID_TARGET.create(rawTarget);
+		}
+        return ResourceOrTagKeyArgument.getResourceOrTagKey(
+            context, "biome", Registries.BIOME, ERROR_INVALID_TARGET
+        );
+    }
+
+	private static String rawArgument(
+		com.mojang.brigadier.context.CommandContext<CommandSourceStack> context,
+		String name
+	) {
+		for (ParsedCommandNode<CommandSourceStack> node : context.getNodes()) {
+			if (node.getNode().getName().equals(name) && node.getNode() instanceof ArgumentCommandNode<?, ?>) {
+				return context.getInput().substring(node.getRange().getStart(), node.getRange().getEnd());
+			}
+		}
+		return "";
+	}
+
+    private static int locate(
+        CommandSourceStack source,
+        ResourceOrTagKeyArgument.Result<Biome> targetBiome
+    ) throws CommandSyntaxException {
+        String value = targetBiome.asPrintable();
+        LocateTerrainCommand.TargetLevel target = LocateTerrainCommand.findTargetLevel(source);
+        if (target == null) {
+            throw ERROR_NOT_FTF.create();
+        }
+        BiomeLocateSearch.Query query = locateQuery(target.level());
+        if (query == null) {
+            throw ERROR_NOT_FTF.create();
+        }
+
+        RunningSearch current = ACTIVE_SEARCH.get();
+        if (current != null && !current.future().isDone()) {
+            source.sendFailure(Component.translatableWithFallback(
+                KEY + "already_running",
+                "A biome search for %s is already running. Use '/ftf locate cancel' to abort it first.",
+                current.target()
+            ));
+            return 0;
+        }
+
+        ServerLevel level = target.level();
+        BlockPos origin = level == source.getLevel()
+            ? BlockPos.containing(source.getPosition())
+            : level.getSharedSpawnPos();
+        long start = System.nanoTime();
+        CompletableFuture<BiomeLocateSearch.Result> future = BiomeLocateSearch.findFirst(
+            query, targetBiome, origin
+        );
+        RunningSearch search = new RunningSearch(future, value);
+        ACTIVE_SEARCH.set(search);
+        source.sendSuccess(() -> Component.translatableWithFallback(
+            KEY + "searching", "Searching FTF worldgen for %s for up to %s seconds...",
+            value, LocateSearchSettings.TIME_LIMIT_SECONDS
+        ), false);
+
+        MinecraftServer server = source.getServer();
+        future.whenComplete((result, failure) -> {
+            ACTIVE_SEARCH.compareAndSet(search, null);
+            if (!server.isRunning()) {
+                return;
+            }
+            try {
+                server.execute(() -> report(
+                    source, level, value, result, failure, System.nanoTime() - start
+                ));
+            } catch (RejectedExecutionException ignored) {
+                // Server stopped between completion and dispatch.
+            }
+        });
+        return Command.SINGLE_SUCCESS;
+    }
+
+    public static CompletableFuture<BlockPos> findForPreview(
+        ServerLevel level,
+        BlockPos origin,
+        String value
+    ) {
+        BiomeSearchTarget target = BiomeSearchTarget.parse(value);
+        BiomeLocateSearch.Query query = locateQuery(level);
+        if (query == null) {
+            return CompletableFuture.failedFuture(
+                new IllegalStateException("The preview's FTF biome plan is unavailable")
+            );
+        }
+        CompletableFuture<BiomeLocateSearch.Result> search = BiomeLocateSearch.findFirst(query, target, origin);
+        CompletableFuture<BlockPos> result = new CompletableFuture<>() {
+            @Override
+            public boolean cancel(boolean mayInterruptIfRunning) {
+                search.cancel(mayInterruptIfRunning);
+                return super.cancel(mayInterruptIfRunning);
+            }
+        };
+        search.whenComplete((found, failure) -> {
+            if (failure != null) {
+                result.completeExceptionally(failure);
+            } else if (!found.targetPossible()) {
+                result.completeExceptionally(new IllegalArgumentException(
+                    "Biome " + target.input() + " cannot be produced by the active FTF worldgen plan"
+                ));
+            } else if (found.match() == null && found.timedOut()) {
+                result.completeExceptionally(new IllegalStateException(
+                    "The search for biome " + target.input() + " timed out after "
+                        + LocateSearchSettings.TIME_LIMIT_SECONDS + " seconds"
+                ));
+            } else {
+                result.complete(found.match() == null ? null : found.match().position());
+            }
+        });
+        return result;
+    }
+
+    @Nullable
+    static String cancelActive() {
+        RunningSearch active = ACTIVE_SEARCH.getAndSet(null);
+        if (active == null || active.future().isDone()) {
+            return null;
+        }
+        active.future().cancel(true);
+        return active.target();
+    }
+
+    @Nullable
+    private static BiomeLocateSearch.Query locateQuery(ServerLevel level) {
+        RandomState randomState = level.getChunkSource().randomState();
+        if (!((Object) randomState instanceof FTFRandomState ftfState)) {
+            return null;
+        }
+        WorldgenRuntimeBinding binding = ftfState.binding();
+        if (binding == null || ftfState.generatorContext() == null) {
+            return null;
+        }
+		WorldgenRuntimeBinding.BiomeRuntime runtime = binding.biomeRuntime();
+		WorldgenPlan expected = runtime.plan();
+        return new FTFBiomeLocateQuery(
+			runtime.selection(),
+            ftfState.generatorContext(),
+            randomState.sampler(),
+			runtime.placement(),
+            () -> isCurrent(binding, expected)
+        );
+    }
+
+    private static boolean isCurrent(WorldgenRuntimeBinding binding, WorldgenPlan expected) {
+        try {
+            return binding.plan() == expected;
+        } catch (IllegalStateException closed) {
+            return false;
+        }
+    }
+
+    private static void report(
+        CommandSourceStack source,
+        ServerLevel level,
+        String value,
+        @Nullable BiomeLocateSearch.Result result,
+        @Nullable Throwable failure,
+        long elapsedNanos
+    ) {
+        if (failure != null) {
+            if (isCancellation(failure)) {
+                return;
+            }
+            FTFCommon.LOGGER.error("FTF biome locate failed", failure);
+            source.sendFailure(Component.translatableWithFallback(
+                KEY + "failed", "Searching for biome %s failed; see the server log", value
+            ));
+            return;
+        }
+        if (result == null) {
+            source.sendFailure(Component.translatableWithFallback(
+                KEY + "failed", "Searching for biome %s failed", value
+            ));
+            return;
+        }
+        if (!result.targetPossible()) {
+            source.sendFailure(Component.translatableWithFallback(
+                KEY + "impossible", "Biome %s cannot be produced by the active FTF worldgen plan", value
+            ));
+            return;
+        }
+
+        BiomeLocateSearch.Match match = result.match();
+        if (match == null) {
+            source.sendFailure(result.timedOut()
+                ? Component.translatableWithFallback(
+                    KEY + "timed_out", "Could not find biome %s before the %s-second search limit",
+                    value, LocateSearchSettings.TIME_LIMIT_SECONDS
+                )
+                : Component.translatableWithFallback(
+                    KEY + "not_found", "Could not find biome %s in the searchable world", value
+                ));
+            return;
+        }
+
+        BlockPos position = match.position();
+        ResourceLocation biomeId = match.biome().unwrapKey()
+            .map(ResourceKey::location)
+            .orElse(ResourceLocation.withDefaultNamespace("unknown"));
+        String teleport = level == source.getLevel()
+            ? "/tp @s " + position.getX() + " " + position.getY() + " " + position.getZ()
+            : "/execute in " + level.dimension().location() + " run tp @s "
+                + position.getX() + " " + position.getY() + " " + position.getZ();
+        Component coordinates = ComponentUtils.wrapInSquareBrackets(Component.translatable(
+            "chat.coordinates", position.getX(), position.getY(), position.getZ()
+        )).withStyle(style -> style
+            .withColor(ChatFormatting.GREEN)
+            .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, teleport))
+            .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.translatable("chat.coordinates.tooltip"))));
+        source.sendSuccess(() -> Component.translatableWithFallback(
+            KEY + "success", "Found sampled %s biome at %s", biomeId, coordinates
+        ), false);
+        FTFCommon.LOGGER.info(
+            "Located FTF biome {} in {} ms ({} columns, horizontal step {}, vertical step {}, roles {})",
+            biomeId,
+            TimeUnit.NANOSECONDS.toMillis(elapsedNanos),
+            result.columns(),
+            result.plan().resolution().horizontalStep(),
+            result.plan().resolution().verticalStep(),
+            result.plan().roles().roles()
+        );
+    }
+
+    private static boolean isCancellation(Throwable failure) {
+        Throwable current = failure;
+        while (current != null) {
+            if (current instanceof CancellationException) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private record RunningSearch(
+        CompletableFuture<BiomeLocateSearch.Result> future,
+        String target
+    ) {
+    }
+}
