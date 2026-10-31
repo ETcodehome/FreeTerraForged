@@ -25,11 +25,12 @@ public final class BiomeSearchTarget implements Predicate<Holder<Biome>> {
 	public static BiomeSearchTarget parse(String input) {
 		String value = Objects.requireNonNull(input, "input").trim();
 		if (value.isEmpty()) {
-			throw new IllegalArgumentException("A biome ID or biome tag is required");
+			throw new IllegalArgumentException("Enter a biome ID or biome tag.");
 		}
 		if (!value.startsWith("#") && !value.contains(":")) {
 			throw new IllegalArgumentException(
-				"Biome IDs must include a namespace or be supplied as a tag: " + value
+				"Biome IDs need a namespace, such as minecraft:mangrove_swamp. "
+					+ "Tags start with #, such as #c:is_beach."
 			);
 		}
 		try {
@@ -40,7 +41,7 @@ public final class BiomeSearchTarget implements Predicate<Holder<Biome>> {
 			ResourceLocation id = ResourceLocation.parse(value);
 			return new BiomeSearchTarget(value, ResourceKey.create(Registries.BIOME, id), null);
 		} catch (RuntimeException failure) {
-			throw new IllegalArgumentException("Invalid biome or biome tag: " + value, failure);
+			throw new IllegalArgumentException("Invalid biome ID or tag: " + value + ".", failure);
 		}
 	}
 

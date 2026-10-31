@@ -48,10 +48,10 @@ public final class LocateBiomeCommand {
     private static final String KEY = FTFCommon.MOD_ID + ".commands.locate.biome.";
     private static final AtomicReference<RunningSearch> ACTIVE_SEARCH = new AtomicReference<>();
     private static final DynamicCommandExceptionType ERROR_INVALID_TARGET = new DynamicCommandExceptionType(
-        value -> Component.translatableWithFallback(KEY + "invalid", "Invalid biome or biome tag: %s", value)
+        value -> Component.translatableWithFallback(KEY + "invalid", "Invalid biome ID or tag: %s.", value)
     );
     private static final SimpleCommandExceptionType ERROR_NOT_FTF = new SimpleCommandExceptionType(
-        Component.translatableWithFallback(KEY + "not_ftf", "No FreeTerraForged dimension is available")
+        Component.translatableWithFallback(KEY + "not_ftf", "No FreeTerraForged world is available.")
     );
 
     private LocateBiomeCommand() {
@@ -115,7 +115,7 @@ public final class LocateBiomeCommand {
         if (current != null && !current.future().isDone()) {
             source.sendFailure(Component.translatableWithFallback(
                 KEY + "already_running",
-                "A biome search for %s is already running. Use '/ftf locate cancel' to abort it first.",
+                "A biome search for %s is already running. Use '/ftf locate cancel' to stop it first.",
                 current.target()
             ));
             return 0;
@@ -132,7 +132,7 @@ public final class LocateBiomeCommand {
         RunningSearch search = new RunningSearch(future, value);
         ACTIVE_SEARCH.set(search);
         source.sendSuccess(() -> Component.translatableWithFallback(
-            KEY + "searching", "Searching FTF worldgen for %s for up to %s seconds...",
+            KEY + "searching", "Searching for biome %s for up to %s seconds...",
             value, LocateSearchSettings.TIME_LIMIT_SECONDS
         ), false);
 
@@ -153,7 +153,7 @@ public final class LocateBiomeCommand {
         return Command.SINGLE_SUCCESS;
     }
 
-    public static CompletableFuture<BlockPos> findForPreview(
+    static CompletableFuture<LocatePreviewResult> findForPreview(
         ServerLevel level,
         BlockPos origin,
         String value
@@ -161,12 +161,10 @@ public final class LocateBiomeCommand {
         BiomeSearchTarget target = BiomeSearchTarget.parse(value);
         BiomeLocateSearch.Query query = locateQuery(level);
         if (query == null) {
-            return CompletableFuture.failedFuture(
-                new IllegalStateException("The preview's FTF biome plan is unavailable")
-            );
+            return CompletableFuture.completedFuture(LocatePreviewResult.of(LocatePreviewResult.Status.UNAVAILABLE));
         }
         CompletableFuture<BiomeLocateSearch.Result> search = BiomeLocateSearch.findFirst(query, target, origin);
-        CompletableFuture<BlockPos> result = new CompletableFuture<>() {
+		CompletableFuture<LocatePreviewResult> result = new CompletableFuture<>() {
             @Override
             public boolean cancel(boolean mayInterruptIfRunning) {
                 search.cancel(mayInterruptIfRunning);
@@ -177,16 +175,16 @@ public final class LocateBiomeCommand {
             if (failure != null) {
                 result.completeExceptionally(failure);
             } else if (!found.targetPossible()) {
-                result.completeExceptionally(new IllegalArgumentException(
-                    "Biome " + target.input() + " cannot be produced by the active FTF worldgen plan"
-                ));
-            } else if (found.match() == null && found.timedOut()) {
-                result.completeExceptionally(new IllegalStateException(
-                    "The search for biome " + target.input() + " timed out after "
-                        + LocateSearchSettings.TIME_LIMIT_SECONDS + " seconds"
-                ));
+				result.complete(LocatePreviewResult.of(LocatePreviewResult.Status.IMPOSSIBLE));
             } else {
-                result.complete(found.match() == null ? null : found.match().position());
+				BiomeLocateSearch.Match match = found.match();
+				if (match != null) {
+					result.complete(LocatePreviewResult.found(match.position()));
+				} else {
+					result.complete(LocatePreviewResult.of(found.timedOut()
+						? LocatePreviewResult.Status.TIMED_OUT
+						: LocatePreviewResult.Status.NOT_FOUND));
+				}
             }
         });
         return result;
@@ -239,25 +237,21 @@ public final class LocateBiomeCommand {
         @Nullable Throwable failure,
         long elapsedNanos
     ) {
-        if (failure != null) {
+		if (failure != null || result == null) {
             if (isCancellation(failure)) {
                 return;
             }
             FTFCommon.LOGGER.error("FTF biome locate failed", failure);
             source.sendFailure(Component.translatableWithFallback(
-                KEY + "failed", "Searching for biome %s failed; see the server log", value
-            ));
-            return;
-        }
-        if (result == null) {
-            source.sendFailure(Component.translatableWithFallback(
-                KEY + "failed", "Searching for biome %s failed", value
+				KEY + "failed",
+				"Could not search for biome %s because of an unexpected error. Check the server log for details.",
+				value
             ));
             return;
         }
         if (!result.targetPossible()) {
             source.sendFailure(Component.translatableWithFallback(
-                KEY + "impossible", "Biome %s cannot be produced by the active FTF worldgen plan", value
+				KEY + "impossible", "This FreeTerraForged world does not generate %s.", value
             ));
             return;
         }
@@ -266,11 +260,13 @@ public final class LocateBiomeCommand {
         if (match == null) {
             source.sendFailure(result.timedOut()
                 ? Component.translatableWithFallback(
-                    KEY + "timed_out", "Could not find biome %s before the %s-second search limit",
+					KEY + "timed_out", "Could not find biome %s within %s seconds.",
                     value, LocateSearchSettings.TIME_LIMIT_SECONDS
                 )
                 : Component.translatableWithFallback(
-                    KEY + "not_found", "Could not find biome %s in the searchable world", value
+					KEY + "not_found",
+					"Could not find biome %s before reaching Minecraft's world limits.",
+					value
                 ));
             return;
         }
@@ -289,9 +285,7 @@ public final class LocateBiomeCommand {
             .withColor(ChatFormatting.GREEN)
             .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, teleport))
             .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.translatable("chat.coordinates.tooltip"))));
-        source.sendSuccess(() -> Component.translatableWithFallback(
-            KEY + "success", "Found sampled %s biome at %s", biomeId, coordinates
-        ), false);
+        source.sendSuccess(() -> successMessage(biomeId, coordinates), false);
         FTFCommon.LOGGER.info(
             "Located FTF biome {} in {} ms ({} columns, horizontal step {}, vertical step {}, roles {})",
             biomeId,
@@ -302,6 +296,15 @@ public final class LocateBiomeCommand {
             result.plan().roles().roles()
         );
     }
+
+	private static Component successMessage(ResourceLocation biomeId, Component coordinates) {
+		return Component.translatableWithFallback(
+			KEY + "success",
+			"Found biome %s at %s.",
+			Component.literal(biomeId.toString()),
+			coordinates
+		);
+	}
 
     private static boolean isCancellation(Throwable failure) {
         Throwable current = failure;
