@@ -25,6 +25,21 @@ public final class FTFLanguageProvider {
 			this.add(FTFTranslationKeys.NO_ERROR_MESSAGE, "{No error message}");
 
 			this.add(FTFTranslationKeys.GUI_INPUT_PROMPT, "Type preset name");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.title"), "Active FreeTerraForged Preset");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.unnamed"), "Unnamed preset");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.settings"), "Preset settings");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.copy_json"), "Copy Preset JSON");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.copy_json_tooltip"), "Copy the complete active preset JSON");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.copy_setting"), "Click to copy this setting");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.copied"), "Copied to clipboard");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.setting_help"), "Read-only active preset setting");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.narration"), "Select a setting to copy its JSON value");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.category.flow"), "River Flow Settings");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.category.presentation"), "Preset Details");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.section.climate_effects"), "Climate Effects");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.section.details"), "Details");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.setting.preset_name"), "Preset Name");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.setting.last_modified"), "Last Modified");
 
 			this.add(FTFTranslationKeys.GUI_SELECT_PRESET_MISSING_LEGACY_PRESETS, "Couldn't find any legacy presets");
 			this.add(FTFTranslationKeys.GUI_SELECT_PRESET_TITLE, "Presets & Defaults");
