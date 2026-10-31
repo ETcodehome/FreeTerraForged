@@ -79,8 +79,8 @@ final class PreviewNavigation {
 		this.help = Component.translatableWithFallback(
 			KEY + (context == Context.IN_WORLD ? "navigation_help" : "editor_navigation_help"),
 			context == Context.IN_WORLD
-				? "Enter here, spawn, x z, terrain <name>, or biome <namespaced-id-or-#tag>. Press Enter or Go."
-				: "Enter x z, terrain <name>, or biome <namespaced-id-or-#tag>. Press Enter or Go."
+				? "Enter here, spawn, x z, terrain <name>, or biome <namespace:id or #namespace:tag>. Press Enter or Go."
+				: "Enter x z, terrain <name>, or biome <namespace:id or #namespace:tag>. Press Enter or Go."
 		);
 
         int inputWidth = Math.max(20, width - BUTTON_WIDTH - GAP);
@@ -123,7 +123,7 @@ final class PreviewNavigation {
         };
 		this.input.setHint(ellipsize(
 			font,
-			Component.translatableWithFallback(KEY + "short_hint", "Search or enter x z…"),
+			Component.translatableWithFallback(KEY + "short_hint", "Find a biome or terrain…"),
 			inputWidth - 8
 		));
 		this.input.setTooltip(Tooltip.create(this.help));
@@ -172,23 +172,23 @@ final class PreviewNavigation {
 	}
 
     void pending() {
-		this.feedback(0xFFFF55, "search_pending", "Searching the seed…");
+		this.feedback(0xFFFF55, "search_pending", "Searching…");
     }
 
     void succeeded() {
-		this.feedback(0x55FF55, "search_succeeded", "Match found; preview recentered.");
+		this.feedback(0x55FF55, "search_succeeded", "Preview moved to the result.");
     }
 
 	void searchSucceeded() {
 		if (this.context == Context.PRESET_EDITOR) {
-			this.feedback(0x55FF55, "search_spawn_selected", "Match found; spawn selected.");
+			this.feedback(0x55FF55, "search_spawn_selected", "Spawn moved to the result.");
 		} else {
 			this.succeeded();
 		}
 	}
 
     void failed() {
-		this.feedback(0xFF5555, "search_failed", "No match was found before the search ended.");
+		this.feedback(0xFF5555, "search_failed", "No matching location was found.");
 	}
 
 	void failed(Component status) {
@@ -229,7 +229,7 @@ final class PreviewNavigation {
         if (operation.length == 2 && operation[0].equalsIgnoreCase("terrain")) {
 			String target = operation[1].trim();
 			if (TerrainSearchTargets.get(target) == null) {
-				this.reject(Component.literal("Unknown terrain type: " + target));
+				this.reject(Component.literal("Unknown terrain type: " + target + "."));
 				return;
 			}
 			this.handler.terrain(target);
@@ -258,8 +258,8 @@ final class PreviewNavigation {
 		this.reject(Component.translatableWithFallback(
 			KEY + (this.context == Context.IN_WORLD ? "invalid_navigation" : "editor_invalid_navigation"),
 			this.context == Context.IN_WORLD
-				? "Use: here, spawn, <x> <z>, terrain <name>, or biome <namespaced-id-or-#tag>"
-				: "Use: <x> <z>, terrain <name>, or biome <namespaced-id-or-#tag>"
+				? "Enter here, spawn, x z, terrain <name>, or biome <namespace:id or #namespace:tag>."
+				: "Enter x z, terrain <name>, or biome <namespace:id or #namespace:tag>."
 		));
     }
 

@@ -9,6 +9,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
 
+import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
 import etcodehome.freeterraforged.client.gui.widget.Slider;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
@@ -18,6 +19,7 @@ import etcodehome.freeterraforged.network.PreviewLocationPayload;
 import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementConfig;
 import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementConfigSnapshot;
 import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
+import etcodehome.freeterraforged.world.worldgen.search.LocateSearchSettings;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -97,7 +99,11 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 				.getOrThrow(message -> new IllegalArgumentException("Invalid active preset snapshot: " + message));
 			return new PresetPreviewScreen(snapshot, preset);
 		} catch (RuntimeException failure) {
-			return new PreviewUnavailableScreen(failure.getMessage());
+			FTFCommon.LOGGER.error("Could not decode the active preset preview", failure);
+			return new PreviewUnavailableScreen(Component.translatableWithFallback(
+				KEY + "invalid_snapshot",
+				"The active preset data is invalid. Check the game log for details."
+			));
 		}
 	}
 
@@ -117,8 +123,10 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 			this.preview2D.regenerate();
 			this.preview3D.regenerate();
 		} catch (RuntimeException | LinkageError failure) {
+			FTFCommon.LOGGER.error("Could not initialize the active preset preview", failure);
 			this.status = Component.translatableWithFallback(
-				KEY + "unavailable", "Preview unavailable: %s", message(failure)
+				KEY + "unavailable",
+				"The preview could not be opened. Check the game log for details."
 			).withStyle(ChatFormatting.RED);
 			this.addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, ignored -> this.onClose())
 				.bounds(this.width / 2 - 75, this.height - 27, 150, 20).build());
@@ -265,7 +273,9 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 	private void requestLocate(PreviewLocateRequestPayload.TargetType type, String target) {
 		if (this.minecraft.getConnection() == null) {
 			this.navigation.failed();
-			this.status = Component.translatableWithFallback(KEY + "disconnected", "No active server connection")
+			this.status = Component.translatableWithFallback(
+				KEY + "disconnected", "The server connection is no longer available."
+			)
 				.withStyle(ChatFormatting.RED);
 			return;
 		}
@@ -277,7 +287,8 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 		this.locatePending = true;
 		this.navigation.pending();
 		this.status = Component.translatableWithFallback(
-			KEY + "searching", "Searching for %s %s...", type.name().toLowerCase(java.util.Locale.ROOT), target
+			KEY + "searching", "Searching for %s %s...",
+			type.name().toLowerCase(java.util.Locale.ROOT), target
 		).withStyle(ChatFormatting.YELLOW);
 	}
 
@@ -289,15 +300,13 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 		this.locatePending = false;
 		if (!location.found()) {
 			this.navigation.failed();
-			this.status = Component.literal(location.message()).withStyle(ChatFormatting.RED);
+			this.status = this.locationMessage(location).copy().withStyle(ChatFormatting.RED);
 			return;
 		}
 		this.setPreviewNavigation(location.x(), location.z());
 		this.regeneratePreviews();
 		this.navigation.succeeded();
-		this.status = Component.literal(
-			location.message() + " at x" + location.x() + " z" + location.z()
-		).withStyle(ChatFormatting.GREEN);
+		this.status = this.locationMessage(location).copy().withStyle(ChatFormatting.GREEN);
 	}
 
 	private void navigateTo(int x, int z) {
@@ -306,8 +315,59 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 		this.regeneratePreviews();
 		this.navigation.succeeded();
 		this.status = Component.translatableWithFallback(
-			KEY + "centered", "Centered on x%s z%s", x, z
+			KEY + "centered", "Preview moved to x%s z%s.", x, z
 		).withStyle(ChatFormatting.GREEN);
+	}
+
+	private Component locationMessage(PreviewLocationPayload location) {
+		String kind = location.targetType() == PreviewLocateRequestPayload.TargetType.TERRAIN
+			? "terrain"
+			: "biome";
+		return switch (location.status()) {
+			case FOUND -> Component.translatableWithFallback(
+				KEY + "result." + kind + ".found",
+				"Found " + kind + " %s at x%s z%s.",
+				location.target(), location.x(), location.z()
+			);
+			case NOT_FOUND -> Component.translatableWithFallback(
+				KEY + "result." + kind + ".not_found",
+				"Could not find " + kind + " %s before reaching Minecraft's world limits.",
+				location.target()
+			);
+			case TIMED_OUT -> Component.translatableWithFallback(
+				KEY + "result." + kind + ".timed_out",
+				"Could not find " + kind + " %s within %s seconds.",
+				location.target(), LocateSearchSettings.TIME_LIMIT_SECONDS
+			);
+			case IMPOSSIBLE -> Component.translatableWithFallback(
+				KEY + "result.biome.impossible",
+				"This FreeTerraForged world does not generate %s.",
+				location.target()
+			);
+			case INVALID_TARGET -> Component.translatableWithFallback(
+				KEY + "result." + kind + ".invalid",
+				location.targetType() == PreviewLocateRequestPayload.TargetType.TERRAIN
+					? "Unknown terrain type: %s."
+					: "Invalid biome ID or tag: %s.",
+				location.target()
+			);
+			case UNAVAILABLE -> Component.translatableWithFallback(
+				KEY + "result.unavailable",
+				"The FreeTerraForged world used by this preview is no longer available."
+			);
+			case NO_PERMISSION -> Component.translatableWithFallback(
+				KEY + "result.no_permission",
+				"You do not have permission to use the FreeTerraForged preview."
+			);
+			case TARGET_REQUIRED -> Component.translatableWithFallback(
+				KEY + "result.target_required",
+				"Enter a terrain or biome to search for."
+			);
+			case FAILED -> Component.translatableWithFallback(
+				KEY + "result." + kind + ".failed",
+				"The " + kind + " search failed unexpectedly. Check the server log for details."
+			);
+		};
 	}
 
 	@Override
@@ -430,16 +490,12 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 		}
 	}
 
-	private static String message(Throwable failure) {
-		return failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage();
-	}
-
 	private static final class PreviewUnavailableScreen extends Screen {
-		private final String reason;
+		private final Component reason;
 
-		private PreviewUnavailableScreen(String reason) {
+		private PreviewUnavailableScreen(Component reason) {
 			super(Component.translatableWithFallback(KEY + "title", "FreeTerraForged Preview"));
-			this.reason = reason == null ? "Invalid preset snapshot" : reason;
+			this.reason = reason;
 		}
 
 		@Override

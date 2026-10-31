@@ -114,7 +114,9 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		if (this instanceof WorldSettingsPage worldPage) {
 			worldPage.spawnType.setValue(etcodehome.freeterraforged.data.worldgen.preset.settings.SpawnType.USER_SELECTED);
 		}
-		this.resetPreviewNavigation();
+		// Persist the selected spawn and keep the preview centered on that exact locate result.
+		// Relying on the preset mutation alone made recentering an accidental regeneration side effect.
+		this.setPreviewNavigation(x, z);
 		this.regenerate();
 	}
 
