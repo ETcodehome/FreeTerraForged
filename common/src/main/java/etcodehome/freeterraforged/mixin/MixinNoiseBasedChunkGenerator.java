@@ -243,6 +243,14 @@ abstract class MixinNoiseBasedChunkGenerator extends ChunkGenerator {
 						regionZ = colCache.regionZ;
 					}
 				}
+				if (!generator.isUnifiedBiomeSource(source)) {
+					BiomeColumnCache colCache = BiomeColumnCache.get();
+					colCache.quartX = quartX;
+					colCache.quartZ = quartZ;
+					colCache.regionX = regionX;
+					colCache.regionZ = regionZ;
+					return source.getNoiseBiome(quartX, quartY, quartZ, sampler);
+				}
 				return generator.resolveBiomeInCell(
 					quartX, quartY, quartZ, sampler, regionX, regionZ
 				);

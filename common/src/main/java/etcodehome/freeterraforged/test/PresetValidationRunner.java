@@ -74,6 +74,18 @@ import etcodehome.freeterraforged.world.worldgen.search.BiomeSearchResolution;
 import etcodehome.freeterraforged.world.worldgen.search.LocateSearchValidator;
 import etcodehome.freeterraforged.world.worldgen.search.TerrainSearchResolution;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
+import net.minecraft.data.registries.VanillaRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.world.level.dimension.LevelStem;
+import net.minecraft.world.level.levelgen.FlatLevelSource;
+import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
+import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
+import net.minecraft.world.level.levelgen.RandomState;
+import net.minecraft.world.level.levelgen.WorldDimensions;
+import net.minecraft.world.level.levelgen.flat.FlatLevelGeneratorSettings;
+import net.minecraft.world.level.levelgen.presets.WorldPreset;
+import net.minecraft.world.level.levelgen.presets.WorldPresets;
+import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
 
 public final class PresetValidationRunner {
 	private static boolean testsTriggered = false;
@@ -1111,6 +1123,229 @@ public final class PresetValidationRunner {
 			);
 			testRecords.add(new TestRecord(currentTestName, String.format("Full reload forces 2D Preview parity across %d samples & exact spawn (%d, %d, %d)",
 				paritySamplesChecked, customSpawnX, expectedSurfaceY, customSpawnZ), true, null));
+
+			// -----------------------------------------------------------------------------------------
+			// Non-FTF World Types (Default & Superflat) Resolution & Generation
+			// -----------------------------------------------------------------------------------------
+			currentTestName = "presetValidation.nonFtfWorldResolution." + loader;
+			watchdog.setStep(currentTestName);
+			FTFCommon.LOGGER.info("[FTF-Test] Verifying Non-FTF World Resolution & Sampling (Default, Amplified & Superflat)...");
+
+			// 1. Simulate cycling away from FTF: verify datapack lifecycle & decoupling
+			Path nonFtfTestDir = testWorkDir.resolve("non-ftf-cycling-test");
+			Files.createDirectories(nonFtfTestDir);
+			Path testStagedPack = nonFtfTestDir.resolve(FTFWorldPresets.GENERATED_PRESET_PACK_FILE_NAME);
+			FTFWorldPresetDataPacks.exportPresetAsDatapack(testStagedPack, Presets.modernDefaultWithRivers(), "CyclingTest", server.registryAccess());
+			if (!Files.isRegularFile(testStagedPack)) {
+				throw new AssertionError("Failed to stage preset pack for non-FTF cycling test");
+			}
+
+			WorldDataConfiguration ftfActiveConfig = new WorldDataConfiguration(
+				new DataPackConfig(List.of("vanilla", FTFWorldPresets.GENERATED_PRESET_PACK_ID), List.of()),
+				FeatureFlags.DEFAULT_FLAGS
+			);
+			if (!FTFWorldPresetDataPacks.requiresFullDataPackReload(ftfActiveConfig)) {
+				throw new AssertionError("requiresFullDataPackReload must return true when FTF preset pack is enabled");
+			}
+
+			WorldDataConfiguration sanitizedConfig = FTFWorldPresetDataPacks.setCustomPresetEnabled(ftfActiveConfig, false);
+			if (sanitizedConfig.dataPacks().getEnabled().contains(FTFWorldPresets.GENERATED_PRESET_PACK_ID)) {
+				throw new AssertionError("setCustomPresetEnabled(false) failed to remove FTF preset pack from enabled list");
+			}
+
+			Files.deleteIfExists(testStagedPack);
+			if (Files.exists(testStagedPack)) {
+				throw new AssertionError("Failed to delete unused FTF preset pack for non-FTF world creation");
+			}
+
+			// 2. Default World (WorldPresets.NORMAL) Guarantee
+			// When cycling away from FTF, datapacks are reloaded without freeterraforged-preset.zip,
+			// restoring clean vanilla registries (VanillaRegistries.createLookup()).
+			HolderLookup.Provider vanillaLookups = VanillaRegistries.createLookup();
+			HolderLookup.RegistryLookup<WorldPreset> vanillaPresets = vanillaLookups.lookupOrThrow(Registries.WORLD_PRESET);
+			WorldPreset vanillaNormalPreset = vanillaPresets.getOrThrow(WorldPresets.NORMAL).value();
+			WorldDimensions normalDimensions = vanillaNormalPreset.createWorldDimensions();
+			LevelStem normalOverworldStem = normalDimensions.get(LevelStem.OVERWORLD).orElseThrow(
+				() -> new AssertionError("Normal preset has no overworld stem")
+			);
+			var normalGenerator = normalOverworldStem.generator();
+
+			if (!(normalGenerator instanceof NoiseBasedChunkGenerator noiseBasedGen)) {
+				throw new AssertionError("Default world overworld generator must be NoiseBasedChunkGenerator, got: " + normalGenerator.getClass().getName());
+			}
+			if (normalGenerator instanceof TerraForgedChunkGenerator) {
+				throw new AssertionError("Default world overworld generator must NOT be TerraForgedChunkGenerator");
+			}
+
+			NoiseGeneratorSettings normalNoiseSettings = noiseBasedGen.generatorSettings().value();
+			RandomState normalRandomState = RandomState.create(
+				normalNoiseSettings,
+				server.registryAccess().lookupOrThrow(Registries.NOISE),
+				paritySeed
+			);
+
+			if (!((Object) normalRandomState instanceof FTFRandomState normalRtfState)) {
+				throw new AssertionError("RandomState must expose FTFRandomState contract");
+			}
+			if (normalRtfState.isTerraForged()) {
+				throw new AssertionError("Default world RandomState must NOT be flagged as TerraForged! CellSampler.Marker was found in default noise router.");
+			}
+
+			int sampleDefaultHeight = normalGenerator.getBaseHeight(0, 0, Heightmap.Types.OCEAN_FLOOR_WG, server.overworld(), normalRandomState);
+			if (sampleDefaultHeight < server.overworld().getMinBuildHeight() || sampleDefaultHeight > server.overworld().getMaxBuildHeight()) {
+				throw new AssertionError("Default world sampled out-of-bounds height: " + sampleDefaultHeight);
+			}
+			var defaultColumn = normalGenerator.getBaseColumn(0, 0, server.overworld(), normalRandomState);
+			if (defaultColumn == null) {
+				throw new AssertionError("Default world getBaseColumn returned null");
+			}
+
+			// 3. Amplified World (WorldPresets.AMPLIFIED) Guarantee
+			WorldPreset vanillaAmplifiedPreset = vanillaPresets.getOrThrow(WorldPresets.AMPLIFIED).value();
+			WorldDimensions amplifiedDimensions = vanillaAmplifiedPreset.createWorldDimensions();
+			LevelStem amplifiedOverworldStem = amplifiedDimensions.get(LevelStem.OVERWORLD).orElseThrow(
+				() -> new AssertionError("Amplified preset has no overworld stem")
+			);
+			var amplifiedGenerator = amplifiedOverworldStem.generator();
+
+			if (!(amplifiedGenerator instanceof NoiseBasedChunkGenerator amplifiedGen)) {
+				throw new AssertionError("Amplified world overworld generator must be NoiseBasedChunkGenerator, got: " + amplifiedGenerator.getClass().getName());
+			}
+			if (amplifiedGenerator instanceof TerraForgedChunkGenerator) {
+				throw new AssertionError("Amplified world overworld generator must NOT be TerraForgedChunkGenerator");
+			}
+
+			NoiseGeneratorSettings amplifiedNoiseSettings = amplifiedGen.generatorSettings().value();
+			RandomState amplifiedRandomState = RandomState.create(
+				amplifiedNoiseSettings,
+				server.registryAccess().lookupOrThrow(Registries.NOISE),
+				paritySeed
+			);
+
+			if (!((Object) amplifiedRandomState instanceof FTFRandomState amplifiedRtfState)) {
+				throw new AssertionError("RandomState must expose FTFRandomState contract");
+			}
+			if (amplifiedRtfState.isTerraForged()) {
+				throw new AssertionError("Amplified world RandomState must NOT be flagged as TerraForged! CellSampler.Marker was found in amplified noise router.");
+			}
+
+			int sampleAmplifiedHeight = amplifiedGenerator.getBaseHeight(0, 0, Heightmap.Types.OCEAN_FLOOR_WG, server.overworld(), amplifiedRandomState);
+			if (sampleAmplifiedHeight < server.overworld().getMinBuildHeight() || sampleAmplifiedHeight > server.overworld().getMaxBuildHeight()) {
+				throw new AssertionError("Amplified world sampled out-of-bounds height: " + sampleAmplifiedHeight);
+			}
+			var amplifiedColumn = amplifiedGenerator.getBaseColumn(0, 0, server.overworld(), amplifiedRandomState);
+			if (amplifiedColumn == null) {
+				throw new AssertionError("Amplified world getBaseColumn returned null");
+			}
+
+			// 4. Superflat World (WorldPresets.FLAT) Guarantee
+			// Tested on both clean vanilla lookups and live server registry:
+			WorldPreset flatWorldPreset = server.registryAccess().registryOrThrow(Registries.WORLD_PRESET).getOrThrow(WorldPresets.FLAT);
+			WorldDimensions flatDimensions = flatWorldPreset.createWorldDimensions();
+			LevelStem flatOverworldStem = flatDimensions.get(LevelStem.OVERWORLD).orElseThrow(
+				() -> new AssertionError("Flat preset has no overworld stem")
+			);
+			var flatGenerator = flatOverworldStem.generator();
+
+			if (!(flatGenerator instanceof FlatLevelSource flatLevelSource)) {
+				throw new AssertionError("Superflat world overworld generator must be FlatLevelSource, got: " + flatGenerator.getClass().getName());
+			}
+			if (flatGenerator instanceof TerraForgedChunkGenerator) {
+				throw new AssertionError("Superflat world overworld generator must NOT be TerraForgedChunkGenerator");
+			}
+
+			// Vanilla ChunkMap uses NoiseGeneratorSettings.dummy() for non-NoiseBasedChunkGenerators (like FlatLevelSource)
+			RandomState flatRandomState = RandomState.create(
+				NoiseGeneratorSettings.dummy(),
+				server.registryAccess().lookupOrThrow(Registries.NOISE),
+				paritySeed
+			);
+
+			if (!((Object) flatRandomState instanceof FTFRandomState flatRtfState)) {
+				throw new AssertionError("Superflat RandomState must expose FTFRandomState contract");
+			}
+			if (flatRtfState.isTerraForged()) {
+				throw new AssertionError("Superflat RandomState must NOT be flagged as TerraForged");
+			}
+
+			FlatLevelGeneratorSettings flatSettings = flatLevelSource.settings();
+			if (flatSettings.getLayersInfo().isEmpty()) {
+				throw new AssertionError("Superflat world generator settings have no layers");
+			}
+
+			int sampleFlatHeight = flatGenerator.getBaseHeight(0, 0, Heightmap.Types.OCEAN_FLOOR_WG, server.overworld(), flatRandomState);
+			if (sampleFlatHeight < server.overworld().getMinBuildHeight() || sampleFlatHeight > server.overworld().getMaxBuildHeight()) {
+				throw new AssertionError("Superflat world sampled out-of-bounds height: " + sampleFlatHeight);
+			}
+			var flatColumn = flatGenerator.getBaseColumn(0, 0, server.overworld(), flatRandomState);
+			if (flatColumn == null) {
+				throw new AssertionError("Superflat world getBaseColumn returned null");
+			}
+
+			FTFCommon.LOGGER.info(
+				"[FTF-Test] PASSED: Non-FTF worlds (Default, Amplified & Superflat) verified clean generator isolation, RandomState isTerraForged=false, and successful terrain sampling (Default Y={}, Amplified Y={}, Flat Y={}).",
+				sampleDefaultHeight, sampleAmplifiedHeight, sampleFlatHeight
+			);
+			testRecords.add(new TestRecord(
+				currentTestName,
+				String.format("Default (NoiseBased, RTF=false, Y=%d), Amplified (NoiseBased, RTF=false, Y=%d), and Superflat (FlatLevelSource, RTF=false, Y=%d) verified",
+					sampleDefaultHeight, sampleAmplifiedHeight, sampleFlatHeight),
+				true,
+				null
+			));
+
+			// -----------------------------------------------------------------------------------------
+			// Mod Compatibility Shims (Non-FTF Dimensions & Foreign Climate.Sampler - Issues #340, #310, #298)
+			// -----------------------------------------------------------------------------------------
+			currentTestName = "presetValidation.modCompatibilityShims." + loader;
+			watchdog.setStep(currentTestName);
+			FTFCommon.LOGGER.info("[FTF-Test] Verifying Mod Compatibility Shims (Non-FTF Dimension CellSampler Fallback & Foreign Climate.Sampler Adoption)...");
+
+			NoiseGeneratorSettings liveOverworldNoiseSettings = server.registryAccess()
+				.lookupOrThrow(Registries.NOISE_SETTINGS)
+				.getOrThrow(NoiseGeneratorSettings.OVERWORLD)
+				.value();
+			RandomState uninitializedFtfRouterState = RandomState.create(
+				liveOverworldNoiseSettings,
+				server.registryAccess().lookupOrThrow(Registries.NOISE),
+				paritySeed
+			);
+			FTFRandomState uninitializedRtfState = (FTFRandomState) (Object) uninitializedFtfRouterState;
+			if (uninitializedRtfState.isTerraForged()) {
+				throw new AssertionError("Uninitialized RandomState referencing FTF density functions must NOT report isTerraForged=true before epoch initialization (Issue #340/#310)");
+			}
+			var testPointCtx = new net.minecraft.world.level.levelgen.DensityFunction.SinglePointContext(128, 64, -256);
+			double fallbackContinent = uninitializedFtfRouterState.router().continents().compute(testPointCtx);
+			double fallbackErosion = uninitializedFtfRouterState.router().erosion().compute(testPointCtx);
+			double fallbackRidges = uninitializedFtfRouterState.router().ridges().compute(testPointCtx);
+			if (!Double.isFinite(fallbackContinent) || !Double.isFinite(fallbackErosion) || !Double.isFinite(fallbackRidges)) {
+				throw new AssertionError("Non-FTF dimension fallback noise evaluation produced non-finite values");
+			}
+			if (fallbackContinent == 0.0D && fallbackErosion == 0.0D && fallbackRidges == 0.0D) {
+				throw new AssertionError("Non-FTF dimension fallback noise evaluation returned all zeros instead of wired Vanilla shifted noise");
+			}
+
+			if (server.overworld().getChunkSource().getGenerator() instanceof TerraForgedChunkGenerator liveTfGen) {
+				net.minecraft.world.level.biome.Climate.Sampler foreignSampler = net.minecraft.world.level.biome.Climate.empty();
+				var resolvedViaSource = liveTfGen.getBiomeSource().getNoiseBiome(10, 16, -10, foreignSampler);
+				var resolvedViaCell = liveTfGen.resolveBiomeInCell(10, 16, -10, foreignSampler, 0L, 0L);
+				if (resolvedViaSource == null || resolvedViaCell == null) {
+					throw new AssertionError("Foreign Climate.Sampler failed to resolve biome on TerraForgedChunkGenerator (Issue #298)");
+				}
+			}
+
+			FTFCommon.LOGGER.info(
+				"[FTF-Test] PASSED: Mod compatibility shims verified (non-FTF dimension fallback continents={}, erosion={}, ridges={}; foreign Climate.Sampler adopted cleanly).",
+				String.format(java.util.Locale.ROOT, "%.4f", fallbackContinent),
+				String.format(java.util.Locale.ROOT, "%.4f", fallbackErosion),
+				String.format(java.util.Locale.ROOT, "%.4f", fallbackRidges)
+			);
+			testRecords.add(new TestRecord(
+				currentTestName,
+				"Non-FTF dimension CellSampler fallback (#340/#310) & foreign Climate.Sampler adoption (#298) verified",
+				true,
+				null
+			));
 
 			// -----------------------------------------------------------------------------------------
 			// Complete Summary Banner

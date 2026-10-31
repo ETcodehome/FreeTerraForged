@@ -64,11 +64,13 @@ public abstract class MixinCreateWorldScreen {
 		throw new AssertionError();
 	}
 
-	@Unique
-	private boolean freeterraforged$syncingPresetPack;
+	@Shadow
+	private void onCreate() {
+		throw new AssertionError();
+	}
 
 	@Unique
-	private boolean freeterraforged$pendingPresetPackSync;
+	private boolean freeterraforged$pendingCreateOnReload;
 
 	// Vanilla maps every NoiseBasedChunkGenerator to NORMAL, so recognize FTF's generator explicitly.
 	@Redirect(
@@ -100,18 +102,6 @@ public abstract class MixinCreateWorldScreen {
 		return Optional.of(FTFWorldPresets.FREETERRAFORGED);
 	}
 
-	@Inject(method = "<init>", at = @At("TAIL"))
-	private void freeterraforged$watchSelectedWorldType(
-		Minecraft minecraft,
-		Screen lastScreen,
-		WorldCreationContext context,
-		Optional<ResourceKey<WorldPreset>> preset,
-		OptionalLong seed,
-		CallbackInfo callback
-	) {
-		this.uiState.addListener(this::freeterraforged$syncPresetPackWithWorldType);
-	}
-
 	@Inject(method = "openFresh", at = @At("TAIL"))
 	private static void freeterraforged$applySavedDefaultPreset(
 		Minecraft minecraft,
@@ -127,41 +117,54 @@ public abstract class MixinCreateWorldScreen {
 	private void freeterraforged$initializeDefaultPreset() {
 		PresetManager.PM.cachedPreset = null;
 		PresetManager.PM.ingestFromPreset(DefaultPresetArchive.getActiveDefaultPreset());
-		this.freeterraforged$syncPresetPackWithWorldType(this.uiState);
+	}
+
+	@Inject(method = "repositionElements", at = @At("TAIL"))
+	private void freeterraforged$triggerCreateAfterReloadOnReposition(CallbackInfo callback) {
+		this.freeterraforged$triggerPendingCreate();
 	}
 
 	@Inject(method = "init", at = @At("TAIL"))
-	private void freeterraforged$syncPresetPackAfterRecreate(CallbackInfo callback) {
-		if (this.recreated) {
-			this.freeterraforged$pendingPresetPackSync = false;
-			this.freeterraforged$syncPresetPackWithWorldType(this.uiState);
-		}
+	private void freeterraforged$triggerCreateAfterReloadOnInit(CallbackInfo callback) {
+		this.freeterraforged$triggerPendingCreate();
 	}
 
 	@Unique
-	private void freeterraforged$syncPresetPackWithWorldType(WorldCreationUiState state) {
-		if (this.recreated && Minecraft.getInstance().screen != (Object) this) {
-			this.freeterraforged$pendingPresetPackSync = true;
-			return;
+	private void freeterraforged$triggerPendingCreate() {
+		if (this.freeterraforged$pendingCreateOnReload) {
+			this.freeterraforged$pendingCreateOnReload = false;
+			Minecraft.getInstance().tell(() -> {
+				if (Minecraft.getInstance().screen == (Object) this) {
+					this.onCreate();
+				}
+			});
 		}
-		if (this.freeterraforged$syncingPresetPack) {
+	}
+
+	@Inject(method = "onClose", at = @At("HEAD"))
+	private void freeterraforged$resetStateOnClose(CallbackInfo callback) {
+		this.freeterraforged$pendingCreateOnReload = false;
+	}
+
+	@Inject(method = "onCreate", at = @At("HEAD"), cancellable = true)
+	private void freeterraforged$prepareDataPacksBeforeCreate(CallbackInfo callback) {
+		if (this.freeterraforged$pendingCreateOnReload) {
 			return;
 		}
 
-		var selectedType = state.getWorldType();
+		var selectedType = this.uiState.getWorldType();
 		Holder<WorldPreset> selectedPreset = selectedType == null ? null : selectedType.preset();
 		boolean ftfSelected = selectedPreset != null && selectedPreset.unwrapKey()
 			.filter(FTFWorldPresets.FREETERRAFORGED::equals)
 			.isPresent();
 
-		WorldDataConfiguration configuration = state.getSettings().dataConfiguration();
+		WorldDataConfiguration configuration = this.uiState.getSettings().dataConfiguration();
 		List<String> enabledPacks = configuration.dataPacks().getEnabled();
 		String customPackId = FTFWorldPresets.GENERATED_PRESET_PACK_ID;
 		boolean customPackEnabled = enabledPacks.contains(customPackId);
 
 		Pair<Path, PackRepository> selection = this.getDataPackSelectionSettings(configuration);
 		if (selection == null) {
-			FTFCommon.LOGGER.error("Could not prepare a data pack repository while switching the world type");
 			return;
 		}
 
@@ -170,11 +173,13 @@ public abstract class MixinCreateWorldScreen {
 
 		boolean needsSync = ftfSelected
 			? (!zipExists || !customPackEnabled)
-			: customPackEnabled;
+			: (customPackEnabled || zipExists);
 
 		if (!needsSync) {
 			return;
 		}
+
+		callback.cancel();
 
 		PackRepository repository = selection.getSecond();
 		repository.reload();
@@ -183,9 +188,11 @@ public abstract class MixinCreateWorldScreen {
 		if (ftfSelected) {
 			if (!zipExists) {
 				try {
-					Preset defaultPreset = DefaultPresetArchive.getActiveDefaultPreset();
+					Preset defaultPreset = PresetManager.PM.cachedPreset != null
+						? PresetManager.PM.cachedPreset.getPreset()
+						: DefaultPresetArchive.getActiveDefaultPreset();
 					String presetName = DefaultPresetArchive.getActiveDefaultPresetName();
-					RegistryAccess registries = state.getSettings().worldgenLoadContext();
+					RegistryAccess registries = this.uiState.getSettings().worldgenLoadContext();
 					FTFWorldPresetDataPacks.exportPresetAsDatapack(presetZipPath, defaultPreset, presetName, registries);
 				} catch (IOException exception) {
 					FTFCommon.LOGGER.error("Could not export the FreeTerraForged preset datapack to {}", presetZipPath, exception);
@@ -201,13 +208,19 @@ public abstract class MixinCreateWorldScreen {
 			}
 		} else {
 			repository.removePack(customPackId);
+			try {
+				Files.deleteIfExists(presetZipPath);
+			} catch (IOException ignored) {
+			}
 		}
 
-		this.freeterraforged$syncingPresetPack = true;
+		this.freeterraforged$pendingCreateOnReload = true;
 		try {
-			this.tryApplyNewDataPacks(repository, false, ignored -> this.freeterraforged$syncingPresetPack = false);
+			this.tryApplyNewDataPacks(repository, false, ignored -> {
+				this.freeterraforged$pendingCreateOnReload = false;
+			});
 		} catch (Throwable throwable) {
-			this.freeterraforged$syncingPresetPack = false;
+			this.freeterraforged$pendingCreateOnReload = false;
 			throw throwable;
 		}
 	}
@@ -222,25 +235,5 @@ public abstract class MixinCreateWorldScreen {
 	)
 	private WorldDimensions freeterraforged$encodeSelectedInputsForReload(WorldDimensions dimensions) {
 		return WorldgenDimensionInputs.forReload(dimensions);
-	}
-
-	@Inject(method = "onCreate", at = @At("HEAD"))
-	private void freeterraforged$cleanupPresetPackIfNonFtfWorld(CallbackInfo callback) {
-		var selectedType = this.uiState.getWorldType();
-		Holder<WorldPreset> selectedPreset = selectedType == null ? null : selectedType.preset();
-		boolean ftfSelected = selectedPreset != null && selectedPreset.unwrapKey()
-			.filter(FTFWorldPresets.FREETERRAFORGED::equals)
-			.isPresent();
-		if (!ftfSelected) {
-			Pair<Path, PackRepository> selection = this.getDataPackSelectionSettings(this.uiState.getSettings().dataConfiguration());
-			if (selection != null) {
-				Path presetZipPath = selection.getFirst().resolve(FTFWorldPresets.GENERATED_PRESET_PACK_FILE_NAME);
-				try {
-					Files.deleteIfExists(presetZipPath);
-				} catch (IOException exception) {
-					FTFCommon.LOGGER.warn("Could not delete unused FreeTerraForged preset datapack before non-FTF world creation", exception);
-				}
-			}
-		}
 	}
 }

@@ -103,11 +103,8 @@ public final class WorldgenDimensionInputs {
 		if (declared.generator() instanceof TerraForgedChunkGenerator) {
 			return declared;
 		}
-		if (declared.generator().getClass() != NoiseBasedChunkGenerator.class) {
-			throw new IllegalStateException(
-				"Unsupported dimension generator composition: selected FTF generator and declared "
-					+ declared.generator().getClass().getName()
-			);
+		if (!(declared.generator() instanceof NoiseBasedChunkGenerator)) {
+			return selected;
 		}
 		var source = declared.generator().getBiomeSource();
 		if (owner.acquisitionBiomeSource() == source) {
