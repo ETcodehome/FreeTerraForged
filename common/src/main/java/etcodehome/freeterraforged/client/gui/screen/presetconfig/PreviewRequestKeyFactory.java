@@ -31,20 +31,32 @@ final class PreviewRequestKeyFactory implements AutoCloseable {
 	}
 
 	synchronized Input capture(WorldCreationContext settings, Preset preset) {
+		return this.capture(
+			settings.options().seed(), preset, settings.dataConfiguration(),
+			settings.worldgenLoadContext(), settings.selectedDimensions().get(LevelStem.OVERWORLD).orElseThrow(),
+			BiomeReplacementConfigStore.capture()
+		);
+	}
+
+	synchronized Input capture(
+		long seed,
+		Preset preset,
+		WorldDataConfiguration dataConfiguration,
+		RegistryAccess.Frozen registries,
+		LevelStem selectedStem,
+		BiomeReplacementConfigSnapshot biomeReplacementConfig
+	) {
 		if (this.closed) {
 			throw new java.util.concurrent.CancellationException("Preview request keys are closed");
 		}
-		RegistryAccess.Frozen registries = settings.worldgenLoadContext();
-		LevelStem selectedStem = settings.selectedDimensions().get(LevelStem.OVERWORLD).orElseThrow();
-		long seed = settings.options().seed();
-		WorldDataConfiguration dataConfiguration = settings.dataConfiguration();
 		if (this.capturedInput != null && this.capturedInput.matches(
-			this.inputRevision, seed, preset, dataConfiguration, registries, selectedStem
+			this.inputRevision, seed, preset, dataConfiguration, registries, selectedStem, biomeReplacementConfig
 		)) {
 			return this.capturedInput;
 		}
 		this.capturedInput = new Input(
-			this.inputRevision, seed, preset, preset.copy(), dataConfiguration, registries, selectedStem
+			this.inputRevision, seed, preset, preset.copy(), dataConfiguration, registries, selectedStem,
+			biomeReplacementConfig
 		);
 		return this.capturedInput;
 	}
@@ -64,7 +76,7 @@ final class PreviewRequestKeyFactory implements AutoCloseable {
 					: WorldgenCapabilityDiscovery.discover(PreviewRequestKeyFactory.class.getClassLoader());
 		WorldDataConfiguration dataConfiguration = input.dataConfiguration();
 		String settingsIdentity = WorldgenSettingsIdentity.describe(selectedStem.generator());
-		BiomeReplacementConfigSnapshot biomeReplacementConfig = BiomeReplacementConfigStore.capture();
+		BiomeReplacementConfigSnapshot biomeReplacementConfig = input.biomeReplacementConfig();
 		String tagFingerprint = this.current != null
 			&& this.current.registrySnapshot() == registries
 			? this.current.tagFingerprint()
@@ -128,6 +140,7 @@ final class PreviewRequestKeyFactory implements AutoCloseable {
 		private final WorldDataConfiguration dataConfiguration;
 		private final RegistryAccess.Frozen registries;
 		private final LevelStem selectedStem;
+		private final BiomeReplacementConfigSnapshot biomeReplacementConfig;
 		private String presetFingerprint;
 
 		private Input(
@@ -137,7 +150,8 @@ final class PreviewRequestKeyFactory implements AutoCloseable {
 			Preset preset,
 			WorldDataConfiguration dataConfiguration,
 			RegistryAccess.Frozen registries,
-			LevelStem selectedStem
+			LevelStem selectedStem,
+			BiomeReplacementConfigSnapshot biomeReplacementConfig
 		) {
 			this.revision = revision;
 			this.seed = seed;
@@ -146,6 +160,9 @@ final class PreviewRequestKeyFactory implements AutoCloseable {
 			this.dataConfiguration = java.util.Objects.requireNonNull(dataConfiguration, "dataConfiguration");
 			this.registries = java.util.Objects.requireNonNull(registries, "registries");
 			this.selectedStem = java.util.Objects.requireNonNull(selectedStem, "selectedStem");
+			this.biomeReplacementConfig = java.util.Objects.requireNonNull(
+				biomeReplacementConfig, "biomeReplacementConfig"
+			);
 		}
 
 		private boolean matches(
@@ -154,14 +171,17 @@ final class PreviewRequestKeyFactory implements AutoCloseable {
 			Preset sourcePreset,
 			WorldDataConfiguration dataConfiguration,
 			RegistryAccess.Frozen registries,
-			LevelStem selectedStem
+			LevelStem selectedStem,
+			BiomeReplacementConfigSnapshot biomeReplacementConfig
 		) {
 			return this.revision == revision
 				&& this.seed == seed
 				&& this.sourcePreset == sourcePreset
 				&& this.dataConfiguration.equals(dataConfiguration)
 				&& this.registries == registries
-				&& this.selectedStem == selectedStem;
+				&& this.selectedStem == selectedStem
+				&& this.biomeReplacementConfig.revision() == biomeReplacementConfig.revision()
+				&& this.biomeReplacementConfig.fingerprint().equals(biomeReplacementConfig.fingerprint());
 		}
 
 		long seed() {
@@ -182,6 +202,10 @@ final class PreviewRequestKeyFactory implements AutoCloseable {
 
 		LevelStem selectedStem() {
 			return this.selectedStem;
+		}
+
+		BiomeReplacementConfigSnapshot biomeReplacementConfig() {
+			return this.biomeReplacementConfig;
 		}
 
 		synchronized String presetFingerprint() {

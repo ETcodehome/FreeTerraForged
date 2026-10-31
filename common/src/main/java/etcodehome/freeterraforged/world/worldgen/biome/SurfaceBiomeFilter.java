@@ -2,7 +2,6 @@ package etcodehome.freeterraforged.world.worldgen.biome;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -61,23 +60,13 @@ public final class SurfaceBiomeFilter<T> {
 		T finalFallback
 	) {
 		List<Pair<Climate.ParameterPoint, T>> entries = source.values();
-		Map<T, Roles> roles = new HashMap<>();
-		UndergroundBiomeBanding.CandidateRole[] classified =
-			new UndergroundBiomeBanding.CandidateRole[entries.size()];
-		for (int index = 0; index < entries.size(); index++) {
-			Pair<Climate.ParameterPoint, T> entry = entries.get(index);
-			UndergroundBiomeBanding.CandidateRole role = classifier.apply(entry.getFirst(), entry.getSecond());
-			classified[index] = role;
-			roles.computeIfAbsent(entry.getSecond(), ignored -> new Roles()).accept(role);
-		}
-		for (T candidate : additionalUndergroundCandidates) {
-			roles.computeIfAbsent(candidate, ignored -> new Roles()).underground = true;
-		}
+		BiomeCandidateRoles<T> roles = BiomeCandidateRoles.compile(
+			source, classifier, undergroundTag, additionalUndergroundCandidates
+		);
 
 		Set<T> undergroundOnly = new HashSet<>();
-		for (Map.Entry<T, Roles> entry : roles.entrySet()) {
-			if (undergroundTag.test(entry.getKey())
-				|| (entry.getValue().underground && !entry.getValue().surface)) {
+		for (Map.Entry<T, BiomeCandidateRoles.Roles> entry : roles.candidates().entrySet()) {
+			if (entry.getValue().undergroundOnly()) {
 				undergroundOnly.add(entry.getKey());
 			}
 		}
@@ -85,7 +74,7 @@ public final class SurfaceBiomeFilter<T> {
 		List<Pair<Climate.ParameterPoint, T>> surfaceEntries = new ArrayList<>();
 		for (int index = 0; index < entries.size(); index++) {
 			Pair<Climate.ParameterPoint, T> entry = entries.get(index);
-			UndergroundBiomeBanding.CandidateRole role = classified[index];
+			UndergroundBiomeBanding.CandidateRole role = roles.registration(index);
 			if (!undergroundOnly.contains(entry.getSecond())
 				&& role != UndergroundBiomeBanding.CandidateRole.SHALLOW_CAVE
 				&& role != UndergroundBiomeBanding.CandidateRole.DEEP_CAVE) {
@@ -97,7 +86,7 @@ public final class SurfaceBiomeFilter<T> {
 			? source
 			: null;
 		return new SurfaceBiomeFilter<>(
-			surfaceEntries, retained, Set.copyOf(undergroundOnly), Set.copyOf(roles.keySet()),
+			surfaceEntries, retained, Set.copyOf(undergroundOnly), Set.copyOf(roles.candidates().keySet()),
 			undergroundTag, finalFallback
 		);
 	}
@@ -143,20 +132,6 @@ public final class SurfaceBiomeFilter<T> {
 			}
 		}
 		return this.finalFallback;
-	}
-
-	private static final class Roles {
-		private boolean surface;
-		private boolean underground;
-
-		private void accept(UndergroundBiomeBanding.CandidateRole role) {
-			if (role == UndergroundBiomeBanding.CandidateRole.SURFACE) {
-				this.surface = true;
-			} else if (role == UndergroundBiomeBanding.CandidateRole.SHALLOW_CAVE
-				|| role == UndergroundBiomeBanding.CandidateRole.DEEP_CAVE) {
-				this.underground = true;
-			}
-		}
 	}
 
 }

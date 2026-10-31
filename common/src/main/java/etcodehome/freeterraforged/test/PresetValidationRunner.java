@@ -11,11 +11,13 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
+import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.JsonOps;
 import org.apache.commons.io.file.PathUtils;
 
@@ -39,6 +41,7 @@ import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.level.DataPackConfig;
 import net.minecraft.world.level.WorldDataConfiguration;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.storage.ServerLevelData;
 import net.minecraft.world.level.validation.DirectoryValidator;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.SpawnType;
@@ -64,6 +67,13 @@ import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Presets;
 import etcodehome.freeterraforged.platform.ConfigUtil;
 import etcodehome.freeterraforged.registries.FTFRegistries;
+import etcodehome.freeterraforged.world.worldgen.biome.BiomeCandidateRoles;
+import etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeBanding;
+import etcodehome.freeterraforged.world.worldgen.runtime.BiomePlacementPlan;
+import etcodehome.freeterraforged.world.worldgen.search.BiomeSearchResolution;
+import etcodehome.freeterraforged.world.worldgen.search.LocateSearchValidator;
+import etcodehome.freeterraforged.world.worldgen.search.TerrainSearchResolution;
+import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.dimension.LevelStem;
@@ -219,6 +229,150 @@ public final class PresetValidationRunner {
 
 	public record TestRecord(String name, String notes, boolean passed, String error) {}
 
+	private static String validateAdaptiveBiomeSearchResolution() {
+		String topology = LocateSearchValidator.validateTopology();
+		Preset terrainPreset = Presets.makeFTFDefault().copy();
+		terrainPreset.terrain().general.terrainRegionSize = 125;
+		terrainPreset.terrain().general.globalHorizontalScale = 8.0F;
+		if (TerrainSearchResolution.derive(terrainPreset, TerrainType.FLATS).horizontalStep() != 12) {
+			throw new AssertionError("Terrain regions must derive from their unscaled 125-block selector cells");
+		}
+		terrainPreset.island().size = 50.0F;
+		if (TerrainSearchResolution.derive(terrainPreset, TerrainType.ISLAND).horizontalStep() != 48) {
+			throw new AssertionError("Island searching must include the active global horizontal scale");
+		}
+		terrainPreset.island().size = 500.0F;
+		if (TerrainSearchResolution.derive(terrainPreset, TerrainType.ISLAND_MOUNTAINS).horizontalStep() != 64) {
+			throw new AssertionError("Large physical island footprints must respect the conservative step cap");
+		}
+		if (TerrainSearchResolution.derive(terrainPreset, TerrainType.COAST).horizontalStep() != 4
+			|| TerrainSearchResolution.derive(terrainPreset, TerrainType.BEACH).horizontalStep() != 4
+			|| TerrainSearchResolution.derive(terrainPreset, TerrainType.RIVER).horizontalStep() != 4) {
+			throw new AssertionError("Thin terrain targets must retain quart-resolution searching");
+		}
+		BiomePlacementPlan.TargetRoles surface = new BiomePlacementPlan.TargetRoles(
+			true, Set.of(BiomePlacementPlan.Role.SURFACE), true, false
+		);
+		BiomePlacementPlan.SearchScales defaultScales = new BiomePlacementPlan.SearchScales(185, 586, 64);
+		BiomeSearchResolution defaultSurface = BiomeSearchResolution.derive(defaultScales, surface);
+		if (defaultSurface.horizontalStep() != 20) {
+			throw new AssertionError("Biome size 185 should derive a 20-block surface step, got "
+				+ defaultSurface.horizontalStep());
+		}
+
+		BiomePlacementPlan.SearchScales smallSurface = new BiomePlacementPlan.SearchScales(50, 586, 64);
+		if (BiomeSearchResolution.derive(smallSurface, surface).horizontalStep() != 4) {
+			throw new AssertionError("Minimum surface biome size should derive quart-resolution searching");
+		}
+		BiomePlacementPlan.SearchScales largeSurface = new BiomePlacementPlan.SearchScales(2000, 586, 64);
+		if (BiomeSearchResolution.derive(largeSurface, surface).horizontalStep() != 192) {
+			throw new AssertionError("Large surface biomes should respect the benchmarked 192-block cap");
+		}
+		BiomePlacementPlan.SearchScales mediumSurface = new BiomePlacementPlan.SearchScales(1000, 586, 64);
+		if (BiomeSearchResolution.derive(mediumSurface, surface).horizontalStep() != 124) {
+			throw new AssertionError("Biome size 1000 should retain its preset-derived 124-block surface step");
+		}
+		BiomePlacementPlan.SearchScales modernSurface = new BiomePlacementPlan.SearchScales(586, 586, 64);
+		if (BiomeSearchResolution.derive(modernSurface, surface).horizontalStep() != 72) {
+			throw new AssertionError("Biome size 586 should retain its preset-derived 72-block surface step");
+		}
+
+		BiomePlacementPlan.SearchScales minimumCaveScales = new BiomePlacementPlan.SearchScales(2000, 50, 16);
+		BiomePlacementPlan.TargetRoles cave = new BiomePlacementPlan.TargetRoles(
+			true, Set.of(BiomePlacementPlan.Role.SHALLOW_CAVE, BiomePlacementPlan.Role.DEEP_CAVE), true, false
+		);
+		BiomeSearchResolution minimumCave = BiomeSearchResolution.derive(minimumCaveScales, cave);
+		if (minimumCave.horizontalStep() != 4 || minimumCave.verticalStep() != 4) {
+			throw new AssertionError("Minimum underground biome sizes should search at quart resolution");
+		}
+		BiomePlacementPlan.SearchScales largeCaveScales = new BiomePlacementPlan.SearchScales(2000, 2000, 2048);
+		BiomeSearchResolution largeCave = BiomeSearchResolution.derive(largeCaveScales, cave);
+		if (largeCave.horizontalStep() != 64 || largeCave.verticalStep() != 64) {
+			throw new AssertionError("Unbenchmarked underground horizontal and vertical searches must retain 64-block caps");
+		}
+		BiomePlacementPlan.TargetRoles unbandedCave = new BiomePlacementPlan.TargetRoles(
+			true, Set.of(BiomePlacementPlan.Role.SHALLOW_CAVE, BiomePlacementPlan.Role.DEEP_CAVE), false, false
+		);
+		BiomeSearchResolution unbandedResolution = BiomeSearchResolution.derive(defaultScales, unbandedCave);
+		if (unbandedResolution.horizontalStep() != 64 || unbandedResolution.verticalStep() != 8) {
+			throw new AssertionError(
+				"Unbanded caves must retain preset-derived horizontal and vertical sampling"
+			);
+		}
+
+		BiomePlacementPlan.TargetRoles mixed = new BiomePlacementPlan.TargetRoles(
+			true, Set.of(BiomePlacementPlan.Role.SURFACE, BiomePlacementPlan.Role.DEEP_CAVE), true, false
+		);
+		if (BiomeSearchResolution.derive(minimumCaveScales, mixed).horizontalStep() != 4) {
+			throw new AssertionError("Mixed targets must use the finer applicable horizontal resolution");
+		}
+		if (BiomeSearchResolution.derive(largeCaveScales, mixed).horizontalStep() != 64) {
+			throw new AssertionError("Mixed surface-underground targets must retain the conservative underground cap");
+		}
+		BiomePlacementPlan.TargetRoles unknown = new BiomePlacementPlan.TargetRoles(
+			true, Set.of(BiomePlacementPlan.Role.UNKNOWN), true, false
+		);
+		BiomeSearchResolution unknownResolution = BiomeSearchResolution.derive(defaultScales, unknown);
+		if (unknownResolution.horizontalStep() != 20 || unknownResolution.verticalStep() != 8) {
+			throw new AssertionError("Unknown placement must retain the active preset's finest applicable scale");
+		}
+		BiomeSearchResolution largeUnknown = BiomeSearchResolution.derive(largeCaveScales, unknown);
+		if (largeUnknown.horizontalStep() != 64 || largeUnknown.verticalStep() != 64) {
+			throw new AssertionError("Unknown placement must not inherit the surface-only 192-block cap");
+		}
+		BiomePlacementPlan.TargetRoles thinSurface = new BiomePlacementPlan.TargetRoles(
+			true, Set.of(BiomePlacementPlan.Role.SURFACE), true, true
+		);
+		if (BiomeSearchResolution.derive(largeSurface, thinSurface).horizontalStep() != 4) {
+			throw new AssertionError("River and beach targets must ignore broad biome-cell scaling");
+		}
+
+		Climate.TargetPoint surfacePoint = new Climate.TargetPoint(0L, 0L, 0L, 0L, Climate.quantizeCoord(-1.0F), 0L);
+		Climate.TargetPoint shallowPoint = new Climate.TargetPoint(0L, 0L, 0L, 0L, Climate.quantizeCoord(0.5F), 0L);
+		Climate.TargetPoint deepPoint = new Climate.TargetPoint(0L, 0L, 0L, 0L, Climate.quantizeCoord(2.0F), 0L);
+		if (UndergroundBiomeBanding.classifyTarget(surfacePoint) != UndergroundBiomeBanding.CandidateRole.SURFACE
+			|| UndergroundBiomeBanding.classifyTarget(shallowPoint) != UndergroundBiomeBanding.CandidateRole.SHALLOW_CAVE
+			|| UndergroundBiomeBanding.classifyTarget(deepPoint) != UndergroundBiomeBanding.CandidateRole.DEEP_CAVE) {
+			throw new AssertionError("Runtime climate depth classification disagrees with cave-stage boundaries");
+		}
+
+		Climate.Parameter full = Climate.Parameter.span(-1.0F, 1.0F);
+		Climate.ParameterPoint surfaceRegistration = new Climate.ParameterPoint(
+			full, full, full, full, Climate.Parameter.point(0.0F), full, 0L
+		);
+		Climate.ParameterPoint shallowRegistration = new Climate.ParameterPoint(
+			full, full, full, full, Climate.Parameter.span(0.2F, 0.9F), full, 0L
+		);
+		Climate.ParameterPoint deepRegistration = new Climate.ParameterPoint(
+			full, full, full, full, Climate.Parameter.point(1.1F), full, 0L
+		);
+		BiomeCandidateRoles<String> semanticRoles = BiomeCandidateRoles.compile(
+			new Climate.ParameterList<>(List.of(
+				Pair.of(surfaceRegistration, "ordinary"),
+				Pair.of(deepRegistration, "ordinary"),
+				Pair.of(shallowRegistration, "tagged_cave"),
+				Pair.of(deepRegistration, "untagged_underground")
+			)),
+			(point, value) -> UndergroundBiomeBanding.classify(point, value.equals("tagged_cave")),
+			value -> value.equals("tagged_cave"),
+			List.of()
+		);
+		BiomeCandidateRoles.Roles ordinary = semanticRoles.candidate("ordinary");
+		if (ordinary.undergroundOnly() || !ordinary.surface() || !ordinary.deep()) {
+			throw new AssertionError("Surface-plus-deep filler registrations must remain semantically surface-only");
+		}
+		BiomeCandidateRoles.Roles taggedCave = semanticRoles.candidate("tagged_cave");
+		if (!taggedCave.undergroundOnly() || !taggedCave.shallow()) {
+			throw new AssertionError("A tagged shallow cave candidate must remain underground-only");
+		}
+		BiomeCandidateRoles.Roles untaggedUnderground = semanticRoles.candidate("untagged_underground");
+		if (!untaggedUnderground.undergroundOnly() || !untaggedUnderground.deep()) {
+			throw new AssertionError("An underground-only registration must not require a cave tag");
+		}
+		return topology
+			+ "; quart-aligned biome/terrain scale derivation, semantic filler roles, preset-scaled unknowns, and depth stages";
+	}
+
 	public static void runAllTests(MinecraftServer server) {
 		String serverModName = server.getServerModName();
 		String loader = serverModName.toLowerCase().replaceAll("[^a-z0-9]", "");
@@ -250,6 +404,62 @@ public final class PresetValidationRunner {
 		Path testWorkDir = null;
 		try {
 			testWorkDir = Files.createTempDirectory("ftf-preset-validation-");
+
+			currentTestName = "presetValidation.adaptiveBiomeLocate." + loader;
+			watchdog.setStep(currentTestName);
+			String adaptiveSearchNotes = validateAdaptiveBiomeSearchResolution();
+			FTFCommon.LOGGER.info("[FTF-Test] PASSED: Adaptive biome locate validation ({})", adaptiveSearchNotes);
+			testRecords.add(new TestRecord(currentTestName, adaptiveSearchNotes, true, null));
+
+			currentTestName = "presetValidation.biomeLocateLivePlan." + loader;
+			watchdog.setStep(currentTestName);
+			BiomeLocateValidator.Result locateResult = BiomeLocateValidator.validate(server);
+			String locateNotes = String.format(
+				"surface=%s, captured=%d, vanilla=%dms@%s, ftf=%dms@%s, columns=%d, step=%dx%d, roles=%s; "
+					+ "lush_caves vanilla=%dms@%s, ftf=%dms@%s, columns=%d, step=%dx%d, roles=%s",
+				locateResult.biome(),
+				locateResult.capturedBiomes(),
+				locateResult.vanillaMillis(),
+				locateResult.vanillaPosition(),
+				locateResult.ftfMillis(),
+				locateResult.ftfPosition(),
+				locateResult.ftfColumns(),
+				locateResult.horizontalStep(),
+				locateResult.verticalStep(),
+				locateResult.roles(),
+				locateResult.vanillaCaveMillis(),
+				locateResult.vanillaCavePosition(),
+				locateResult.ftfCaveMillis(),
+				locateResult.ftfCavePosition(),
+				locateResult.ftfCaveColumns(),
+				locateResult.caveHorizontalStep(),
+				locateResult.caveVerticalStep(),
+				locateResult.caveRoles()
+			);
+			FTFCommon.LOGGER.info("[FTF-Test] PASSED: Live biome locate comparison ({})", locateNotes);
+			testRecords.add(new TestRecord(currentTestName, locateNotes, true, null));
+
+			currentTestName = "presetValidation.terrainLocateLivePlan." + loader;
+			watchdog.setStep(currentTestName);
+			TerrainLocateValidator.Result terrainLocate = TerrainLocateValidator.validate(
+				((FTFRandomState) (Object) server.overworld().getChunkSource().randomState()).generatorContext(),
+				server.overworld().getSharedSpawnPos()
+			);
+			String terrainLocateNotes = String.format(
+				"raw=%s captured@%s, %dms@%s, samples=%d, step=%d; beach(filtered)=%dms@%s, samples=%d, step=%d",
+				terrainLocate.rawTerrain(),
+				terrainLocate.rawCapture(),
+				terrainLocate.rawMillis(),
+				terrainLocate.rawMatch(),
+				terrainLocate.rawSamples(),
+				terrainLocate.rawStep(),
+				terrainLocate.beachMillis(),
+				terrainLocate.beachMatch(),
+				terrainLocate.beachSamples(),
+				terrainLocate.beachStep()
+			);
+			FTFCommon.LOGGER.info("[FTF-Test] PASSED: Live terrain locate validation ({})", terrainLocateNotes);
+			testRecords.add(new TestRecord(currentTestName, terrainLocateNotes, true, null));
 
 			// -----------------------------------------------------------------------------------------
 			// Live Server Datapack & Registry Resolution

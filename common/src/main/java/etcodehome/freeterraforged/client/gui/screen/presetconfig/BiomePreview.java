@@ -26,6 +26,7 @@ import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementConfigS
 import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementPlan;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenContributionRevision;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenProviderCatalog;
+import etcodehome.freeterraforged.world.worldgen.search.BiomeLocateSearch;
 
 final class BiomePreview implements AutoCloseable {
     private static final ResourceLocation UNREGISTERED = FTFCommon.location("unregistered");
@@ -180,6 +181,10 @@ final class BiomePreview implements AutoCloseable {
             cacheCancelled::getAsBoolean
         )).join();
     }
+
+	BiomeLocateSearch.Query biomeLocateQuery(BooleanSupplier valid) {
+		return this.resolver.biomeLocateQuery(valid);
+	}
 
     static int hatchPhase(int worldX, int worldZ, int zoom) {
         if (zoom < 1) {

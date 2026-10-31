@@ -32,6 +32,7 @@ import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.PreviewGrid;
 import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementConfigSnapshot;
 import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementPlan;
+import etcodehome.freeterraforged.world.worldgen.runtime.BiomePlacementPlan;
 import etcodehome.freeterraforged.world.worldgen.runtime.CapabilityState;
 import etcodehome.freeterraforged.world.worldgen.runtime.MinecraftWorldgenPlanCompiler;
 import etcodehome.freeterraforged.world.worldgen.runtime.MinecraftBiomeSourceGraphs;
@@ -49,6 +50,8 @@ import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenFacet;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPlan;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPlans;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenProviderCatalog;
+import etcodehome.freeterraforged.world.worldgen.search.BiomeLocateSearch;
+import etcodehome.freeterraforged.world.worldgen.search.FTFBiomeLocateQuery;
 
 public final class BiomePreviewResolver implements AutoCloseable {
 	private final GeneratorContext generatorContext;
@@ -57,6 +60,7 @@ public final class BiomePreviewResolver implements AutoCloseable {
 	private final Climate.Sampler sampler;
 	private final WorldgenPlan plan;
 	private final WorldgenBiomeSelection.Executable biomeSelection;
+	private final BiomePlacementPlan biomePlacement;
 	private final RequestOwnedBiomeSource sourceLifecycle;
 
 	private BiomePreviewResolver(
@@ -66,6 +70,7 @@ public final class BiomePreviewResolver implements AutoCloseable {
 		Climate.Sampler sampler,
 		WorldgenPlan plan,
 		WorldgenBiomeSelection.Executable biomeSelection,
+		BiomePlacementPlan biomePlacement,
 		RequestOwnedBiomeSource sourceLifecycle
 	) {
 		this.generatorContext = generatorContext;
@@ -74,6 +79,7 @@ public final class BiomePreviewResolver implements AutoCloseable {
 		this.sampler = sampler;
 		this.plan = plan;
 		this.biomeSelection = biomeSelection;
+		this.biomePlacement = biomePlacement;
 		this.sourceLifecycle = sourceLifecycle;
 	}
 
@@ -207,6 +213,9 @@ public final class BiomePreviewResolver implements AutoCloseable {
 			);
 			checkCancellation(cancelled);
 			WorldgenBiomeSelection.Executable biomeSelection = WorldgenBiomeSelection.prepare(plan);
+			BiomePlacementPlan biomePlacement = BiomePlacementPlan.compile(
+				plan, preset, biomeSelection.possibleBiomes()
+			);
 			checkCancellation(cancelled);
 			requireCurrentContributions(
 				dimension, contributionRevision, providers, "during plan compilation"
@@ -227,7 +236,7 @@ public final class BiomePreviewResolver implements AutoCloseable {
 			);
 			return new BiomePreviewResolver(
 				generatorContext, preset, previewGenerator, sampler, plan,
-				biomeSelection, sourceResult.owned()
+				biomeSelection, biomePlacement, sourceResult.owned()
 			);
 		} catch (Throwable failure) {
 			try {
@@ -490,6 +499,16 @@ public final class BiomePreviewResolver implements AutoCloseable {
 			WorldgenFacet.SPATIAL_OWNERSHIP,
 			WorldgenFacet.SAMPLER_DECORATION,
 			WorldgenFacet.BIOME_REPLACEMENT
+		);
+	}
+
+	public BiomeLocateSearch.Query biomeLocateQuery(BooleanSupplier valid) {
+		return new FTFBiomeLocateQuery(
+			this.biomeSelection,
+			this.generatorContext,
+			this.sampler,
+			this.biomePlacement,
+			valid
 		);
 	}
 
