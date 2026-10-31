@@ -2,7 +2,6 @@ package etcodehome.freeterraforged.server.command;
 
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -150,7 +149,21 @@ public final class LocateTerrainCommand {
 			.then(Commands.literal("terrain")
 				.then(Commands.argument("terrain", StringArgumentType.word())
 					.suggests((context, builder) -> SharedSuggestionProvider.suggest(TerrainSearchTargets.names(), builder))
-					.executes(context -> locate(context.getSource(), StringArgumentType.getString(context, "terrain")))
+					.executes(context -> locate(
+						context.getSource(),
+						StringArgumentType.getString(context, "terrain"),
+						LocateCommandOptions.defaults()
+					))
+					.then(Commands.argument(LocateCommandOptions.ARGUMENT, StringArgumentType.greedyString())
+						.suggests(LocateCommandOptions::suggest)
+						.executes(context -> locate(
+							context.getSource(),
+							StringArgumentType.getString(context, "terrain"),
+							LocateCommandOptions.parse(StringArgumentType.getString(
+								context, LocateCommandOptions.ARGUMENT
+							))
+						))
+					)
 				)
 			)
 			.then(LocateBiomeCommand.build());
@@ -188,7 +201,12 @@ public final class LocateTerrainCommand {
 		return Command.SINGLE_SUCCESS;
 	}
 
-	private static int locate(CommandSourceStack source, String name) throws CommandSyntaxException {
+	private static int locate(
+		CommandSourceStack source,
+		String name,
+		LocateCommandOptions options
+	) throws CommandSyntaxException {
+		LocateSearchSettings settings = options.searchSettings();
 		Terrain target = TerrainSearchTargets.get(name);
 		if (target == null) {
 			throw ERROR_UNKNOWN_TERRAIN.create(name);
@@ -217,32 +235,25 @@ public final class LocateTerrainCommand {
 			KEY + "searching",
 			"Searching for terrain %s for up to %s seconds...",
 			target.getName(),
-			LocateSearchSettings.TIME_LIMIT_SECONDS
+			settings.timeoutSeconds()
 		), false);
 
 		CompletableFuture<TerrainLocateSearch.Result> future = TerrainLocateSearch.findFirst(
-			context, target, origin
+			context, target, origin, settings
 		);
 
 		RunningSearch search = new RunningSearch(future, target.getName());
 		ACTIVE_SEARCH.set(search);
-
-		future.whenComplete((result, error) -> {
-			ACTIVE_SEARCH.compareAndSet(search, null);
-			long elapsedNanos = System.nanoTime() - start;
-			if (!server.isRunning()) {
-				return;
-			}
-			try {
-				server.execute(() -> {
-					if (server.isRunning()) {
-						report(source, level, target, result, error, elapsedNanos);
-					}
-				});
-			} catch (RejectedExecutionException ignored) {
-				// Server shut down before or during dispatch
-			}
-		});
+		LocateCommandExecution.dispatch(
+			future,
+			options.pauseMainThread(),
+			server,
+			() -> ACTIVE_SEARCH.compareAndSet(search, null),
+			(result, error) -> report(
+				source, level, target, result, error,
+				System.nanoTime() - start, settings.timeoutSeconds()
+			)
+		);
 		return Command.SINGLE_SUCCESS;
 	}
 
@@ -285,7 +296,15 @@ public final class LocateTerrainCommand {
 		return result;
 	}
 
-	private static void report(CommandSourceStack source, ServerLevel targetLevel, Terrain target, @Nullable TerrainLocateSearch.Result result, @Nullable Throwable error, long elapsedNanos) {
+	private static void report(
+		CommandSourceStack source,
+		ServerLevel targetLevel,
+		Terrain target,
+		@Nullable TerrainLocateSearch.Result result,
+		@Nullable Throwable error,
+		long elapsedNanos,
+		long timeoutSeconds
+	) {
 		String name = target.getName();
 		if (isCancellation(error)) {
 			return;
@@ -316,7 +335,7 @@ public final class LocateTerrainCommand {
 			source.sendFailure(result.timedOut()
 				? Component.translatableWithFallback(
 					KEY + "timed_out", "Could not find terrain %s within %s seconds.", name,
-					LocateSearchSettings.TIME_LIMIT_SECONDS
+					timeoutSeconds
 				)
 				: Component.translatableWithFallback(
 					KEY + "not_found",

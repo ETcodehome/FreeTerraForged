@@ -20,16 +20,27 @@ public final class TerrainLocateSearch {
 		Terrain target,
 		BlockPos origin
 	) {
+		return findFirst(context, target, origin, LocateSearchSettings.defaults());
+	}
+
+	public static CompletableFuture<Result> findFirst(
+		GeneratorContext context,
+		Terrain target,
+		BlockPos origin,
+		LocateSearchSettings settings
+	) {
 		Objects.requireNonNull(context, "context");
 		Objects.requireNonNull(target, "target");
 		Objects.requireNonNull(origin, "origin");
+		Objects.requireNonNull(settings, "settings");
 		TerrainSearchResolution resolution = TerrainSearchResolution.derive(context.preset, target);
 		CompletableFuture<ParallelFirstSearch.Result<Match>> search = ParallelFirstSearch.findFirst(
 			origin.getX(),
 			origin.getZ(),
 			() -> evaluator(context, target, origin, resolution),
 			LocateSearchExecutors.parallel(),
-			LocateSearchExecutors.parallelism()
+			settings.workerThreads(),
+			settings.timeoutSeconds()
 		);
 		CompletableFuture<Result> transformed = search.thenApply(result -> new Result(
 			result.match(),

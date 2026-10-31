@@ -2,7 +2,6 @@ package etcodehome.freeterraforged.server.command;
 
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
@@ -10,6 +9,7 @@ import java.util.stream.Stream;
 import org.jetbrains.annotations.Nullable;
 
 import com.mojang.brigadier.Command;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.ParsedCommandNode;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -67,7 +67,19 @@ public final class LocateBiomeCommand {
                         biomes.listTagIds().map(tag -> "#" + tag.location())
                     ), builder);
                 })
-                .executes(context -> locate(context.getSource(), biomeTarget(context)))
+				.executes(context -> locate(
+					context.getSource(), biomeTarget(context), LocateCommandOptions.defaults()
+				))
+				.then(Commands.argument(LocateCommandOptions.ARGUMENT, StringArgumentType.greedyString())
+					.suggests(LocateCommandOptions::suggest)
+					.executes(context -> locate(
+						context.getSource(),
+						biomeTarget(context),
+						LocateCommandOptions.parse(StringArgumentType.getString(
+							context, LocateCommandOptions.ARGUMENT
+						))
+					))
+				)
             );
     }
 
@@ -99,8 +111,10 @@ public final class LocateBiomeCommand {
 
     private static int locate(
         CommandSourceStack source,
-        ResourceOrTagKeyArgument.Result<Biome> targetBiome
+		ResourceOrTagKeyArgument.Result<Biome> targetBiome,
+		LocateCommandOptions options
     ) throws CommandSyntaxException {
+		LocateSearchSettings settings = options.searchSettings();
         String value = targetBiome.asPrintable();
         LocateTerrainCommand.TargetLevel target = LocateTerrainCommand.findTargetLevel(source);
         if (target == null) {
@@ -127,29 +141,26 @@ public final class LocateBiomeCommand {
             : level.getSharedSpawnPos();
         long start = System.nanoTime();
         CompletableFuture<BiomeLocateSearch.Result> future = BiomeLocateSearch.findFirst(
-            query, targetBiome, origin
+			query, targetBiome, origin, settings
         );
         RunningSearch search = new RunningSearch(future, value);
         ACTIVE_SEARCH.set(search);
         source.sendSuccess(() -> Component.translatableWithFallback(
             KEY + "searching", "Searching for biome %s for up to %s seconds...",
-            value, LocateSearchSettings.TIME_LIMIT_SECONDS
+			value, settings.timeoutSeconds()
         ), false);
 
         MinecraftServer server = source.getServer();
-        future.whenComplete((result, failure) -> {
-            ACTIVE_SEARCH.compareAndSet(search, null);
-            if (!server.isRunning()) {
-                return;
-            }
-            try {
-                server.execute(() -> report(
-                    source, level, value, result, failure, System.nanoTime() - start
-                ));
-            } catch (RejectedExecutionException ignored) {
-                // Server stopped between completion and dispatch.
-            }
-        });
+		LocateCommandExecution.dispatch(
+			future,
+			options.pauseMainThread(),
+			server,
+			() -> ACTIVE_SEARCH.compareAndSet(search, null),
+			(result, failure) -> report(
+					source, level, value, result, failure,
+					System.nanoTime() - start, settings.timeoutSeconds()
+			)
+		);
         return Command.SINGLE_SUCCESS;
     }
 
@@ -235,7 +246,8 @@ public final class LocateBiomeCommand {
         String value,
         @Nullable BiomeLocateSearch.Result result,
         @Nullable Throwable failure,
-        long elapsedNanos
+		long elapsedNanos,
+		long timeoutSeconds
     ) {
 		if (failure != null || result == null) {
             if (isCancellation(failure)) {
@@ -261,7 +273,7 @@ public final class LocateBiomeCommand {
             source.sendFailure(result.timedOut()
                 ? Component.translatableWithFallback(
 					KEY + "timed_out", "Could not find biome %s within %s seconds.",
-                    value, LocateSearchSettings.TIME_LIMIT_SECONDS
+					value, timeoutSeconds
                 )
                 : Component.translatableWithFallback(
 					KEY + "not_found",

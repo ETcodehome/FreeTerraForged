@@ -22,9 +22,19 @@ public final class BiomeLocateSearch {
 		Predicate<Holder<Biome>> target,
 		BlockPos origin
 	) {
+		return findFirst(query, target, origin, LocateSearchSettings.defaults());
+	}
+
+	public static CompletableFuture<Result> findFirst(
+		Query query,
+		Predicate<Holder<Biome>> target,
+		BlockPos origin,
+		LocateSearchSettings settings
+	) {
 		Objects.requireNonNull(query, "query");
 		Objects.requireNonNull(target, "target");
 		Objects.requireNonNull(origin, "origin");
+		Objects.requireNonNull(settings, "settings");
 		SearchPlan plan = query.plan(target);
 		if (!plan.roles().possible()) {
 			return CompletableFuture.completedFuture(new Result(
@@ -33,14 +43,15 @@ public final class BiomeLocateSearch {
 		}
 
 		boolean parallel = query.supportsParallelQueries();
-		int parallelism = parallel ? LocateSearchExecutors.parallelism() : 1;
+		int parallelism = parallel ? settings.workerThreads() : 1;
 		Executor executor = parallel ? LocateSearchExecutors.parallel() : LocateSearchExecutors.serial();
 		CompletableFuture<ParallelFirstSearch.Result<Match>> search = ParallelFirstSearch.findFirst(
 			origin.getX(),
 			origin.getZ(),
 			() -> query.createTileSampler(target, plan, origin),
 			executor,
-			parallelism
+			parallelism,
+			settings.timeoutSeconds()
 		);
 		CompletableFuture<Result> transformed = search.thenApply(result -> new Result(
 			result.match(),

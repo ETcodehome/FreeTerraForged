@@ -38,12 +38,35 @@ public final class ParallelFirstSearch {
 		Executor executor,
 		int parallelism
 	) {
+		return findFirst(
+			originX,
+			originZ,
+			evaluators,
+			executor,
+			parallelism,
+			LocateSearchSettings.DEFAULT_TIMEOUT_SECONDS
+		);
+	}
+
+	public static <M> CompletableFuture<Result<M>> findFirst(
+		int originX,
+		int originZ,
+		Supplier<TileEvaluator<M>> evaluators,
+		Executor executor,
+		int parallelism,
+		long timeoutSeconds
+	) {
 		Objects.requireNonNull(evaluators, "evaluators");
 		Objects.requireNonNull(executor, "executor");
 		if (parallelism < 1) {
 			throw new IllegalArgumentException("parallelism must be positive");
 		}
-		Search<M> search = new Search<>(originX, originZ, evaluators, executor, parallelism);
+		if (timeoutSeconds < 1L) {
+			throw new IllegalArgumentException("timeoutSeconds must be positive");
+		}
+		Search<M> search = new Search<>(
+			originX, originZ, evaluators, executor, parallelism, timeoutSeconds
+		);
 		search.start();
 		return search.future();
 	}
@@ -158,7 +181,9 @@ public final class ParallelFirstSearch {
 		private final Supplier<TileEvaluator<M>> evaluators;
 		private final Executor executor;
 		private final int parallelism;
-		private final long deadlineNanos;
+		private final long timeoutSeconds;
+		private final long startedNanos;
+		private final long timeoutNanos;
 		private final AtomicBoolean stopped = new AtomicBoolean();
 		private final AtomicLong samples = new AtomicLong();
 		private final CancellableFuture<Result<M>> result;
@@ -170,7 +195,8 @@ public final class ParallelFirstSearch {
 			int originZ,
 			Supplier<TileEvaluator<M>> evaluators,
 			Executor executor,
-			int parallelism
+			int parallelism,
+			long timeoutSeconds
 		) {
 			this.centerTileX = Math.floorDiv(originX, TILE_BLOCKS);
 			this.centerTileZ = Math.floorDiv(originZ, TILE_BLOCKS);
@@ -183,8 +209,9 @@ public final class ParallelFirstSearch {
 			this.evaluators = evaluators;
 			this.executor = executor;
 			this.parallelism = parallelism;
-			this.deadlineNanos = System.nanoTime()
-				+ TimeUnit.SECONDS.toNanos(LocateSearchSettings.TIME_LIMIT_SECONDS);
+			this.timeoutSeconds = timeoutSeconds;
+			this.startedNanos = System.nanoTime();
+			this.timeoutNanos = TimeUnit.SECONDS.toNanos(timeoutSeconds);
 			this.result = new CancellableFuture<>(this::cancel);
 		}
 
@@ -195,7 +222,7 @@ public final class ParallelFirstSearch {
 		void start() {
 			this.timeout = LocateSearchExecutors.timer().schedule(
 				this::finishTimeout,
-				LocateSearchSettings.TIME_LIMIT_SECONDS,
+				this.timeoutSeconds,
 				TimeUnit.SECONDS
 			);
 			this.searchRing(0);
@@ -206,7 +233,7 @@ public final class ParallelFirstSearch {
 			if (this.stopped.get() || Thread.currentThread().isInterrupted()) {
 				return true;
 			}
-			if (System.nanoTime() - this.deadlineNanos >= 0L) {
+			if (System.nanoTime() - this.startedNanos >= this.timeoutNanos) {
 				this.finishTimeout();
 				return true;
 			}

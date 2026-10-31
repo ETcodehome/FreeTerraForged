@@ -10,8 +10,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /** Shared, bounded concurrency for server-side FTF locate work. */
 public final class LocateSearchExecutors {
-	private static final int WORKERS = Math.max(1, Runtime.getRuntime().availableProcessors() / 2);
-	private static final ThreadPoolExecutor PARALLEL = createExecutor(WORKERS, "FTF-Locate-");
+	private static final ThreadPoolExecutor PARALLEL = createExecutor(
+		LocateSearchSettings.MAX_WORKER_THREADS, "FTF-Locate-"
+	);
 	private static final ThreadPoolExecutor SERIAL = createExecutor(1, "FTF-Locate-Serial-");
 	private static final ScheduledThreadPoolExecutor TIMER = createTimer();
 
@@ -19,7 +20,7 @@ public final class LocateSearchExecutors {
 	}
 
 	public static int parallelism() {
-		return WORKERS;
+		return LocateSearchSettings.DEFAULT_WORKER_THREADS;
 	}
 
 	public static Executor parallel() {

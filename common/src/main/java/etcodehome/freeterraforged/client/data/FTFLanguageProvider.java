@@ -25,6 +25,12 @@ public final class FTFLanguageProvider {
 			this.add(FTFTranslationKeys.NO_ERROR_MESSAGE, "{No error message}");
 
 			this.add(FTFTranslationKeys.GUI_INPUT_PROMPT, "Type preset name");
+			this.add("freeterraforged.commands.locate.options.unknown", "Unknown locate option: %s.");
+			this.add("freeterraforged.commands.locate.options.duplicate", "Locate option %s was supplied more than once.");
+			this.add("freeterraforged.commands.locate.options.missing_value", "Locate option %s requires a value.");
+			this.add("freeterraforged.commands.locate.options.whole_number", "The value for %s must be a whole number.");
+			this.add("freeterraforged.commands.locate.options.timeout", "Locate timeout must be at least 1 second; received %s.");
+			this.add("freeterraforged.commands.locate.options.workers", "Locate workers must be between 1 and %s; received %s.");
 			this.add("freeterraforged.commands.locate.terrain.unknown", "Unknown terrain type: %s.");
 			this.add("freeterraforged.commands.locate.terrain.not_ftf", "No FreeTerraForged world is available.");
 			this.add("freeterraforged.commands.locate.terrain.no_active_search", "No FreeTerraForged locate search is running.");
