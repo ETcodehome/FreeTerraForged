@@ -393,7 +393,7 @@ public class Preview2D extends Button implements IPreviewHandler {
 						"freeterraforged.gui.preset_preview.biome_search_timed_out",
 						"Could not find biome %s within %s seconds.",
 						target,
-						LocateSearchSettings.TIME_LIMIT_SECONDS
+						LocateSearchSettings.DEFAULT_TIMEOUT_SECONDS
 					));
 				}
 				return SearchResult.failed(Component.translatableWithFallback(
@@ -439,7 +439,7 @@ public class Preview2D extends Button implements IPreviewHandler {
 						"freeterraforged.gui.preset_preview.terrain_search_timed_out",
 						"Could not find terrain %s within %s seconds.",
 						target,
-						LocateSearchSettings.TIME_LIMIT_SECONDS
+						LocateSearchSettings.DEFAULT_TIMEOUT_SECONDS
 					));
 				}
 				return SearchResult.failed(Component.translatableWithFallback(
