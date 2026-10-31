@@ -1,6 +1,8 @@
 package etcodehome.freeterraforged.world.worldgen.biome;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -34,6 +36,7 @@ public final class UndergroundBiomeBanding {
 	private static final double CLIMATE_INFLUENCE_SCALE = 2.0D;
 	private static final long OCCUPANCY_CELL_SALT = 0x3CB2F11B1A5D39E7L;
 	private static final long OCCUPANCY_SCORE_SALT = 0x75A28C4D91E637BFL;
+	private static final long IDENTITY_CELL_SALT = 0x61F0CE12D47A958BL;
 	private static final long IDENTITY_SCORE_SALT = 0x2AD4B83598FC1E67L;
 
 	private static final Climate.Parameter VANILLA_UNDERGROUND_DEPTH = Climate.Parameter.span(
@@ -260,7 +263,7 @@ public final class UndergroundBiomeBanding {
 		if (depth.max() <= surface) {
 			return CandidateRole.SURFACE;
 		}
-		if (depth.min() > surface || (caveTagged && depth.min() == surface && depth.max() > surface)) {
+		if (caveTagged && (depth.min() > surface || (depth.min() == surface && depth.max() > surface))) {
 			return depth.min() >= Climate.quantizeCoord(VANILLA_UNDERGROUND_DEPTH_END)
 				? CandidateRole.DEEP_CAVE : CandidateRole.SHALLOW_CAVE;
 		}
@@ -341,6 +344,9 @@ public final class UndergroundBiomeBanding {
 		int cellZ = (int) Math.floor(z);
 		double nearestDistance = Double.POSITIVE_INFINITY;
 		long nearestKey = 0L;
+		int nearestCellX = cellX;
+		int nearestCellY = cellY;
+		int nearestCellZ = cellZ;
 		double nearestSiteX = 0.0D;
 		double nearestSiteY = 0.0D;
 		double nearestSiteZ = 0.0D;
@@ -362,6 +368,9 @@ public final class UndergroundBiomeBanding {
 					if (distance < nearestDistance || (distance == nearestDistance && key < nearestKey)) {
 						nearestDistance = distance;
 						nearestKey = key;
+						nearestCellX = candidateX;
+						nearestCellY = candidateY;
+						nearestCellZ = candidateZ;
 						nearestSiteX = siteX;
 						nearestSiteY = siteY;
 						nearestSiteZ = siteZ;
@@ -372,6 +381,9 @@ public final class UndergroundBiomeBanding {
 		return new RegionSample(
 			nearestKey,
 			unit(nearestKey ^ OCCUPANCY_SCORE_SALT),
+			cellX,
+			nearestCellY,
+			cellZ,
 			QuartPos.fromBlock((int) Math.floor(nearestSiteX * horizontalSize)),
 			QuartPos.fromBlock((int) Math.floor(nearestSiteY * verticalSize)),
 			QuartPos.fromBlock((int) Math.floor(nearestSiteZ * horizontalSize))
@@ -499,56 +511,56 @@ public final class UndergroundBiomeBanding {
 			this.candidates = List.copyOf(candidates);
 		}
 
-		private T findValue(Climate.TargetPoint target, long regionKey, float climateInfluence) {
-			if (this.candidates.size() == 1) {
+		private T findValue(
+			Climate.TargetPoint target,
+			long seed,
+			int cellX,
+			int cellY,
+			int cellZ,
+			long regionKey,
+			float climateInfluence,
+			boolean bandingEnabled
+		) {
+			int candidateCount = this.candidates.size();
+			if (candidateCount == 1) {
 				return this.candidates.getFirst().value();
 			}
 
-			double minimumDistance = Double.POSITIVE_INFINITY;
-			double[] distances = new double[this.candidates.size()];
-			for (int index = 0; index < this.candidates.size(); index++) {
-				double distance = this.candidates.get(index).distance(target);
-				distances[index] = distance;
-				minimumDistance = Math.min(minimumDistance, distance);
+			double[] distances = new double[candidateCount];
+			for (int index = 0; index < candidateCount; index++) {
+				distances[index] = this.candidates.get(index).distance(target);
 			}
 
-			if (climateInfluence >= 1.0F) {
-				int tieCount = 0;
-				for (double distance : distances) {
-					if (distance == minimumDistance) {
-						tieCount++;
-					}
-				}
-				int tie = Math.min((int) (unit(regionKey ^ IDENTITY_SCORE_SALT) * tieCount), tieCount - 1);
-				for (int index = 0; index < distances.length; index++) {
-					if (distances[index] == minimumDistance && tie-- == 0) {
-						return this.candidates.get(index).value();
-					}
-				}
+			Integer[] ranked = new Integer[candidateCount];
+			for (int index = 0; index < candidateCount; index++) {
+				ranked[index] = index;
+			}
+			if (climateInfluence > 0.0F) {
+				Arrays.sort(ranked, Comparator.<Integer>comparingDouble(index -> distances[index])
+					.thenComparingInt(index -> index));
 			}
 
-			double sharpness = CLIMATE_INFLUENCE_SCALE * climateInfluence / (1.0D - climateInfluence);
-			double totalWeight = 0.0D;
-			double[] weights = new double[distances.length];
-			for (int index = 0; index < distances.length; index++) {
-				double weight = Math.exp(-(distances[index] - minimumDistance) * sharpness);
-				weights[index] = weight;
-				totalWeight += weight;
-			}
-			double selectedWeight = unit(regionKey ^ IDENTITY_SCORE_SALT) * totalWeight;
-			for (int index = 0; index < weights.length; index++) {
-				selectedWeight -= weights[index];
-				if (selectedWeight <= 0.0D) {
-					return this.candidates.get(index).value();
+			long horizontalHash = cellHash(seed, cellX, 0, cellZ, IDENTITY_CELL_SALT);
+			int horizontalPhase = Math.floorMod((int) (horizontalHash ^ (horizontalHash >>> 32)), candidateCount);
+
+			if (!bandingEnabled) {
+				if (climateInfluence >= 1.0F) {
+					return this.candidates.get(ranked[0]).value();
 				}
+				return this.candidates.get(ranked[horizontalPhase]).value();
 			}
-			return this.candidates.getLast().value();
+
+			int rotationIndex = Math.floorMod(cellY + horizontalPhase, candidateCount);
+			return this.candidates.get(ranked[rotationIndex]).value();
 		}
 	}
 
 	private record RegionSample(
 		long key,
 		double occupancy,
+		int cellX,
+		int cellY,
+		int cellZ,
 		int identityQuartX,
 		int identityQuartY,
 		int identityQuartZ
@@ -768,13 +780,19 @@ public final class UndergroundBiomeBanding {
 				return this.background.findValue(target);
 			}
 
-			if (!this.bandingEnabled) {
-				return this.original.findValue(target);
-			}
 			Climate.TargetPoint identityTarget = targetSampler.sample(
 				region.identityQuartX(), region.identityQuartY(), region.identityQuartZ()
 			);
-			return stage.findValue(identityTarget, region.key(), this.climateInfluence);
+			return stage.findValue(
+				identityTarget,
+				this.seed,
+				region.cellX(),
+				region.cellY(),
+				region.cellZ(),
+				region.key(),
+				this.climateInfluence,
+				this.bandingEnabled
+			);
 		}
 
 		private float surfaceFactor(long depth) {

@@ -76,6 +76,11 @@ import net.minecraft.world.level.levelgen.flat.FlatLevelGeneratorSettings;
 import net.minecraft.world.level.levelgen.presets.WorldPreset;
 import net.minecraft.world.level.levelgen.presets.WorldPresets;
 import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
+import etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeBanding;
+import net.minecraft.world.level.biome.Climate;
+import etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeTags;
+import net.minecraft.world.level.biome.MultiNoiseBiomeSourceParameterLists;
+import net.minecraft.core.QuartPos;
 
 public final class PresetValidationRunner {
 	private static boolean testsTriggered = false;
@@ -1133,6 +1138,142 @@ public final class PresetValidationRunner {
 			testRecords.add(new TestRecord(
 				currentTestName,
 				"Non-FTF dimension CellSampler fallback (#340/#310) & foreign Climate.Sampler adoption (#298) verified",
+				true,
+				null
+			));
+
+			// -----------------------------------------------------------------------------------------
+			// Underground Biome Banding & Vertical Stacking in Deep Worlds
+			// -----------------------------------------------------------------------------------------
+			currentTestName = "presetValidation.undergroundBiomeBanding." + loader;
+			watchdog.setStep(currentTestName);
+			FTFCommon.LOGGER.info("[FTF-Test] Verifying Underground Biome Banding & Vertical Stacking in Deep Worlds...");
+
+			var parameterLists = server.registryAccess().lookupOrThrow(Registries.MULTI_NOISE_BIOME_SOURCE_PARAMETER_LIST);
+			var overworldParamsHolder = parameterLists.getOrThrow(MultiNoiseBiomeSourceParameterLists.OVERWORLD);
+			Climate.ParameterList<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> overworldEntries = overworldParamsHolder.value().parameters();
+
+			// 1. Configure deep world preset with vertical banding enabled
+			Preset deepPreset = Presets.makeFTFDefault();
+			deepPreset.world().properties.worldDepth = 512;
+			deepPreset.world().properties.worldHeight = 320;
+			deepPreset.climate().biomeShape.undergroundBiomeSize = 225;
+			deepPreset.climate().biomeShape.undergroundBiomeVerticalSize = 64;
+			deepPreset.climate().biomeShape.undergroundBiomeCoverage = 1.0F;
+			deepPreset.climate().biomeShape.undergroundBiomeClimateInfluence = 0.75F;
+			deepPreset.climate().biomeShape.undergroundBiomeBanding = true;
+
+			long seed = server.overworld().getSeed();
+			UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> bandedLayout = UndergroundBiomeBanding.apply(
+				deepPreset,
+				overworldEntries,
+				seed,
+				(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value))
+			);
+
+			if (bandedLayout.deepCandidateCount() < 2) {
+				throw new AssertionError("Deep stage should have at least 2 cave candidates, found: " + bandedLayout.deepCandidateCount());
+			}
+
+			// Sample a vertical column in the deep cave zone at steps of verticalSize (64 blocks)
+			Climate.TargetPoint target = Climate.target(0.0F, 0.0F, 0.0F, -0.5F, 1.5F, 0.0F);
+			int quartX = 0;
+			int quartZ = 0;
+			int verticalSizeBlocks = 64;
+
+			java.util.Set<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> stackedBiomes = new java.util.LinkedHashSet<>();
+			net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> previousBiome = null;
+			int stepTransitions = 0;
+			int sampleStepCount = 0;
+
+			// Sample Y levels corresponding to center of vertical bands from Y = -96 down to Y = -448
+			for (int blockY = -96; blockY >= -448; blockY -= verticalSizeBlocks) {
+				int quartY = QuartPos.fromBlock(blockY);
+				net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> currentBiome = bandedLayout.findValue(target, quartX, quartY, quartZ);
+				stackedBiomes.add(currentBiome);
+				if (previousBiome != null && !previousBiome.equals(currentBiome)) {
+					stepTransitions++;
+				}
+				previousBiome = currentBiome;
+				sampleStepCount++;
+			}
+
+			if (stackedBiomes.size() < 2) {
+				throw new AssertionError("Underground biome banding failed: expected multiple stacked cave biome types across vertical column, but only got " + stackedBiomes.size() + ": " + stackedBiomes);
+			}
+			if (stepTransitions < 2) {
+				throw new AssertionError("Underground biome banding failed: expected transitions at steps of verticalSize (" + verticalSizeBlocks + " blocks), but got " + stepTransitions + " transitions across " + sampleStepCount + " steps");
+			}
+
+			// 2. Verify columnar behavior when banding is disabled
+			Preset columnarPreset = deepPreset.copy();
+			columnarPreset.climate().biomeShape.undergroundBiomeBanding = false;
+			UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> columnarLayout = UndergroundBiomeBanding.apply(
+				columnarPreset,
+				overworldEntries,
+				seed,
+				(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value))
+			);
+
+			java.util.Set<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> columnarBiomes = new java.util.HashSet<>();
+			for (int blockY = -96; blockY >= -448; blockY -= verticalSizeBlocks) {
+				int quartY = QuartPos.fromBlock(blockY);
+				columnarBiomes.add(columnarLayout.findValue(target, quartX, quartY, quartZ));
+			}
+			if (columnarBiomes.size() != 1) {
+				throw new AssertionError("Underground biomes with banding disabled should be columnar (single biome down column), but got " + columnarBiomes.size() + ": " + columnarBiomes);
+			}
+
+			// 3. Verify that undergroundBiomeSize controls horizontal biome transition frequency
+			Preset smallSizePreset = deepPreset.copy();
+			smallSizePreset.climate().biomeShape.undergroundBiomeSize = 50;
+			UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> smallLayout = UndergroundBiomeBanding.apply(
+				smallSizePreset,
+				overworldEntries,
+				seed,
+				(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value))
+			);
+
+			Preset largeSizePreset = deepPreset.copy();
+			largeSizePreset.climate().biomeShape.undergroundBiomeSize = 500;
+			UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> largeLayout = UndergroundBiomeBanding.apply(
+				largeSizePreset,
+				overworldEntries,
+				seed,
+				(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value))
+			);
+
+			int smallTransitions = 0;
+			int largeTransitions = 0;
+			net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> prevSmall = null;
+			net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> prevLarge = null;
+			int fixedQuartY = QuartPos.fromBlock(-160);
+
+			for (int blockX = 0; blockX <= 1500; blockX += 16) {
+				int qX = QuartPos.fromBlock(blockX);
+				net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> bSmall = smallLayout.findValue(target, qX, fixedQuartY, 0);
+				net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> bLarge = largeLayout.findValue(target, qX, fixedQuartY, 0);
+				if (prevSmall != null && !prevSmall.equals(bSmall)) smallTransitions++;
+				if (prevLarge != null && !prevLarge.equals(bLarge)) largeTransitions++;
+				prevSmall = bSmall;
+				prevLarge = bLarge;
+			}
+
+			if (smallTransitions <= largeTransitions * 2) {
+				throw new AssertionError("undergroundBiomeSize not respected: small size (50) should have significantly more transitions than large size (500). Small=" + smallTransitions + ", Large=" + largeTransitions);
+			}
+
+			FTFCommon.LOGGER.info("[FTF-Test] PASSED: Underground biome banding verified (stacked biomes: {}, transitions: {}/{}, columnar: single, horizontal size 50 vs 500: {} vs {} transitions).",
+				stackedBiomes.stream().map(h -> h.unwrapKey().map(k -> k.location().getPath()).orElse("unknown")).toList(),
+				stepTransitions,
+				sampleStepCount - 1,
+				smallTransitions,
+				largeTransitions
+			);
+			testRecords.add(new TestRecord(
+				currentTestName,
+				String.format("Underground biome banding verified: %d stacked types in column, horizontal sizing 50 vs 500 (%d vs %d transitions)",
+					stackedBiomes.size(), smallTransitions, largeTransitions),
 				true,
 				null
 			));
