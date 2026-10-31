@@ -100,10 +100,13 @@ public final class BiomeLocateSearch {
 		}
 	}
 
-	public record Match(BlockPos position, Holder<Biome> biome) {
+	public record Match(BlockPos position, Holder<Biome> biome, long distanceSq) {
 		public Match {
 			position = Objects.requireNonNull(position, "position");
 			biome = Objects.requireNonNull(biome, "biome");
+			if (distanceSq < 0L) {
+				throw new IllegalArgumentException("distanceSq must not be negative");
+			}
 		}
 	}
 

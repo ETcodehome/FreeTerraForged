@@ -86,7 +86,7 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 				(cell, blockX, blockZ) -> this.findInColumn(
 					target,
 					plan,
-					origin.getY(),
+					origin,
 					cell,
 					blockX,
 					blockZ
@@ -114,17 +114,18 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 	private BiomeLocateSearch.Match findInColumn(
 		Predicate<Holder<Biome>> target,
 		BiomeLocateSearch.SearchPlan plan,
-		int originY,
+		BlockPos origin,
 		Cell cell,
 		int blockX,
 		int blockZ
 	) {
 		this.requireValid();
 		int surfaceY = this.surfaceY(cell);
+		int originY = origin.getY();
 		BiomePlacementPlan.TargetRoles roles = plan.roles();
 		boolean surfaceFirst = roles.searchesSurface() && originY >= surfaceY;
 		if (surfaceFirst) {
-			BiomeLocateSearch.Match surface = this.matchAt(target, cell, blockX, surfaceY, blockZ);
+			BiomeLocateSearch.Match surface = this.matchAt(target, origin, cell, blockX, surfaceY, blockZ);
 			if (surface != null) {
 				return surface;
 			}
@@ -145,7 +146,7 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 					}
 					if (lowerValid) {
 						BiomeLocateSearch.Match match = this.matchUndergroundAt(
-							target, roles, cell, blockX, startY - offset, blockZ
+							target, roles, origin, cell, blockX, startY - offset, blockZ
 						);
 						if (match != null) {
 							return match;
@@ -153,7 +154,7 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 					}
 					if (upperValid) {
 						BiomeLocateSearch.Match match = this.matchUndergroundAt(
-							target, roles, cell, blockX, startY + offset, blockZ
+							target, roles, origin, cell, blockX, startY + offset, blockZ
 						);
 						if (match != null) {
 							return match;
@@ -164,7 +165,7 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 		}
 
 		if (roles.searchesSurface() && !surfaceFirst) {
-			return this.matchAt(target, cell, blockX, surfaceY, blockZ);
+			return this.matchAt(target, origin, cell, blockX, surfaceY, blockZ);
 		}
 		return null;
 	}
@@ -173,13 +174,14 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 	private BiomeLocateSearch.Match matchUndergroundAt(
 		Predicate<Holder<Biome>> target,
 		BiomePlacementPlan.TargetRoles roles,
+		BlockPos origin,
 		Cell cell,
 		int blockX,
 		int blockY,
 		int blockZ
 	) {
 		if (this.directSource) {
-			return this.matchAt(target, cell, blockX, blockY, blockZ);
+			return this.matchAt(target, origin, cell, blockX, blockY, blockZ);
 		}
 		int quartX = QuartPos.fromBlock(blockX);
 		int quartY = QuartPos.fromBlock(blockY);
@@ -206,13 +208,16 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 		);
 		this.requireValid();
 		return target.test(biome)
-			? new BiomeLocateSearch.Match(new BlockPos(blockX, blockY, blockZ), biome)
+			? new BiomeLocateSearch.Match(
+				new BlockPos(blockX, blockY, blockZ), biome, distanceSq(origin, blockX, blockZ)
+			)
 			: null;
 	}
 
 	@Nullable
 	private BiomeLocateSearch.Match matchAt(
 		Predicate<Holder<Biome>> target,
+		BlockPos origin,
 		Cell cell,
 		int blockX,
 		int blockY,
@@ -220,8 +225,16 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 	) {
 		Holder<Biome> biome = this.resolveAt(cell, blockX, blockY, blockZ);
 		return target.test(biome)
-			? new BiomeLocateSearch.Match(new BlockPos(blockX, blockY, blockZ), biome)
+			? new BiomeLocateSearch.Match(
+				new BlockPos(blockX, blockY, blockZ), biome, distanceSq(origin, blockX, blockZ)
+			)
 			: null;
+	}
+
+	private static long distanceSq(BlockPos origin, int blockX, int blockZ) {
+		long dx = (long) blockX - origin.getX();
+		long dz = (long) blockZ - origin.getZ();
+		return dx * dx + dz * dz;
 	}
 
 	private Holder<Biome> resolveAt(Cell cell, int blockX, int blockY, int blockZ) {

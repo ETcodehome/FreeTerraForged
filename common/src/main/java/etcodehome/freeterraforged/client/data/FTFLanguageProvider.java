@@ -49,7 +49,7 @@ public final class FTFLanguageProvider {
 			this.add("freeterraforged.commands.locate.biome.impossible", "This FreeTerraForged world does not generate %s.");
 			this.add("freeterraforged.commands.locate.biome.timed_out", "Could not find biome %s within %s seconds.");
 			this.add("freeterraforged.commands.locate.biome.not_found", "Could not find biome %s before reaching Minecraft's world limits.");
-			this.add("freeterraforged.commands.locate.biome.success", "Found biome %s at %s.");
+			this.add("freeterraforged.commands.locate.biome.success", "Found biome %s at %s (%s blocks away).");
 
 			this.add(FTFTranslationKeys.GUI_SELECT_PRESET_MISSING_LEGACY_PRESETS, "Couldn't find any legacy presets");
 			this.add(FTFTranslationKeys.GUI_SELECT_PRESET_TITLE, "Presets & Defaults");

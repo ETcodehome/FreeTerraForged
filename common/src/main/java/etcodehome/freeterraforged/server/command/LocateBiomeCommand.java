@@ -297,7 +297,8 @@ public final class LocateBiomeCommand {
             .withColor(ChatFormatting.GREEN)
             .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, teleport))
             .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.translatable("chat.coordinates.tooltip"))));
-        source.sendSuccess(() -> successMessage(biomeId, coordinates), false);
+		int distance = (int) Math.sqrt((double) match.distanceSq());
+		source.sendSuccess(() -> successMessage(biomeId, coordinates, distance), false);
         FTFCommon.LOGGER.info(
             "Located FTF biome {} in {} ms ({} columns, horizontal step {}, vertical step {}, roles {})",
             biomeId,
@@ -309,12 +310,13 @@ public final class LocateBiomeCommand {
         );
     }
 
-	private static Component successMessage(ResourceLocation biomeId, Component coordinates) {
+	private static Component successMessage(ResourceLocation biomeId, Component coordinates, int distance) {
 		return Component.translatableWithFallback(
 			KEY + "success",
-			"Found biome %s at %s.",
+			"Found biome %s at %s (%s blocks away).",
 			Component.literal(biomeId.toString()),
-			coordinates
+			coordinates,
+			distance
 		);
 	}
 

@@ -23,7 +23,7 @@
   "freeterraforged.commands.locate.biome.not_found": "Could not find biome %s before reaching Minecraft's world limits.",
   "freeterraforged.commands.locate.biome.not_ftf": "No FreeTerraForged world is available.",
   "freeterraforged.commands.locate.biome.searching": "Searching for biome %s for up to %s seconds...",
-  "freeterraforged.commands.locate.biome.success": "Found biome %s at %s.",
+  "freeterraforged.commands.locate.biome.success": "Found biome %s at %s (%s blocks away).",
   "freeterraforged.commands.locate.biome.timed_out": "Could not find biome %s within %s seconds.",
   "freeterraforged.gui.button.rename": "Rename Selected",
   "freeterraforged.gui.toast.preset_renamed": "Renamed to %s",
