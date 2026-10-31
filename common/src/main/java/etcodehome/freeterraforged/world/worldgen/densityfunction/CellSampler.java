@@ -6,6 +6,7 @@ import java.util.function.Supplier;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.KeyDispatchCodec;
 import net.minecraft.world.level.levelgen.DensityFunction;
+import net.minecraft.world.level.levelgen.DensityFunctions;
 import org.jetbrains.annotations.Nullable;
 
 import com.mojang.serialization.Codec;
@@ -29,7 +30,16 @@ import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 import etcodehome.freeterraforged.world.worldgen.util.PosUtil;
 
-public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) implements MarkerFunction.Mapped {
+public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, DensityFunction fallback) implements MarkerFunction.Mapped {
+	public CellSampler {
+		java.util.Objects.requireNonNull(deferredLookup, "deferredLookup");
+		java.util.Objects.requireNonNull(field, "field");
+		fallback = fallback != null ? fallback : DensityFunctions.zero();
+	}
+
+	public CellSampler(Supplier<WorldLookup> deferredLookup, Field field) {
+		this(deferredLookup, field, DensityFunctions.zero());
+	}
 	private static final float DEEP_OCEAN_MAX = Climate.unquantizeCoord(Climate.quantizeCoord(Continentalness.DEEP_OCEAN.max()) - 1);
 	private static final float SHALLOW_OCEAN_MIN = Climate.unquantizeCoord(Climate.quantizeCoord(Continentalness.OCEAN.min()) + 1);
 	private static final ThreadLocal<Cache2d> CELL = ThreadLocal.withInitial(Cache2d::new);
@@ -86,7 +96,7 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 	public double compute(DensityFunction.FunctionContext ctx) {
 		WorldLookup worldLookup = this.deferredLookup.get();
 		if (worldLookup == null) {
-			throw new IllegalStateException("FTF cell sampler used before its world lookup was initialized");
+			return this.fallback.compute(ctx);
 		}
 		Cell cell = CELL.get().getAndUpdate(worldLookup, ctx.blockX(), ctx.blockZ(), true);
 		if (WorldgenPerfTracker.ACTIVE) {
@@ -242,6 +252,13 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 			}
 
 			WorldLookup worldLookup = CellSampler.this.deferredLookup.get();
+			if (worldLookup == null) {
+				double val = CellSampler.this.fallback.compute(ctx);
+				this.lastX = bx;
+				this.lastZ = bz;
+				this.lastValue = val;
+				return val;
+			}
 			Cell cell;
 			int relX = bx - this.minBlockX;
 			int relZ = bz - this.minBlockZ;

@@ -121,6 +121,16 @@ class MixinClimateSampler {
 		}
 	}
 
+	public void freeterraforged$FTFClimateSampler$adoptClimateQuerySemantics(
+		ClimateQuerySemantics semantics
+	) {
+		java.util.Objects.requireNonNull(semantics, "climate query semantics");
+		if (this.freeterraforged$querySemantics != semantics) {
+			this.freeterraforged$querySemantics = semantics;
+			this.freeterraforged$discardLocalQueryCacheStorage();
+		}
+	}
+
 	public ClimateQuerySemantics freeterraforged$FTFClimateSampler$climateQuerySemantics() {
 		return this.freeterraforged$querySemantics;
 	}
