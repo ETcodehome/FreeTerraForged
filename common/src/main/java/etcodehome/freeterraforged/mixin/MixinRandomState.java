@@ -3,10 +3,8 @@ package etcodehome.freeterraforged.mixin;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import etcodehome.freeterraforged.FTFCommon;
-import etcodehome.freeterraforged.concurrent.ThreadPools;
 import etcodehome.freeterraforged.config.PerformanceConfig;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
-import etcodehome.freeterraforged.data.worldgen.preset.settings.FlowSettings;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.registries.FTFRegistries;
 import etcodehome.freeterraforged.tags.FTFDensityFunctionTags;
@@ -14,8 +12,8 @@ import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 import etcodehome.freeterraforged.world.worldgen.biome.FTFClimateSampler;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.MarkerFunction;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.NoiseFunction;
+import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
 import etcodehome.freeterraforged.world.worldgen.util.Seed;
 import net.minecraft.world.level.levelgen.*;
@@ -28,7 +26,6 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
-import com.google.common.base.Suppliers;
 import net.minecraft.core.HolderGetter;
 import net.minecraft.core.HolderLookup.RegistryLookup;
 import net.minecraft.core.RegistryAccess;
@@ -36,20 +33,6 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.levelgen.DensityFunction.NoiseHolder;
 import net.minecraft.world.level.levelgen.synth.NormalNoise;
-import etcodehome.freeterraforged.FTFCommon;
-import etcodehome.freeterraforged.concurrent.ThreadPools;
-import etcodehome.freeterraforged.config.PerformanceConfig;
-import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
-import etcodehome.freeterraforged.registries.FTFRegistries;
-import etcodehome.freeterraforged.tags.FTFDensityFunctionTags;
-import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
-import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.MarkerFunction;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.NoiseFunction;
-import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
-import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
-import etcodehome.freeterraforged.world.worldgen.biome.FTFClimateSampler;
 import etcodehome.freeterraforged.world.worldgen.biome.ClimateQueryPolicy;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenEpoch;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPlan;
@@ -65,7 +48,7 @@ class MixinRandomState {
 	private long seed;
 	private boolean hasContext;
 	@Shadow	@Final private Climate.Sampler sampler;
-	@Unique private boolean freeterraforged$isFTFDimension = false; // Tracks if the base router belongs to FTF
+	@Unique private boolean freeterraforged$isFTFDimension = false; // Tracks if the base router belongs to an initialized FTF epoch
 	@Nullable private volatile GeneratorContext generatorContext;
 	@Nullable private volatile Preset preset;
 	@Nullable private volatile WorldgenEpoch worldgenEpoch;
@@ -114,12 +97,7 @@ class MixinRandomState {
 			}
 		};
 
-		// Map the base router first. If the current dimension naturally utilizes FTF, hasContext flips to true here.
-		NoiseRouter mappedRouter = router.mapAll(this.densityFunctionWrapper);
-		if (false && this.hasContext) {
-			this.freeterraforged$isFTFDimension = true;
-		}
-		return mappedRouter;
+		return router.mapAll(this.densityFunctionWrapper);
 	}
 
 	public synchronized void freeterraforged$FTFRandomState$initialize(WorldgenEpoch epoch) {

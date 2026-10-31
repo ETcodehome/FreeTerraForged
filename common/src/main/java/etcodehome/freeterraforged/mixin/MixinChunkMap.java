@@ -59,14 +59,8 @@ public class MixinChunkMap {
 			throw new IllegalStateException("RandomState does not expose the FTF ownership contract");
 		}
 		if (!(chunkGenerator instanceof TerraForgedChunkGenerator terraForged)) {
-			String settingsIdentity = WorldgenSettingsIdentity.describe(chunkGenerator);
-			if (false && rtfRandomState.isTerraForged()) {
-				throw new IllegalStateException(
-					"FTF density functions require the registered TerraForged generator root; resolved generator is "
-						+ settingsIdentity
-				);
-			}
 			if (serverLevel.dimension() == Level.OVERWORLD) {
+				String settingsIdentity = WorldgenSettingsIdentity.describe(chunkGenerator);
 				FTFCommon.LOGGER.warn(
 					"FTF terrain generation is inactive for the Overworld: resolved generator is {}. "
 						+ "The world will use that generator; select the FreeTerraForged world type to use FTF terrain.",

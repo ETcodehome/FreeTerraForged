@@ -21,10 +21,6 @@ public final class WorldgenRuntimeBinding {
 		this.state = new AtomicReference<>();
 	}
 
-	private WorldgenRuntimeBinding(State state) {
-		this.state = new AtomicReference<>(Objects.requireNonNull(state, "state"));
-	}
-
 	static WorldgenRuntimeBinding create(
 		WorldgenEpoch epoch,
 		WorldgenPlan plan,
@@ -184,28 +180,6 @@ public final class WorldgenRuntimeBinding {
 			generationSettings,
 			possibleBiomes,
 			WorldgenBiomeSelection.prepare(plan, possibleBiomes, fallbackSemantics, ownerBinding),
-			new BiomeDecorationPlan(
-				plan.structures().structures(), plan.placedFeatures().steps(), surfaceColumns.decorationSettings(),
-				possibleBiomes
-			),
-			surfaceColumns
-		);
-	}
-
-	@SuppressWarnings("unused")
-	private static State materializeState(
-		WorldgenEpoch epoch,
-		WorldgenPlan plan,
-		Map<ResourceKey<Biome>, BiomeGenerationSettings> generationSettings
-	) {
-		Set<Holder<Biome>> possibleBiomes = WorldgenBiomeSelection.possibleBiomes(plan);
-		SurfaceColumnPlan surfaceColumns = SurfaceColumnPlan.compile(plan.placedFeatures().steps(), generationSettings);
-		return new State(
-			epoch,
-			plan,
-			generationSettings,
-			possibleBiomes,
-			WorldgenBiomeSelection.prepare(plan, possibleBiomes),
 			new BiomeDecorationPlan(
 				plan.structures().structures(), plan.placedFeatures().steps(), surfaceColumns.decorationSettings(),
 				possibleBiomes
