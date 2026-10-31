@@ -337,7 +337,7 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 			case TIMED_OUT -> Component.translatableWithFallback(
 				KEY + "result." + kind + ".timed_out",
 				"Could not find " + kind + " %s within %s seconds.",
-				location.target(), LocateSearchSettings.TIME_LIMIT_SECONDS
+				location.target(), LocateSearchSettings.DEFAULT_TIMEOUT_SECONDS
 			);
 			case IMPOSSIBLE -> Component.translatableWithFallback(
 				KEY + "result.biome.impossible",
