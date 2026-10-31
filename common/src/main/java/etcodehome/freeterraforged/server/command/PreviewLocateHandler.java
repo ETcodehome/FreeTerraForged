@@ -9,6 +9,8 @@ import java.util.concurrent.RejectedExecutionException;
 import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.network.PreviewLocateRequestPayload;
 import etcodehome.freeterraforged.network.PreviewLocationPayload;
+import etcodehome.freeterraforged.network.PreviewLocationPayload.Status;
+import etcodehome.freeterraforged.world.worldgen.search.TerrainSearchTargets;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.server.MinecraftServer;
@@ -24,7 +26,7 @@ public final class PreviewLocateHandler {
 
 	public static void handle(PreviewLocateRequestPayload request, ServerPlayer player) {
 		if (!player.createCommandSourceStack().hasPermission(2)) {
-			send(player, request, false, BlockPos.ZERO, "You do not have permission to use the FTF preview");
+			send(player, request, Status.NO_PERMISSION, BlockPos.ZERO);
 			return;
 		}
 		if (request.targetType() == PreviewLocateRequestPayload.TargetType.CANCEL) {
@@ -38,12 +40,12 @@ public final class PreviewLocateHandler {
 			player.createCommandSourceStack()
 		);
 		if (target == null || !target.level().dimension().location().toString().equals(request.dimension())) {
-			send(player, request, false, BlockPos.ZERO, "The preview's FTF dimension is no longer available");
+			send(player, request, Status.UNAVAILABLE, BlockPos.ZERO);
 			return;
 		}
 		String value = request.target().trim();
 		if (value.isEmpty()) {
-			send(player, request, false, BlockPos.ZERO, "A locate target is required");
+			send(player, request, Status.TARGET_REQUIRED, BlockPos.ZERO);
 			return;
 		}
 		if (request.targetType() == PreviewLocateRequestPayload.TargetType.TERRAIN) {
@@ -59,11 +61,15 @@ public final class PreviewLocateHandler {
 		LocateTerrainCommand.TargetLevel target,
 		String value
 	) {
+		if (TerrainSearchTargets.get(value) == null) {
+			send(player, request, Status.INVALID_TARGET, BlockPos.ZERO);
+			return;
+		}
 		BlockPos origin = origin(player, target.level());
-		CompletableFuture<BlockPos> future = LocateTerrainCommand.findForPreview(
+		CompletableFuture<LocatePreviewResult> future = LocateTerrainCommand.findForPreview(
 			target.context(), origin, value
 		);
-		startSearch(request, player, value, "terrain", future);
+		startSearch(request, player, future);
 	}
 
 	private static void locateBiome(
@@ -73,23 +79,20 @@ public final class PreviewLocateHandler {
 		String value
 	) {
 		try {
-			CompletableFuture<BlockPos> future = LocateBiomeCommand.findForPreview(
+			CompletableFuture<LocatePreviewResult> future = LocateBiomeCommand.findForPreview(
 				level, origin(player, level), value
 			);
-			startSearch(request, player, value, "biome", future);
+			startSearch(request, player, future);
 		} catch (RuntimeException failure) {
 			FTFCommon.LOGGER.debug("Preview biome locate failed for {}", value, failure);
-			send(player, request, false, BlockPos.ZERO,
-				failure.getMessage() == null ? "Invalid biome: " + value : failure.getMessage());
+			send(player, request, Status.INVALID_TARGET, BlockPos.ZERO);
 		}
 	}
 
 	private static void startSearch(
 		PreviewLocateRequestPayload request,
 		ServerPlayer player,
-		String value,
-		String kind,
-		CompletableFuture<BlockPos> future
+		CompletableFuture<LocatePreviewResult> future
 	) {
 		Pending pending = new Pending(future);
 		Pending previous = PENDING.put(player.getUUID(), pending);
@@ -97,7 +100,7 @@ public final class PreviewLocateHandler {
 			previous.future().cancel(true);
 		}
 		MinecraftServer server = player.getServer();
-		future.whenComplete((position, failure) -> {
+		future.whenComplete((result, failure) -> {
 			if (!server.isRunning()) {
 				return;
 			}
@@ -111,18 +114,22 @@ public final class PreviewLocateHandler {
 						return;
 					}
 					if (failure != null) {
-						String message = failure.getCause() != null && failure.getCause().getMessage() != null
-							? failure.getCause().getMessage()
-							: failure.getMessage();
-						send(current, request, false, BlockPos.ZERO,
-							message == null
-								? Character.toUpperCase(kind.charAt(0)) + kind.substring(1) + " search failed"
-								: message);
-					} else if (position == null) {
-						send(current, request, false, BlockPos.ZERO,
-								"Could not find " + kind + " " + value + " before the search ended");
+						FTFCommon.LOGGER.error(
+							"Preview {} locate failed for {}",
+							request.targetType().name().toLowerCase(java.util.Locale.ROOT),
+							request.target(),
+							failure
+						);
+						send(current, request, Status.FAILED, BlockPos.ZERO);
+					} else if (result == null) {
+						FTFCommon.LOGGER.error(
+							"Preview {} locate returned no result for {}",
+							request.targetType().name().toLowerCase(java.util.Locale.ROOT),
+							request.target()
+						);
+						send(current, request, Status.FAILED, BlockPos.ZERO);
 					} else {
-						send(current, request, true, position, "Found " + kind + " " + value);
+						send(current, request, status(result.status()), result.position());
 					}
 				});
 			} catch (RejectedExecutionException ignored) {
@@ -138,16 +145,25 @@ public final class PreviewLocateHandler {
 	private static void send(
 		ServerPlayer player,
 		PreviewLocateRequestPayload request,
-		boolean found,
-		BlockPos position,
-		String message
+		Status status,
+		BlockPos position
 	) {
 		player.connection.send(new ClientboundCustomPayloadPacket(new PreviewLocationPayload(
-			request.requestId(), request.dimension(), found,
-			position.getX(), position.getZ(), message
+			request.requestId(), request.dimension(), request.targetType(), status,
+			position.getX(), position.getZ(), request.target()
 		)));
 	}
 
-	private record Pending(CompletableFuture<BlockPos> future) {
+	private static Status status(LocatePreviewResult.Status status) {
+		return switch (status) {
+			case FOUND -> Status.FOUND;
+			case NOT_FOUND -> Status.NOT_FOUND;
+			case TIMED_OUT -> Status.TIMED_OUT;
+			case IMPOSSIBLE -> Status.IMPOSSIBLE;
+			case UNAVAILABLE -> Status.UNAVAILABLE;
+		};
+	}
+
+	private record Pending(CompletableFuture<?> future) {
 	}
 }

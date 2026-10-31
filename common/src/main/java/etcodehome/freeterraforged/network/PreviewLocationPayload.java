@@ -8,10 +8,11 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 public record PreviewLocationPayload(
 	long requestId,
 	String dimension,
-	boolean found,
+	PreviewLocateRequestPayload.TargetType targetType,
+	Status status,
 	int x,
 	int z,
-	String message
+	String target
 ) implements CustomPacketPayload {
 	public static final Type<PreviewLocationPayload> TYPE = new Type<>(
 		FTFCommon.location("preview_location")
@@ -20,23 +21,41 @@ public record PreviewLocationPayload(
 		(buffer, payload) -> {
 			buffer.writeLong(payload.requestId);
 			buffer.writeUtf(payload.dimension, 256);
-			buffer.writeBoolean(payload.found);
+			buffer.writeEnum(payload.targetType);
+			buffer.writeEnum(payload.status);
 			buffer.writeInt(payload.x);
 			buffer.writeInt(payload.z);
-			buffer.writeUtf(payload.message, 512);
+			buffer.writeUtf(payload.target, 256);
 		},
 		buffer -> new PreviewLocationPayload(
 			buffer.readLong(),
 			buffer.readUtf(256),
-			buffer.readBoolean(),
+			buffer.readEnum(PreviewLocateRequestPayload.TargetType.class),
+			buffer.readEnum(Status.class),
 			buffer.readInt(),
 			buffer.readInt(),
-			buffer.readUtf(512)
+			buffer.readUtf(256)
 		)
 	);
+
+	public boolean found() {
+		return this.status == Status.FOUND;
+	}
 
 	@Override
 	public Type<? extends CustomPacketPayload> type() {
 		return TYPE;
+	}
+
+	public enum Status {
+		FOUND,
+		NOT_FOUND,
+		TIMED_OUT,
+		IMPOSSIBLE,
+		INVALID_TARGET,
+		UNAVAILABLE,
+		NO_PERMISSION,
+		TARGET_REQUIRED,
+		FAILED
 	}
 }

@@ -292,7 +292,7 @@ public class Preview2D extends Button implements IPreviewHandler {
             this.pendingSearch = null;
             search.result.accept(NavigationResult.failed(Component.translatableWithFallback(
 				"freeterraforged.gui.preset_preview.search_unavailable",
-				"The preset preview is unavailable."
+				"The preview is unavailable, so it cannot be searched."
 			)));
             return;
         }
@@ -331,15 +331,11 @@ public class Preview2D extends Button implements IPreviewHandler {
                     : failure;
                 if (cause != null) {
                     if (!PreviewCancellation.isCancellation(cause)) {
-						if (cause instanceof IllegalArgumentException && cause.getMessage() != null) {
-							result.accept(NavigationResult.failed(Component.literal(cause.getMessage())));
-						} else {
-							FTFCommon.LOGGER.error("Failed searching preset preview", cause);
-							result.accept(NavigationResult.failed(Component.translatableWithFallback(
-								"freeterraforged.gui.preset_preview.search_error",
-								"Preset search failed; see the game log."
-							)));
-						}
+						FTFCommon.LOGGER.error("Failed searching preset preview", cause);
+						result.accept(NavigationResult.failed(Component.translatableWithFallback(
+							"freeterraforged.gui.preset_preview.search_error",
+							"The search failed unexpectedly. Check the game log for details."
+						)));
                     }
                     return;
                 }
@@ -347,7 +343,7 @@ public class Preview2D extends Button implements IPreviewHandler {
                     result.accept(NavigationResult.failed(match == null
 						? Component.translatableWithFallback(
 							"freeterraforged.gui.preset_preview.search_failed",
-							"No match was found before the search ended."
+							"No matching location was found."
 						)
 						: match.failure()));
                     return;
@@ -394,7 +390,7 @@ public class Preview2D extends Button implements IPreviewHandler {
 			if (!search.targetPossible()) {
 				return SearchResult.failed(Component.translatableWithFallback(
 					"freeterraforged.gui.preset_preview.biome_impossible",
-					"Biome %s cannot be produced by this preset.",
+					"This preset does not generate %s.",
 					target
 				));
 			}
@@ -402,14 +398,14 @@ public class Preview2D extends Button implements IPreviewHandler {
 				if (search.timedOut()) {
 					return SearchResult.failed(Component.translatableWithFallback(
 						"freeterraforged.gui.preset_preview.biome_search_timed_out",
-						"The search for biome %s timed out after %s seconds.",
+						"Could not find biome %s within %s seconds.",
 						target,
 						LocateSearchSettings.TIME_LIMIT_SECONDS
 					));
 				}
 				return SearchResult.failed(Component.translatableWithFallback(
 					"freeterraforged.gui.preset_preview.biome_not_found",
-					"Could not find biome %s before reaching the world coordinate limits.",
+					"Could not find biome %s before reaching Minecraft's world limits.",
 					target
 				));
 			}
@@ -435,7 +431,7 @@ public class Preview2D extends Button implements IPreviewHandler {
 	) {
 		Terrain terrain = TerrainSearchTargets.get(target);
 		if (terrain == null) {
-			return CompletableFuture.failedFuture(new IllegalArgumentException("Unknown terrain type: " + target));
+			return CompletableFuture.failedFuture(new IllegalArgumentException("Unknown terrain type: " + target + "."));
 		}
 		cancellation.check();
 		CompletableFuture<TerrainLocateSearch.Result> locate = TerrainLocateSearch.findFirst(
@@ -448,14 +444,14 @@ public class Preview2D extends Button implements IPreviewHandler {
 				if (search.timedOut()) {
 					return SearchResult.failed(Component.translatableWithFallback(
 						"freeterraforged.gui.preset_preview.terrain_search_timed_out",
-						"The search for terrain %s timed out after %s seconds.",
+						"Could not find terrain %s within %s seconds.",
 						target,
 						LocateSearchSettings.TIME_LIMIT_SECONDS
 					));
 				}
 				return SearchResult.failed(Component.translatableWithFallback(
 					"freeterraforged.gui.preset_preview.terrain_not_found",
-					"Could not find terrain %s before reaching the world coordinate limits.",
+					"Could not find terrain %s before reaching Minecraft's world limits.",
 					target
 				));
 			}
