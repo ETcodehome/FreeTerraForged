@@ -50,6 +50,21 @@ public final class FTFLanguageProvider {
 			this.add("freeterraforged.commands.locate.biome.timed_out", "Could not find biome %s within %s seconds.");
 			this.add("freeterraforged.commands.locate.biome.not_found", "Could not find biome %s before reaching Minecraft's world limits.");
 			this.add("freeterraforged.commands.locate.biome.success", "Found biome %s at %s (%s blocks away).");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.title"), "Active FreeTerraForged Preset");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.unnamed"), "Unnamed preset");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.settings"), "Preset settings");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.copy_json"), "Copy Preset JSON");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.copy_json_tooltip"), "Copy the complete active preset JSON");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.copy_setting"), "Click to copy this setting");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.copied"), "Copied to clipboard");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.setting_help"), "Read-only active preset setting");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.narration"), "Select a setting to copy its JSON value");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.category.flow"), "River Flow Settings");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.category.presentation"), "Preset Details");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.section.climate_effects"), "Climate Effects");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.section.details"), "Details");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.setting.preset_name"), "Preset Name");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.setting.last_modified"), "Last Modified");
 
 			this.add(FTFTranslationKeys.GUI_SELECT_PRESET_MISSING_LEGACY_PRESETS, "Couldn't find any legacy presets");
 			this.add(FTFTranslationKeys.GUI_SELECT_PRESET_TITLE, "Presets & Defaults");

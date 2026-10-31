@@ -6,6 +6,7 @@ import com.mojang.brigadier.context.CommandContext;
 import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.TerrainMapGenerator;
 import etcodehome.freeterraforged.server.command.LocateTerrainCommand;
+import etcodehome.freeterraforged.server.command.PresetCommand;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
@@ -167,6 +168,7 @@ public class FTFCommands {
                                     return 1;
                                 })))
                 .then(LocateTerrainCommand.build())
+				.then(PresetCommand.build())
         );
     }
 
