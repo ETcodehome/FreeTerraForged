@@ -128,9 +128,13 @@ public final class DefaultPresetArchive {
 
 			if (Files.isRegularFile(source)) {
 				try (Reader reader = Files.newBufferedReader(source, StandardCharsets.UTF_8)) {
-					return Preset.DIRECT_CODEC.parse(JsonOps.INSTANCE, JsonParser.parseReader(reader))
+					Preset preset = Preset.DIRECT_CODEC.parse(JsonOps.INSTANCE, JsonParser.parseReader(reader))
 						.resultOrPartial(err -> FTFCommon.LOGGER.warn("Failed to parse default preset at {}: {}", source, err))
 						.orElseGet(Presets::makeFTFDefault);
+					if (preset.presentation().presetName.isBlank()) {
+						preset.presentation().setPresetName(fileName(source));
+					}
+					return preset;
 				}
 			}
 		} catch (Exception exception) {
@@ -141,28 +145,26 @@ public final class DefaultPresetArchive {
 	}
 
 	public static Preset getBuiltinPreset(String builtinId) {
+		Preset preset;
 		if (FTFTranslationKeys.GUI_RIVERS_PRESET_NAME.equals(builtinId)) {
-			return Presets.modernDefaultWithRivers();
+			preset = Presets.modernDefaultWithRivers();
+		} else if (FTFTranslationKeys.GUI_COMMUNITY1_PRESET_NAME.equals(builtinId)) {
+			preset = Presets.makeCommunityPreset1();
+		} else if (FTFTranslationKeys.GUI_DEFAULT_LEGACY_PRESET_NAME.equals(builtinId)) {
+			preset = Presets.makeLegacyDefault();
+		} else if (FTFTranslationKeys.GUI_BEAUTIFUL_PRESET_NAME.equals(builtinId)) {
+			preset = Presets.makeLegacyBeautiful();
+		} else if (FTFTranslationKeys.GUI_HUGE_BIOMES_PRESET_NAME.equals(builtinId)) {
+			preset = Presets.makeLegacyHugeBiomes();
+		} else if (FTFTranslationKeys.GUI_LITE_PRESET_NAME.equals(builtinId)) {
+			preset = Presets.makeLegacyLite();
+		} else if (FTFTranslationKeys.GUI_VANILLAISH_PRESET_NAME.equals(builtinId)) {
+			preset = Presets.makeLegacyVanillaish();
+		} else {
+			return Presets.makeFTFDefault();
 		}
-		if (FTFTranslationKeys.GUI_COMMUNITY1_PRESET_NAME.equals(builtinId)) {
-			return Presets.makeCommunityPreset1();
-		}
-		if (FTFTranslationKeys.GUI_DEFAULT_LEGACY_PRESET_NAME.equals(builtinId)) {
-			return Presets.makeLegacyDefault();
-		}
-		if (FTFTranslationKeys.GUI_BEAUTIFUL_PRESET_NAME.equals(builtinId)) {
-			return Presets.makeLegacyBeautiful();
-		}
-		if (FTFTranslationKeys.GUI_HUGE_BIOMES_PRESET_NAME.equals(builtinId)) {
-			return Presets.makeLegacyHugeBiomes();
-		}
-		if (FTFTranslationKeys.GUI_LITE_PRESET_NAME.equals(builtinId)) {
-			return Presets.makeLegacyLite();
-		}
-		if (FTFTranslationKeys.GUI_VANILLAISH_PRESET_NAME.equals(builtinId)) {
-			return Presets.makeLegacyVanillaish();
-		}
-		return Presets.makeFTFDefault();
+		preset.presentation().setPresetName(net.minecraft.network.chat.Component.translatable(builtinId).getString());
+		return preset;
 	}
 
 	public static String getActiveDefaultPresetName() {
@@ -172,7 +174,8 @@ public final class DefaultPresetArchive {
 		try {
 			String savedPath = Files.readString(SAVED_SOURCE, StandardCharsets.UTF_8).trim();
 			if (savedPath.startsWith(BUILTIN_SOURCE_PREFIX)) {
-				return "FreeTerraForged";
+				String builtinId = savedPath.substring(BUILTIN_SOURCE_PREFIX.length());
+				return net.minecraft.network.chat.Component.translatable(builtinId).getString();
 			}
 			Path source = Path.of(savedPath);
 			String fileName = source.getFileName().toString();
@@ -183,5 +186,10 @@ public final class DefaultPresetArchive {
 		} catch (Exception exception) {
 			return "FreeTerraForged";
 		}
+	}
+
+	private static String fileName(Path source) {
+		String fileName = source.getFileName().toString();
+		return fileName.endsWith(".json") ? fileName.substring(0, fileName.length() - 5) : fileName;
 	}
 }
