@@ -17,6 +17,10 @@ public final class WorldgenRuntimeBinding {
 	private final AtomicReference<RejectedPublication> rejection = new AtomicReference<>();
 	private final WorldgenQueryCaches queryCaches = new WorldgenQueryCaches();
 
+	private WorldgenRuntimeBinding() {
+		this.state = new AtomicReference<>();
+	}
+
 	private WorldgenRuntimeBinding(State state) {
 		this.state = new AtomicReference<>(Objects.requireNonNull(state, "state"));
 	}
@@ -26,7 +30,18 @@ public final class WorldgenRuntimeBinding {
 		WorldgenPlan plan,
 		Map<ResourceKey<Biome>, BiomeGenerationSettings> generationSettings
 	) {
-		return new WorldgenRuntimeBinding(materializeState(epoch, plan, generationSettings));
+		return create(epoch, plan, generationSettings, null);
+	}
+
+	static WorldgenRuntimeBinding create(
+		WorldgenEpoch epoch,
+		WorldgenPlan plan,
+		Map<ResourceKey<Biome>, BiomeGenerationSettings> generationSettings,
+		@org.jetbrains.annotations.Nullable etcodehome.freeterraforged.world.worldgen.biome.ClimateQuerySemantics fallbackSemantics
+	) {
+		WorldgenRuntimeBinding binding = new WorldgenRuntimeBinding();
+		binding.state.set(materializeState(epoch, plan, generationSettings, fallbackSemantics, binding));
+		return binding;
 	}
 
 	public WorldgenEpoch epoch() {
@@ -55,7 +70,17 @@ public final class WorldgenRuntimeBinding {
 		WorldgenPlan plan,
 		Map<ResourceKey<Biome>, BiomeGenerationSettings> generationSettings
 	) {
-		State replacement = materializeState(epoch, plan, generationSettings);
+		return this.replace(expected, epoch, plan, generationSettings, null);
+	}
+
+	State replace(
+		State expected,
+		WorldgenEpoch epoch,
+		WorldgenPlan plan,
+		Map<ResourceKey<Biome>, BiomeGenerationSettings> generationSettings,
+		@org.jetbrains.annotations.Nullable etcodehome.freeterraforged.world.worldgen.biome.ClimateQuerySemantics fallbackSemantics
+	) {
+		State replacement = materializeState(epoch, plan, generationSettings, fallbackSemantics, this);
 		if (!this.state.compareAndSet(expected, replacement)) {
 			throw new IllegalStateException("Worldgen runtime changed while a replacement plan was prepared");
 		}
@@ -134,6 +159,40 @@ public final class WorldgenRuntimeBinding {
 
 	}
 
+	synchronized State refreshPossibleBiomes(
+		Map<ResourceKey<Biome>, BiomeGenerationSettings> generationSettings,
+		@org.jetbrains.annotations.Nullable etcodehome.freeterraforged.world.worldgen.biome.ClimateQuerySemantics fallbackSemantics
+	) {
+		State current = this.current();
+		State updated = materializeState(current.epoch(), current.plan(), generationSettings, fallbackSemantics, this);
+		this.state.set(updated);
+		return updated;
+	}
+
+	private static State materializeState(
+		WorldgenEpoch epoch,
+		WorldgenPlan plan,
+		Map<ResourceKey<Biome>, BiomeGenerationSettings> generationSettings,
+		@org.jetbrains.annotations.Nullable etcodehome.freeterraforged.world.worldgen.biome.ClimateQuerySemantics fallbackSemantics,
+		@org.jetbrains.annotations.Nullable WorldgenRuntimeBinding ownerBinding
+	) {
+		Set<Holder<Biome>> possibleBiomes = WorldgenBiomeSelection.possibleBiomes(plan);
+		SurfaceColumnPlan surfaceColumns = SurfaceColumnPlan.compile(plan.placedFeatures().steps(), generationSettings);
+		return new State(
+			epoch,
+			plan,
+			generationSettings,
+			possibleBiomes,
+			WorldgenBiomeSelection.prepare(plan, possibleBiomes, fallbackSemantics, ownerBinding),
+			new BiomeDecorationPlan(
+				plan.structures().structures(), plan.placedFeatures().steps(), surfaceColumns.decorationSettings(),
+				possibleBiomes
+			),
+			surfaceColumns
+		);
+	}
+
+	@SuppressWarnings("unused")
 	private static State materializeState(
 		WorldgenEpoch epoch,
 		WorldgenPlan plan,

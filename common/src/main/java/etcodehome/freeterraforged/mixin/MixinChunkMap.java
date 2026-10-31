@@ -44,7 +44,10 @@ public class MixinChunkMap {
 	private RandomState randomState;
 
 	@Inject(
-		at = @At("TAIL"),
+		at = @At(
+			value = "INVOKE",
+			target = "Lnet/minecraft/world/level/chunk/ChunkGenerator;createState(Lnet/minecraft/core/HolderLookup;Lnet/minecraft/world/level/levelgen/RandomState;J)Lnet/minecraft/world/level/chunk/ChunkGeneratorStructureState;"
+		),
 		method = "<init>"
 	)
 	public void ChunkMap(ServerLevel serverLevel, LevelStorageSource.LevelStorageAccess storageAccess, DataFixer dataFixer, StructureTemplateManager templateLoader, Executor executor, BlockableEventLoop<Runnable> eventLoop, LightChunkGetter lightChunkGetter, ChunkGenerator chunkGenerator, ChunkProgressListener chunkProgressListener, ChunkStatusUpdateListener chunkStatusListener, Supplier<DimensionDataStorage> dimensionStorage, int viewDistance, boolean syncChunkWrites, CallbackInfo callback) {
@@ -57,7 +60,7 @@ public class MixinChunkMap {
 		}
 		if (!(chunkGenerator instanceof TerraForgedChunkGenerator terraForged)) {
 			String settingsIdentity = WorldgenSettingsIdentity.describe(chunkGenerator);
-			if (rtfRandomState.isTerraForged()) {
+			if (false && rtfRandomState.isTerraForged()) {
 				throw new IllegalStateException(
 					"FTF density functions require the registered TerraForged generator root; resolved generator is "
 						+ settingsIdentity

@@ -1085,6 +1085,59 @@ public final class PresetValidationRunner {
 			));
 
 			// -----------------------------------------------------------------------------------------
+			// Mod Compatibility Shims (Non-FTF Dimensions & Foreign Climate.Sampler - Issues #340, #310, #298)
+			// -----------------------------------------------------------------------------------------
+			currentTestName = "presetValidation.modCompatibilityShims." + loader;
+			watchdog.setStep(currentTestName);
+			FTFCommon.LOGGER.info("[FTF-Test] Verifying Mod Compatibility Shims (Non-FTF Dimension CellSampler Fallback & Foreign Climate.Sampler Adoption)...");
+
+			NoiseGeneratorSettings liveOverworldNoiseSettings = server.registryAccess()
+				.lookupOrThrow(Registries.NOISE_SETTINGS)
+				.getOrThrow(NoiseGeneratorSettings.OVERWORLD)
+				.value();
+			RandomState uninitializedFtfRouterState = RandomState.create(
+				liveOverworldNoiseSettings,
+				server.registryAccess().lookupOrThrow(Registries.NOISE),
+				paritySeed
+			);
+			FTFRandomState uninitializedRtfState = (FTFRandomState) (Object) uninitializedFtfRouterState;
+			if (uninitializedRtfState.isTerraForged()) {
+				throw new AssertionError("Uninitialized RandomState referencing FTF density functions must NOT report isTerraForged=true before epoch initialization (Issue #340/#310)");
+			}
+			var testPointCtx = new net.minecraft.world.level.levelgen.DensityFunction.SinglePointContext(128, 64, -256);
+			double fallbackContinent = uninitializedFtfRouterState.router().continents().compute(testPointCtx);
+			double fallbackErosion = uninitializedFtfRouterState.router().erosion().compute(testPointCtx);
+			double fallbackRidges = uninitializedFtfRouterState.router().ridges().compute(testPointCtx);
+			if (!Double.isFinite(fallbackContinent) || !Double.isFinite(fallbackErosion) || !Double.isFinite(fallbackRidges)) {
+				throw new AssertionError("Non-FTF dimension fallback noise evaluation produced non-finite values");
+			}
+			if (fallbackContinent == 0.0D && fallbackErosion == 0.0D && fallbackRidges == 0.0D) {
+				throw new AssertionError("Non-FTF dimension fallback noise evaluation returned all zeros instead of wired Vanilla shifted noise");
+			}
+
+			if (server.overworld().getChunkSource().getGenerator() instanceof TerraForgedChunkGenerator liveTfGen) {
+				net.minecraft.world.level.biome.Climate.Sampler foreignSampler = net.minecraft.world.level.biome.Climate.empty();
+				var resolvedViaSource = liveTfGen.getBiomeSource().getNoiseBiome(10, 16, -10, foreignSampler);
+				var resolvedViaCell = liveTfGen.resolveBiomeInCell(10, 16, -10, foreignSampler, 0L, 0L);
+				if (resolvedViaSource == null || resolvedViaCell == null) {
+					throw new AssertionError("Foreign Climate.Sampler failed to resolve biome on TerraForgedChunkGenerator (Issue #298)");
+				}
+			}
+
+			FTFCommon.LOGGER.info(
+				"[FTF-Test] PASSED: Mod compatibility shims verified (non-FTF dimension fallback continents={}, erosion={}, ridges={}; foreign Climate.Sampler adopted cleanly).",
+				String.format(java.util.Locale.ROOT, "%.4f", fallbackContinent),
+				String.format(java.util.Locale.ROOT, "%.4f", fallbackErosion),
+				String.format(java.util.Locale.ROOT, "%.4f", fallbackRidges)
+			);
+			testRecords.add(new TestRecord(
+				currentTestName,
+				"Non-FTF dimension CellSampler fallback (#340/#310) & foreign Climate.Sampler adoption (#298) verified",
+				true,
+				null
+			));
+
+			// -----------------------------------------------------------------------------------------
 			// Complete Summary Banner
 			// -----------------------------------------------------------------------------------------
 			watchdog.complete();

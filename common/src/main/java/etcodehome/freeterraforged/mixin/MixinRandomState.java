@@ -96,7 +96,12 @@ class MixinRandomState {
 				if(function instanceof CellSampler.Marker marker) {
 					MixinRandomState.this.hasContext = true;
 					return this.cells.computeIfAbsent(marker.field(), field -> new CellSampler(
-						Suppliers.memoize(() -> MixinRandomState.this.generatorContext.lookup), field
+						() -> {
+							GeneratorContext ctx = MixinRandomState.this.generatorContext;
+							return ctx != null ? ctx.lookup : null;
+						},
+						field,
+						freeterraforged$createCellFallback(field, visitor, params)
 					));
 				}
 
@@ -111,7 +116,7 @@ class MixinRandomState {
 
 		// Map the base router first. If the current dimension naturally utilizes FTF, hasContext flips to true here.
 		NoiseRouter mappedRouter = router.mapAll(this.densityFunctionWrapper);
-		if (this.hasContext) {
+		if (false && this.hasContext) {
 			this.freeterraforged$isFTFDimension = true;
 		}
 		return mappedRouter;
@@ -126,7 +131,7 @@ class MixinRandomState {
 		}
 		RegistryAccess registries = epoch.registries();
 		RegistryLookup<Preset> presets = registries.lookupOrThrow(FTFRegistries.PRESET);
-		if (epoch.selectedStem().generator() instanceof TerraForgedChunkGenerator) {
+		if (epoch.selectedStem().generator() instanceof TerraForgedChunkGenerator || this.hasContext) {
 			this.freeterraforged$isFTFDimension = true;
 		}
 		Preset initializedPreset = presets.get(Preset.KEY)
@@ -267,6 +272,7 @@ class MixinRandomState {
 		this.generatorContext = null;
 		this.worldgenBinding = null;
 		this.worldgenEpoch = null;
+		this.freeterraforged$isFTFDimension = false;
 		this.preset = null;
 		Throwable failure = this.freeterraforged$resetSamplerState(null);
 		if (closing != null) {
@@ -322,6 +328,42 @@ class MixinRandomState {
 	}
 
 	@Nullable
+	@Unique
+	private static DensityFunction freeterraforged$createCellFallback(
+		CellSampler.Field field,
+		DensityFunction.Visitor visitor,
+		HolderGetter<NormalNoise.NoiseParameters> params
+	) {
+		if (params == null) {
+			return DensityFunctions.zero();
+		}
+		var shiftOpt = params.get(net.minecraft.world.level.levelgen.Noises.SHIFT);
+		if (shiftOpt.isEmpty()) {
+			return DensityFunctions.zero();
+		}
+		var shift = shiftOpt.orElseThrow();
+		DensityFunction shiftX = DensityFunctions.shiftA(shift);
+		DensityFunction shiftZ = DensityFunctions.shiftB(shift);
+		return switch (field) {
+			case CONTINENT -> params.get(net.minecraft.world.level.levelgen.Noises.CONTINENTALNESS)
+				.map(noise -> DensityFunctions.shiftedNoise2d(shiftX, shiftZ, 0.25D, noise).mapAll(visitor))
+				.orElseGet(DensityFunctions::zero);
+			case EROSION, TERRAIN_EROSION, HEIGHT_EROSION -> params.get(net.minecraft.world.level.levelgen.Noises.EROSION)
+				.map(noise -> DensityFunctions.shiftedNoise2d(shiftX, shiftZ, 0.25D, noise).mapAll(visitor))
+				.orElseGet(DensityFunctions::zero);
+			case WEIRDNESS -> params.get(net.minecraft.world.level.levelgen.Noises.RIDGE)
+				.map(noise -> DensityFunctions.shiftedNoise2d(shiftX, shiftZ, 0.25D, noise).mapAll(visitor))
+				.orElseGet(DensityFunctions::zero);
+			case TEMPERATURE -> params.get(net.minecraft.world.level.levelgen.Noises.TEMPERATURE)
+				.map(noise -> DensityFunctions.shiftedNoise2d(shiftX, shiftZ, 0.25D, noise).mapAll(visitor))
+				.orElseGet(DensityFunctions::zero);
+			case MOISTURE -> params.get(net.minecraft.world.level.levelgen.Noises.VEGETATION)
+				.map(noise -> DensityFunctions.shiftedNoise2d(shiftX, shiftZ, 0.25D, noise).mapAll(visitor))
+				.orElseGet(DensityFunctions::zero);
+			default -> DensityFunctions.zero();
+		};
+	}
+
 	public DensityFunction freeterraforged$FTFRandomState$wrap(DensityFunction function) {
 		return this.densityFunctionWrapper != null ? function.mapAll(this.densityFunctionWrapper) : function;
 	}
