@@ -61,6 +61,10 @@ public final class BiomeReplacementPlan {
 		return this.active;
 	}
 
+	public boolean isConfigIgnored() {
+		return this.diagnostics.stream().anyMatch(d -> "config_ignored".equals(d.code()));
+	}
+
 	public int decisionCount() {
 		return this.decisions.size();
 	}
