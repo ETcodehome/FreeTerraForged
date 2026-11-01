@@ -1558,6 +1558,43 @@ public final class PresetValidationRunner {
 				}
 			}
 
+			// 6. Test Live UnifiedBiomeSource with liveSampler across subterranean depths
+			FTFCommon.LOGGER.info("[FTF-Test] Probing live server subterranean biome resolution via liveSampler...");
+			if (server.overworld().getChunkSource().getGenerator() instanceof TerraForgedChunkGenerator liveTfGen) {
+				var liveSampler = server.overworld().getChunkSource().randomState().sampler();
+				int nonCaveCount = 0;
+				int oceanInRockCount = 0;
+				int totalSubterraneanSamples = 0;
+				for (int cx = -100; cx <= 100; cx += 50) {
+					for (int cz = -100; cz <= 100; cz += 50) {
+						int qx = cx << 2;
+						int qz = cz << 2;
+						for (int blockY = -100; blockY >= -240; blockY -= 32) {
+							int qy = QuartPos.fromBlock(blockY);
+							var liveBiome = liveTfGen.getBiomeSource().getNoiseBiome(qx, qy, qz, liveSampler);
+							totalSubterraneanSamples++;
+							boolean isCave = UndergroundBiomeTags.isCave(liveBiome);
+							String path = liveBiome.unwrapKey().map(k -> k.location().getPath()).orElse("unknown");
+							if (!isCave) {
+								nonCaveCount++;
+								if (path.contains("ocean")) {
+									oceanInRockCount++;
+									FTFCommon.LOGGER.warn("[FTF-Test] Subterranean OCEAN in rock detected at ({}, Y={}, {}): {}", qx << 2, blockY, qz << 2, path);
+									if (oceanInRockCount == 1) {
+										var sampledTarget = liveSampler.sample(qx, qy, qz);
+										float cov = UndergroundBiomeSurfaceProtection.coverageFactor(liveSampler, sampledTarget, qx, qy, qz);
+										FTFCommon.LOGGER.warn("[FTF-Test] DEBUG sample at ({}, Y={}, {}): target.depth={}, cov={}, target.cont={}",
+											qx << 2, blockY, qz << 2, sampledTarget.depth(), cov, sampledTarget.continentalness());
+									}
+								}
+							}
+						}
+					}
+				}
+				FTFCommon.LOGGER.info("[FTF-Test] Subterranean live probe: total={}, nonCave={}, oceanInRock={}",
+					totalSubterraneanSamples, nonCaveCount, oceanInRockCount);
+			}
+
 			FTFCommon.LOGGER.info("[FTF-Test] PASSED: Underground biome banding verified (stacked biomes: {}, transitions: {}/{}, columnar: single, horizontal size 50 vs 500: {} vs {} transitions).",
 				stackedBiomes.stream().map(h -> h.unwrapKey().map(k -> k.location().getPath()).orElse("unknown")).toList(),
 				stepTransitions,
@@ -1852,7 +1889,262 @@ public final class PresetValidationRunner {
 				throw new AssertionError("Memory leak detected: UndergroundBiomeBanding.Layout was retained in ThreadLocal or caches by persistent worker threads!");
 			}
 
-			FTFCommon.LOGGER.info("[FTF-Test] PASSED: World generation memory leak prevention verified (transient samplers and layouts reclaimed cleanly).");
+			// 3. Concrete Expanding Area Memory Leak Measurement on Deep World Presets (1024-block depth)
+			// Simulates player flying and generating larger areas in a 1024-deep world with 100% cave coverage
+			FTFCommon.LOGGER.info("[FTF-Test] Measuring memory stability across expanding area on 1024-deep world preset...");
+			Preset leakDeepPreset = Presets.makeFTFDefault();
+			leakDeepPreset.world().properties.worldDepth = 1024;
+			leakDeepPreset.world().properties.worldHeight = 320;
+			leakDeepPreset.climate().biomeShape.undergroundBiomeSize = 225;
+			leakDeepPreset.climate().biomeShape.undergroundBiomeVerticalSize = 64;
+			leakDeepPreset.climate().biomeShape.undergroundBiomeCoverage = 1.0F;
+			leakDeepPreset.climate().biomeShape.undergroundBiomeClimateInfluence = 0.0F;
+			leakDeepPreset.climate().biomeShape.undergroundBiomeBanding = true;
+
+			final UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> deepAreaLayout =
+				UndergroundBiomeBanding.apply(
+					leakDeepPreset,
+					overworldEntries,
+					seed,
+					(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value)),
+					UndergroundBiomeTags::isCave
+				);
+
+			Climate.Sampler liveSamplerForLeak = server.overworld().getChunkSource().randomState().sampler();
+			int areaBatches = 4;
+			int chunksPerAreaBatch = 16;
+			long[] retainedHeapByBatch = new long[areaBatches];
+
+			for (int b = 0; b < areaBatches; b++) {
+				final int batchNum = b;
+				java.util.concurrent.CountDownLatch batchLatch = new java.util.concurrent.CountDownLatch(chunksPerAreaBatch);
+				for (int c = 0; c < chunksPerAreaBatch; c++) {
+					final int chunkIdx = batchNum * chunksPerAreaBatch + c;
+					final int chunkX = (chunkIdx % 16) + 500;
+					final int chunkZ = (chunkIdx / 16) + 500;
+					net.minecraft.Util.backgroundExecutor().execute(() -> {
+						try {
+							int baseQuartX = chunkX << 2;
+							int baseQuartZ = chunkZ << 2;
+							// 1024 depth: quartY from -256 to 80 (336 vertical quarts)
+							for (int quartY = -256; quartY <= 80; quartY += 4) {
+								for (int qz = 0; qz < 4; qz++) {
+									for (int qx = 0; qx < 4; qx++) {
+										int qX = baseQuartX + qx;
+										int qZ = baseQuartZ + qz;
+										float coverage = UndergroundBiomeSurfaceProtection.coverageFactor(
+											liveSamplerForLeak, leakTarget, qX, quartY, qZ
+										);
+										net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> sampled =
+											deepAreaLayout.findValue(
+												leakTarget, qX, quartY, qZ, coverage,
+												(iqx, iqy, iqz) -> leakTarget
+											);
+										if (sampled == null) {
+											throw new AssertionError("Sampled biome was null");
+										}
+										if (quartY <= -16 && !UndergroundBiomeTags.isCave(sampled)) {
+											String path = sampled.unwrapKey().map(k -> k.location().getPath()).orElse("unknown");
+											throw new AssertionError(String.format(
+												java.util.Locale.ROOT,
+												"Non-cave biome '%s' returned underground at (qx=%d, quartY=%d, qz=%d) when 100%% cave coverage configured!",
+												path, qX, quartY, qZ
+											));
+										}
+									}
+								}
+							}
+						} finally {
+							batchLatch.countDown();
+						}
+					});
+				}
+				if (!batchLatch.await(30, java.util.concurrent.TimeUnit.SECONDS)) {
+					throw new AssertionError("Deep area batch " + b + " timed out");
+				}
+
+				// Measure post-GC retained heap
+				for (int gc = 0; gc < 5; gc++) {
+					System.gc();
+					Thread.sleep(50);
+				}
+				retainedHeapByBatch[b] = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+				FTFCommon.LOGGER.info(
+					"[FTF-Test] Deep world (1024 depth) area batch {}/{} ({} chunks): Retained heap = {} MB",
+					b + 1, areaBatches, (b + 1) * chunksPerAreaBatch, retainedHeapByBatch[b] / (1024 * 1024)
+				);
+			}
+
+			// Clear layout caches
+			deepAreaLayout.clear();
+
+			// Check memory trend across batches
+			long initialHeap = retainedHeapByBatch[0];
+			long finalHeap = retainedHeapByBatch[areaBatches - 1];
+			long netGrowth = finalHeap - initialHeap;
+			FTFCommon.LOGGER.info(
+				"[FTF-Test] Deep world expanding area memory report: Initial={} MB, Final={} MB, Net Growth={} MB",
+				initialHeap / (1024 * 1024), finalHeap / (1024 * 1024), netGrowth / (1024 * 1024)
+			);
+
+			if (netGrowth > 50L * 1024L * 1024L) {
+				throw new AssertionError(String.format(
+					java.util.Locale.ROOT,
+					"Memory leak detected during expanding area generation: heap climbed by %.2f MB across %d batches (Initial: %.2f MB, Final: %.2f MB)",
+					netGrowth / (1024.0 * 1024.0), areaBatches, initialHeap / (1024.0 * 1024.0), finalHeap / (1024.0 * 1024.0)
+				));
+			}
+
+			// 4. Live Server Chunk Generation Memory Stability Test Across Expanding Area
+			// Generates chunks via ServerChunkCache to verify that generated chunks, flow fields,
+			// cell caches, and structure plans do not leak monotonically as new terrain is explored.
+			FTFCommon.LOGGER.info("[FTF-Test] Measuring live server chunk generation memory stability across expanding area...");
+			ServerLevel liveLevel = server.overworld();
+			net.minecraft.server.level.ServerChunkCache liveChunkSource = liveLevel.getChunkSource();
+			net.minecraft.server.level.TicketType<net.minecraft.util.Unit> leakTicket =
+				net.minecraft.server.level.TicketType.create("ftf_leak_test", (a, b) -> 0);
+
+			int chunkBatches = 4;
+			int chunksPerLiveBatch = 20;
+			long[] liveChunkHeapByBatch = new long[chunkBatches];
+
+			for (int b = 0; b < chunkBatches; b++) {
+				java.util.List<net.minecraft.world.level.ChunkPos> batchPositions = new java.util.ArrayList<>(chunksPerLiveBatch);
+				java.util.List<java.util.concurrent.CompletableFuture<net.minecraft.server.level.ChunkResult<net.minecraft.world.level.chunk.ChunkAccess>>> futures =
+					new java.util.ArrayList<>(chunksPerLiveBatch);
+
+				for (int c = 0; c < chunksPerLiveBatch; c++) {
+					int chunkIdx = b * chunksPerLiveBatch + c;
+					int cx = 2000 + (chunkIdx % 10);
+					int cz = 2000 + (chunkIdx / 10);
+					net.minecraft.world.level.ChunkPos pos = new net.minecraft.world.level.ChunkPos(cx, cz);
+					batchPositions.add(pos);
+					liveChunkSource.addRegionTicket(leakTicket, pos, 0, net.minecraft.util.Unit.INSTANCE);
+					futures.add(liveChunkSource.getChunkFuture(cx, cz, net.minecraft.world.level.chunk.status.ChunkStatus.FULL, true));
+				}
+
+				for (var f : futures) {
+					try {
+						f.get(30, java.util.concurrent.TimeUnit.SECONDS);
+					} catch (Exception ex) {
+						throw new AssertionError("Live chunk generation timed out or failed in batch " + b, ex);
+					}
+				}
+				futures.clear();
+
+				// Release tickets
+				for (net.minecraft.world.level.ChunkPos pos : batchPositions) {
+					liveChunkSource.removeRegionTicket(leakTicket, pos, 0, net.minecraft.util.Unit.INSTANCE);
+				}
+
+				// Tick chunk source and drain server task queues
+				int drainedTasks = 0;
+				for (int tick = 0; tick < 50; tick++) {
+					liveChunkSource.tick(() -> true, true);
+					while (liveChunkSource.pollTask()) {
+						drainedTasks++;
+					}
+					while (server.pollTask()) {
+						drainedTasks++;
+					}
+				}
+				// Flush any pending chunk writes to region files so background IO queues are clean
+				liveLevel.save(null, true, false);
+				while (server.pollTask()) {
+					drainedTasks++;
+				}
+				int chunkMapSize = liveChunkSource.chunkMap.size();
+				boolean hasWork = liveChunkSource.chunkMap.hasWork();
+				FTFCommon.LOGGER.info("[FTF-Test] Batch {} unloaded: drained {} server/chunk tasks, chunkMapSize={}, hasWork={}",
+					b + 1, drainedTasks, chunkMapSize, hasWork);
+
+				if ((Object) server.overworld().getChunkSource().randomState() instanceof FTFRandomState rtfRs) {
+					GeneratorContext gCtx = rtfRs.generatorContext();
+					if (gCtx != null) {
+						int filteredSize = gCtx.filteredChunkCache != null ? gCtx.filteredChunkCache.size() : -1;
+						int rawSize = gCtx.rawChunkCache != null ? gCtx.rawChunkCache.size() : -1;
+						FTFCommon.LOGGER.info("[FTF-Test] FTF Caches: filteredChunkCache={}, rawChunkCache={}",
+							filteredSize, rawSize);
+						if (filteredSize > 512 || rawSize > 512) {
+							throw new AssertionError(String.format(
+								java.util.Locale.ROOT,
+								"FTF terrain cache exceeded capacity bounds! filteredChunkCache=%d (max 512), rawChunkCache=%d (max 512)",
+								filteredSize, rawSize
+							));
+						}
+					}
+				}
+
+				for (java.lang.reflect.Field f : net.minecraft.server.level.ChunkMap.class.getDeclaredFields()) {
+					try {
+						f.setAccessible(true);
+						Object val = f.get(liveChunkSource.chunkMap);
+						if (val instanceof java.util.Map<?, ?> m) {
+							FTFCommon.LOGGER.info("[FTF-Test] ChunkMap map field {}: size={}", f.getName(), m.size());
+						} else if (val instanceof it.unimi.dsi.fastutil.longs.Long2ObjectMap<?> lom) {
+							FTFCommon.LOGGER.info("[FTF-Test] ChunkMap Long2ObjectMap field {}: size={}", f.getName(), lom.size());
+						} else if (val instanceof it.unimi.dsi.fastutil.longs.LongSet ls) {
+							FTFCommon.LOGGER.info("[FTF-Test] ChunkMap LongSet field {}: size={}", f.getName(), ls.size());
+						}
+					} catch (Exception ignored) {}
+				}
+
+				// Measure post-GC retained heap
+				for (int gc = 0; gc < 5; gc++) {
+					System.gc();
+					Thread.sleep(50);
+				}
+				liveChunkHeapByBatch[b] = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+				int loadedCount = liveChunkSource.getLoadedChunksCount();
+				boolean sampleStillLoaded = liveChunkSource.hasChunk(batchPositions.get(0).x, batchPositions.get(0).z);
+				FTFCommon.LOGGER.info(
+					"[FTF-Test] Live chunk generation area batch {}/{} ({} chunks requested, loadedChunks={}, sampleStillLoaded={}): Retained heap = {} MB",
+					b + 1, chunkBatches, (b + 1) * chunksPerLiveBatch, loadedCount, sampleStillLoaded, liveChunkHeapByBatch[b] / (1024 * 1024)
+				);
+
+				if (b == 0 || b == chunkBatches - 1) {
+					try {
+						long pid = ProcessHandle.current().pid();
+						java.nio.file.Path jcmdPath = java.nio.file.Paths.get(System.getProperty("java.home"), "bin", "jcmd.exe");
+						if (!java.nio.file.Files.exists(jcmdPath)) {
+							jcmdPath = java.nio.file.Paths.get(System.getProperty("java.home"), "bin", "jcmd");
+						}
+						if (java.nio.file.Files.exists(jcmdPath)) {
+							Process proc = new ProcessBuilder(
+								jcmdPath.toString(),
+								String.valueOf(pid),
+								"GC.class_histogram"
+							).redirectErrorStream(true).start();
+							String histo = new String(proc.getInputStream().readAllBytes());
+							String[] lines = histo.split("\n");
+							FTFCommon.LOGGER.info("[FTF-Test] --- Class Histogram Top 25 (Batch {}) ---", b + 1);
+							for (int i = 0; i < Math.min(28, lines.length); i++) {
+								FTFCommon.LOGGER.info("[FTF-Test] {}", lines[i].trim());
+							}
+						}
+					} catch (Exception ex) {
+						FTFCommon.LOGGER.warn("[FTF-Test] Failed to run GC.class_histogram: {}", ex.getMessage());
+					}
+				}
+			}
+
+			long liveInitialHeap = liveChunkHeapByBatch[0];
+			long liveFinalHeap = liveChunkHeapByBatch[chunkBatches - 1];
+			long liveNetGrowth = liveFinalHeap - liveInitialHeap;
+			FTFCommon.LOGGER.info(
+				"[FTF-Test] Live chunk generation memory report: Initial={} MB, Final={} MB, Net Growth={} MB",
+				liveInitialHeap / (1024 * 1024), liveFinalHeap / (1024 * 1024), liveNetGrowth / (1024 * 1024)
+			);
+
+			if (liveNetGrowth > 175L * 1024L * 1024L) {
+				throw new AssertionError(String.format(
+					java.util.Locale.ROOT,
+					"Memory leak detected during live chunk generation: heap climbed by %.2f MB across %d batches (Initial: %.2f MB, Final: %.2f MB)",
+					liveNetGrowth / (1024.0 * 1024.0), chunkBatches, liveInitialHeap / (1024.0 * 1024.0), liveFinalHeap / (1024.0 * 1024.0)
+				));
+			}
+
+			FTFCommon.LOGGER.info("[FTF-Test] PASSED: World generation memory leak prevention verified (transient samplers and layouts reclaimed cleanly; expanding area memory stable).");
 			testRecords.add(new TestRecord(
 				currentTestName,
 				"World generation memory leak prevention verified: transient samplers and layouts collected cleanly by GC without ThreadLocal retention",

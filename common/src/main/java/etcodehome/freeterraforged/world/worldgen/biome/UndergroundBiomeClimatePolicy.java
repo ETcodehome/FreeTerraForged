@@ -51,40 +51,11 @@ public final class UndergroundBiomeClimatePolicy {
 		Preset preset,
 		long seed
 	) {
-		if (!((Object) sampler instanceof FTFClimateSampler ftfSampler)) {
-			return target;
-		}
-		if (!policy.appliesUndergroundBanding()) {
-			return target;
-		}
-		if (preset == null) {
-			return target;
-		}
-		float surfaceCoverageFactor = UndergroundBiomeSurfaceProtection.coverageFactor(
-			sampler,
-			target,
-			quartX,
-			quartY,
-			quartZ
-		);
-		if (UndergroundBiomeBanding.allowsCaveBiome(
-			preset,
-			seed,
-			target,
-			quartX,
-			quartY,
-			quartZ,
-			surfaceCoverageFactor
-		)) {
-			return target;
-		}
-		return new Climate.TargetPoint(
-			target.temperature(),
-			target.humidity(),
-			target.continentalness(),
-			target.erosion(),
-			SURFACE_DEPTH,
-			target.weirdness()
-		);
+		// Passthrough target: do NOT mutate target.depth() to SURFACE_DEPTH (0L).
+		// Mutating depth to 0L during Climate.Sampler.sample causes subterranean queries
+		// in negative continentalness areas to match surface ocean biomes inside solid rock,
+		// and desynchronizes underground biome banding. Underground biome selection and banding
+		// are cleanly resolved in applyUndergroundPolicy at the biome selection pipeline stage.
+		return target;
 	}
 }

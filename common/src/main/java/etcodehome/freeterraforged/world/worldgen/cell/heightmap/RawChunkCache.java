@@ -2,17 +2,15 @@ package etcodehome.freeterraforged.world.worldgen.cell.heightmap;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.atomic.AtomicInteger;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 import etcodehome.freeterraforged.world.worldgen.util.PosUtil;
 
 public class RawChunkCache {
-    private static final int MAX_ENTRIES = 2048;
-    private final ConcurrentHashMap<Long, Cell[]> cache = new ConcurrentHashMap<>(512);
+    private static final int MAX_ENTRIES = 512;
+    private final ConcurrentHashMap<Long, Cell[]> cache = new ConcurrentHashMap<>(MAX_ENTRIES);
     private final ConcurrentLinkedQueue<Long> evictionQueue = new ConcurrentLinkedQueue<>();
-    private final AtomicInteger size = new AtomicInteger(0);
     private final GeneratorContext context;
 
     public RawChunkCache(GeneratorContext context) {
@@ -58,19 +56,22 @@ public class RawChunkCache {
         }
 
         this.evictionQueue.offer(key);
-        if (this.size.incrementAndGet() > MAX_ENTRIES) {
+        while (this.cache.size() > MAX_ENTRIES) {
             Long oldest = this.evictionQueue.poll();
-            if (oldest != null) {
-                this.cache.remove(oldest);
-                this.size.decrementAndGet();
+            if (oldest == null) {
+                break;
             }
+            this.cache.remove(oldest);
         }
         return cells;
+    }
+
+    public int size() {
+        return this.cache.size();
     }
 
     public void clear() {
         this.cache.clear();
         this.evictionQueue.clear();
-        this.size.set(0);
     }
 }

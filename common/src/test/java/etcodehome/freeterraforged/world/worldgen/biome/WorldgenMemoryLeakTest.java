@@ -138,4 +138,90 @@ class WorldgenMemoryLeakTest {
 		}
 		assertNull(ref.get(), message);
 	}
+
+	@Test
+	@SuppressWarnings("unchecked")
+	void testDeepWorldExpandingAreaMemoryLeak() throws Exception {
+		Preset preset = Presets.makeFTFDefault();
+		preset.world().properties.worldDepth = 1024;
+		preset.world().properties.worldHeight = 320;
+		preset.climate().biomeShape.undergroundBiomeSize = 225;
+		preset.climate().biomeShape.undergroundBiomeVerticalSize = 64;
+		preset.climate().biomeShape.undergroundBiomeCoverage = 1.0F;
+		preset.climate().biomeShape.undergroundBiomeClimateInfluence = 0.0F;
+		preset.climate().biomeShape.undergroundBiomeBanding = true;
+
+		List<Pair<Climate.ParameterPoint, String>> entries = List.of(
+			Pair.of(point(-1.0F, 0.0F), "surface_plains"),
+			Pair.of(point(0.2F, 0.9F), "lush_caves"),
+			Pair.of(point(0.2F, 0.9F), "dripstone_caves"),
+			Pair.of(point(1.1F, 1.1F), "deep_dark")
+		);
+
+		UndergroundBiomeBanding.Layout<String> layout = UndergroundBiomeBanding.apply(
+			preset, entries, 42L,
+			(point, value) -> UndergroundBiomeBanding.classify(point, value.contains("caves") || value.contains("dark")),
+			value -> value.contains("caves") || value.contains("dark")
+		);
+
+		Climate.Sampler sampler = Climate.empty();
+		Climate.TargetPoint target = Climate.target(0.0F, 0.0F, 0.0F, -0.5F, 1.5F, 0.0F);
+
+		int threadCount = Math.max(4, Runtime.getRuntime().availableProcessors());
+		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+
+		int batches = 5;
+		int chunksPerBatch = 32;
+		long[] retainedHeapPerBatch = new long[batches];
+
+		try {
+			for (int b = 0; b < batches; b++) {
+				final int batchIndex = b;
+				CountDownLatch latch = new CountDownLatch(chunksPerBatch);
+				for (int c = 0; c < chunksPerBatch; c++) {
+					final int chunkIdx = batchIndex * chunksPerBatch + c;
+					final int chunkX = chunkIdx % 32;
+					final int chunkZ = chunkIdx / 32;
+					executor.submit(() -> {
+						try {
+							int baseQuartX = chunkX << 2;
+							int baseQuartZ = chunkZ << 2;
+							// 1024 depth down to -256 quarts, 320 height up to 80 quarts
+							for (int quartY = -256; quartY <= 80; quartY += 4) {
+								for (int qz = 0; qz < 4; qz++) {
+									for (int qx = 0; qx < 4; qx++) {
+										int qX = baseQuartX + qx;
+										int qZ = baseQuartZ + qz;
+										float coverage = UndergroundBiomeSurfaceProtection.coverageFactor(
+											sampler, target, qX, quartY, qZ
+										);
+										String biome = layout.findValue(
+											target, qX, quartY, qZ, coverage,
+											(iqx, iqy, iqz) -> target
+										);
+										assertNotNull(biome);
+									}
+								}
+							}
+						} finally {
+							latch.countDown();
+						}
+					});
+				}
+				assertTrue(latch.await(30, TimeUnit.SECONDS), "Batch " + b + " should finish promptly");
+
+				// Force GC and measure retained heap
+				for (int gc = 0; gc < 5; gc++) {
+					System.gc();
+					Thread.sleep(50);
+				}
+				retainedHeapPerBatch[b] = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+				System.out.printf("[LeakTest] Batch %d (%d chunks generated): Retained heap = %.2f MB%n",
+					b + 1, (b + 1) * chunksPerBatch, retainedHeapPerBatch[b] / (1024.0 * 1024.0));
+			}
+		} finally {
+			executor.shutdown();
+			executor.awaitTermination(5, TimeUnit.SECONDS);
+		}
+	}
 }

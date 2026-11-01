@@ -23,7 +23,7 @@ public final class BiomeSurfaceEnvelope {
 	private static final int[] SAMPLE_OFFSETS = {-3, -1, 1, 3, 5, 6};
 
 	private static final ThreadLocal<int[]> SCALED_GRID_SCRATCH = ThreadLocal.withInitial(() -> new int[88 * 88]);
-	private final OwnerThreadCache<Entry> values = new OwnerThreadCache<>(65536);
+	private final OwnerThreadCache<Entry> values = new OwnerThreadCache<>(8192);
 
 	/**
 	 * Pre-populates the surface envelope cache for all quarts covering the given multi-chunk
