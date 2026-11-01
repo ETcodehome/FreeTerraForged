@@ -65,6 +65,109 @@ jobs:
         id: run_preset_test
         run: ./gradlew :${{ matrix.loader }}:runPresetTest --no-daemon
 
+      # Generates a rich step summary in GitHub Actions UI including system and unit test tables
+      - name: Publish Step Summary (${{ matrix.loader }})
+        if: always()
+        shell: bash
+        run: |
+          node -e '
+            const fs = require("fs");
+            const path = require("path");
+            const reportDir = "build/reports/preset-test-heightmaps";
+            const loader = "${{ matrix.loader }}";
+
+            let summary = `## Preset Verification Summary (${loader})\n\n`;
+
+            // 1. Parse unit tests report
+            let unitSummary = null;
+            const unitTestFile = path.join(reportDir, "unit_tests_report.txt");
+            if (fs.existsSync(unitTestFile)) {
+              try {
+                const uContent = fs.readFileSync(unitTestFile, "utf8");
+                let uTotal = 0, uFailures = 0, uErrors = 0;
+                const totMatch = uContent.match(/TOTALS:\s*(\d+)\s*Tests,\s*(\d+)\s*Failures,\s*(\d+)\s*Errors/);
+                if (totMatch) {
+                  uTotal = parseInt(totMatch[1], 10);
+                  uFailures = parseInt(totMatch[2], 10);
+                  uErrors = parseInt(totMatch[3], 10);
+                }
+                const uTests = [];
+                const caseRegex = /-\s*\[(PASSED|FAILED)\]\s*(.*?)\s*\(([^()\r\n]+)\)/g;
+                let cMatch;
+                while ((cMatch = caseRegex.exec(uContent)) !== null) {
+                  const passed = cMatch[1] === "PASSED";
+                  const name = cMatch[2].trim();
+                  const fullClass = cMatch[3].trim();
+                  const simpleClass = fullClass.includes(".") ? fullClass.substring(fullClass.lastIndexOf(".") + 1) : fullClass;
+                  uTests.push({ name, simpleClass, passed });
+                }
+                unitSummary = {
+                  total: uTotal || uTests.length,
+                  failures: uFailures,
+                  errors: uErrors,
+                  passed: uFailures === 0 && uErrors === 0 && (uTotal > 0 || uTests.length > 0),
+                  tests: uTests
+                };
+              } catch (e) {}
+            }
+
+            // 2. Parse suite summary report for this loader
+            let systemTests = [];
+            if (fs.existsSync(reportDir)) {
+              const files = fs.readdirSync(reportDir);
+              const summaryFiles = files.filter(f => f.startsWith(`suite_summary_${loader}_`) && f.endsWith("_report.txt")).sort();
+              if (summaryFiles.length > 0) {
+                const sContent = fs.readFileSync(path.join(reportDir, summaryFiles[summaryFiles.length - 1]), "utf8");
+                const entries = sContent.split("[Test Entry]").slice(1);
+                for (const entry of entries) {
+                  const nameMatch = entry.match(/Name:\s*([^\r\n]+)/);
+                  const outcomeMatch = entry.match(/Outcome:\s*([^\r\n]+)/);
+                  const notesMatch = entry.match(/Notes:\s*([^\r\n]+)/);
+                  const errorMatch = entry.match(/Error:\s*([^\r\n]+)/);
+                  const name = nameMatch ? nameMatch[1].trim() : "Unknown";
+                  if (name.startsWith("unitTest.")) continue;
+                  const passed = outcomeMatch ? outcomeMatch[1].trim() === "PASSED" : false;
+                  const notes = notesMatch ? notesMatch[1].trim() : "";
+                  const error = errorMatch ? errorMatch[1].trim() : "";
+                  systemTests.push({ name, passed, notes: notes || (passed ? "Verified" : error) });
+                }
+              }
+            }
+
+            // 3. Render System Tests Table
+            if (systemTests.length > 0) {
+              const sysPassed = systemTests.filter(t => t.passed).length;
+              summary += `### &#127757; Headless Worldgen & Preset System Tests (${loader})\n\n`;
+              summary += `**Results**: ${sysPassed} / ${systemTests.length} Tests Passed\n\n`;
+              summary += `| Status | Test Target | Outcome & Diagnostics |\n`;
+              summary += `| :---: | :--- | :--- |\n`;
+              for (const st of systemTests) {
+                const icon = st.passed ? ":white_check_mark:" : ":x:";
+                summary += `| ${icon} | <code>${st.name}</code> | ${st.notes} |\n`;
+              }
+              summary += `\n`;
+            }
+
+            // 4. Render Explicit Automated Unit Tests Table
+            if (unitSummary && unitSummary.tests.length > 0) {
+              const uPassed = unitSummary.total - unitSummary.failures;
+              summary += `### &#129514; Automated Unit Tests (\`:common:test\`)\n\n`;
+              summary += `**Results**: ${uPassed} / ${unitSummary.total} Tests Passed\n\n`;
+              summary += `| Status | Test Method | Suite / Class |\n`;
+              summary += `| :---: | :--- | :--- |\n`;
+              for (const ut of unitSummary.tests) {
+                const icon = ut.passed ? ":white_check_mark:" : ":x:";
+                summary += `| ${icon} | <code>${ut.name}</code> | <code>${ut.simpleClass}</code> |\n`;
+              }
+              summary += `\n`;
+            }
+
+            const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+            if (summaryPath) {
+              fs.appendFileSync(summaryPath, summary, "utf8");
+            }
+          '
+
       # Uploads visual heightmaps & test report files from this loader
       - name: Upload Test Outputs (${{ matrix.loader }})
         if: always()
