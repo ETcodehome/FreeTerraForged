@@ -789,6 +789,9 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 		this.randomState = null;
 		this.providerCatalog = null;
 		this.preServerFailures.set(Map.of());
+		this.activeBiomeDecoration.remove();
+		this.activeStructures.remove();
+		etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeBanding.clearThreadCaches();
 		Throwable failure = null;
 		try {
 			if (closingRandomState != null) {

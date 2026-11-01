@@ -1,5 +1,7 @@
 package etcodehome.freeterraforged.world.worldgen.biome;
 
+import java.lang.ref.WeakReference;
+
 import net.minecraft.core.QuartPos;
 import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.levelgen.NoiseRouterData;
@@ -20,7 +22,7 @@ public final class UndergroundBiomeSurfaceProtection {
 		int quartX = Integer.MIN_VALUE;
 		int quartY = Integer.MIN_VALUE;
 		int quartZ = Integer.MIN_VALUE;
-		Object sampler;
+		WeakReference<Climate.Sampler> samplerRef;
 		float coverage;
 	}
 	private static final ThreadLocal<CoverageMru> COVERAGE_MRU = ThreadLocal.withInitial(CoverageMru::new);
@@ -36,16 +38,25 @@ public final class UndergroundBiomeSurfaceProtection {
 			int quartZ
 	) {
 		CoverageMru mru = COVERAGE_MRU.get();
-		if (mru.quartX == quartX && mru.quartY == quartY && mru.quartZ == quartZ && mru.sampler == sampler) {
+		Climate.Sampler cachedSampler = mru.samplerRef != null ? mru.samplerRef.get() : null;
+		if (mru.quartX == quartX && mru.quartY == quartY && mru.quartZ == quartZ && cachedSampler == sampler) {
 			return mru.coverage;
 		}
 		float coverage = computeCoverageFactor(sampler, target, quartX, quartY, quartZ);
 		mru.quartX = quartX;
 		mru.quartY = quartY;
 		mru.quartZ = quartZ;
-		mru.sampler = sampler;
+		mru.samplerRef = new WeakReference<>(sampler);
 		mru.coverage = coverage;
 		return coverage;
+	}
+
+	public static void clearThreadCaches() {
+		CoverageMru mru = COVERAGE_MRU.get();
+		mru.samplerRef = null;
+		mru.quartX = Integer.MIN_VALUE;
+		mru.quartY = Integer.MIN_VALUE;
+		mru.quartZ = Integer.MIN_VALUE;
 	}
 
 	private static float computeCoverageFactor(

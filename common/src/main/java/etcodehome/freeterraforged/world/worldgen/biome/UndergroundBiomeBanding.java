@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicIntegerArray;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicLongArray;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.function.BiFunction;
@@ -557,6 +558,13 @@ public final class UndergroundBiomeBanding {
 
 	public static void clearThreadCaches() {
 		REGION_CACHE.get().clear();
+		Stage.LocalMru mru = Stage.LOCAL_MRU.get();
+		mru.stageId = 0L;
+		mru.key0 = 0L;
+		mru.val0 = null;
+		mru.key1 = 0L;
+		mru.val1 = null;
+		UndergroundBiomeSurfaceProtection.clearThreadCaches();
 	}
 
 	private static final class Candidate<T> {
@@ -622,24 +630,24 @@ public final class UndergroundBiomeBanding {
 		}
 	}
 
-	private static final class ConcurrentRankedCache<T> {
+	private static final class ConcurrentRankedCache {
 		private static final int SETS = 1024;
 		private static final int SET_MASK = SETS - 1;
 		private static final int WAYS = 4;
 		private static final int TOTAL_ENTRIES = SETS * WAYS;
 
 		private final AtomicLongArray keys = new AtomicLongArray(TOTAL_ENTRIES);
-		private final AtomicReferenceArray<T[]> values = new AtomicReferenceArray<>(TOTAL_ENTRIES);
+		private final AtomicReferenceArray<int[]> values = new AtomicReferenceArray<>(TOTAL_ENTRIES);
 		private final AtomicIntegerArray clocks = new AtomicIntegerArray(SETS);
 
-		T[] find(long key) {
+		int[] find(long key) {
 			long searchKey = key == 0L ? 1L : key;
 			int set = (int) HashCommon.mix(searchKey) & SET_MASK;
 			int base = set * WAYS;
 			for (int way = 0; way < WAYS; way++) {
 				int slot = base + way;
 				if (this.keys.get(slot) == searchKey) {
-					T[] value = this.values.get(slot);
+					int[] value = this.values.get(slot);
 					if (value != null && this.keys.get(slot) == searchKey) {
 						return value;
 					}
@@ -648,7 +656,7 @@ public final class UndergroundBiomeBanding {
 			return null;
 		}
 
-		void store(long key, T[] value) {
+		void store(long key, int[] value) {
 			if (value == null) {
 				return;
 			}
@@ -694,6 +702,8 @@ public final class UndergroundBiomeBanding {
 	}
 
 	private static final class Stage<T> {
+		private static final AtomicLong STAGE_ID_GEN = new AtomicLong();
+
 		private static final class PhaseMru {
 			long seed;
 			int cellX = Integer.MIN_VALUE;
@@ -703,25 +713,22 @@ public final class UndergroundBiomeBanding {
 		}
 		private static final ThreadLocal<PhaseMru> PHASE_MRU = ThreadLocal.withInitial(PhaseMru::new);
 
-		private static final class LocalMru<T> {
+		private static final class LocalMru {
+			long stageId;
 			long key0;
-			T[] val0;
+			int[] val0;
 			long key1;
-			T[] val1;
+			int[] val1;
 		}
-		private final ThreadLocal<LocalMru<T>> localMru = ThreadLocal.withInitial(LocalMru::new);
+		private static final ThreadLocal<LocalMru> LOCAL_MRU = ThreadLocal.withInitial(LocalMru::new);
 
+		private final long stageId = STAGE_ID_GEN.incrementAndGet();
 		private final StageCandidate<T>[] candidates;
-		private final T[] unrankedValues;
-		private final ConcurrentRankedCache<T> rankedCache = new ConcurrentRankedCache<>();
+		private final ConcurrentRankedCache rankedCache = new ConcurrentRankedCache();
 
 		@SuppressWarnings("unchecked")
 		private Stage(List<StageCandidate<T>> candidates) {
 			this.candidates = candidates.toArray(new StageCandidate[0]);
-			this.unrankedValues = (T[]) new Object[this.candidates.length];
-			for (int i = 0; i < this.candidates.length; i++) {
-				this.unrankedValues[i] = this.candidates[i].value();
-			}
 		}
 
 		private T findValue(
@@ -737,46 +744,57 @@ public final class UndergroundBiomeBanding {
 			}
 
 			long regionKey = region.key();
-			T[] rankedValues;
+			int horizontalPhase = this.getHorizontalPhase(seed, region.cellX(), region.cellZ(), candidateCount);
+
 			if (climateInfluence <= 0.0F) {
-				rankedValues = this.unrankedValues;
-			} else {
-				LocalMru<T> mru = this.localMru.get();
-				if (mru.key0 == regionKey && mru.val0 != null) {
-					rankedValues = mru.val0;
-				} else if (mru.key1 == regionKey && mru.val1 != null) {
-					rankedValues = mru.val1;
-					mru.key1 = mru.key0;
-					mru.val1 = mru.val0;
-					mru.key0 = regionKey;
-					mru.val0 = rankedValues;
-				} else {
-					rankedValues = this.rankedCache.find(regionKey);
-					if (rankedValues == null) {
-						Climate.TargetPoint identityTarget = targetSampler != null
-							? targetSampler.sample(region.identityQuartX(), region.identityQuartY(), region.identityQuartZ())
-							: Climate.target(0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F);
-						rankedValues = this.computeRanked(identityTarget);
-						this.rankedCache.store(regionKey, rankedValues);
-					}
-					mru.key1 = mru.key0;
-					mru.val1 = mru.val0;
-					mru.key0 = regionKey;
-					mru.val0 = rankedValues;
+				if (!bandingEnabled) {
+					return this.candidates[horizontalPhase].value();
 				}
+				int rotationIndex = Math.floorMod(region.cellY() + horizontalPhase, candidateCount);
+				return this.candidates[rotationIndex].value();
 			}
 
-			int horizontalPhase = this.getHorizontalPhase(seed, region.cellX(), region.cellZ(), candidateCount);
+			int[] rankedIndices;
+			LocalMru mru = LOCAL_MRU.get();
+			if (mru.stageId == this.stageId && mru.key0 == regionKey && mru.val0 != null) {
+				rankedIndices = mru.val0;
+			} else if (mru.stageId == this.stageId && mru.key1 == regionKey && mru.val1 != null) {
+				rankedIndices = mru.val1;
+				mru.key1 = mru.key0;
+				mru.val1 = mru.val0;
+				mru.key0 = regionKey;
+				mru.val0 = rankedIndices;
+			} else {
+				rankedIndices = this.rankedCache.find(regionKey);
+				if (rankedIndices == null) {
+					Climate.TargetPoint identityTarget = targetSampler != null
+						? targetSampler.sample(region.identityQuartX(), region.identityQuartY(), region.identityQuartZ())
+						: Climate.target(0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F);
+					rankedIndices = this.computeRankedIndices(identityTarget);
+					this.rankedCache.store(regionKey, rankedIndices);
+				}
+				if (mru.stageId != this.stageId) {
+					mru.stageId = this.stageId;
+					mru.key0 = 0L;
+					mru.val0 = null;
+					mru.key1 = 0L;
+					mru.val1 = null;
+				}
+				mru.key1 = mru.key0;
+				mru.val1 = mru.val0;
+				mru.key0 = regionKey;
+				mru.val0 = rankedIndices;
+			}
 
 			if (!bandingEnabled) {
 				if (climateInfluence >= 1.0F) {
-					return rankedValues[0];
+					return this.candidates[rankedIndices[0]].value();
 				}
-				return rankedValues[horizontalPhase];
+				return this.candidates[rankedIndices[horizontalPhase]].value();
 			}
 
 			int rotationIndex = Math.floorMod(region.cellY() + horizontalPhase, candidateCount);
-			return rankedValues[rotationIndex];
+			return this.candidates[rankedIndices[rotationIndex]].value();
 		}
 
 		private int getHorizontalPhase(long seed, int cellX, int cellZ, int candidateCount) {
@@ -794,8 +812,7 @@ public final class UndergroundBiomeBanding {
 			return phase;
 		}
 
-		@SuppressWarnings("unchecked")
-		private T[] computeRanked(Climate.TargetPoint target) {
+		private int[] computeRankedIndices(Climate.TargetPoint target) {
 			int candidateCount = this.candidates.length;
 			long[] distancesSq = new long[candidateCount];
 			for (int i = 0; i < candidateCount; i++) {
@@ -824,12 +841,7 @@ public final class UndergroundBiomeBanding {
 				}
 				ranked[j + 1] = key;
 			}
-
-			T[] rankedValues = (T[]) new Object[candidateCount];
-			for (int i = 0; i < candidateCount; i++) {
-				rankedValues[i] = this.candidates[ranked[i]].value();
-			}
-			return rankedValues;
+			return ranked;
 		}
 
 		private void clear() {
@@ -1075,6 +1087,7 @@ public final class UndergroundBiomeBanding {
 			if (this.deepStage != null) {
 				this.deepStage.clear();
 			}
+			clearThreadCaches();
 		}
 
 		private float surfaceFactor(long depth) {

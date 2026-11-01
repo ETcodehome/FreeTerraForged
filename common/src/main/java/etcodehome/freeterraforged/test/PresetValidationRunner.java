@@ -90,6 +90,7 @@ import net.minecraft.world.level.levelgen.presets.WorldPresets;
 import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
 import etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeBanding;
 import etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeTags;
+import etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeSurfaceProtection;
 import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementConfig;
 import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementConfigSnapshot;
 import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementPlan;
@@ -1747,6 +1748,111 @@ public final class PresetValidationRunner {
 			testRecords.add(new TestRecord(
 				currentTestName,
 				"Live chunk generator biome replacement validated (live sampling, edge cases, contradiction suppression, state restoration)",
+				true,
+				null
+			));
+
+			// -----------------------------------------------------------------------------------------
+			// World Generation Memory Leak Prevention Verification
+			// -----------------------------------------------------------------------------------------
+			currentTestName = "presetValidation.worldgenMemoryLeak." + loader;
+			watchdog.setStep(currentTestName);
+			FTFCommon.LOGGER.info("[FTF-Test] Verifying world generation memory leak prevention and ThreadLocal lifecycle...");
+
+			// 1. Verify that transient Climate.Sampler instances are not retained in ThreadLocal COVERAGE_MRU
+			net.minecraft.world.level.biome.Climate.Sampler[] samplerHolder =
+				new net.minecraft.world.level.biome.Climate.Sampler[]{net.minecraft.world.level.biome.Climate.empty()};
+			java.lang.ref.WeakReference<net.minecraft.world.level.biome.Climate.Sampler> samplerLeakRef =
+				new java.lang.ref.WeakReference<>(samplerHolder[0]);
+
+			Climate.TargetPoint leakTarget = Climate.target(0.0F, 0.0F, 0.0F, -0.5F, 1.5F, 0.0F);
+			int leakWorkerThreads = 4;
+			java.util.concurrent.ExecutorService leakExecutor = java.util.concurrent.Executors.newFixedThreadPool(leakWorkerThreads);
+			java.util.concurrent.CountDownLatch leakLatch = new java.util.concurrent.CountDownLatch(leakWorkerThreads);
+			for (int t = 0; t < leakWorkerThreads; t++) {
+				leakExecutor.submit(() -> {
+					try {
+						for (int i = 0; i < 50; i++) {
+							UndergroundBiomeSurfaceProtection.coverageFactor(samplerHolder[0], leakTarget, i * 4, -60, i * 4);
+						}
+					} finally {
+						leakLatch.countDown();
+					}
+				});
+			}
+			if (!leakLatch.await(5, java.util.concurrent.TimeUnit.SECONDS)) {
+				throw new AssertionError("Memory leak validation worker threads timed out");
+			}
+			leakExecutor.shutdown();
+			if (!leakExecutor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS)) {
+				throw new AssertionError("Memory leak validation executor termination timed out");
+			}
+
+			// 2. Verify that transient UndergroundBiomeBanding.Layout instances are not retained in worker thread-locals
+			Preset transientPreset = Presets.makeFTFDefault();
+			transientPreset.climate().biomeShape.undergroundBiomeClimateInfluence = 0.75F;
+			transientPreset.climate().biomeShape.undergroundBiomeBanding = true;
+			@SuppressWarnings("unchecked")
+			UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>>[] layoutHolder =
+				new UndergroundBiomeBanding.Layout[]{
+					UndergroundBiomeBanding.apply(
+						transientPreset,
+						overworldEntries,
+						12345L,
+						(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value)),
+						UndergroundBiomeTags::isCave
+					)
+				};
+			java.lang.ref.WeakReference<UndergroundBiomeBanding.Layout<?>> layoutLeakRef =
+				new java.lang.ref.WeakReference<>(layoutHolder[0]);
+
+			java.util.concurrent.ExecutorService layoutExecutor = java.util.concurrent.Executors.newFixedThreadPool(leakWorkerThreads);
+			java.util.concurrent.CountDownLatch layoutLatch = new java.util.concurrent.CountDownLatch(leakWorkerThreads);
+			for (int t = 0; t < leakWorkerThreads; t++) {
+				layoutExecutor.submit(() -> {
+					try {
+						for (int i = 0; i < 50; i++) {
+							layoutHolder[0].findValue(leakTarget, i * 4, -120, i * 4, 1.0F);
+						}
+					} finally {
+						layoutLatch.countDown();
+					}
+				});
+			}
+			if (!layoutLatch.await(5, java.util.concurrent.TimeUnit.SECONDS)) {
+				throw new AssertionError("Layout memory leak validation worker threads timed out");
+			}
+			layoutExecutor.shutdown();
+			if (!layoutExecutor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS)) {
+				throw new AssertionError("Layout memory leak validation executor termination timed out");
+			}
+
+			// Clear strong references
+			samplerHolder[0] = null;
+			layoutHolder[0] = null;
+
+			// Verify garbage collection cleans up both weak references
+			boolean samplerCollected = false;
+			boolean layoutCollected = false;
+			for (int i = 0; i < 50; i++) {
+				if (!samplerCollected && samplerLeakRef.get() == null) samplerCollected = true;
+				if (!layoutCollected && layoutLeakRef.get() == null) layoutCollected = true;
+				if (samplerCollected && layoutCollected) break;
+				System.gc();
+				Thread.sleep(50);
+			}
+
+			if (!samplerCollected) {
+				throw new AssertionError("Memory leak detected: Climate.Sampler was retained in ThreadLocal or caches after disposal!");
+			}
+			if (!layoutCollected) {
+				throw new AssertionError("Memory leak detected: UndergroundBiomeBanding.Layout was retained in ThreadLocal or caches after disposal!");
+			}
+
+			FTFCommon.LOGGER.info("[FTF-Test] PASSED: World generation memory leak prevention verified (transient samplers and layouts reclaimed cleanly).");
+			testRecords.add(new TestRecord(
+				currentTestName,
+				"World generation memory leak prevention verified: transient samplers and layouts collected cleanly by GC without ThreadLocal retention",
 				true,
 				null
 			));
