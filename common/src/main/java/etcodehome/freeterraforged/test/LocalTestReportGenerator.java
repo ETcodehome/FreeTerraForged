@@ -140,17 +140,27 @@ public final class LocalTestReportGenerator {
 			// Match image previews
 			Map<String, List<ImageThumb>> imagesByToken = mapImages(allFiles);
 
+			// Parse unit test summary
+			UnitTestSummary unitTestSummary = parseUnitTestReport(reportDir);
+			if (unitTestSummary != null && !unitTestSummary.passed()) {
+				failures.add("Automated unit test suite failed: " + unitTestSummary.failures() + " failure(s), " + unitTestSummary.errors() + " error(s)");
+			}
+
 			// Calculate stats
 			int totalExpected = BASE_TEST_TOKENS.size() * 2;
 			long passedCount = resultsByToken.values().stream().filter(TestResult::passed).count();
 			long failedCount = resultsByToken.values().stream().filter(r -> !r.passed()).count();
 			boolean overallPassed = (passedCount >= totalExpected) && (failedCount == 0);
+			if (unitTestSummary != null) {
+				overallPassed = overallPassed && unitTestSummary.passed();
+			}
 
 			// Build HTML
 			String html = renderHtml(
 				resultsByToken,
 				imagesByToken,
 				diagnosticLogs,
+				unitTestSummary,
 				failures,
 				totalExpected,
 				(int) passedCount,
@@ -250,6 +260,7 @@ public final class LocalTestReportGenerator {
 		Map<String, TestResult> results,
 		Map<String, List<ImageThumb>> images,
 		List<DiagnosticLog> diagnosticLogs,
+		UnitTestSummary unitTestSummary,
 		List<String> failures,
 		int totalExpected,
 		int passedCount,
@@ -357,10 +368,36 @@ public final class LocalTestReportGenerator {
 		sb.append("  tr { border-bottom: 1px solid var(--border); transition: background 0.15s ease; }\n");
 		sb.append("  tr:last-child { border-bottom: none; }\n");
 		sb.append("  tr:hover { background: var(--bg-surface-hover); }\n");
-		sb.append("  td {\n");
+		sb.append("  td, th {\n");
 		sb.append("    padding: 10px 14px;\n");
 		sb.append("    vertical-align: middle;\n");
 		sb.append("    font-size: 13px;\n");
+		sb.append("    text-align: left;\n");
+		sb.append("  }\n");
+		sb.append("  th {\n");
+		sb.append("    background: var(--bg-primary);\n");
+		sb.append("    color: var(--text-muted);\n");
+		sb.append("    font-weight: 600;\n");
+		sb.append("    font-size: 11px;\n");
+		sb.append("    text-transform: uppercase;\n");
+		sb.append("    letter-spacing: 0.5px;\n");
+		sb.append("    border-bottom: 1px solid var(--border);\n");
+		sb.append("  }\n");
+		sb.append("  .section-header {\n");
+		sb.append("    display: flex;\n");
+		sb.append("    align-items: center;\n");
+		sb.append("    justify-content: space-between;\n");
+		sb.append("    margin: 28px 0 14px;\n");
+		sb.append("    padding-bottom: 8px;\n");
+		sb.append("    border-bottom: 1px solid var(--border);\n");
+		sb.append("  }\n");
+		sb.append("  .section-header h3 {\n");
+		sb.append("    font-size: 15px;\n");
+		sb.append("    font-weight: 600;\n");
+		sb.append("    color: var(--text-primary);\n");
+		sb.append("    display: flex;\n");
+		sb.append("    align-items: center;\n");
+		sb.append("    gap: 8px;\n");
 		sb.append("  }\n");
 		sb.append("  .td-icon { width: 44px; text-align: center; font-size: 15px; }\n");
 		sb.append("  .icon-pass { color: var(--pass-fg); font-weight: bold; }\n");
@@ -451,8 +488,11 @@ public final class LocalTestReportGenerator {
 		sb.append("      <span class=\"badge ").append(badgeClass).append("\">").append(badgeIcon).append(" ").append(badgeText).append("</span>\n");
 		sb.append("      <div class=\"meta\">\n");
 		sb.append("        <span><b>Date:</b> ").append(timestamp).append("</span> &nbsp;|&nbsp; \n");
-		sb.append("        <span><b>Results:</b> ").append(passedCount).append(" / ").append(totalExpected).append(" Tests Passed</span>\n");
-		sb.append("      </div>\n");
+		sb.append("        <span><b>System Tests:</b> ").append(passedCount).append(" / ").append(totalExpected).append(" Passed</span>");
+		if (unitTestSummary != null) {
+			sb.append(" &nbsp;|&nbsp; <span><b>Unit Tests:</b> ").append(unitTestSummary.total() - unitTestSummary.failures()).append(" / ").append(unitTestSummary.total()).append(" Passed</span>");
+		}
+		sb.append("\n      </div>\n");
 		sb.append("    </div>\n");
 		sb.append("    <div class=\"meta\"><span><b>Path:</b> ").append(escapeHtml(reportDir.toString())).append("</span></div>\n");
 		sb.append("  </header>\n\n");
@@ -470,18 +510,38 @@ public final class LocalTestReportGenerator {
 		}
 
 		// Filter Buttons
+		int totalCombined = results.size() + (unitTestSummary != null ? unitTestSummary.total() : 0);
+		int passedCombined = passedCount + (unitTestSummary != null ? (unitTestSummary.total() - unitTestSummary.failures()) : 0);
+		int failedCombined = failedCount + (unitTestSummary != null ? unitTestSummary.failures() : 0);
 		sb.append("  <div class=\"filters\">\n");
-		sb.append("    <button class=\"filter-btn active\" onclick=\"filterRows('all', this)\">All (").append(results.size()).append(")</button>\n");
-		sb.append("    <button class=\"filter-btn\" onclick=\"filterRows('pass', this)\">Passed (").append(passedCount).append(")</button>\n");
-		if (failedCount > 0) {
-			sb.append("    <button class=\"filter-btn\" onclick=\"filterRows('fail', this)\">Failed (").append(failedCount).append(")</button>\n");
+		sb.append("    <button class=\"filter-btn active\" onclick=\"filterRows('all', this)\">All (").append(totalCombined).append(")</button>\n");
+		sb.append("    <button class=\"filter-btn\" onclick=\"filterRows('system', this)\">System Tests (").append(results.size()).append(")</button>\n");
+		if (unitTestSummary != null) {
+			sb.append("    <button class=\"filter-btn\" onclick=\"filterRows('unit', this)\">Unit Tests (").append(unitTestSummary.total()).append(")</button>\n");
+		}
+		sb.append("    <button class=\"filter-btn\" onclick=\"filterRows('pass', this)\">Passed (").append(passedCombined).append(")</button>\n");
+		if (failedCombined > 0) {
+			sb.append("    <button class=\"filter-btn\" onclick=\"filterRows('fail', this)\">Failed (").append(failedCombined).append(")</button>\n");
 		}
 		sb.append("    <button class=\"filter-btn\" onclick=\"filterRows('fabric', this)\">Fabric</button>\n");
 		sb.append("    <button class=\"filter-btn\" onclick=\"filterRows('neoforge', this)\">NeoForge</button>\n");
 		sb.append("  </div>\n\n");
 
+		// System Tests Section Header
+		sb.append("  <div class=\"section-header\" id=\"system-tests-header\">\n");
+		sb.append("    <h3>&#127757; Headless Worldgen &amp; Preset System Tests</h3>\n");
+		sb.append("    <span class=\"meta\"><b>").append(passedCount).append("</b> / ").append(totalExpected).append(" Tests Passed across Fabric &amp; NeoForge</span>\n");
+		sb.append("  </div>\n\n");
+
 		// Main Verification Table
 		sb.append("  <table id=\"verification-table\">\n");
+		sb.append("    <thead>\n");
+		sb.append("      <tr>\n");
+		sb.append("        <th class=\"td-icon\">Status</th>\n");
+		sb.append("        <th class=\"td-token\">Test Target</th>\n");
+		sb.append("        <th>Validation Outcome &amp; Diagnostics</th>\n");
+		sb.append("      </tr>\n");
+		sb.append("    </thead>\n");
 		sb.append("    <tbody>\n");
 
 		// Canonical ordering: for each base token, show fabric then neoforge
@@ -504,6 +564,35 @@ public final class LocalTestReportGenerator {
 
 		sb.append("    </tbody>\n");
 		sb.append("  </table>\n\n");
+
+		// Automated Unit Tests Section & Table
+		if (unitTestSummary != null && !unitTestSummary.entries().isEmpty()) {
+			sb.append("  <div class=\"section-header\" id=\"unit-tests-header\">\n");
+			sb.append("    <h3>&#129514; Automated Unit Tests (:common:test)</h3>\n");
+			sb.append("    <span class=\"meta\"><b>").append(unitTestSummary.total() - unitTestSummary.failures())
+				.append("</b> / ").append(unitTestSummary.total()).append(" Tests Passed</span>\n");
+			sb.append("  </div>\n\n");
+			sb.append("  <table id=\"unit-test-table\">\n");
+			sb.append("    <thead>\n");
+			sb.append("      <tr>\n");
+			sb.append("        <th class=\"td-icon\">Status</th>\n");
+			sb.append("        <th class=\"td-token\">Test Method</th>\n");
+			sb.append("        <th>Suite / Class</th>\n");
+			sb.append("      </tr>\n");
+			sb.append("    </thead>\n");
+			sb.append("    <tbody>\n");
+			for (UnitTestEntry ute : unitTestSummary.entries()) {
+				String uStatus = ute.passed() ? "pass" : "fail";
+				String uIcon = ute.passed() ? "<span class=\"icon-pass\">&#10004;</span>" : "<span class=\"icon-fail\">&#10006;</span>";
+				sb.append("      <tr data-status=\"").append(uStatus).append("\" data-loader=\"common\">\n");
+				sb.append("        <td class=\"td-icon\"><sub>").append(uIcon).append("</sub></td>\n");
+				sb.append("        <td class=\"td-token\"><sub><code>").append(escapeHtml(ute.name())).append("</code></sub></td>\n");
+				sb.append("        <td class=\"td-metric\"><sub><code>").append(escapeHtml(ute.simpleClass())).append("</code></sub></td>\n");
+				sb.append("      </tr>\n");
+			}
+			sb.append("    </tbody>\n");
+			sb.append("  </table>\n\n");
+		}
 
 		// Detailed Diagnostic Logs
 		if (!diagnosticLogs.isEmpty()) {
@@ -546,8 +635,32 @@ public final class LocalTestReportGenerator {
 		sb.append("  function filterRows(type, btn) {\n");
 		sb.append("    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));\n");
 		sb.append("    if (btn) btn.classList.add('active');\n");
-		sb.append("    const rows = document.querySelectorAll('#verification-table tbody tr');\n");
-		sb.append("    rows.forEach(r => {\n");
+		sb.append("    const sysHeader = document.getElementById('system-tests-header');\n");
+		sb.append("    const sysTable = document.getElementById('verification-table');\n");
+		sb.append("    const unitHeader = document.getElementById('unit-tests-header');\n");
+		sb.append("    const unitTable = document.getElementById('unit-test-table');\n");
+		sb.append("    if (type === 'system') {\n");
+		sb.append("      if (sysHeader) sysHeader.style.display = '';\n");
+		sb.append("      if (sysTable) sysTable.style.display = '';\n");
+		sb.append("      if (unitHeader) unitHeader.style.display = 'none';\n");
+		sb.append("      if (unitTable) unitTable.style.display = 'none';\n");
+		sb.append("      document.querySelectorAll('#verification-table tbody tr').forEach(r => r.style.display = '');\n");
+		sb.append("      return;\n");
+		sb.append("    }\n");
+		sb.append("    if (type === 'unit') {\n");
+		sb.append("      if (sysHeader) sysHeader.style.display = 'none';\n");
+		sb.append("      if (sysTable) sysTable.style.display = 'none';\n");
+		sb.append("      if (unitHeader) unitHeader.style.display = '';\n");
+		sb.append("      if (unitTable) unitTable.style.display = '';\n");
+		sb.append("      if (unitTable) unitTable.querySelectorAll('tbody tr').forEach(r => r.style.display = '');\n");
+		sb.append("      return;\n");
+		sb.append("    }\n");
+		sb.append("    if (sysHeader) sysHeader.style.display = '';\n");
+		sb.append("    if (sysTable) sysTable.style.display = '';\n");
+		sb.append("    if (unitHeader) unitHeader.style.display = (type === 'fabric' || type === 'neoforge') ? 'none' : '';\n");
+		sb.append("    if (unitTable) unitTable.style.display = (type === 'fabric' || type === 'neoforge') ? 'none' : '';\n");
+		sb.append("    const allRows = document.querySelectorAll('#verification-table tbody tr, #unit-test-table tbody tr');\n");
+		sb.append("    allRows.forEach(r => {\n");
 		sb.append("      const status = r.getAttribute('data-status');\n");
 		sb.append("      const loader = r.getAttribute('data-loader');\n");
 		sb.append("      if (type === 'all') r.style.display = '';\n");
@@ -602,4 +715,44 @@ public final class LocalTestReportGenerator {
 	public record TestResult(String token, String loader, boolean passed, String notes, String error) {}
 	public record ImageThumb(String fileName, String label, String title) {}
 	public record DiagnosticLog(String fileName, String content) {}
+	public record UnitTestEntry(String name, String className, String simpleClass, boolean passed) {}
+	public record UnitTestSummary(int total, int failures, int errors, int skipped, boolean passed, List<UnitTestEntry> entries) {}
+
+	private static UnitTestSummary parseUnitTestReport(Path reportDir) {
+		Path unitTestFile = reportDir.resolve("unit_tests_report.txt");
+		if (!Files.exists(unitTestFile)) {
+			return null;
+		}
+		try {
+			String content = Files.readString(unitTestFile, StandardCharsets.UTF_8);
+			int total = 0, failures = 0, errors = 0, skipped = 0;
+			Matcher totalsMatcher = Pattern.compile("TOTALS:\\s*(\\d+)\\s*Tests,\\s*(\\d+)\\s*Failures,\\s*(\\d+)\\s*Errors,\\s*(\\d+)\\s*Skipped").matcher(content);
+			if (totalsMatcher.find()) {
+				total = Integer.parseInt(totalsMatcher.group(1));
+				failures = Integer.parseInt(totalsMatcher.group(2));
+				errors = Integer.parseInt(totalsMatcher.group(3));
+				skipped = Integer.parseInt(totalsMatcher.group(4));
+			}
+
+			List<UnitTestEntry> entries = new ArrayList<>();
+			Matcher caseMatcher = Pattern.compile("-\\s*\\[(PASSED|FAILED)\\]\\s*(.*?)\\s*\\(([^()\\r\\n]+)\\)").matcher(content);
+			while (caseMatcher.find()) {
+				boolean passed = "PASSED".equalsIgnoreCase(caseMatcher.group(1));
+				String name = caseMatcher.group(2).trim();
+				String fullClass = caseMatcher.group(3).trim();
+				String simpleClass = fullClass.contains(".") ? fullClass.substring(fullClass.lastIndexOf('.') + 1) : fullClass;
+				entries.add(new UnitTestEntry(name, fullClass, simpleClass, passed));
+			}
+
+			if (total == 0 && !entries.isEmpty()) {
+				total = entries.size();
+				failures = (int) entries.stream().filter(e -> !e.passed()).count();
+			}
+			boolean overallPassed = (failures == 0 && errors == 0 && total > 0);
+
+			return new UnitTestSummary(total, failures, errors, skipped, overallPassed, entries);
+		} catch (Exception e) {
+			return null;
+		}
+	}
 }
