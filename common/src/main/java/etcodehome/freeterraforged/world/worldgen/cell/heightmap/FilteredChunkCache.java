@@ -23,7 +23,7 @@ import etcodehome.freeterraforged.world.worldgen.util.PosUtil;
 public class FilteredChunkCache {
     public static final int REGION_CHUNKS = RegionFilterGrid.REGION_CHUNKS; // 4
     public static final int REGION_MASK = REGION_CHUNKS - 1; // 3
-    private static final int MAX_ENTRIES = 512;
+    private static final int MAX_ENTRIES = 2048;
 
     private final ConcurrentHashMap<Long, Cell[]> cache = new ConcurrentHashMap<>(MAX_ENTRIES);
     private final ConcurrentLinkedQueue<Long> evictionQueue = new ConcurrentLinkedQueue<>();

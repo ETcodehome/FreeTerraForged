@@ -8,7 +8,7 @@ import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 import etcodehome.freeterraforged.world.worldgen.util.PosUtil;
 
 public class RawChunkCache {
-    private static final int MAX_ENTRIES = 512;
+    private static final int MAX_ENTRIES = 2048;
     private final ConcurrentHashMap<Long, Cell[]> cache = new ConcurrentHashMap<>(MAX_ENTRIES);
     private final ConcurrentLinkedQueue<Long> evictionQueue = new ConcurrentLinkedQueue<>();
     private final GeneratorContext context;

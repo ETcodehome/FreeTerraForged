@@ -59,8 +59,8 @@ public class PresetNoiseRouterData {
         ctx.register(NoiseRouterData.EROSION, FTFDensityFunctions.cell(CellSampler.Field.EROSION));
         ctx.register(NoiseRouterData.RIDGES, FTFDensityFunctions.cell(CellSampler.Field.WEIRDNESS));
 
-        DensityFunction height = NoiseRouterData.registerAndWrap(ctx, HEIGHT, FTFDensityFunctions.cell(CellSampler.Field.HEIGHT));
-        DensityFunction offset = NoiseRouterData.registerAndWrap(ctx, NoiseRouterData.OFFSET, DensityFunctions.add(DensityFunctions.constant(NoiseRouterData.GLOBAL_OFFSET - 0.5F), DensityFunctions.mul(height, DensityFunctions.constant(2.0D))));
+        DensityFunction height = NoiseRouterData.registerAndWrap(ctx, HEIGHT, DensityFunctions.cache2d(FTFDensityFunctions.cell(CellSampler.Field.HEIGHT)));
+        DensityFunction offset = NoiseRouterData.registerAndWrap(ctx, NoiseRouterData.OFFSET, DensityFunctions.cache2d(DensityFunctions.add(DensityFunctions.constant(NoiseRouterData.GLOBAL_OFFSET - 0.5F), DensityFunctions.mul(height, DensityFunctions.constant(2.0D)))));
         DensityFunction terrainDensity = DensityFunctions.add(DensityFunctions.yClampedGradient(-worldDepth, worldHeight, yGradientRange(-worldDepth), yGradientRange(worldHeight)), offset);
         DensityFunction factor = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.FACTOR);
         ctx.register(NoiseRouterData.SLOPED_CHEESE, NoiseRouterData.noiseGradientDensity(DensityFunctions.cache2d(factor), terrainDensity));
@@ -91,7 +91,7 @@ public class PresetNoiseRouterData {
         DensityFunction aquiferLava = DensityFunctions.noise(noiseParams.getOrThrow(Noises.AQUIFER_LAVA));
         DensityFunction factor = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.FACTOR);
         DensityFunction depth = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.DEPTH);
-        DensityFunction offset = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.OFFSET);
+        DensityFunction offset = DensityFunctions.cache2d(NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.OFFSET));
         DensityFunction terrainDensity = DensityFunctions.add(
             DensityFunctions.yClampedGradient(-worldDepth, worldHeight, yGradientRange(-worldDepth), yGradientRange(worldHeight)),
             offset
