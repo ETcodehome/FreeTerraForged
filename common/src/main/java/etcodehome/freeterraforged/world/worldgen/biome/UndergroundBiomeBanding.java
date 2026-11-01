@@ -263,11 +263,25 @@ public final class UndergroundBiomeBanding {
 		if (depth.max() <= surface) {
 			return CandidateRole.SURFACE;
 		}
-		if (caveTagged && (depth.min() > surface || (depth.min() == surface && depth.max() > surface))) {
+		if (depth.min() > surface || (caveTagged && depth.min() == surface && depth.max() > surface)) {
 			return depth.min() >= Climate.quantizeCoord(VANILLA_UNDERGROUND_DEPTH_END)
 				? CandidateRole.DEEP_CAVE : CandidateRole.SHALLOW_CAVE;
 		}
 		return CandidateRole.UNKNOWN;
+	}
+
+	/** Classifies a sampled runtime climate point using the same shallow/deep boundary as band selection. */
+	public static CandidateRole classifyTarget(Climate.TargetPoint target) {
+		if (target == null) {
+			return CandidateRole.UNKNOWN;
+		}
+		long depth = target.depth();
+		if (depth < Climate.quantizeCoord(SURFACE_DEPTH)) {
+			return CandidateRole.SURFACE;
+		}
+		return depth < Climate.quantizeCoord(VANILLA_BOTTOM_DEPTH)
+			? CandidateRole.SHALLOW_CAVE
+			: CandidateRole.DEEP_CAVE;
 	}
 
 	private static boolean isWellFormed(Climate.ParameterPoint point) {

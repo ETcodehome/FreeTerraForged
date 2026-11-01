@@ -2,11 +2,13 @@ package etcodehome.freeterraforged.world.worldgen.runtime;
 
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
+import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
+import etcodehome.freeterraforged.registries.FTFRegistries;
 import net.minecraft.core.Holder;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.biome.Biome;
@@ -46,6 +48,17 @@ public final class WorldgenRuntimeBinding {
 
 	public WorldgenPlan plan() {
 		return this.current().plan();
+	}
+
+	public WorldgenBiomeSelection.Executable biomeSelection() {
+		return this.current().biomeSelection();
+	}
+
+	public BiomeRuntime biomeRuntime() {
+		State current = this.current();
+		return new BiomeRuntime(
+			current.plan(), current.biomeSelection(), current.biomePlacement()
+		);
 	}
 
 	public WorldgenQueryCaches queryCaches() {
@@ -125,6 +138,7 @@ public final class WorldgenRuntimeBinding {
 		WorldgenPlan plan,
 		Map<ResourceKey<Biome>, BiomeGenerationSettings> generationSettings,
 		Set<Holder<Biome>> possibleBiomes,
+		BiomePlacementPlan biomePlacement,
 		WorldgenBiomeSelection.Executable biomeSelection,
 		BiomeDecorationPlan biomeDecorationPlan,
 		SurfaceColumnPlan surfaceColumns
@@ -134,6 +148,7 @@ public final class WorldgenRuntimeBinding {
 			plan = Objects.requireNonNull(plan, "plan");
 			generationSettings = Map.copyOf(generationSettings);
 			possibleBiomes = Set.copyOf(possibleBiomes);
+			biomePlacement = Objects.requireNonNull(biomePlacement, "biomePlacement");
 			biomeSelection = Objects.requireNonNull(biomeSelection, "biomeSelection");
 			biomeDecorationPlan = Objects.requireNonNull(biomeDecorationPlan, "biomeDecorationPlan");
 			surfaceColumns = Objects.requireNonNull(surfaceColumns, "surfaceColumns");
@@ -142,6 +157,9 @@ public final class WorldgenRuntimeBinding {
 			}
 			if (biomeSelection.plan() != plan) {
 				throw new IllegalArgumentException("Biome query executor belongs to a different plan");
+			}
+			if (biomePlacement.plan() != plan) {
+				throw new IllegalArgumentException("Biome placement metadata belongs to a different plan");
 			}
 			for (Holder<Biome> biome : possibleBiomes) {
 				if (biome.unwrapKey().isPresent() && !generationSettings.containsKey(biome.unwrapKey().orElseThrow())) {
@@ -153,6 +171,21 @@ public final class WorldgenRuntimeBinding {
 			}
 		}
 
+	}
+
+	public record BiomeRuntime(
+		WorldgenPlan plan,
+		WorldgenBiomeSelection.Executable selection,
+		BiomePlacementPlan placement
+	) {
+		public BiomeRuntime {
+			plan = Objects.requireNonNull(plan, "plan");
+			selection = Objects.requireNonNull(selection, "selection");
+			placement = Objects.requireNonNull(placement, "placement");
+			if (selection.plan() != plan || placement.plan() != plan) {
+				throw new IllegalArgumentException("Biome runtime components belong to different plans");
+			}
+		}
 	}
 
 	synchronized State refreshPossibleBiomes(
@@ -174,11 +207,17 @@ public final class WorldgenRuntimeBinding {
 	) {
 		Set<Holder<Biome>> possibleBiomes = WorldgenBiomeSelection.possibleBiomes(plan);
 		SurfaceColumnPlan surfaceColumns = SurfaceColumnPlan.compile(plan.placedFeatures().steps(), generationSettings);
+		Preset preset = plan.owner().lookups()
+			.lookupOrThrow(FTFRegistries.PRESET)
+			.get(Preset.KEY)
+			.orElseThrow(() -> new IllegalStateException("Worldgen runtime plan has no selected preset"))
+			.value();
 		return new State(
 			epoch,
 			plan,
 			generationSettings,
 			possibleBiomes,
+			BiomePlacementPlan.compile(plan, preset, possibleBiomes),
 			WorldgenBiomeSelection.prepare(plan, possibleBiomes, fallbackSemantics, ownerBinding),
 			new BiomeDecorationPlan(
 				plan.structures().structures(), plan.placedFeatures().steps(), surfaceColumns.decorationSettings(),

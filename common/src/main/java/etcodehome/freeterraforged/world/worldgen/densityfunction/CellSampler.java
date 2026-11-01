@@ -43,6 +43,7 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, Den
 	private static final float DEEP_OCEAN_MAX = Climate.unquantizeCoord(Climate.quantizeCoord(Continentalness.DEEP_OCEAN.max()) - 1);
 	private static final float SHALLOW_OCEAN_MIN = Climate.unquantizeCoord(Climate.quantizeCoord(Continentalness.OCEAN.min()) + 1);
 	private static final ThreadLocal<Cache2d> CELL = ThreadLocal.withInitial(Cache2d::new);
+	private static final ThreadLocal<LookupFrame> LOOKUP_OVERRIDE = new ThreadLocal<>();
 
 	public static Cache2d threadCache2d() {
 		return CELL.get();
@@ -50,6 +51,59 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, Den
 
 	public static Cell getCachedOrLookup(WorldLookup lookup, int blockX, int blockZ, boolean sampleClimate) {
 		return CELL.get().getAndUpdate(lookup, blockX, blockZ, sampleClimate);
+	}
+
+	/**
+	 * Installs a worker-thread-local authoritative cell source for a bounded query.
+	 *
+	 * <p>The override is consulted before the ordinary 2D and filtered-chunk caches. This is important for locate and
+	 * preview queries: a previously cached raw cell must not replace the query's filtered terrain state. Overrides may
+	 * be nested and must be closed in stack order on the thread that opened them.
+	 */
+	public static LookupScope pushLookupOverride(WorldLookup owner, LookupOverride lookup) {
+		java.util.Objects.requireNonNull(owner, "world lookup");
+		java.util.Objects.requireNonNull(lookup, "cell lookup override");
+		LookupFrame previous = LOOKUP_OVERRIDE.get();
+		LookupFrame frame = new LookupFrame(owner, lookup, previous);
+		LOOKUP_OVERRIDE.set(frame);
+		return new LookupScope(frame);
+	}
+
+	@FunctionalInterface
+	public interface LookupOverride {
+		@Nullable Cell lookup(int blockX, int blockZ, boolean sampleClimate);
+	}
+
+	public static final class LookupScope implements AutoCloseable {
+		private final LookupFrame frame;
+		private boolean closed;
+
+		private LookupScope(LookupFrame frame) {
+			this.frame = frame;
+		}
+
+		@Override
+		public void close() {
+			if (this.closed) {
+				return;
+			}
+			if (LOOKUP_OVERRIDE.get() != this.frame) {
+				throw new IllegalStateException("FTF cell lookup overrides must close in stack order");
+			}
+			this.closed = true;
+			if (this.frame.previous == null) {
+				LOOKUP_OVERRIDE.remove();
+			} else {
+				LOOKUP_OVERRIDE.set(this.frame.previous);
+			}
+		}
+	}
+
+	private record LookupFrame(
+		WorldLookup owner,
+		LookupOverride lookup,
+		@Nullable LookupFrame previous
+	) {
 	}
 
 	/**
@@ -154,6 +208,14 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, Den
 		}
 		
 		public Cell getAndUpdate(WorldLookup lookup, int blockX, int blockZ, boolean sampleClimate) {
+			for (LookupFrame frame = LOOKUP_OVERRIDE.get(); frame != null; frame = frame.previous) {
+				if (frame.owner == lookup) {
+					Cell overridden = frame.lookup.lookup(blockX, blockZ, sampleClimate);
+					if (overridden != null) {
+						return overridden;
+					}
+				}
+			}
 			long packedPos = PosUtil.pack(blockX, blockZ);
 			boolean sameOwner = this.lastLookup.get() == lookup;
 			if (!sameOwner) {
@@ -241,6 +303,10 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, Den
 
 		public CacheChunk(@Nullable Cache2d cache2d) {
 			this(null, 0, 0, cache2d);
+		}
+
+		public Field field() {
+			return CellSampler.this.field;
 		}
 
 		@Override
