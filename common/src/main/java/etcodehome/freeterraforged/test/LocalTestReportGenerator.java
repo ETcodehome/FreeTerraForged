@@ -32,7 +32,9 @@ public final class LocalTestReportGenerator {
 		"presetValidation.multiRunSeamContinuity",
 		"presetValidation.inGameCommandParity",
 		"presetValidation.twoStageReloadSpawnPersistence",
-		"presetValidation.nonFtfWorldResolution"
+		"presetValidation.nonFtfWorldResolution",
+		"presetValidation.modCompatibilityShims",
+		"presetValidation.biomeReplacementValidation"
 	);
 
 	public static void main(String[] args) {

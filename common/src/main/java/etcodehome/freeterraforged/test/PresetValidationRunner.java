@@ -20,12 +20,14 @@ import com.mojang.serialization.JsonOps;
 import org.apache.commons.io.file.PathUtils;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
 import net.minecraft.core.HolderGetter;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.RegistryDataLoader;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.packs.PackType;
@@ -76,6 +78,13 @@ import net.minecraft.world.level.levelgen.flat.FlatLevelGeneratorSettings;
 import net.minecraft.world.level.levelgen.presets.WorldPreset;
 import net.minecraft.world.level.levelgen.presets.WorldPresets;
 import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
+import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementConfig;
+import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementConfigSnapshot;
+import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementPlan;
+import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenOwner;
+import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPlan;
+import net.minecraft.world.level.biome.Biomes;
+import net.minecraft.world.level.biome.Climate;
 
 public final class PresetValidationRunner {
 	private static boolean testsTriggered = false;
@@ -1133,6 +1142,185 @@ public final class PresetValidationRunner {
 			testRecords.add(new TestRecord(
 				currentTestName,
 				"Non-FTF dimension CellSampler fallback (#340/#310) & foreign Climate.Sampler adoption (#298) verified",
+				true,
+				null
+			));
+
+			// -----------------------------------------------------------------------------------------
+			// Live Biome Replacement System Validation & Edge Case Failsafe
+			// -----------------------------------------------------------------------------------------
+			currentTestName = "presetValidation.biomeReplacementValidation." + loader;
+			watchdog.setStep(currentTestName);
+			FTFCommon.LOGGER.info("[FTF-Test] Verifying Biome Replacement System (Live Generation, Resolution & Edge Case Failsafes)...");
+
+			Registry<net.minecraft.world.level.biome.Biome> biomeRegistry = server.registryAccess().registryOrThrow(Registries.BIOME);
+			Holder.Reference<net.minecraft.world.level.biome.Biome> plainsHolder = biomeRegistry.getHolderOrThrow(Biomes.PLAINS);
+			Holder.Reference<net.minecraft.world.level.biome.Biome> desertHolder = biomeRegistry.getHolderOrThrow(Biomes.DESERT);
+			Holder.Reference<net.minecraft.world.level.biome.Biome> forestHolder = biomeRegistry.getHolderOrThrow(Biomes.FOREST);
+			Holder.Reference<net.minecraft.world.level.biome.Biome> deepDarkHolder = biomeRegistry.getHolderOrThrow(Biomes.DEEP_DARK);
+
+			if (server.overworld().getChunkSource().getGenerator() instanceof TerraForgedChunkGenerator liveTfGen) {
+				WorldgenPlan initialPlan = liveTfGen.plan().orElse(null);
+				if (initialPlan == null) {
+					throw new AssertionError("Live server TerraForgedChunkGenerator has no compiled WorldgenPlan");
+				}
+				WorldgenOwner liveOwner = initialPlan.owner();
+				Climate.Sampler liveSampler = server.overworld().getChunkSource().randomState().sampler();
+				BiomeReplacementConfigSnapshot originalSnapshot = liveOwner.biomeReplacementConfig();
+
+				// Sample baseline biome at coordinate (0, 64, 0)
+				Holder<net.minecraft.world.level.biome.Biome> baselineSample = liveTfGen.getBiomeSource().getNoiseBiome(0, 64, 0, liveSampler);
+				ResourceLocation baselineLoc = baselineSample.unwrapKey().map(net.minecraft.resources.ResourceKey::location).orElse(null);
+				if (baselineLoc == null) {
+					throw new AssertionError("Live server sampled biome at (0, 64, 0) has no resource key");
+				}
+
+				// Choose a replacement target distinctly different from baseline
+				String replacementTargetStr = baselineLoc.equals(ResourceLocation.parse("minecraft:desert"))
+					? "minecraft:plains" : "minecraft:desert";
+				ResourceLocation replacementTargetLoc = ResourceLocation.parse(replacementTargetStr);
+
+				// Construct test configuration with the live replacement rule AND various edge cases
+				String liveTestContent = String.format(java.util.Locale.ROOT, """
+					format_version=1
+					%s > %s
+					#minecraft:is_forest > %s
+					minecraft:deep_dark > null
+					modded:nonexistent_biome > %s
+					minecraft:Plains > %s
+					[invalid:dimension space]
+					minecraft:plains > %s
+					minecraft:plains > terrablender:deferred_placeholder
+					#c:empty_tag_test > %s
+					""", baselineLoc, replacementTargetStr, replacementTargetStr,
+					replacementTargetStr, replacementTargetStr, replacementTargetStr, replacementTargetStr);
+
+				BiomeReplacementConfig liveTestConfig = BiomeReplacementConfig.parse(liveTestContent);
+				BiomeReplacementConfigSnapshot liveTestSnapshot = new BiomeReplacementConfigSnapshot(
+					originalSnapshot.revision() + 1000L,
+					"live_test_fingerprint",
+					originalSnapshot.path(),
+					BiomeReplacementConfigSnapshot.Origin.NATIVE,
+					liveTestContent,
+					liveTestConfig,
+					originalSnapshot.legacyFilePresent()
+				);
+
+				try {
+					// Refresh inputs on the live generator so the replacement takes effect in real worldgen
+					WorldgenPlan refreshedLivePlan = liveTfGen.refreshInputs(
+						liveOwner.resourceRevision(),
+						liveOwner.resourceLayerFingerprint(),
+						liveOwner.tagEpoch(),
+						liveTestSnapshot,
+						liveOwner.contributionRevision(),
+						(FTFRandomState) (Object) server.overworld().getChunkSource().randomState()
+					);
+
+					if (refreshedLivePlan.biomeReplacement().plan().isConfigIgnored()) {
+						throw new AssertionError("Live replacement plan was unexpectedly suppressed due to non-fatal edge cases");
+					}
+
+					// Verify in the live chunk generator biome source that the replacement actually occurred
+					Holder<net.minecraft.world.level.biome.Biome> liveReplacedSample = liveTfGen.getBiomeSource().getNoiseBiome(0, 64, 0, liveSampler);
+					ResourceLocation actualLiveLoc = liveReplacedSample.unwrapKey().map(net.minecraft.resources.ResourceKey::location).orElse(null);
+					if (!replacementTargetLoc.equals(actualLiveLoc)) {
+						throw new AssertionError(String.format(
+							"Live server replacement failed at (0, 64, 0)! Expected target '%s' but live generator sampled '%s'",
+							replacementTargetLoc, actualLiveLoc
+						));
+					}
+
+					// Also verify via resolveBiomeInCell
+					Holder<net.minecraft.world.level.biome.Biome> liveCellSample = liveTfGen.resolveBiomeInCell(0, 64, 0, liveSampler, 0L, 0L);
+					ResourceLocation actualCellLoc = liveCellSample.unwrapKey().map(net.minecraft.resources.ResourceKey::location).orElse(null);
+					if (!replacementTargetLoc.equals(actualCellLoc)) {
+						throw new AssertionError(String.format(
+							"Live resolveBiomeInCell replacement failed at (0, 64, 0)! Expected '%s' but got '%s'",
+							replacementTargetLoc, actualCellLoc
+						));
+					}
+
+					// Verify direct rule contract on refreshed plan
+					BiomeReplacementPlan activePlan = refreshedLivePlan.biomeReplacement().plan();
+					if (!activePlan.active()) {
+						throw new AssertionError("Refreshed biome replacement plan should be active");
+					}
+					if (!activePlan.isRemoved(deepDarkHolder)) {
+						throw new AssertionError("Live removal failed: deep_dark should be marked removed");
+					}
+
+					// 2. Fatal Contradiction Test: target removed must gracefully suppress all rules
+					String fatalContent = String.format(java.util.Locale.ROOT, """
+						format_version=1
+						%s > null
+						%s > %s
+						""", replacementTargetStr, baselineLoc, replacementTargetStr);
+					BiomeReplacementConfig fatalConfig = BiomeReplacementConfig.parse(fatalContent);
+					BiomeReplacementConfigSnapshot fatalSnapshot = new BiomeReplacementConfigSnapshot(
+						originalSnapshot.revision() + 2000L,
+						"live_fatal_fingerprint",
+						originalSnapshot.path(),
+						BiomeReplacementConfigSnapshot.Origin.NATIVE,
+						fatalContent,
+						fatalConfig,
+						originalSnapshot.legacyFilePresent()
+					);
+
+					WorldgenPlan fatalLivePlan = liveTfGen.refreshInputs(
+						liveOwner.resourceRevision(),
+						liveOwner.resourceLayerFingerprint(),
+						liveOwner.tagEpoch(),
+						fatalSnapshot,
+						liveOwner.contributionRevision(),
+						(FTFRandomState) (Object) server.overworld().getChunkSource().randomState()
+					);
+
+					if (!fatalLivePlan.biomeReplacement().plan().isConfigIgnored()) {
+						throw new AssertionError("Fatal contradictory replacement rule did not trigger isConfigIgnored()");
+					}
+					if (fatalLivePlan.biomeReplacement().plan().active()) {
+						throw new AssertionError("Fatal contradictory plan should be inactive");
+					}
+
+					// Sampling again under suppressed plan should revert cleanly to baseline without crash
+					Holder<net.minecraft.world.level.biome.Biome> revertedSample = liveTfGen.getBiomeSource().getNoiseBiome(0, 64, 0, liveSampler);
+					ResourceLocation revertedLoc = revertedSample.unwrapKey().map(net.minecraft.resources.ResourceKey::location).orElse(null);
+					if (!baselineLoc.equals(revertedLoc)) {
+						throw new AssertionError(String.format(
+							"Reversion failed under ignored config! Expected baseline '%s' but got '%s'",
+							baselineLoc, revertedLoc
+						));
+					}
+
+				} finally {
+					// Cleanly restore original configuration on the live generator with an advancing revision
+					BiomeReplacementConfigSnapshot restoredSnapshot = new BiomeReplacementConfigSnapshot(
+						originalSnapshot.revision() + 3000L,
+						originalSnapshot.fingerprint(),
+						originalSnapshot.path(),
+						originalSnapshot.origin(),
+						originalSnapshot.content(),
+						originalSnapshot.config(),
+						originalSnapshot.legacyFilePresent()
+					);
+					liveTfGen.refreshInputs(
+						liveOwner.resourceRevision(),
+						liveOwner.resourceLayerFingerprint(),
+						liveOwner.tagEpoch(),
+						restoredSnapshot,
+						liveOwner.contributionRevision(),
+						(FTFRandomState) (Object) server.overworld().getChunkSource().randomState()
+					);
+				}
+			}
+
+			FTFCommon.LOGGER.info(
+				"[FTF-Test] PASSED: Biome replacement system validated in live server run: real chunk generator replacements verified, edge cases isolated, fatal contradictions safely suppressed, and live generator cleanly restored."
+			);
+			testRecords.add(new TestRecord(
+				currentTestName,
+				"Live chunk generator biome replacement validated (live sampling, edge cases, contradiction suppression, state restoration)",
 				true,
 				null
 			));
