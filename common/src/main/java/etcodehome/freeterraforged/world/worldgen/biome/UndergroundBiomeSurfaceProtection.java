@@ -46,7 +46,9 @@ public final class UndergroundBiomeSurfaceProtection {
 		mru.quartX = quartX;
 		mru.quartY = quartY;
 		mru.quartZ = quartZ;
-		mru.samplerRef = new WeakReference<>(sampler);
+		if (cachedSampler != sampler) {
+			mru.samplerRef = new WeakReference<>(sampler);
+		}
 		mru.coverage = coverage;
 		return coverage;
 	}

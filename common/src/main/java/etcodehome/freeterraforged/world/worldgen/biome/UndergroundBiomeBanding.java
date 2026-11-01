@@ -380,26 +380,104 @@ public final class UndergroundBiomeBanding {
 	}
 
 	private static final class RegionCache {
-		private static final int CAPACITY = 1024;
+		private static final int CAPACITY = 8192;
 		private static final int MASK = CAPACITY - 1;
 
 		private final long[] keys = new long[CAPACITY];
-		private final RegionSample[] samples = new RegionSample[CAPACITY];
+		private final long[] nearestKeys = new long[CAPACITY];
+		private final float[] occupancies = new float[CAPACITY];
+		private final int[] cellXs = new int[CAPACITY];
+		private final int[] nearestCellYs = new int[CAPACITY];
+		private final int[] cellZs = new int[CAPACITY];
+		private final int[] identityQuartXs = new int[CAPACITY];
+		private final int[] identityQuartYs = new int[CAPACITY];
+		private final int[] identityQuartZs = new int[CAPACITY];
 
-		RegionSample find(long key) {
+		int getOrCompute(
+			long key,
+			long seed,
+			int quartX,
+			int quartY,
+			int quartZ,
+			int horizontalSize,
+			int verticalSize
+		) {
 			int slot = (int) HashCommon.mix(key) & MASK;
-			return this.keys[slot] == key ? this.samples[slot] : null;
+			if (this.keys[slot] == key) {
+				return slot;
+			}
+			this.computeInto(slot, key, seed, quartX, quartY, quartZ, horizontalSize, verticalSize);
+			return slot;
 		}
 
-		void store(long key, RegionSample sample) {
-			int slot = (int) HashCommon.mix(key) & MASK;
+		private void computeInto(
+			int slot,
+			long key,
+			long seed,
+			int quartX,
+			int quartY,
+			int quartZ,
+			int horizontalSize,
+			int verticalSize
+		) {
+			int blockX = QuartPos.toBlock(quartX);
+			int blockY = QuartPos.toBlock(quartY);
+			int blockZ = QuartPos.toBlock(quartZ);
+			double x = (double) blockX / horizontalSize;
+			double y = (double) blockY / verticalSize;
+			double z = (double) blockZ / horizontalSize;
+			int cellX = (int) Math.floor(x);
+			int cellY = (int) Math.floor(y);
+			int cellZ = (int) Math.floor(z);
+			double nearestDistance = Double.POSITIVE_INFINITY;
+			long nearestKey = 0L;
+			int nearestCellX = cellX;
+			int nearestCellY = cellY;
+			int nearestCellZ = cellZ;
+			double nearestSiteX = 0.0D;
+			double nearestSiteY = 0.0D;
+			double nearestSiteZ = 0.0D;
+
+			for (int offsetY = -1; offsetY <= 1; offsetY++) {
+				for (int offsetZ = -1; offsetZ <= 1; offsetZ++) {
+					for (int offsetX = -1; offsetX <= 1; offsetX++) {
+						int candidateX = cellX + offsetX;
+						int candidateY = cellY + offsetY;
+						int candidateZ = cellZ + offsetZ;
+						long k = cellHash(seed, candidateX, candidateY, candidateZ, OCCUPANCY_CELL_SALT);
+					double siteX = candidateX + 0.5D + (unit(k ^ 0x632BE59BD9B4E019L) - 0.5D) * CELL_JITTER;
+					double siteY = candidateY + 0.5D + (unit(k ^ 0xC6BC279692B5C323L) - 0.5D) * CELL_JITTER;
+					double siteZ = candidateZ + 0.5D + (unit(k ^ 0xD1B54A32D192ED03L) - 0.5D) * CELL_JITTER;
+					double dx = x - siteX;
+					double dy = y - siteY;
+					double dz = z - siteZ;
+					double distance = dx * dx + dy * dy + dz * dz;
+					if (distance < nearestDistance || (distance == nearestDistance && k < nearestKey)) {
+						nearestDistance = distance;
+						nearestKey = k;
+						nearestCellX = candidateX;
+						nearestCellY = candidateY;
+						nearestCellZ = candidateZ;
+						nearestSiteX = siteX;
+						nearestSiteY = siteY;
+						nearestSiteZ = siteZ;
+					}
+					}
+				}
+			}
 			this.keys[slot] = key;
-			this.samples[slot] = sample;
+			this.nearestKeys[slot] = nearestKey;
+			this.occupancies[slot] = (float) unit(nearestKey ^ OCCUPANCY_SCORE_SALT);
+			this.cellXs[slot] = cellX;
+			this.nearestCellYs[slot] = nearestCellY;
+			this.cellZs[slot] = cellZ;
+			this.identityQuartXs[slot] = QuartPos.fromBlock((int) Math.floor(nearestSiteX * horizontalSize));
+			this.identityQuartYs[slot] = QuartPos.fromBlock((int) Math.floor(nearestSiteY * verticalSize));
+			this.identityQuartZs[slot] = QuartPos.fromBlock((int) Math.floor(nearestSiteZ * horizontalSize));
 		}
 
 		void clear() {
 			java.util.Arrays.fill(this.keys, 0L);
-			java.util.Arrays.fill(this.samples, null);
 		}
 	}
 	private static final ThreadLocal<RegionCache> REGION_CACHE = ThreadLocal.withInitial(RegionCache::new);
@@ -408,90 +486,6 @@ public final class UndergroundBiomeBanding {
 		long coords = ((long) (quartY & 0xFFFF) << 48) | ((long) (quartX & 0xFFFFFF) << 24) | (quartZ & 0xFFFFFFL);
 		long sizes = ((long) horizontalSize << 32) | (verticalSize & 0xFFFFFFFFL);
 		return coords ^ seed ^ HashCommon.mix(sizes);
-	}
-
-	private static RegionSample sample3d(
-		long seed,
-		int quartX,
-		int quartY,
-		int quartZ,
-		int horizontalSize,
-		int verticalSize
-	) {
-		long key = sampleKey(seed, quartX, quartY, quartZ, horizontalSize, verticalSize);
-		RegionCache cache = REGION_CACHE.get();
-		RegionSample sample = cache.find(key);
-		if (sample != null) {
-			return sample;
-		}
-		sample = computeSample3d(seed, quartX, quartY, quartZ, horizontalSize, verticalSize);
-		cache.store(key, sample);
-		return sample;
-	}
-
-	private static RegionSample computeSample3d(
-		long seed,
-		int quartX,
-		int quartY,
-		int quartZ,
-		int horizontalSize,
-		int verticalSize
-	) {
-		int blockX = QuartPos.toBlock(quartX);
-		int blockY = QuartPos.toBlock(quartY);
-		int blockZ = QuartPos.toBlock(quartZ);
-		double x = (double) blockX / horizontalSize;
-		double y = (double) blockY / verticalSize;
-		double z = (double) blockZ / horizontalSize;
-		int cellX = (int) Math.floor(x);
-		int cellY = (int) Math.floor(y);
-		int cellZ = (int) Math.floor(z);
-		double nearestDistance = Double.POSITIVE_INFINITY;
-		long nearestKey = 0L;
-		int nearestCellX = cellX;
-		int nearestCellY = cellY;
-		int nearestCellZ = cellZ;
-		double nearestSiteX = 0.0D;
-		double nearestSiteY = 0.0D;
-		double nearestSiteZ = 0.0D;
-
-		for (int offsetY = -1; offsetY <= 1; offsetY++) {
-			for (int offsetZ = -1; offsetZ <= 1; offsetZ++) {
-				for (int offsetX = -1; offsetX <= 1; offsetX++) {
-					int candidateX = cellX + offsetX;
-					int candidateY = cellY + offsetY;
-					int candidateZ = cellZ + offsetZ;
-					long key = cellHash(seed, candidateX, candidateY, candidateZ, OCCUPANCY_CELL_SALT);
-					double siteX = candidateX + 0.5D + (unit(key ^ 0x632BE59BD9B4E019L) - 0.5D) * CELL_JITTER;
-					double siteY = candidateY + 0.5D + (unit(key ^ 0xC6BC279692B5C323L) - 0.5D) * CELL_JITTER;
-					double siteZ = candidateZ + 0.5D + (unit(key ^ 0xD1B54A32D192ED03L) - 0.5D) * CELL_JITTER;
-					double dx = x - siteX;
-					double dy = y - siteY;
-					double dz = z - siteZ;
-					double distance = dx * dx + dy * dy + dz * dz;
-					if (distance < nearestDistance || (distance == nearestDistance && key < nearestKey)) {
-						nearestDistance = distance;
-						nearestKey = key;
-						nearestCellX = candidateX;
-						nearestCellY = candidateY;
-						nearestCellZ = candidateZ;
-						nearestSiteX = siteX;
-						nearestSiteY = siteY;
-						nearestSiteZ = siteZ;
-					}
-				}
-			}
-		}
-		return new RegionSample(
-			nearestKey,
-			unit(nearestKey ^ OCCUPANCY_SCORE_SALT),
-			cellX,
-			nearestCellY,
-			cellZ,
-			QuartPos.fromBlock((int) Math.floor(nearestSiteX * horizontalSize)),
-			QuartPos.fromBlock((int) Math.floor(nearestSiteY * verticalSize)),
-			QuartPos.fromBlock((int) Math.floor(nearestSiteZ * horizontalSize))
-		);
 	}
 
 	public static boolean allowsCaveBiome(
@@ -528,15 +522,10 @@ public final class UndergroundBiomeBanding {
 			preset.world().properties.worldHeight,
 			preset.world().properties.worldDepth
 		);
-		RegionSample region = sample3d(
-			seed,
-			quartX,
-			quartY,
-			quartZ,
-			horizontalSize,
-			verticalSize
-		);
-		return region.occupancy() < effectiveDensity;
+		long key = sampleKey(seed, quartX, quartY, quartZ, horizontalSize, verticalSize);
+		RegionCache cache = REGION_CACHE.get();
+		int slot = cache.getOrCompute(key, seed, quartX, quartY, quartZ, horizontalSize, verticalSize);
+		return cache.occupancies[slot] < effectiveDensity;
 	}
 
 	private static float surfaceFactor(long depth, long selectionStart, long fullDensityStart) {
@@ -732,7 +721,13 @@ public final class UndergroundBiomeBanding {
 		}
 
 		private T findValue(
-			RegionSample region,
+			long regionKey,
+			int cellX,
+			int cellY,
+			int cellZ,
+			int identityQuartX,
+			int identityQuartY,
+			int identityQuartZ,
 			TargetSampler targetSampler,
 			long seed,
 			float climateInfluence,
@@ -743,14 +738,13 @@ public final class UndergroundBiomeBanding {
 				return this.candidates[0].value();
 			}
 
-			long regionKey = region.key();
-			int horizontalPhase = this.getHorizontalPhase(seed, region.cellX(), region.cellZ(), candidateCount);
+			int horizontalPhase = this.getHorizontalPhase(seed, cellX, cellZ, candidateCount);
 
 			if (climateInfluence <= 0.0F) {
 				if (!bandingEnabled) {
 					return this.candidates[horizontalPhase].value();
 				}
-				int rotationIndex = Math.floorMod(region.cellY() + horizontalPhase, candidateCount);
+				int rotationIndex = Math.floorMod(cellY + horizontalPhase, candidateCount);
 				return this.candidates[rotationIndex].value();
 			}
 
@@ -768,7 +762,7 @@ public final class UndergroundBiomeBanding {
 				rankedIndices = this.rankedCache.find(regionKey);
 				if (rankedIndices == null) {
 					Climate.TargetPoint identityTarget = targetSampler != null
-						? targetSampler.sample(region.identityQuartX(), region.identityQuartY(), region.identityQuartZ())
+						? targetSampler.sample(identityQuartX, identityQuartY, identityQuartZ)
 						: Climate.target(0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F);
 					rankedIndices = this.computeRankedIndices(identityTarget);
 					this.rankedCache.store(regionKey, rankedIndices);
@@ -793,7 +787,7 @@ public final class UndergroundBiomeBanding {
 				return this.candidates[rankedIndices[horizontalPhase]].value();
 			}
 
-			int rotationIndex = Math.floorMod(region.cellY() + horizontalPhase, candidateCount);
+			int rotationIndex = Math.floorMod(cellY + horizontalPhase, candidateCount);
 			return this.candidates[rankedIndices[rotationIndex]].value();
 		}
 
@@ -812,9 +806,15 @@ public final class UndergroundBiomeBanding {
 			return phase;
 		}
 
+		private static final ThreadLocal<long[]> DISTANCE_SCRATCH = ThreadLocal.withInitial(() -> new long[32]);
+
 		private int[] computeRankedIndices(Climate.TargetPoint target) {
 			int candidateCount = this.candidates.length;
-			long[] distancesSq = new long[candidateCount];
+			long[] distancesSq = DISTANCE_SCRATCH.get();
+			if (distancesSq.length < candidateCount) {
+				distancesSq = new long[candidateCount];
+				DISTANCE_SCRATCH.set(distancesSq);
+			}
 			for (int i = 0; i < candidateCount; i++) {
 				distancesSq[i] = this.candidates[i].distanceSq(target);
 			}
@@ -849,17 +849,6 @@ public final class UndergroundBiomeBanding {
 		}
 	}
 
-	private record RegionSample(
-		long key,
-		double occupancy,
-		int cellX,
-		int cellY,
-		int cellZ,
-		int identityQuartX,
-		int identityQuartY,
-		int identityQuartZ
-	) {
-	}
 
 	@FunctionalInterface
 	public interface TargetSampler {
@@ -887,6 +876,7 @@ public final class UndergroundBiomeBanding {
 		private final int classificationFailureCount;
 		private final List<T> shallowCandidateValues;
 		private final List<T> deepCandidateValues;
+		private final Set<T> caveCandidateSet;
 
 		private Layout(
 			Climate.ParameterList<T> original,
@@ -930,6 +920,9 @@ public final class UndergroundBiomeBanding {
 			this.classificationFailureCount = classificationFailureCount;
 			this.shallowCandidateValues = List.copyOf(shallowCandidateValues);
 			this.deepCandidateValues = List.copyOf(deepCandidateValues);
+			Set<T> candidateSet = new LinkedHashSet<>(this.shallowCandidateValues);
+			candidateSet.addAll(this.deepCandidateValues);
+			this.caveCandidateSet = Set.copyOf(candidateSet);
 		}
 
 		private static <T> Layout<T> unmodified(
@@ -1005,7 +998,7 @@ public final class UndergroundBiomeBanding {
 		}
 
 		public boolean isCaveCandidate(T value) {
-			return this.shallowCandidateValues.contains(value) || this.deepCandidateValues.contains(value);
+			return this.caveCandidateSet.contains(value);
 		}
 
 		public T backgroundValue(Climate.TargetPoint target) {
@@ -1059,20 +1052,21 @@ public final class UndergroundBiomeBanding {
 				return this.background.findValue(target);
 			}
 
-			RegionSample region = sample3d(
-				this.seed,
-				quartX,
-				quartY,
-				quartZ,
-				this.horizontalSize,
-				this.verticalSize
-			);
-			if (effectiveDensity < 1.0F && region.occupancy() >= effectiveDensity) {
+			long key = sampleKey(this.seed, quartX, quartY, quartZ, this.horizontalSize, this.verticalSize);
+			RegionCache cache = REGION_CACHE.get();
+			int slot = cache.getOrCompute(key, this.seed, quartX, quartY, quartZ, this.horizontalSize, this.verticalSize);
+			if (effectiveDensity < 1.0F && cache.occupancies[slot] >= effectiveDensity) {
 				return this.background.findValue(target);
 			}
 
 			return stage.findValue(
-				region,
+				cache.nearestKeys[slot],
+				cache.cellXs[slot],
+				cache.nearestCellYs[slot],
+				cache.cellZs[slot],
+				cache.identityQuartXs[slot],
+				cache.identityQuartYs[slot],
+				cache.identityQuartZs[slot],
 				targetSampler,
 				this.seed,
 				this.climateInfluence,

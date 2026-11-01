@@ -944,6 +944,50 @@ public final class MinecraftWorldgenPlanCompiler {
 		return compileProviderSelectionPolicy(owner, providers, samplerDecoration, purpose);
 	}
 
+	private static final class DecoratedTargetSampler implements UndergroundBiomeBanding.TargetSampler {
+		private Climate.Sampler sampler;
+		private WorldgenPlans.SamplerDecoration samplerDecoration;
+		private WorldgenPlans.ProviderSelection providers;
+		private ResourceLocation domain;
+		private boolean usedFallback;
+
+		void init(
+			Climate.Sampler sampler,
+			WorldgenPlans.SamplerDecoration samplerDecoration,
+			WorldgenPlans.ProviderSelection providers,
+			ResourceLocation domain,
+			boolean usedFallback
+		) {
+			this.sampler = sampler;
+			this.samplerDecoration = samplerDecoration;
+			this.providers = providers;
+			this.domain = domain;
+			this.usedFallback = usedFallback;
+		}
+
+		void clear() {
+			this.sampler = null;
+			this.samplerDecoration = null;
+			this.providers = null;
+			this.domain = null;
+		}
+
+		@Override
+		public Climate.TargetPoint sample(int identityQuartX, int identityQuartY, int identityQuartZ) {
+			boolean prev = etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeClimatePolicy.beginSkipBanding();
+			try {
+				Climate.TargetPoint identitySample = this.samplerDecoration.sample(
+					this.sampler, identityQuartX, identityQuartY, identityQuartZ
+				);
+				return this.providers.projectTarget(this.domain, this.usedFallback, identitySample);
+			} finally {
+				etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeClimatePolicy.endSkipBanding(prev);
+			}
+		}
+	}
+	private static final ThreadLocal<DecoratedTargetSampler> TARGET_SAMPLER =
+		ThreadLocal.withInitial(DecoratedTargetSampler::new);
+
 	private static WorldgenPlans.SelectionDecoration compileProviderSelectionPolicy(
 		WorldgenOwner owner,
 		WorldgenPlans.ProviderSelection providers,
@@ -997,20 +1041,16 @@ public final class MinecraftWorldgenPlanCompiler {
 				if (layout == null) {
 					throw new IllegalStateException("No underground policy for candidate domain " + domain);
 				}
-				Holder<Biome> resolved = applyUndergroundPolicy(
-					preset, layout, selected, target, quartX, quartY, quartZ, sampler,
-					(identityQuartX, identityQuartY, identityQuartZ) -> {
-						boolean prev = etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeClimatePolicy.beginSkipBanding();
-						try {
-							Climate.TargetPoint identitySample = samplerDecoration.sample(
-								sampler, identityQuartX, identityQuartY, identityQuartZ
-							);
-							return providers.projectTarget(domain, result.usedFallback(), identitySample);
-						} finally {
-							etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeClimatePolicy.endSkipBanding(prev);
-						}
-					}
-				);
+				DecoratedTargetSampler targetSampler = TARGET_SAMPLER.get();
+				Holder<Biome> resolved;
+				try {
+					targetSampler.init(sampler, samplerDecoration, providers, domain, result.usedFallback());
+					resolved = applyUndergroundPolicy(
+						preset, layout, selected, target, quartX, quartY, quartZ, sampler, targetSampler
+					);
+				} finally {
+					targetSampler.clear();
+				}
 				return terrainRoles.resolve(
 					result, target, resolved, quartX, quartY, quartZ, sampler, surfaceContext
 				);

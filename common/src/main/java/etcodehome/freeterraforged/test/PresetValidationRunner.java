@@ -1759,36 +1759,38 @@ public final class PresetValidationRunner {
 			watchdog.setStep(currentTestName);
 			FTFCommon.LOGGER.info("[FTF-Test] Verifying world generation memory leak prevention and ThreadLocal lifecycle...");
 
-			// 1. Verify that transient Climate.Sampler instances are not retained in ThreadLocal COVERAGE_MRU
+			// 1. Verify that transient Climate.Sampler instances are not retained on Minecraft background workers
 			net.minecraft.world.level.biome.Climate.Sampler[] samplerHolder =
 				new net.minecraft.world.level.biome.Climate.Sampler[]{net.minecraft.world.level.biome.Climate.empty()};
 			java.lang.ref.WeakReference<net.minecraft.world.level.biome.Climate.Sampler> samplerLeakRef =
 				new java.lang.ref.WeakReference<>(samplerHolder[0]);
 
 			Climate.TargetPoint leakTarget = Climate.target(0.0F, 0.0F, 0.0F, -0.5F, 1.5F, 0.0F);
-			int leakWorkerThreads = 4;
-			java.util.concurrent.ExecutorService leakExecutor = java.util.concurrent.Executors.newFixedThreadPool(leakWorkerThreads);
-			java.util.concurrent.CountDownLatch leakLatch = new java.util.concurrent.CountDownLatch(leakWorkerThreads);
-			for (int t = 0; t < leakWorkerThreads; t++) {
-				leakExecutor.submit(() -> {
+			int leakWorkerTasks = Math.max(8, Runtime.getRuntime().availableProcessors() * 2);
+			java.util.concurrent.CountDownLatch leakLatch = new java.util.concurrent.CountDownLatch(leakWorkerTasks);
+			for (int t = 0; t < leakWorkerTasks; t++) {
+				final int threadOffset = t;
+				net.minecraft.Util.backgroundExecutor().execute(() -> {
 					try {
-						for (int i = 0; i < 50; i++) {
-							UndergroundBiomeSurfaceProtection.coverageFactor(samplerHolder[0], leakTarget, i * 4, -60, i * 4);
+						// Deep world column scan (256 vertical quarts = 1024 blocks depth)
+						for (int quartY = -128; quartY <= 128; quartY += 4) {
+							for (int q = 0; q < 8; q++) {
+								net.minecraft.world.level.biome.Climate.Sampler s = samplerHolder[0];
+								if (s != null) {
+									UndergroundBiomeSurfaceProtection.coverageFactor(s, leakTarget, (threadOffset + q) * 4, quartY, q * 4);
+								}
+							}
 						}
 					} finally {
 						leakLatch.countDown();
 					}
 				});
 			}
-			if (!leakLatch.await(5, java.util.concurrent.TimeUnit.SECONDS)) {
-				throw new AssertionError("Memory leak validation worker threads timed out");
-			}
-			leakExecutor.shutdown();
-			if (!leakExecutor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS)) {
-				throw new AssertionError("Memory leak validation executor termination timed out");
+			if (!leakLatch.await(10, java.util.concurrent.TimeUnit.SECONDS)) {
+				throw new AssertionError("Memory leak validation worker tasks timed out");
 			}
 
-			// 2. Verify that transient UndergroundBiomeBanding.Layout instances are not retained in worker thread-locals
+			// 2. Verify that transient UndergroundBiomeBanding.Layout instances are not retained on Minecraft background workers
 			Preset transientPreset = Presets.makeFTFDefault();
 			transientPreset.climate().biomeShape.undergroundBiomeClimateInfluence = 0.75F;
 			transientPreset.climate().biomeShape.undergroundBiomeBanding = true;
@@ -1806,32 +1808,33 @@ public final class PresetValidationRunner {
 			java.lang.ref.WeakReference<UndergroundBiomeBanding.Layout<?>> layoutLeakRef =
 				new java.lang.ref.WeakReference<>(layoutHolder[0]);
 
-			java.util.concurrent.ExecutorService layoutExecutor = java.util.concurrent.Executors.newFixedThreadPool(leakWorkerThreads);
-			java.util.concurrent.CountDownLatch layoutLatch = new java.util.concurrent.CountDownLatch(leakWorkerThreads);
-			for (int t = 0; t < leakWorkerThreads; t++) {
-				layoutExecutor.submit(() -> {
+			java.util.concurrent.CountDownLatch layoutLatch = new java.util.concurrent.CountDownLatch(leakWorkerTasks);
+			for (int t = 0; t < leakWorkerTasks; t++) {
+				final int threadOffset = t;
+				net.minecraft.Util.backgroundExecutor().execute(() -> {
 					try {
-						for (int i = 0; i < 50; i++) {
-							layoutHolder[0].findValue(leakTarget, i * 4, -120, i * 4, 1.0F);
+						for (int quartY = -128; quartY <= 128; quartY += 4) {
+							for (int q = 0; q < 8; q++) {
+								UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> l = layoutHolder[0];
+								if (l != null) {
+									l.findValue(leakTarget, (threadOffset + q) * 4, quartY, q * 4, 1.0F);
+								}
+							}
 						}
 					} finally {
 						layoutLatch.countDown();
 					}
 				});
 			}
-			if (!layoutLatch.await(5, java.util.concurrent.TimeUnit.SECONDS)) {
-				throw new AssertionError("Layout memory leak validation worker threads timed out");
-			}
-			layoutExecutor.shutdown();
-			if (!layoutExecutor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS)) {
-				throw new AssertionError("Layout memory leak validation executor termination timed out");
+			if (!layoutLatch.await(10, java.util.concurrent.TimeUnit.SECONDS)) {
+				throw new AssertionError("Layout memory leak validation worker tasks timed out");
 			}
 
-			// Clear strong references
+			// Clear strong references while background worker threads are STILL RUNNING AND ALIVE!
 			samplerHolder[0] = null;
 			layoutHolder[0] = null;
 
-			// Verify garbage collection cleans up both weak references
+			// Verify garbage collection cleans up both weak references while threads remain alive in backgroundExecutor
 			boolean samplerCollected = false;
 			boolean layoutCollected = false;
 			for (int i = 0; i < 50; i++) {
@@ -1843,10 +1846,10 @@ public final class PresetValidationRunner {
 			}
 
 			if (!samplerCollected) {
-				throw new AssertionError("Memory leak detected: Climate.Sampler was retained in ThreadLocal or caches after disposal!");
+				throw new AssertionError("Memory leak detected: Climate.Sampler was retained in ThreadLocal or caches by persistent worker threads!");
 			}
 			if (!layoutCollected) {
-				throw new AssertionError("Memory leak detected: UndergroundBiomeBanding.Layout was retained in ThreadLocal or caches after disposal!");
+				throw new AssertionError("Memory leak detected: UndergroundBiomeBanding.Layout was retained in ThreadLocal or caches by persistent worker threads!");
 			}
 
 			FTFCommon.LOGGER.info("[FTF-Test] PASSED: World generation memory leak prevention verified (transient samplers and layouts reclaimed cleanly).");

@@ -63,14 +63,15 @@ class WorldgenMemoryLeakTest {
 		}
 
 		assertTrue(latch.await(5, TimeUnit.SECONDS), "Threads should finish queries promptly");
-		executor.shutdown();
-		assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS), "Executor should terminate");
 
-		// Null out strong reference
+		// Null out strong reference while worker threads are STILL ALIVE and idle!
 		samplerHolder[0] = null;
 
-		// Trigger GC to ensure WeakReference is collected
-		assertGarbageCollected(samplerRef, "Climate.Sampler must be garbage collected and not retained by COVERAGE_MRU");
+		// Trigger GC to ensure WeakReference is collected while threads are still alive
+		assertGarbageCollected(samplerRef, "Climate.Sampler must be garbage collected and not retained by COVERAGE_MRU while threads are alive");
+
+		executor.shutdown();
+		assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS), "Executor should terminate");
 	}
 
 	@Test
@@ -116,14 +117,15 @@ class WorldgenMemoryLeakTest {
 		}
 
 		assertTrue(latch.await(5, TimeUnit.SECONDS), "Threads should finish queries promptly");
-		executor.shutdown();
-		assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS), "Executor should terminate");
 
-		// Null out strong reference
+		// Null out strong reference while worker threads are STILL ALIVE and idle!
 		layoutHolder[0] = null;
 
-		// Trigger GC to ensure WeakReference is collected
-		assertGarbageCollected(layoutRef, "Layout must be garbage collected and not retained in ThreadLocal or caches");
+		// Trigger GC to ensure WeakReference is collected while threads are still alive
+		assertGarbageCollected(layoutRef, "Layout must be garbage collected and not retained in ThreadLocal or caches while threads are alive");
+
+		executor.shutdown();
+		assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS), "Executor should terminate");
 	}
 
 	private static void assertGarbageCollected(WeakReference<?> ref, String message) throws InterruptedException {
