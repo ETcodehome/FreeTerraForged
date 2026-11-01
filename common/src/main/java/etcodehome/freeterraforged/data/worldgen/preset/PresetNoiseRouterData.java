@@ -60,8 +60,11 @@ public class PresetNoiseRouterData {
         ctx.register(NoiseRouterData.RIDGES, FTFDensityFunctions.cell(CellSampler.Field.WEIRDNESS));
 
         DensityFunction height = NoiseRouterData.registerAndWrap(ctx, HEIGHT, FTFDensityFunctions.cell(CellSampler.Field.HEIGHT));
-        DensityFunction offset = NoiseRouterData.registerAndWrap(ctx, NoiseRouterData.OFFSET, DensityFunctions.add(DensityFunctions.constant(NoiseRouterData.GLOBAL_OFFSET - 0.5F), DensityFunctions.mul(FTFDensityFunctions.clampToNearestUnit(height, properties.terrainScaleFactor()), DensityFunctions.constant(2.0D))));
-        ctx.register(NoiseRouterData.DEPTH, DensityFunctions.add(DensityFunctions.yClampedGradient(-worldDepth, worldHeight, yGradientRange(-worldDepth), yGradientRange(worldHeight)), offset));
+        DensityFunction offset = NoiseRouterData.registerAndWrap(ctx, NoiseRouterData.OFFSET, DensityFunctions.add(DensityFunctions.constant(NoiseRouterData.GLOBAL_OFFSET - 0.5F), DensityFunctions.mul(height, DensityFunctions.constant(2.0D))));
+        DensityFunction terrainDensity = DensityFunctions.add(DensityFunctions.yClampedGradient(-worldDepth, worldHeight, yGradientRange(-worldDepth), yGradientRange(worldHeight)), offset);
+        DensityFunction factor = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.FACTOR);
+        ctx.register(NoiseRouterData.SLOPED_CHEESE, NoiseRouterData.noiseGradientDensity(DensityFunctions.cache2d(factor), terrainDensity));
+        ctx.register(NoiseRouterData.DEPTH, FTFDensityFunctions.climateDepth(worldDepth, worldHeight));
         ctx.register(NoiseRouterData.BASE_3D_NOISE_OVERWORLD, DensityFunctions.zero());
         ctx.register(NoiseRouterData.JAGGEDNESS, jaggednessPerformanceHack());
                 
@@ -78,6 +81,7 @@ public class PresetNoiseRouterData {
     	WorldSettings worldSettings = preset.world();
     	WorldSettings.Properties properties = worldSettings.properties;
     	int worldDepth = properties.worldDepth;
+    	int worldHeight = properties.worldHeight;
     	
     	CaveSettings caves = preset.caves();
     	float cheeseCaveDepthOffset = caves.cheeseCaveDepthOffset;
@@ -87,13 +91,18 @@ public class PresetNoiseRouterData {
         DensityFunction aquiferLava = DensityFunctions.noise(noiseParams.getOrThrow(Noises.AQUIFER_LAVA));
         DensityFunction factor = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.FACTOR);
         DensityFunction depth = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.DEPTH);
+        DensityFunction offset = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.OFFSET);
+        DensityFunction terrainDensity = DensityFunctions.add(
+            DensityFunctions.yClampedGradient(-worldDepth, worldHeight, yGradientRange(-worldDepth), yGradientRange(worldHeight)),
+            offset
+        );
         DensityFunction temperature = FTFDensityFunctions.cell(CellSampler.Field.TEMPERATURE);
         DensityFunction vegetation = FTFDensityFunctions.cell(CellSampler.Field.MOISTURE);
         DensityFunction continents = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.CONTINENTS);
         DensityFunction erosion = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.EROSION);
         DensityFunction ridges = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.RIDGES);
-        DensityFunction initialDensity = NoiseRouterData.noiseGradientDensity(DensityFunctions.cache2d(factor), depth);
-        DensityFunction slopedCheese = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.SLOPED_CHEESE);
+        DensityFunction initialDensity = NoiseRouterData.noiseGradientDensity(DensityFunctions.cache2d(factor), terrainDensity);
+        DensityFunction slopedCheese = initialDensity;
 //        DensityFunction entrances = DensityFunctions.min(slopedCheese, DensityFunctions.mul(DensityFunctions.constant(5.0), NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.ENTRANCES)));
 //        DensityFunction slopedCheeseCaves = DensityFunctions.rangeChoice(slopedCheese, -1000000.0, 1.5625, entrances, NoiseRouterData.underground(densityFunctions, noiseParams, slopedCheese));
 //        DensityFunction finalDensity = DensityFunctions.min(NoiseRouterData.postProcess(slideOverworld(slopedCheeseCaves, -worldDepth)), NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.NOODLE));

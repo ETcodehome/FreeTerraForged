@@ -71,6 +71,7 @@ import etcodehome.freeterraforged.platform.ConfigUtil;
 import etcodehome.freeterraforged.registries.FTFRegistries;
 import etcodehome.freeterraforged.world.worldgen.biome.BiomeCandidateRoles;
 import etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeBanding;
+import etcodehome.freeterraforged.world.worldgen.perf.WorldgenBenchmarkRunner;
 import etcodehome.freeterraforged.world.worldgen.runtime.BiomePlacementPlan;
 import etcodehome.freeterraforged.world.worldgen.search.BiomeSearchResolution;
 import etcodehome.freeterraforged.world.worldgen.search.LocateSearchValidator;
@@ -1500,7 +1501,8 @@ public final class PresetValidationRunner {
 				throw new AssertionError("undergroundBiomeSize not respected: small size (50) should have significantly more transitions than large size (500). Small=" + smallTransitions + ", Large=" + largeTransitions);
 			}
 
-			// 4. Verify 1024-block deep world with 100% cave coverage and 0% climate influence
+			// 4. Verify 1024-block deep world with 100% cave coverage:
+			// At 0% (0.0F) climate influence: completely tolerant, rotating across all cave biomes
 			Preset extraDeepPreset = Presets.makeFTFDefault();
 			extraDeepPreset.world().properties.worldDepth = 1024;
 			extraDeepPreset.world().properties.worldHeight = 320;
@@ -1538,6 +1540,26 @@ public final class PresetValidationRunner {
 			}
 			if (deepWorldTransitions < 8) {
 				throw new AssertionError("1024-deep world should have frequent vertical banding transitions down 1000 blocks, but only got " + deepWorldTransitions);
+			}
+
+			// Verify 100% (1.0F) climate influence: always selected entirely by accurate climate parameter values
+			Preset accurateClimatePreset = extraDeepPreset.copy();
+			accurateClimatePreset.climate().biomeShape.undergroundBiomeClimateInfluence = 1.0F;
+			UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> accurateLayout = UndergroundBiomeBanding.apply(
+				accurateClimatePreset,
+				overworldEntries,
+				seed,
+				(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value)),
+				UndergroundBiomeTags::isCave
+			);
+			java.util.Set<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> accurateBiomes = new java.util.LinkedHashSet<>();
+			for (int blockY = -96; blockY >= -1000; blockY -= 64) {
+				int quartY = QuartPos.fromBlock(blockY);
+				net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> b = accurateLayout.findValue(target, quartX, quartY, quartZ);
+				accurateBiomes.add(b);
+			}
+			if (accurateBiomes.size() != 1) {
+				throw new AssertionError("1024-deep world with 100% climate influence should select exclusively the closest climate candidate, but found " + accurateBiomes.size() + ": " + accurateBiomes);
 			}
 
 			// 5. Verify 0% cave coverage underground: all sampled biomes must be background (non-cave) biomes
@@ -1890,8 +1912,14 @@ public final class PresetValidationRunner {
 			}
 
 			// 3. Concrete Expanding Area Memory Leak Measurement on Deep World Presets (1024-block depth)
-			// Simulates player flying and generating larger areas in a 1024-deep world with 100% cave coverage
-			FTFCommon.LOGGER.info("[FTF-Test] Measuring memory stability across expanding area on 1024-deep world preset...");
+			// Simulates player flying and generating a 1000x1000 block region in a 1024-deep world starting at middle of continent
+			BlockPos continentCenter = WorldgenBenchmarkRunner.resolveContinentCenter(server.overworld(), 0, 0);
+			int continentCenterX = continentCenter.getX();
+			int continentCenterZ = continentCenter.getZ();
+			FTFCommon.LOGGER.info(
+				"[FTF-Test] Measuring memory stability across 1000x1000 block region centered at continent middle ({}, {}) on 1024-deep world preset...",
+				continentCenterX, continentCenterZ
+			);
 			Preset leakDeepPreset = Presets.makeFTFDefault();
 			leakDeepPreset.world().properties.worldDepth = 1024;
 			leakDeepPreset.world().properties.worldHeight = 320;
@@ -1911,53 +1939,73 @@ public final class PresetValidationRunner {
 				);
 
 			Climate.Sampler liveSamplerForLeak = server.overworld().getChunkSource().randomState().sampler();
+			int minChunkX = (continentCenterX - 500) >> 4;
+			int maxChunkX = (continentCenterX + 500) >> 4;
+			int minChunkZ = (continentCenterZ - 500) >> 4;
+			int maxChunkZ = (continentCenterZ + 500) >> 4;
+			int chunksSpanX = maxChunkX - minChunkX + 1;
+			int chunksSpanZ = maxChunkZ - minChunkZ + 1;
 			int areaBatches = 4;
-			int chunksPerAreaBatch = 16;
 			long[] retainedHeapByBatch = new long[areaBatches];
 
 			for (int b = 0; b < areaBatches; b++) {
 				final int batchNum = b;
-				java.util.concurrent.CountDownLatch batchLatch = new java.util.concurrent.CountDownLatch(chunksPerAreaBatch);
-				for (int c = 0; c < chunksPerAreaBatch; c++) {
-					final int chunkIdx = batchNum * chunksPerAreaBatch + c;
-					final int chunkX = (chunkIdx % 16) + 500;
-					final int chunkZ = (chunkIdx / 16) + 500;
-					net.minecraft.Util.backgroundExecutor().execute(() -> {
-						try {
-							int baseQuartX = chunkX << 2;
-							int baseQuartZ = chunkZ << 2;
-							// 1024 depth: quartY from -256 to 80 (336 vertical quarts)
-							for (int quartY = -256; quartY <= 80; quartY += 4) {
-								for (int qz = 0; qz < 4; qz++) {
-									for (int qx = 0; qx < 4; qx++) {
-										int qX = baseQuartX + qx;
-										int qZ = baseQuartZ + qz;
-										float coverage = UndergroundBiomeSurfaceProtection.coverageFactor(
-											liveSamplerForLeak, leakTarget, qX, quartY, qZ
-										);
-										net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> sampled =
-											deepAreaLayout.findValue(
-												leakTarget, qX, quartY, qZ, coverage,
-												(iqx, iqy, iqz) -> leakTarget
+				int zStart = minChunkZ + (b * chunksSpanZ) / areaBatches;
+				int zEnd = minChunkZ + ((b + 1) * chunksSpanZ) / areaBatches;
+				int batchChunkCount = chunksSpanX * (zEnd - zStart);
+				java.util.concurrent.CountDownLatch batchLatch = new java.util.concurrent.CountDownLatch(batchChunkCount);
+
+				for (int cz = zStart; cz < zEnd; cz++) {
+					final int chunkZ = cz;
+					for (int cx = minChunkX; cx <= maxChunkX; cx++) {
+						final int chunkX = cx;
+						net.minecraft.Util.backgroundExecutor().execute(() -> {
+							try {
+								int baseQuartX = chunkX << 2;
+								int baseQuartZ = chunkZ << 2;
+								// 1024 depth: quartY from -256 to 80 (336 vertical quarts)
+								for (int quartY = -256; quartY <= 80; quartY += 8) {
+									for (int qz = 0; qz < 4; qz += 2) {
+										for (int qx = 0; qx < 4; qx += 2) {
+											int qX = baseQuartX + qx;
+											int qZ = baseQuartZ + qz;
+											float coverage = UndergroundBiomeSurfaceProtection.coverageFactor(
+												liveSamplerForLeak, leakTarget, qX, quartY, qZ
 											);
-										if (sampled == null) {
-											throw new AssertionError("Sampled biome was null");
-										}
-										if (quartY <= -16 && !UndergroundBiomeTags.isCave(sampled)) {
-											String path = sampled.unwrapKey().map(k -> k.location().getPath()).orElse("unknown");
-											throw new AssertionError(String.format(
-												java.util.Locale.ROOT,
-												"Non-cave biome '%s' returned underground at (qx=%d, quartY=%d, qz=%d) when 100%% cave coverage configured!",
-												path, qX, quartY, qZ
-											));
+											net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> sampled =
+												deepAreaLayout.findValue(
+													leakTarget, qX, quartY, qZ, coverage,
+													(iqx, iqy, iqz) -> leakTarget
+												);
+											if (sampled == null) {
+												throw new AssertionError("Sampled biome was null");
+											}
+											// Subterranean cave checks: 100% cave coverage means cave biomes underground
+											if (quartY <= -16 && coverage >= 1.0F && !UndergroundBiomeTags.isCave(sampled)) {
+												String path = sampled.unwrapKey().map(k -> k.location().getPath()).orElse("unknown");
+												throw new AssertionError(String.format(
+													java.util.Locale.ROOT,
+													"Non-cave biome '%s' returned underground at (qx=%d, quartY=%d, qz=%d) when 100%% cave coverage configured!",
+													path, qX, quartY, qZ
+												));
+											}
+											// Surface protection check: cave biomes must not project through surface
+											if (coverage <= 0.0F && UndergroundBiomeTags.isCave(sampled)) {
+												String path = sampled.unwrapKey().map(k -> k.location().getPath()).orElse("unknown");
+												throw new AssertionError(String.format(
+													java.util.Locale.ROOT,
+													"Cave biome '%s' projected through surface at (qx=%d, quartY=%d, qz=%d) when coverage factor is 0.0!",
+													path, qX, quartY, qZ
+												));
+											}
 										}
 									}
 								}
+							} finally {
+								batchLatch.countDown();
 							}
-						} finally {
-							batchLatch.countDown();
-						}
-					});
+						});
+					}
 				}
 				if (!batchLatch.await(30, java.util.concurrent.TimeUnit.SECONDS)) {
 					throw new AssertionError("Deep area batch " + b + " timed out");
@@ -1970,8 +2018,8 @@ public final class PresetValidationRunner {
 				}
 				retainedHeapByBatch[b] = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
 				FTFCommon.LOGGER.info(
-					"[FTF-Test] Deep world (1024 depth) area batch {}/{} ({} chunks): Retained heap = {} MB",
-					b + 1, areaBatches, (b + 1) * chunksPerAreaBatch, retainedHeapByBatch[b] / (1024 * 1024)
+					"[FTF-Test] Deep world (1024 depth) 1000x1000 block region batch {}/{} ({} chunks in batch): Retained heap = {} MB",
+					b + 1, areaBatches, batchChunkCount, retainedHeapByBatch[b] / (1024 * 1024)
 				);
 			}
 
@@ -1983,7 +2031,7 @@ public final class PresetValidationRunner {
 			long finalHeap = retainedHeapByBatch[areaBatches - 1];
 			long netGrowth = finalHeap - initialHeap;
 			FTFCommon.LOGGER.info(
-				"[FTF-Test] Deep world expanding area memory report: Initial={} MB, Final={} MB, Net Growth={} MB",
+				"[FTF-Test] Deep world expanding area memory report (1000x1000 block region): Initial={} MB, Final={} MB, Net Growth={} MB",
 				initialHeap / (1024 * 1024), finalHeap / (1024 * 1024), netGrowth / (1024 * 1024)
 			);
 
@@ -1998,7 +2046,7 @@ public final class PresetValidationRunner {
 			// 4. Live Server Chunk Generation Memory Stability Test Across Expanding Area
 			// Generates chunks via ServerChunkCache to verify that generated chunks, flow fields,
 			// cell caches, and structure plans do not leak monotonically as new terrain is explored.
-			FTFCommon.LOGGER.info("[FTF-Test] Measuring live server chunk generation memory stability across expanding area...");
+			FTFCommon.LOGGER.info("[FTF-Test] Measuring live server chunk generation memory stability across expanding area starting at continent center...");
 			ServerLevel liveLevel = server.overworld();
 			net.minecraft.server.level.ServerChunkCache liveChunkSource = liveLevel.getChunkSource();
 			net.minecraft.server.level.TicketType<net.minecraft.util.Unit> leakTicket =
@@ -2015,8 +2063,8 @@ public final class PresetValidationRunner {
 
 				for (int c = 0; c < chunksPerLiveBatch; c++) {
 					int chunkIdx = b * chunksPerLiveBatch + c;
-					int cx = 2000 + (chunkIdx % 10);
-					int cz = 2000 + (chunkIdx / 10);
+					int cx = minChunkX + (chunkIdx % 10);
+					int cz = minChunkZ + (chunkIdx / 10);
 					net.minecraft.world.level.ChunkPos pos = new net.minecraft.world.level.ChunkPos(cx, cz);
 					batchPositions.add(pos);
 					liveChunkSource.addRegionTicket(leakTicket, pos, 0, net.minecraft.util.Unit.INSTANCE);

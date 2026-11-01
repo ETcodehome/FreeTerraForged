@@ -15,7 +15,7 @@ public final class UndergroundBiomeSurfaceProtection {
 	static final int REQUIRED_CLEARANCE_BLOCKS = QuartPos.SIZE + HARD_SHELL_BLOCKS;
 
 	private static final float DEPTH_UNITS_PER_BLOCK = 1.0F / 128.0F;
-	private static final float SURFACE_DEPTH = NoiseRouterData.GLOBAL_OFFSET + 0.5F;
+	private static final float SURFACE_DEPTH = 0.0F;
 	private static final float EXTRA_SAFETY_MARGIN_BLOCKS = 16.0F;
 
 	private static final class CoverageMru {
@@ -68,12 +68,7 @@ public final class UndergroundBiomeSurfaceProtection {
 			int quartY,
 			int quartZ
 	) {
-		// Base unquantized clearance from Minecraft's NoiseRouter depth
-		float localClearance = (
-				Climate.unquantizeCoord(target.depth()) - SURFACE_DEPTH
-		) / DEPTH_UNITS_PER_BLOCK;
-
-		if (localClearance <= EXTRA_SAFETY_MARGIN_BLOCKS + REQUIRED_CLEARANCE_BLOCKS) {
+		if (Climate.unquantizeCoord(target.depth()) <= 0.0F) {
 			return 0.0F;
 		}
 		if ((Object) sampler instanceof FTFClimateSampler ftfSampler) {
@@ -82,13 +77,18 @@ public final class UndergroundBiomeSurfaceProtection {
 				int minimumSurfaceY = context.biomeSurfaceEnvelope.minimumSurfaceY(context, quartX, quartZ);
 				float envelopeClearance = minimumSurfaceY - QuartPos.toBlock(quartY)
 					- BiomeSurfaceEnvelope.MAX_VERTICAL_OFFSET;
-				localClearance = Math.min(localClearance, envelopeClearance);
+				if (envelopeClearance <= EXTRA_SAFETY_MARGIN_BLOCKS + REQUIRED_CLEARANCE_BLOCKS) {
+					return 0.0F;
+				}
+				return coverageFactor(envelopeClearance - EXTRA_SAFETY_MARGIN_BLOCKS);
 			}
 		}
 
-		float paddedClearance = localClearance - EXTRA_SAFETY_MARGIN_BLOCKS;
-
-		return coverageFactor(paddedClearance);
+		float localClearance = Climate.unquantizeCoord(target.depth()) / DEPTH_UNITS_PER_BLOCK;
+		if (localClearance <= EXTRA_SAFETY_MARGIN_BLOCKS + REQUIRED_CLEARANCE_BLOCKS) {
+			return 0.0F;
+		}
+		return coverageFactor(localClearance - EXTRA_SAFETY_MARGIN_BLOCKS);
 	}
 
 	static float coverageFactor(float minimumSurfaceClearanceBlocks) {

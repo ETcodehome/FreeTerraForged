@@ -6,16 +6,11 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicIntegerArray;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicLongArray;
-import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
 
 import com.mojang.datafixers.util.Pair;
 
-import it.unimi.dsi.fastutil.HashCommon;
 import net.minecraft.core.QuartPos;
 import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.levelgen.NoiseRouterData;
@@ -31,17 +26,9 @@ public final class UndergroundBiomeBanding {
 	private static final float VANILLA_UNDERGROUND_DEPTH_END = 0.9F;
 	private static final float VANILLA_BOTTOM_DEPTH = 1.1F;
 	private static final float DEPTH_UNITS_PER_BLOCK = 1.0F / 128.0F;
-	private static final float SURFACE_DEPTH = NoiseRouterData.GLOBAL_OFFSET + 0.5F;
-	// Kept below 0.464 so a point in the current lattice cell is provably nearer than every
-	// point two cells away; the 3x3x3 neighborhood is therefore complete, not an approximation.
-	private static final float CELL_JITTER = 0.4F;
-	// A value of 2 preserves the calibrated default sharpness of 6 at 75% influence while the
-	// influence / (1 - influence) curve converges continuously on nearest-only selection at 100%.
-	private static final double CLIMATE_INFLUENCE_SCALE = 2.0D;
+	private static final float SURFACE_DEPTH = 0.0F;
 	private static final long OCCUPANCY_CELL_SALT = 0x3CB2F11B1A5D39E7L;
-	private static final long OCCUPANCY_SCORE_SALT = 0x75A28C4D91E637BFL;
 	private static final long IDENTITY_CELL_SALT = 0x61F0CE12D47A958BL;
-	private static final long IDENTITY_SCORE_SALT = 0x2AD4B83598FC1E67L;
 
 	private static final Climate.Parameter VANILLA_UNDERGROUND_DEPTH = Climate.Parameter.span(
 		VANILLA_UNDERGROUND_DEPTH_START,
@@ -157,6 +144,7 @@ public final class UndergroundBiomeBanding {
 		);
 	}
 
+	@SuppressWarnings("unchecked")
 	private static <T> Layout<T> apply(
 		Preset preset,
 		Climate.ParameterList<T> original,
@@ -225,17 +213,13 @@ public final class UndergroundBiomeBanding {
 			.toList();
 		long bottomCandidateCount = candidates.values().stream().filter(Candidate::hasBottom).count();
 		float endDepth = endDepth(preset);
-		Stage<T> shallowStage = !shallowCandidates.isEmpty() && endDepth > SURFACE_DEPTH
-			? new Stage<>(shallowCandidates)
-			: null;
-		Stage<T> deepStage = !deepCandidates.isEmpty() && endDepth > VANILLA_BOTTOM_DEPTH
-			? new Stage<>(deepCandidates)
-			: null;
-		if (shallowStage == null && deepStage == null) {
+		boolean hasShallow = !shallowCandidates.isEmpty() && endDepth > SURFACE_DEPTH;
+		boolean hasDeep = !deepCandidates.isEmpty() && endDepth > VANILLA_BOTTOM_DEPTH;
+		if (!hasShallow && !hasDeep) {
 			return Layout.unmodified(original, candidates, unknownEntryCount, classificationFailureCount);
 		}
 
-		float selectionStart = shallowStage == null ? VANILLA_BOTTOM_DEPTH : SURFACE_DEPTH;
+		float selectionStart = !hasShallow ? VANILLA_BOTTOM_DEPTH : SURFACE_DEPTH;
 		float fullDensityStart = selectionStart + (
 			UndergroundBiomeSurfaceProtection.HARD_SHELL_BLOCKS
 				+ UndergroundBiomeSurfaceProtection.TRANSITION_BLOCKS
@@ -270,8 +254,8 @@ public final class UndergroundBiomeBanding {
 		return new Layout<>(
 			original,
 			new Climate.ParameterList<>(backgroundEntries),
-			shallowStage,
-			deepStage,
+			hasShallow ? shallowCandidates.toArray(new StageCandidate[0]) : null,
+			hasDeep ? deepCandidates.toArray(new StageCandidate[0]) : null,
 			Climate.quantizeCoord(selectionStart),
 			Climate.quantizeCoord(fullDensityStart),
 			Climate.quantizeCoord(VANILLA_BOTTOM_DEPTH),
@@ -320,7 +304,7 @@ public final class UndergroundBiomeBanding {
 			return CandidateRole.UNKNOWN;
 		}
 		long depth = target.depth();
-		if (depth < Climate.quantizeCoord(SURFACE_DEPTH)) {
+		if (depth <= Climate.quantizeCoord(0.0F)) {
 			return CandidateRole.SURFACE;
 		}
 		return depth < Climate.quantizeCoord(VANILLA_BOTTOM_DEPTH)
@@ -350,21 +334,21 @@ public final class UndergroundBiomeBanding {
 		);
 	}
 
-	private static long horizontalClimateDistanceSq(Climate.ParameterPoint point, Climate.TargetPoint target) {
+	private static long climateDistanceSq(Climate.ParameterPoint point, Climate.TargetPoint target) {
 		long dt = point.temperature().distance(target.temperature());
 		long dh = point.humidity().distance(target.humidity());
 		long dc = point.continentalness().distance(target.continentalness());
 		long de = point.erosion().distance(target.erosion());
+		long dd = point.depth().distance(target.depth());
 		long dw = point.weirdness().distance(target.weirdness());
 		long dOff = Math.abs(point.offset());
-		return dt * dt + dh * dh + dc * dc + de * de + dw * dw + dOff * dOff;
+		return dt * dt + dh * dh + dc * dc + de * de + dd * dd + dw * dw + dOff * dOff;
 	}
 
-	private static long cellHash(long seed, int x, int y, int z, long salt) {
-		long hash = mix64(seed ^ salt ^ 0x9E3779B97F4A7C15L);
-		hash = mix64(hash ^ Integer.toUnsignedLong(x) * 0xD6E8FEB86659FD93L);
-		hash = mix64(hash ^ Integer.toUnsignedLong(y) * 0xA5A3564E27F8866DL);
-		return mix64(hash ^ Integer.toUnsignedLong(z) * 0x9E6C63D0676A9A99L);
+	private static long hash2D(long seed, int x, int z) {
+		long hash = mix64(seed ^ 0x9E3779B97F4A7C15L);
+		hash = mix64(hash ^ (Integer.toUnsignedLong(x) * 0xD6E8FEB86659FD93L));
+		return mix64(hash ^ (Integer.toUnsignedLong(z) * 0x9E6C63D0676A9A99L));
 	}
 
 	private static long mix64(long value) {
@@ -375,185 +359,19 @@ public final class UndergroundBiomeBanding {
 		return value ^ value >>> 31;
 	}
 
-	private static double unit(long value) {
-		return (mix64(value) >>> 11) * 0x1.0p-53;
-	}
-
-	private static final class RegionCache {
-		private static final int CAPACITY = 8192;
-		private static final int MASK = CAPACITY - 1;
-
-		private final long[] keys = new long[CAPACITY];
-		private final long[] nearestKeys = new long[CAPACITY];
-		private final float[] occupancies = new float[CAPACITY];
-		private final int[] cellXs = new int[CAPACITY];
-		private final int[] nearestCellYs = new int[CAPACITY];
-		private final int[] cellZs = new int[CAPACITY];
-		private final int[] identityQuartXs = new int[CAPACITY];
-		private final int[] identityQuartYs = new int[CAPACITY];
-		private final int[] identityQuartZs = new int[CAPACITY];
-
-		int getOrCompute(
-			long key,
-			long seed,
-			int quartX,
-			int quartY,
-			int quartZ,
-			int horizontalSize,
-			int verticalSize
-		) {
-			int slot = (int) HashCommon.mix(key) & MASK;
-			if (this.keys[slot] == key) {
-				return slot;
-			}
-			this.computeInto(slot, key, seed, quartX, quartY, quartZ, horizontalSize, verticalSize);
-			return slot;
-		}
-
-		private void computeInto(
-			int slot,
-			long key,
-			long seed,
-			int quartX,
-			int quartY,
-			int quartZ,
-			int horizontalSize,
-			int verticalSize
-		) {
-			int blockX = QuartPos.toBlock(quartX);
-			int blockY = QuartPos.toBlock(quartY);
-			int blockZ = QuartPos.toBlock(quartZ);
-			double x = (double) blockX / horizontalSize;
-			double y = (double) blockY / verticalSize;
-			double z = (double) blockZ / horizontalSize;
-			int cellX = (int) Math.floor(x);
-			int cellY = (int) Math.floor(y);
-			int cellZ = (int) Math.floor(z);
-			double nearestDistance = Double.POSITIVE_INFINITY;
-			long nearestKey = 0L;
-			int nearestCellX = cellX;
-			int nearestCellY = cellY;
-			int nearestCellZ = cellZ;
-			double nearestSiteX = 0.0D;
-			double nearestSiteY = 0.0D;
-			double nearestSiteZ = 0.0D;
-
-			for (int offsetY = -1; offsetY <= 1; offsetY++) {
-				for (int offsetZ = -1; offsetZ <= 1; offsetZ++) {
-					for (int offsetX = -1; offsetX <= 1; offsetX++) {
-						int candidateX = cellX + offsetX;
-						int candidateY = cellY + offsetY;
-						int candidateZ = cellZ + offsetZ;
-						long k = cellHash(seed, candidateX, candidateY, candidateZ, OCCUPANCY_CELL_SALT);
-					double siteX = candidateX + 0.5D + (unit(k ^ 0x632BE59BD9B4E019L) - 0.5D) * CELL_JITTER;
-					double siteY = candidateY + 0.5D + (unit(k ^ 0xC6BC279692B5C323L) - 0.5D) * CELL_JITTER;
-					double siteZ = candidateZ + 0.5D + (unit(k ^ 0xD1B54A32D192ED03L) - 0.5D) * CELL_JITTER;
-					double dx = x - siteX;
-					double dy = y - siteY;
-					double dz = z - siteZ;
-					double distance = dx * dx + dy * dy + dz * dz;
-					if (distance < nearestDistance || (distance == nearestDistance && k < nearestKey)) {
-						nearestDistance = distance;
-						nearestKey = k;
-						nearestCellX = candidateX;
-						nearestCellY = candidateY;
-						nearestCellZ = candidateZ;
-						nearestSiteX = siteX;
-						nearestSiteY = siteY;
-						nearestSiteZ = siteZ;
-					}
-					}
-				}
-			}
-			this.keys[slot] = key;
-			this.nearestKeys[slot] = nearestKey;
-			this.occupancies[slot] = (float) unit(nearestKey ^ OCCUPANCY_SCORE_SALT);
-			this.cellXs[slot] = cellX;
-			this.nearestCellYs[slot] = nearestCellY;
-			this.cellZs[slot] = cellZ;
-			this.identityQuartXs[slot] = QuartPos.fromBlock((int) Math.floor(nearestSiteX * horizontalSize));
-			this.identityQuartYs[slot] = QuartPos.fromBlock((int) Math.floor(nearestSiteY * verticalSize));
-			this.identityQuartZs[slot] = QuartPos.fromBlock((int) Math.floor(nearestSiteZ * horizontalSize));
-		}
-
-		void clear() {
-			java.util.Arrays.fill(this.keys, 0L);
-		}
-	}
-	private static final ThreadLocal<RegionCache> REGION_CACHE = ThreadLocal.withInitial(RegionCache::new);
-
-	private static long sampleKey(long seed, int quartX, int quartY, int quartZ, int horizontalSize, int verticalSize) {
-		long coords = ((long) (quartY & 0xFFFF) << 48) | ((long) (quartX & 0xFFFFFF) << 24) | (quartZ & 0xFFFFFFL);
-		long sizes = ((long) horizontalSize << 32) | (verticalSize & 0xFFFFFFFFL);
-		return coords ^ seed ^ HashCommon.mix(sizes);
-	}
-
-	public static boolean allowsCaveBiome(
-		Preset preset,
-		long seed,
-		Climate.TargetPoint target,
-		int quartX,
-		int quartY,
-		int quartZ,
-		float surfaceCoverageFactor
-	) {
-		ClimateSettings.BiomeShape settings = preset.climate().biomeShape;
-		long selectionStart = Climate.quantizeCoord(SURFACE_DEPTH);
-		if (target.depth() < selectionStart) {
-			return true;
-		}
-		long fullDensityStart = selectionStart + Climate.quantizeCoord(
-			(UndergroundBiomeSurfaceProtection.HARD_SHELL_BLOCKS
-				+ UndergroundBiomeSurfaceProtection.TRANSITION_BLOCKS) * DEPTH_UNITS_PER_BLOCK
-		);
-		float effectiveDensity = settings.undergroundBiomeCoverage() * Math.min(
-			surfaceFactor(target.depth(), selectionStart, fullDensityStart),
-			Math.clamp(surfaceCoverageFactor, 0.0F, 1.0F)
-		);
-		if (effectiveDensity <= 0.0F) {
-			return false;
-		}
-		if (effectiveDensity >= 1.0F) {
-			return true;
-		}
-
-		int horizontalSize = settings.undergroundBiomeSize();
-		int verticalSize = settings.undergroundBiomeVerticalSize(
-			preset.world().properties.worldHeight,
-			preset.world().properties.worldDepth
-		);
-		long key = sampleKey(seed, quartX, quartY, quartZ, horizontalSize, verticalSize);
-		RegionCache cache = REGION_CACHE.get();
-		int slot = cache.getOrCompute(key, seed, quartX, quartY, quartZ, horizontalSize, verticalSize);
-		return cache.occupancies[slot] < effectiveDensity;
-	}
-
-	private static float surfaceFactor(long depth, long selectionStart, long fullDensityStart) {
-		long hardShellEnd = selectionStart + Climate.quantizeCoord(
-			UndergroundBiomeSurfaceProtection.HARD_SHELL_BLOCKS * DEPTH_UNITS_PER_BLOCK
-		);
-		if (depth <= hardShellEnd || fullDensityStart <= hardShellEnd) {
+	static float surfaceFactor(long depth, long selectionStart, long fullDensityStart) {
+		if (depth <= selectionStart) {
 			return 0.0F;
 		}
 		if (depth >= fullDensityStart) {
 			return 1.0F;
 		}
-		return Math.clamp(
-			(float) (depth - hardShellEnd) / (float) (fullDensityStart - hardShellEnd),
-			0.0F,
-			1.0F
-		);
+		return (float) (depth - selectionStart) / (float) (fullDensityStart - selectionStart);
 	}
 
 	public static void clearThreadCaches() {
-		REGION_CACHE.get().clear();
-		Stage.LocalMru mru = Stage.LOCAL_MRU.get();
-		mru.stageId = 0L;
-		mru.key0 = 0L;
-		mru.val0 = null;
-		mru.key1 = 0L;
-		mru.val1 = null;
 		UndergroundBiomeSurfaceProtection.clearThreadCaches();
+		Layout.clearRankThreadLocals();
 	}
 
 	private static final class Candidate<T> {
@@ -590,7 +408,7 @@ public final class UndergroundBiomeBanding {
 					}
 				}
 			}
-			return new StageCandidate<>(this.value, List.copyOf(registrations));
+			return new StageCandidate<>(this.value, registrations);
 		}
 	}
 
@@ -610,7 +428,7 @@ public final class UndergroundBiomeBanding {
 		private long distanceSq(Climate.TargetPoint target) {
 			long minDistanceSq = Long.MAX_VALUE;
 			for (Climate.ParameterPoint registration : this.registrations) {
-				long d = horizontalClimateDistanceSq(registration, target);
+				long d = climateDistanceSq(registration, target);
 				if (d < minDistanceSq) {
 					minDistanceSq = d;
 				}
@@ -619,247 +437,15 @@ public final class UndergroundBiomeBanding {
 		}
 	}
 
-	private static final class ConcurrentRankedCache {
-		private static final int SETS = 1024;
-		private static final int SET_MASK = SETS - 1;
-		private static final int WAYS = 4;
-		private static final int TOTAL_ENTRIES = SETS * WAYS;
-
-		private final AtomicLongArray keys = new AtomicLongArray(TOTAL_ENTRIES);
-		private final AtomicReferenceArray<int[]> values = new AtomicReferenceArray<>(TOTAL_ENTRIES);
-		private final AtomicIntegerArray clocks = new AtomicIntegerArray(SETS);
-
-		int[] find(long key) {
-			long searchKey = key == 0L ? 1L : key;
-			int set = (int) HashCommon.mix(searchKey) & SET_MASK;
-			int base = set * WAYS;
-			for (int way = 0; way < WAYS; way++) {
-				int slot = base + way;
-				if (this.keys.get(slot) == searchKey) {
-					int[] value = this.values.get(slot);
-					if (value != null && this.keys.get(slot) == searchKey) {
-						return value;
-					}
-				}
-			}
-			return null;
-		}
-
-		void store(long key, int[] value) {
-			if (value == null) {
-				return;
-			}
-			long storeKey = key == 0L ? 1L : key;
-			int set = (int) HashCommon.mix(storeKey) & SET_MASK;
-			int base = set * WAYS;
-
-			int emptySlot = -1;
-			for (int way = 0; way < WAYS; way++) {
-				int slot = base + way;
-				long currentKey = this.keys.get(slot);
-				if (currentKey == storeKey) {
-					this.values.set(slot, value);
-					return;
-				}
-				if (currentKey == 0L && emptySlot == -1) {
-					emptySlot = slot;
-				}
-			}
-
-			if (emptySlot != -1) {
-				this.values.set(emptySlot, value);
-				this.keys.set(emptySlot, storeKey);
-				return;
-			}
-
-			int victimWay = (this.clocks.getAndIncrement(set) & 0x7FFFFFFF) % WAYS;
-			int victimSlot = base + victimWay;
-			this.keys.set(victimSlot, 0L);
-			this.values.set(victimSlot, value);
-			this.keys.set(victimSlot, storeKey);
-		}
-
-		void clear() {
-			for (int i = 0; i < TOTAL_ENTRIES; i++) {
-				this.keys.set(i, 0L);
-				this.values.set(i, null);
-			}
-			for (int i = 0; i < SETS; i++) {
-				this.clocks.set(i, 0);
-			}
-		}
-	}
-
-	private static final class Stage<T> {
-		private static final AtomicLong STAGE_ID_GEN = new AtomicLong();
-
-		private static final class PhaseMru {
-			long seed;
-			int cellX = Integer.MIN_VALUE;
-			int cellZ = Integer.MIN_VALUE;
-			int candidateCount;
-			int phase;
-		}
-		private static final ThreadLocal<PhaseMru> PHASE_MRU = ThreadLocal.withInitial(PhaseMru::new);
-
-		private static final class LocalMru {
-			long stageId;
-			long key0;
-			int[] val0;
-			long key1;
-			int[] val1;
-		}
-		private static final ThreadLocal<LocalMru> LOCAL_MRU = ThreadLocal.withInitial(LocalMru::new);
-
-		private final long stageId = STAGE_ID_GEN.incrementAndGet();
-		private final StageCandidate<T>[] candidates;
-		private final ConcurrentRankedCache rankedCache = new ConcurrentRankedCache();
-
-		@SuppressWarnings("unchecked")
-		private Stage(List<StageCandidate<T>> candidates) {
-			this.candidates = candidates.toArray(new StageCandidate[0]);
-		}
-
-		private T findValue(
-			long regionKey,
-			int cellX,
-			int cellY,
-			int cellZ,
-			int identityQuartX,
-			int identityQuartY,
-			int identityQuartZ,
-			TargetSampler targetSampler,
-			long seed,
-			float climateInfluence,
-			boolean bandingEnabled
-		) {
-			int candidateCount = this.candidates.length;
-			if (candidateCount == 1) {
-				return this.candidates[0].value();
-			}
-
-			int horizontalPhase = this.getHorizontalPhase(seed, cellX, cellZ, candidateCount);
-
-			if (climateInfluence <= 0.0F) {
-				if (!bandingEnabled) {
-					return this.candidates[horizontalPhase].value();
-				}
-				int rotationIndex = Math.floorMod(cellY + horizontalPhase, candidateCount);
-				return this.candidates[rotationIndex].value();
-			}
-
-			int[] rankedIndices;
-			LocalMru mru = LOCAL_MRU.get();
-			if (mru.stageId == this.stageId && mru.key0 == regionKey && mru.val0 != null) {
-				rankedIndices = mru.val0;
-			} else if (mru.stageId == this.stageId && mru.key1 == regionKey && mru.val1 != null) {
-				rankedIndices = mru.val1;
-				mru.key1 = mru.key0;
-				mru.val1 = mru.val0;
-				mru.key0 = regionKey;
-				mru.val0 = rankedIndices;
-			} else {
-				rankedIndices = this.rankedCache.find(regionKey);
-				if (rankedIndices == null) {
-					Climate.TargetPoint identityTarget = targetSampler != null
-						? targetSampler.sample(identityQuartX, identityQuartY, identityQuartZ)
-						: Climate.target(0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F);
-					rankedIndices = this.computeRankedIndices(identityTarget);
-					this.rankedCache.store(regionKey, rankedIndices);
-				}
-				if (mru.stageId != this.stageId) {
-					mru.stageId = this.stageId;
-					mru.key0 = 0L;
-					mru.val0 = null;
-					mru.key1 = 0L;
-					mru.val1 = null;
-				}
-				mru.key1 = mru.key0;
-				mru.val1 = mru.val0;
-				mru.key0 = regionKey;
-				mru.val0 = rankedIndices;
-			}
-
-			if (!bandingEnabled) {
-				if (climateInfluence >= 1.0F) {
-					return this.candidates[rankedIndices[0]].value();
-				}
-				return this.candidates[rankedIndices[horizontalPhase]].value();
-			}
-
-			int rotationIndex = Math.floorMod(cellY + horizontalPhase, candidateCount);
-			return this.candidates[rankedIndices[rotationIndex]].value();
-		}
-
-		private int getHorizontalPhase(long seed, int cellX, int cellZ, int candidateCount) {
-			PhaseMru mru = PHASE_MRU.get();
-			if (mru.seed == seed && mru.cellX == cellX && mru.cellZ == cellZ && mru.candidateCount == candidateCount) {
-				return mru.phase;
-			}
-			long horizontalHash = cellHash(seed, cellX, 0, cellZ, IDENTITY_CELL_SALT);
-			int phase = Math.floorMod((int) (horizontalHash ^ (horizontalHash >>> 32)), candidateCount);
-			mru.seed = seed;
-			mru.cellX = cellX;
-			mru.cellZ = cellZ;
-			mru.candidateCount = candidateCount;
-			mru.phase = phase;
-			return phase;
-		}
-
-		private static final ThreadLocal<long[]> DISTANCE_SCRATCH = ThreadLocal.withInitial(() -> new long[32]);
-
-		private int[] computeRankedIndices(Climate.TargetPoint target) {
-			int candidateCount = this.candidates.length;
-			long[] distancesSq = DISTANCE_SCRATCH.get();
-			if (distancesSq.length < candidateCount) {
-				distancesSq = new long[candidateCount];
-				DISTANCE_SCRATCH.set(distancesSq);
-			}
-			for (int i = 0; i < candidateCount; i++) {
-				distancesSq[i] = this.candidates[i].distanceSq(target);
-			}
-
-			int[] ranked = new int[candidateCount];
-			for (int i = 0; i < candidateCount; i++) {
-				ranked[i] = i;
-			}
-
-			// Stable primitive insertion sort with index tie-breaker
-			for (int i = 1; i < candidateCount; i++) {
-				int key = ranked[i];
-				long keyDist = distancesSq[key];
-				int j = i - 1;
-				while (j >= 0) {
-					int prev = ranked[j];
-					long prevDist = distancesSq[prev];
-					if (prevDist > keyDist || (prevDist == keyDist && prev > key)) {
-						ranked[j + 1] = prev;
-						j--;
-					} else {
-						break;
-					}
-				}
-				ranked[j + 1] = key;
-			}
-			return ranked;
-		}
-
-		private void clear() {
-			this.rankedCache.clear();
-		}
-	}
-
-
-	@FunctionalInterface
 	public interface TargetSampler {
-		Climate.TargetPoint sample(int quartX, int quartY, int quartZ);
+		Climate.TargetPoint sample(int identityQuartX, int identityQuartY, int identityQuartZ);
 	}
 
 	public static final class Layout<T> {
 		private final Climate.ParameterList<T> original;
 		private final Climate.ParameterList<T> background;
-		private final Stage<T> shallowStage;
-		private final Stage<T> deepStage;
+		private final StageCandidate<T>[] shallowCandidates;
+		private final StageCandidate<T>[] deepCandidates;
 		private final long selectionStart;
 		private final long fullDensityStart;
 		private final long deepStart;
@@ -881,8 +467,8 @@ public final class UndergroundBiomeBanding {
 		private Layout(
 			Climate.ParameterList<T> original,
 			Climate.ParameterList<T> background,
-			Stage<T> shallowStage,
-			Stage<T> deepStage,
+			StageCandidate<T>[] shallowCandidates,
+			StageCandidate<T>[] deepCandidates,
 			long selectionStart,
 			long fullDensityStart,
 			long deepStart,
@@ -902,8 +488,8 @@ public final class UndergroundBiomeBanding {
 		) {
 			this.original = original;
 			this.background = background;
-			this.shallowStage = shallowStage;
-			this.deepStage = deepStage;
+			this.shallowCandidates = shallowCandidates;
+			this.deepCandidates = deepCandidates;
 			this.selectionStart = selectionStart;
 			this.fullDensityStart = fullDensityStart;
 			this.deepStart = deepStart;
@@ -1018,7 +604,7 @@ public final class UndergroundBiomeBanding {
 		) {
 			return this.findValue(
 				target, quartX, quartY, quartZ, surfaceCoverageFactor,
-				(identityQuartX, identityQuartY, identityQuartZ) -> target
+				null
 			);
 		}
 
@@ -1033,54 +619,127 @@ public final class UndergroundBiomeBanding {
 			if (!this.appliesAt(target)) {
 				return this.original.findValue(target);
 			}
-			Stage<T> stage = target.depth() < this.deepStart && this.shallowStage != null
-				? this.shallowStage
-				: this.deepStage;
-			if (stage == null) {
-				stage = this.shallowStage;
+
+			StageCandidate<T>[] candidates = (target.depth() < this.deepStart && this.shallowCandidates != null && this.shallowCandidates.length > 0)
+				? this.shallowCandidates
+				: this.deepCandidates;
+			if (candidates == null || candidates.length == 0) {
+				candidates = this.shallowCandidates;
 			}
-			if (stage == null) {
+			if (candidates == null || candidates.length == 0) {
 				return this.original.findValue(target);
 			}
 
+			// 1. Surface clearance protection: cave biomes must never project through the surface
 			float surfaceFactor = Math.min(
 				this.surfaceFactor(target.depth()),
 				Math.clamp(surfaceCoverageFactor, 0.0F, 1.0F)
 			);
-			float effectiveDensity = this.density * surfaceFactor;
-			if (effectiveDensity <= 0.0F) {
+			float effectiveCoverage = this.density * surfaceFactor;
+			if (effectiveCoverage <= 0.0F) {
 				return this.background.findValue(target);
 			}
 
-			long key = sampleKey(this.seed, quartX, quartY, quartZ, this.horizontalSize, this.verticalSize);
-			RegionCache cache = REGION_CACHE.get();
-			int slot = cache.getOrCompute(key, this.seed, quartX, quartY, quartZ, this.horizontalSize, this.verticalSize);
-			if (effectiveDensity < 1.0F && cache.occupancies[slot] >= effectiveDensity) {
-				return this.background.findValue(target);
+			int candidateCount = candidates.length;
+			if (candidateCount == 1) {
+				return candidates[0].value();
 			}
 
-			return stage.findValue(
-				cache.nearestKeys[slot],
-				cache.cellXs[slot],
-				cache.nearestCellYs[slot],
-				cache.cellZs[slot],
-				cache.identityQuartXs[slot],
-				cache.identityQuartYs[slot],
-				cache.identityQuartZs[slot],
-				targetSampler,
-				this.seed,
-				this.climateInfluence,
-				this.bandingEnabled
-			);
+			int blockX = QuartPos.toBlock(quartX);
+			int blockY = QuartPos.toBlock(quartY);
+			int blockZ = QuartPos.toBlock(quartZ);
+
+			// 2. Cave biome coverage: at 0 no cave biomes appear, at 1 all underground selections are cave biomes
+			int hSize = Math.max(16, this.horizontalSize);
+			int cellX = Math.floorDiv(blockX, hSize);
+			int cellZ = Math.floorDiv(blockZ, hSize);
+
+			if (effectiveCoverage < 1.0F) {
+				long covHash = hash2D(this.seed ^ OCCUPANCY_CELL_SALT, cellX, cellZ);
+				float regionRoll = (float) ((covHash >>> 11) * 0x1.0p-53);
+				if (regionRoll >= effectiveCoverage) {
+					return this.background.findValue(target);
+				}
+			}
+
+			// 3. Underground biome horizontal size in blocks as lateral frequency of cave biomes
+			long phaseHash = hash2D(this.seed ^ IDENTITY_CELL_SALT, cellX, cellZ);
+			int horizontalPhase = Math.floorMod((int) (phaseHash ^ (phaseHash >>> 32)), candidateCount);
+
+			// 4. Vertical cave biome banding & vertical size
+			int layer;
+			if (!this.bandingEnabled) {
+				layer = 0; // Columnar: constant down the entire column
+			} else {
+				int vSize = Math.max(8, this.verticalSize);
+				layer = Math.floorDiv(blockY, vSize); // Layer thickness in blocks
+			}
+
+			// 5. Cave climate influence:
+			// At 0: any climate can be matched (completely tolerant), selecting from all candidates in layered stacks
+			// At 1: only the closest climate match will ever be chosen
+			if (this.climateInfluence <= 0.0F) {
+				int index = Math.floorMod(layer + horizontalPhase, candidateCount);
+				return candidates[index].value();
+			}
+
+			if (this.climateInfluence >= 1.0F) {
+				int bestIdx = 0;
+				long minDistance = Long.MAX_VALUE;
+				for (int i = 0; i < candidateCount; i++) {
+					long d = candidates[i].distanceSq(target);
+					if (d < minDistance) {
+						minDistance = d;
+						bestIdx = i;
+					}
+				}
+				return candidates[bestIdx].value();
+			}
+
+			// Intermediate influence: 0.0 -> all candidates in pool, 1.0 -> pool of 1 (closest candidate)
+			float tolerance = 1.0F - this.climateInfluence;
+			int poolSize = Math.clamp(1 + Math.round(tolerance * (candidateCount - 1)), 1, candidateCount);
+			int[] ranked = rankCandidatesByDistance(candidates, target);
+			int chosenRank = Math.floorMod(layer + horizontalPhase, poolSize);
+			return candidates[ranked[chosenRank]].value();
+		}
+
+		private static final ThreadLocal<int[]> RANK_INDICES = ThreadLocal.withInitial(() -> new int[64]);
+		private static final ThreadLocal<long[]> RANK_DISTANCES = ThreadLocal.withInitial(() -> new long[64]);
+
+		public static void clearRankThreadLocals() {
+			RANK_INDICES.remove();
+			RANK_DISTANCES.remove();
+		}
+
+		private static <T> int[] rankCandidatesByDistance(StageCandidate<T>[] candidates, Climate.TargetPoint target) {
+			int n = candidates.length;
+			int[] indices = RANK_INDICES.get();
+			long[] distances = RANK_DISTANCES.get();
+			if (indices.length < n) {
+				indices = new int[Math.max(n, indices.length * 2)];
+				distances = new long[indices.length];
+				RANK_INDICES.set(indices);
+				RANK_DISTANCES.set(distances);
+			}
+			for (int i = 0; i < n; i++) {
+				indices[i] = i;
+				distances[i] = candidates[i].distanceSq(target);
+			}
+			for (int i = 1; i < n; i++) {
+				int keyIdx = indices[i];
+				long keyDist = distances[keyIdx];
+				int j = i - 1;
+				while (j >= 0 && distances[indices[j]] > keyDist) {
+					indices[j + 1] = indices[j];
+					j--;
+				}
+				indices[j + 1] = keyIdx;
+			}
+			return indices;
 		}
 
 		public void clear() {
-			if (this.shallowStage != null) {
-				this.shallowStage.clear();
-			}
-			if (this.deepStage != null) {
-				this.deepStage.clear();
-			}
 			clearThreadCaches();
 		}
 

@@ -13,6 +13,7 @@ import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 import etcodehome.freeterraforged.world.worldgen.biome.FTFClimateSampler;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.NoiseFunction;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.ClimateDepthFunction;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
 import etcodehome.freeterraforged.world.worldgen.util.Seed;
@@ -74,6 +75,18 @@ class MixinRandomState {
 
 				if(function instanceof NoiseFunction.Marker marker) {
 					return new NoiseFunction(marker.noise(), Seed.toInt(seed));
+				}
+
+				if(function instanceof ClimateDepthFunction.Marker marker) {
+					MixinRandomState.this.hasContext = true;
+					return new ClimateDepthFunction(
+						() -> {
+							GeneratorContext ctx = MixinRandomState.this.generatorContext;
+							return ctx != null ? ctx.lookup : null;
+						},
+						marker.worldDepth(),
+						marker.worldHeight()
+					);
 				}
 
 				if(function instanceof CellSampler.Marker marker) {
