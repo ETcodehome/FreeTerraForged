@@ -81,7 +81,7 @@ public final class BiomeReplacementCompiler {
 						config, diagnostics, rule.line(), new RuleBindingException(
 							"invalid_dimension",
 							"Invalid dimension ID '" + rule.dimension() + "'",
-							true
+							false
 						)
 					);
 					continue;
@@ -115,6 +115,7 @@ public final class BiomeReplacementCompiler {
 				targets.add(replace.target());
 			}
 		}
+		boolean fatalTargetRemoval = false;
 		for (Map.Entry<Holder<Biome>, BiomeReplacementPlan.Decision> entry : effective.entrySet()) {
 			if (entry.getValue() instanceof BiomeReplacementPlan.Replace replace
 				&& removals.contains(replace.target())) {
@@ -123,7 +124,11 @@ public final class BiomeReplacementCompiler {
 					"Replacement target " + biomeId(replace.target())
 						+ " is removed by the effective rules"
 				));
+				fatalTargetRemoval = true;
 			}
+		}
+		if (fatalTargetRemoval || invalidatesConfig(diagnostics)) {
+			return ignoredConfig(snapshot, dimension, diagnostics);
 		}
 		addGraphDiagnostics(effective, diagnostics);
 		Map<BiomeReplacementPlan.RuleInfo, List<Holder<Biome>>> replacedByRule = new LinkedHashMap<>();
@@ -234,26 +239,35 @@ public final class BiomeReplacementCompiler {
 			.sorted(Comparator.comparing(BiomeReplacementCompiler::biomeId))
 			.toList();
 		if (members.isEmpty()) {
-			ignoredReference(
-				config, diagnostics, rule.line(), "empty_tag",
+			diagnostics.add(warning(
+				"empty_tag", rule.line(),
 				"Biome tag #" + tagId + " has no members in the owner's frozen tag snapshot"
-			);
+			));
 			return;
 		}
+		List<Holder<Biome>> nonMarkerMembers = new ArrayList<>();
 		for (Holder<Biome> source : members) {
 			String sourceId = biomeId(source);
 			if (MARKER_BIOMES.contains(sourceId)) {
-				throw new RuleBindingException(
-					"integration_marker",
+				diagnostics.add(warning(
+					"integration_marker_omitted", rule.line(),
 					"Biome tag #" + tagId + " includes integration marker "
-						+ sourceId + " and cannot be used",
-					true
-				);
+						+ sourceId + "; this member was skipped"
+				));
+			} else {
+				nonMarkerMembers.add(source);
 			}
+		}
+		if (nonMarkerMembers.isEmpty()) {
+			diagnostics.add(warning(
+				"empty_tag", rule.line(),
+				"Biome tag #" + tagId + " has no usable members in the owner's frozen tag snapshot"
+			));
+			return;
 		}
 		BiomeReplacementPrecedence.FillResult<Holder<Biome>> fill =
 			BiomeReplacementPrecedence.fillUnclaimedWith(
-				scope.decisions, members,
+				scope.decisions, nonMarkerMembers,
 				source -> decision instanceof BiomeReplacementPlan.Replace replace
 					&& source == replace.target()
 						? new BiomeReplacementPlan.Keep(ruleInfo)
@@ -293,7 +307,7 @@ public final class BiomeReplacementCompiler {
 		ResourceLocation location = ResourceLocation.tryParse(id);
 		if (location == null) {
 			throw new RuleBindingException(
-				"invalid_resource_location", "Invalid " + role + " ID '" + id + "'", true
+				"invalid_resource_location", "Invalid " + role + " ID '" + id + "'", false
 			);
 		}
 		return location;
@@ -304,7 +318,7 @@ public final class BiomeReplacementCompiler {
 			throw new RuleBindingException(
 				"integration_marker",
 				"Biome " + role + " '" + id + "' is an integration marker and cannot be used",
-				true
+				false
 			);
 		}
 	}
@@ -327,7 +341,7 @@ public final class BiomeReplacementCompiler {
 			severity, failure.code, line,
 			failure.getMessage() + (severity == BiomeReplacementConfig.Severity.WARNING
 				? "; compatibility validation ignored this rule"
-				: ""),
+				: "; configuration invalidated"),
 			severity == BiomeReplacementConfig.Severity.ERROR
 		));
 	}
