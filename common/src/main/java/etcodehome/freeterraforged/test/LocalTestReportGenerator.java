@@ -555,9 +555,9 @@ public final class LocalTestReportGenerator {
 			}
 		}
 
-		// Extra / unexpected tokens
+		// Extra / unexpected tokens (excluding unit tests which are displayed in their own dedicated table below)
 		for (Map.Entry<String, TestResult> e : results.entrySet()) {
-			if (!processedTokens.contains(e.getKey())) {
+			if (!processedTokens.contains(e.getKey()) && !e.getKey().startsWith("unitTest.")) {
 				appendRow(sb, e.getKey(), e.getValue().loader(), e.getValue(), images.get(e.getKey()));
 			}
 		}

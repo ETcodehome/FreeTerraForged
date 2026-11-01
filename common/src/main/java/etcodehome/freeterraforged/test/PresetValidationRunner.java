@@ -1398,6 +1398,24 @@ public final class PresetValidationRunner {
 			Files.createDirectories(reportDir);
 			String timestamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
 			String loader = serverModName.replaceAll("[^a-zA-Z0-9_-]", "_");
+			// Append automated unit test records so they are included in suite summary
+			Path unitTestFile = reportDir.resolve("unit_tests_report.txt");
+			if (Files.exists(unitTestFile)) {
+				try {
+					String uContent = Files.readString(unitTestFile, StandardCharsets.UTF_8);
+					java.util.regex.Matcher caseMatcher = java.util.regex.Pattern.compile("-\\s*\\[(PASSED|FAILED)\\]\\s*(.*?)\\s*\\(([^()\\r\\n]+)\\)").matcher(uContent);
+					while (caseMatcher.find()) {
+						boolean passed = "PASSED".equalsIgnoreCase(caseMatcher.group(1));
+						String name = caseMatcher.group(2).trim();
+						String fullClass = caseMatcher.group(3).trim();
+						String simpleClass = fullClass.contains(".") ? fullClass.substring(fullClass.lastIndexOf('.') + 1) : fullClass;
+						String cleanName = name.endsWith("()") ? name.substring(0, name.length() - 2) : name;
+						String token = "unitTest." + simpleClass + "." + cleanName + "." + loader;
+						testRecords.add(new TestRecord(token, simpleClass + "." + name, passed, passed ? null : "Unit test failed"));
+					}
+				} catch (Exception ignored) {
+				}
+			}
 			Path summaryFile = reportDir.resolve(String.format("suite_summary_%s_%s_report.txt", loader, timestamp));
 			StringBuilder sb = new StringBuilder();
 			sb.append("FreeTerraForged Test Execution Report\n");
