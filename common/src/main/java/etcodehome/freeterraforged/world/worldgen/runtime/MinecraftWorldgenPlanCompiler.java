@@ -981,7 +981,8 @@ public final class MinecraftWorldgenPlanCompiler {
 				WorldgenPlans.ProviderDomain::id,
 				domain -> UndergroundBiomeBanding.apply(
 					preset, domain.candidates(), owner.seed(),
-					(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value))
+					(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value)),
+					UndergroundBiomeTags::isCave
 				)
 			));
 		return selectionPolicy(

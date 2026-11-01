@@ -42,6 +42,7 @@ class UndergroundBiomeBandingConcurrencyTest {
 	private List<Pair<Climate.ParameterPoint, String>> makeTestEntries() {
 		return List.of(
 			Pair.of(point(-1.0F, 0.0F), "surface_plains"),
+			Pair.of(pointExact(1.1F), "surface_plains"),
 			Pair.of(point(0.2F, 0.9F), "lush_caves"),
 			Pair.of(point(0.2F, 0.9F), "dripstone_caves"),
 			Pair.of(pointExact(1.1F), "deep_dark")
@@ -63,10 +64,13 @@ class UndergroundBiomeBandingConcurrencyTest {
 		List<Pair<Climate.ParameterPoint, String>> entries = this.makeTestEntries();
 		UndergroundBiomeBanding.Layout<String> layout = UndergroundBiomeBanding.apply(
 			preset, entries, seed,
-			(point, value) -> UndergroundBiomeBanding.classify(point, value.contains("caves") || value.contains("dark"))
+			(point, value) -> UndergroundBiomeBanding.classify(point, value.contains("caves") || value.contains("dark")),
+			value -> value.contains("caves") || value.contains("dark")
 		);
 
-		assertTrue(layout.deepCandidateCount() >= 3, "Expected at least 3 deep candidates");
+		assertEquals(3, layout.deepCandidateCount(), "Expected exactly 3 deep candidates");
+		assertEquals(2, layout.shallowCandidateCount(), "Expected exactly 2 shallow candidates");
+		assertTrue(!layout.isCaveCandidate("surface_plains"), "surface_plains must not be a cave candidate");
 
 		AtomicInteger targetSampleCount = new AtomicInteger();
 		UndergroundBiomeBanding.TargetSampler targetSampler = (ix, iy, iz) -> {
@@ -148,7 +152,8 @@ class UndergroundBiomeBandingConcurrencyTest {
 		List<Pair<Climate.ParameterPoint, String>> entries = this.makeTestEntries();
 		UndergroundBiomeBanding.Layout<String> layout = UndergroundBiomeBanding.apply(
 			preset, entries, seed,
-			(point, value) -> UndergroundBiomeBanding.classify(point, value.contains("caves") || value.contains("dark"))
+			(point, value) -> UndergroundBiomeBanding.classify(point, value.contains("caves") || value.contains("dark")),
+			value -> value.contains("caves") || value.contains("dark")
 		);
 
 		Climate.TargetPoint target = Climate.target(0.0F, 0.0F, 0.0F, -0.5F, 1.5F, 0.0F);
@@ -179,7 +184,8 @@ class UndergroundBiomeBandingConcurrencyTest {
 		List<Pair<Climate.ParameterPoint, String>> entries = this.makeTestEntries();
 		UndergroundBiomeBanding.Layout<String> layout = UndergroundBiomeBanding.apply(
 			preset, entries, seed,
-			(point, value) -> UndergroundBiomeBanding.classify(point, value.contains("caves") || value.contains("dark"))
+			(point, value) -> UndergroundBiomeBanding.classify(point, value.contains("caves") || value.contains("dark")),
+			value -> value.contains("caves") || value.contains("dark")
 		);
 
 		Climate.TargetPoint target = Climate.target(0.0F, 0.0F, 0.0F, -0.5F, 1.5F, 0.0F);

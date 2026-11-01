@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicIntegerArray;
 import java.util.concurrent.atomic.AtomicLongArray;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.function.BiFunction;
+import java.util.function.Predicate;
 
 import com.mojang.datafixers.util.Pair;
 
@@ -51,7 +52,7 @@ public final class UndergroundBiomeBanding {
 	}
 
 	public static <T> Layout<T> apply(Preset preset, List<Pair<Climate.ParameterPoint, T>> entries) {
-		return apply(preset, entries, entries, 0L, (point, value) -> classify(point, false));
+		return apply(preset, entries, entries, 0L, (point, value) -> classify(point, false), null);
 	}
 
 	public static <T> Layout<T> apply(
@@ -59,7 +60,7 @@ public final class UndergroundBiomeBanding {
 		List<Pair<Climate.ParameterPoint, T>> entries,
 		long seed
 	) {
-		return apply(preset, entries, entries, seed, (point, value) -> classify(point, false));
+		return apply(preset, entries, entries, seed, (point, value) -> classify(point, false), null);
 	}
 
 	public static <T> Layout<T> apply(
@@ -69,7 +70,8 @@ public final class UndergroundBiomeBanding {
 	) {
 		return apply(
 			preset, source, source.values(), seed,
-			(point, value) -> classify(point, false)
+			(point, value) -> classify(point, false),
+			null
 		);
 	}
 
@@ -79,7 +81,17 @@ public final class UndergroundBiomeBanding {
 		long seed,
 		BiFunction<Climate.ParameterPoint, T, CandidateRole> classifier
 	) {
-		return apply(preset, source, source.values(), seed, classifier);
+		return apply(preset, source, source.values(), seed, classifier, null);
+	}
+
+	public static <T> Layout<T> apply(
+		Preset preset,
+		Climate.ParameterList<T> source,
+		long seed,
+		BiFunction<Climate.ParameterPoint, T, CandidateRole> classifier,
+		Predicate<T> isCave
+	) {
+		return apply(preset, source, source.values(), seed, classifier, isCave);
 	}
 
 	public static <T> Layout<T> apply(
@@ -87,7 +99,7 @@ public final class UndergroundBiomeBanding {
 		List<Pair<Climate.ParameterPoint, T>> entries,
 		BiFunction<Climate.ParameterPoint, T, CandidateRole> classifier
 	) {
-		return apply(preset, entries, entries, 0L, classifier);
+		return apply(preset, entries, entries, 0L, classifier, null);
 	}
 
 	public static <T> Layout<T> apply(
@@ -96,7 +108,17 @@ public final class UndergroundBiomeBanding {
 		long seed,
 		BiFunction<Climate.ParameterPoint, T, CandidateRole> classifier
 	) {
-		return apply(preset, entries, entries, seed, classifier);
+		return apply(preset, entries, entries, seed, classifier, null);
+	}
+
+	public static <T> Layout<T> apply(
+		Preset preset,
+		List<Pair<Climate.ParameterPoint, T>> entries,
+		long seed,
+		BiFunction<Climate.ParameterPoint, T, CandidateRole> classifier,
+		Predicate<T> isCave
+	) {
+		return apply(preset, entries, entries, seed, classifier, isCave);
 	}
 
 	public static <T> Layout<T> apply(
@@ -111,7 +133,26 @@ public final class UndergroundBiomeBanding {
 			new Climate.ParameterList<>(sourceEntries),
 			candidateEntries,
 			seed,
-			classifier
+			classifier,
+			null
+		);
+	}
+
+	public static <T> Layout<T> apply(
+		Preset preset,
+		List<Pair<Climate.ParameterPoint, T>> sourceEntries,
+		List<Pair<Climate.ParameterPoint, T>> candidateEntries,
+		long seed,
+		BiFunction<Climate.ParameterPoint, T, CandidateRole> classifier,
+		Predicate<T> isCave
+	) {
+		return apply(
+			preset,
+			new Climate.ParameterList<>(sourceEntries),
+			candidateEntries,
+			seed,
+			classifier,
+			isCave
 		);
 	}
 
@@ -120,10 +161,13 @@ public final class UndergroundBiomeBanding {
 		Climate.ParameterList<T> original,
 		List<Pair<Climate.ParameterPoint, T>> candidateEntries,
 		long seed,
-		BiFunction<Climate.ParameterPoint, T, CandidateRole> classifier
+		BiFunction<Climate.ParameterPoint, T, CandidateRole> classifier,
+		Predicate<T> isCave
 	) {
+		Predicate<T> effectiveIsCave = isCave != null ? isCave : UndergroundBiomeTags::isCave;
 		List<Pair<Climate.ParameterPoint, T>> sourceEntries = original.values();
 		Map<T, Candidate<T>> candidates = new LinkedHashMap<>();
+		Set<T> surfaceCandidates = new LinkedHashSet<>();
 		int unknownEntryCount = 0;
 		int classificationFailureCount = 0;
 		for (Pair<Climate.ParameterPoint, T> entry : candidateEntries) {
@@ -137,6 +181,9 @@ public final class UndergroundBiomeBanding {
 			} catch (RuntimeException exception) {
 				classificationFailureCount++;
 				continue;
+			}
+			if (role == CandidateRole.SURFACE || entry.getFirst().depth().max() <= Climate.quantizeCoord(0.0F)) {
+				surfaceCandidates.add(entry.getSecond());
 			}
 			if (role != CandidateRole.SHALLOW_CAVE && role != CandidateRole.DEEP_CAVE) {
 				if (role == CandidateRole.UNKNOWN) {
@@ -152,17 +199,14 @@ public final class UndergroundBiomeBanding {
 			}
 		}
 
+		candidates.keySet().removeIf(candidate -> surfaceCandidates.contains(candidate) && !effectiveIsCave.test(candidate));
+
 		List<Pair<Climate.ParameterPoint, T>> backgroundEntries = new ArrayList<>();
 		for (Pair<Climate.ParameterPoint, T> entry : sourceEntries) {
 			if (entry == null || entry.getFirst() == null || entry.getSecond() == null) {
 				continue;
 			}
-			try {
-				CandidateRole role = classifier.apply(entry.getFirst(), entry.getSecond());
-				if (role != CandidateRole.SHALLOW_CAVE && role != CandidateRole.DEEP_CAVE) {
-					backgroundEntries.add(entry);
-				}
-			} catch (RuntimeException exception) {
+			if (!candidates.containsKey(entry.getSecond())) {
 				backgroundEntries.add(entry);
 			}
 		}
@@ -191,13 +235,10 @@ public final class UndergroundBiomeBanding {
 		}
 
 		float selectionStart = shallowStage == null ? VANILLA_BOTTOM_DEPTH : SURFACE_DEPTH;
-		float fullDensityStart = Math.min(
-			endDepth,
-			selectionStart + (
-				UndergroundBiomeSurfaceProtection.HARD_SHELL_BLOCKS
-					+ UndergroundBiomeSurfaceProtection.TRANSITION_BLOCKS
-			) * DEPTH_UNITS_PER_BLOCK
-		);
+		float fullDensityStart = selectionStart + (
+			UndergroundBiomeSurfaceProtection.HARD_SHELL_BLOCKS
+				+ UndergroundBiomeSurfaceProtection.TRANSITION_BLOCKS
+		) * DEPTH_UNITS_PER_BLOCK;
 		ClimateSettings.BiomeShape settings = preset.climate().biomeShape;
 		int horizontalSize = settings.undergroundBiomeSize();
 		int verticalSize = settings.undergroundBiomeVerticalSize(
@@ -463,16 +504,12 @@ public final class UndergroundBiomeBanding {
 	) {
 		ClimateSettings.BiomeShape settings = preset.climate().biomeShape;
 		long selectionStart = Climate.quantizeCoord(SURFACE_DEPTH);
-		long endDepth = Climate.quantizeCoord(endDepth(preset));
-		if (target.depth() < selectionStart || target.depth() > endDepth) {
+		if (target.depth() < selectionStart) {
 			return true;
 		}
-		long fullDensityStart = Math.min(
-			endDepth,
-			selectionStart + Climate.quantizeCoord(
-				(UndergroundBiomeSurfaceProtection.HARD_SHELL_BLOCKS
-					+ UndergroundBiomeSurfaceProtection.TRANSITION_BLOCKS) * DEPTH_UNITS_PER_BLOCK
-			)
+		long fullDensityStart = selectionStart + Climate.quantizeCoord(
+			(UndergroundBiomeSurfaceProtection.HARD_SHELL_BLOCKS
+				+ UndergroundBiomeSurfaceProtection.TRANSITION_BLOCKS) * DEPTH_UNITS_PER_BLOCK
 		);
 		float effectiveDensity = settings.undergroundBiomeCoverage() * Math.min(
 			surfaceFactor(target.depth(), selectionStart, fullDensityStart),
@@ -658,8 +695,10 @@ public final class UndergroundBiomeBanding {
 
 	private static final class Stage<T> {
 		private static final class PhaseMru {
+			long seed;
 			int cellX = Integer.MIN_VALUE;
 			int cellZ = Integer.MIN_VALUE;
+			int candidateCount;
 			int phase;
 		}
 		private static final ThreadLocal<PhaseMru> PHASE_MRU = ThreadLocal.withInitial(PhaseMru::new);
@@ -742,13 +781,15 @@ public final class UndergroundBiomeBanding {
 
 		private int getHorizontalPhase(long seed, int cellX, int cellZ, int candidateCount) {
 			PhaseMru mru = PHASE_MRU.get();
-			if (mru.cellX == cellX && mru.cellZ == cellZ) {
+			if (mru.seed == seed && mru.cellX == cellX && mru.cellZ == cellZ && mru.candidateCount == candidateCount) {
 				return mru.phase;
 			}
 			long horizontalHash = cellHash(seed, cellX, 0, cellZ, IDENTITY_CELL_SALT);
 			int phase = Math.floorMod((int) (horizontalHash ^ (horizontalHash >>> 32)), candidateCount);
+			mru.seed = seed;
 			mru.cellX = cellX;
 			mru.cellZ = cellZ;
+			mru.candidateCount = candidateCount;
 			mru.phase = phase;
 			return phase;
 		}
@@ -924,7 +965,7 @@ public final class UndergroundBiomeBanding {
 		}
 
 		public boolean appliesAt(Climate.TargetPoint target) {
-			return target.depth() >= this.selectionStart && target.depth() <= this.endDepth;
+			return target.depth() >= this.selectionStart;
 		}
 
 		public int shallowCandidateCount() {

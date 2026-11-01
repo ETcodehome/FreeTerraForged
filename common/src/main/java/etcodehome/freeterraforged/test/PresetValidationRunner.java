@@ -1389,8 +1389,21 @@ public final class PresetValidationRunner {
 				(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value))
 			);
 
-			if (bandedLayout.deepCandidateCount() < 2) {
-				throw new AssertionError("Deep stage should have at least 2 cave candidates, found: " + bandedLayout.deepCandidateCount());
+			if (bandedLayout.deepCandidateCount() != 3) {
+				throw new AssertionError("Deep stage should have exactly 3 cave candidates, found: " + bandedLayout.deepCandidateCount() + " (" + bandedLayout.deepCandidateValues() + ")");
+			}
+			if (bandedLayout.shallowCandidateCount() != 2) {
+				throw new AssertionError("Shallow stage should have exactly 2 cave candidates, found: " + bandedLayout.shallowCandidateCount() + " (" + bandedLayout.shallowCandidateValues() + ")");
+			}
+			for (var biome : bandedLayout.deepCandidateValues()) {
+				if (!UndergroundBiomeTags.isCave(biome)) {
+					throw new AssertionError("Deep candidates contain non-cave biome: " + biome);
+				}
+			}
+			for (var biome : bandedLayout.shallowCandidateValues()) {
+				if (!UndergroundBiomeTags.isCave(biome)) {
+					throw new AssertionError("Shallow candidates contain non-cave biome: " + biome);
+				}
 			}
 
 			// Sample a vertical column in the deep cave zone at steps of verticalSize (64 blocks)
@@ -1416,6 +1429,11 @@ public final class PresetValidationRunner {
 				sampleStepCount++;
 			}
 
+			for (var biome : stackedBiomes) {
+				if (!UndergroundBiomeTags.isCave(biome)) {
+					throw new AssertionError("Underground banding sampled non-cave biome in stacked biomes: " + biome);
+				}
+			}
 			if (stackedBiomes.size() < 2) {
 				throw new AssertionError("Underground biome banding failed: expected multiple stacked cave biome types across vertical column, but only got " + stackedBiomes.size() + ": " + stackedBiomes);
 			}
@@ -1479,6 +1497,64 @@ public final class PresetValidationRunner {
 
 			if (smallTransitions <= largeTransitions * 2) {
 				throw new AssertionError("undergroundBiomeSize not respected: small size (50) should have significantly more transitions than large size (500). Small=" + smallTransitions + ", Large=" + largeTransitions);
+			}
+
+			// 4. Verify 1024-block deep world with 100% cave coverage and 0% climate influence
+			Preset extraDeepPreset = Presets.makeFTFDefault();
+			extraDeepPreset.world().properties.worldDepth = 1024;
+			extraDeepPreset.world().properties.worldHeight = 320;
+			extraDeepPreset.climate().biomeShape.undergroundBiomeSize = 225;
+			extraDeepPreset.climate().biomeShape.undergroundBiomeVerticalSize = 64;
+			extraDeepPreset.climate().biomeShape.undergroundBiomeCoverage = 1.0F;
+			extraDeepPreset.climate().biomeShape.undergroundBiomeClimateInfluence = 0.0F;
+			extraDeepPreset.climate().biomeShape.undergroundBiomeBanding = true;
+
+			UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> extraDeepLayout = UndergroundBiomeBanding.apply(
+				extraDeepPreset,
+				overworldEntries,
+				seed,
+				(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value)),
+				UndergroundBiomeTags::isCave
+			);
+
+			java.util.Set<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> deepWorldStackedBiomes = new java.util.LinkedHashSet<>();
+			int deepWorldTransitions = 0;
+			net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> prevDeepBiome = null;
+			for (int blockY = -96; blockY >= -1000; blockY -= 64) {
+				int quartY = QuartPos.fromBlock(blockY);
+				net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> b = extraDeepLayout.findValue(target, quartX, quartY, quartZ);
+				if (!UndergroundBiomeTags.isCave(b)) {
+					throw new AssertionError("1024-deep world at Y=" + blockY + " generated non-cave biome: " + b + "! Expected exclusively cave biomes with 100% coverage.");
+				}
+				deepWorldStackedBiomes.add(b);
+				if (prevDeepBiome != null && !prevDeepBiome.equals(b)) {
+					deepWorldTransitions++;
+				}
+				prevDeepBiome = b;
+			}
+			if (deepWorldStackedBiomes.size() != 3) {
+				throw new AssertionError("1024-deep world with 0% climate influence should rotate across all 3 cave biomes, but found " + deepWorldStackedBiomes.size() + ": " + deepWorldStackedBiomes);
+			}
+			if (deepWorldTransitions < 8) {
+				throw new AssertionError("1024-deep world should have frequent vertical banding transitions down 1000 blocks, but only got " + deepWorldTransitions);
+			}
+
+			// 5. Verify 0% cave coverage underground: all sampled biomes must be background (non-cave) biomes
+			Preset zeroCoveragePreset = extraDeepPreset.copy();
+			zeroCoveragePreset.climate().biomeShape.undergroundBiomeCoverage = 0.0F;
+			UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> zeroCoverageLayout = UndergroundBiomeBanding.apply(
+				zeroCoveragePreset,
+				overworldEntries,
+				seed,
+				(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value)),
+				UndergroundBiomeTags::isCave
+			);
+			for (int blockY = -96; blockY >= -1000; blockY -= 128) {
+				int quartY = QuartPos.fromBlock(blockY);
+				net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> b = zeroCoverageLayout.findValue(target, quartX, quartY, quartZ);
+				if (UndergroundBiomeTags.isCave(b)) {
+					throw new AssertionError("0% coverage preset generated cave biome at Y=" + blockY + ": " + b);
+				}
 			}
 
 			FTFCommon.LOGGER.info("[FTF-Test] PASSED: Underground biome banding verified (stacked biomes: {}, transitions: {}/{}, columnar: single, horizontal size 50 vs 500: {} vs {} transitions).",
