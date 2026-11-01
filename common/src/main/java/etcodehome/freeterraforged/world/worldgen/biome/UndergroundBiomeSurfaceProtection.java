@@ -16,10 +16,39 @@ public final class UndergroundBiomeSurfaceProtection {
 	private static final float SURFACE_DEPTH = NoiseRouterData.GLOBAL_OFFSET + 0.5F;
 	private static final float EXTRA_SAFETY_MARGIN_BLOCKS = 16.0F;
 
+	private static final class CoverageMru {
+		int quartX = Integer.MIN_VALUE;
+		int quartY = Integer.MIN_VALUE;
+		int quartZ = Integer.MIN_VALUE;
+		Object sampler;
+		float coverage;
+	}
+	private static final ThreadLocal<CoverageMru> COVERAGE_MRU = ThreadLocal.withInitial(CoverageMru::new);
+
 	private UndergroundBiomeSurfaceProtection() {
 	}
 
 	public static float coverageFactor(
+			Climate.Sampler sampler,
+			Climate.TargetPoint target,
+			int quartX,
+			int quartY,
+			int quartZ
+	) {
+		CoverageMru mru = COVERAGE_MRU.get();
+		if (mru.quartX == quartX && mru.quartY == quartY && mru.quartZ == quartZ && mru.sampler == sampler) {
+			return mru.coverage;
+		}
+		float coverage = computeCoverageFactor(sampler, target, quartX, quartY, quartZ);
+		mru.quartX = quartX;
+		mru.quartY = quartY;
+		mru.quartZ = quartZ;
+		mru.sampler = sampler;
+		mru.coverage = coverage;
+		return coverage;
+	}
+
+	private static float computeCoverageFactor(
 			Climate.Sampler sampler,
 			Climate.TargetPoint target,
 			int quartX,

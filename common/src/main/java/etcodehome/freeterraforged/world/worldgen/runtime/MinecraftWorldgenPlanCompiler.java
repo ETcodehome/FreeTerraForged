@@ -998,15 +998,17 @@ public final class MinecraftWorldgenPlanCompiler {
 				}
 				Holder<Biome> resolved = applyUndergroundPolicy(
 					preset, layout, selected, target, quartX, quartY, quartZ, sampler,
-					(identityQuartX, identityQuartY, identityQuartZ) -> providers.projectTarget(
-						domain,
-						result.usedFallback(),
-						etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeClimatePolicy.sampleWithoutBanding(
-							() -> samplerDecoration.sample(
+					(identityQuartX, identityQuartY, identityQuartZ) -> {
+						boolean prev = etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeClimatePolicy.beginSkipBanding();
+						try {
+							Climate.TargetPoint identitySample = samplerDecoration.sample(
 								sampler, identityQuartX, identityQuartY, identityQuartZ
-							)
-						)
-					)
+							);
+							return providers.projectTarget(domain, result.usedFallback(), identitySample);
+						} finally {
+							etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeClimatePolicy.endSkipBanding(prev);
+						}
+					}
 				);
 				return terrainRoles.resolve(
 					result, target, resolved, quartX, quartY, quartZ, sampler, surfaceContext
