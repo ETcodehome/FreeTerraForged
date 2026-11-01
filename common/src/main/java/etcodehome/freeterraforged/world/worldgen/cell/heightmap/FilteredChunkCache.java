@@ -25,6 +25,18 @@ public class FilteredChunkCache {
     public static final int REGION_MASK = REGION_CHUNKS - 1; // 3
     private static final int MAX_ENTRIES = 2048;
 
+    private static final class ThreadMru {
+        long chunkKey = Long.MIN_VALUE;
+        Cell[] chunkCells;
+    }
+    private static final ThreadLocal<ThreadMru> THREAD_MRU = ThreadLocal.withInitial(ThreadMru::new);
+
+    public static void clearThreadCaches() {
+        ThreadMru mru = THREAD_MRU.get();
+        mru.chunkKey = Long.MIN_VALUE;
+        mru.chunkCells = null;
+    }
+
     private final ConcurrentHashMap<Long, Cell[]> cache = new ConcurrentHashMap<>(MAX_ENTRIES);
     private final ConcurrentLinkedQueue<Long> evictionQueue = new ConcurrentLinkedQueue<>();
     private final ConcurrentHashMap<Long, CompletableFuture<Void>> inFlightRegions = new ConcurrentHashMap<>();
@@ -36,8 +48,18 @@ public class FilteredChunkCache {
 
     public Cell[] getFilteredChunk(int chunkX, int chunkZ) {
         long chunkKey = PosUtil.pack(chunkX, chunkZ);
+        ThreadMru mru = THREAD_MRU.get();
+        if (mru.chunkKey == chunkKey && mru.chunkCells != null) {
+            if (WorldgenPerfTracker.ACTIVE) {
+                WorldgenPerfTracker.stats().filteredChunkCacheHits++;
+            }
+            return mru.chunkCells;
+        }
+
         Cell[] existing = this.cache.get(chunkKey);
         if (existing != null) {
+            mru.chunkKey = chunkKey;
+            mru.chunkCells = existing;
             if (WorldgenPerfTracker.ACTIVE) {
                 WorldgenPerfTracker.stats().filteredChunkCacheHits++;
             }
@@ -51,6 +73,8 @@ public class FilteredChunkCache {
         while (true) {
             existing = this.cache.get(chunkKey);
             if (existing != null) {
+                mru.chunkKey = chunkKey;
+                mru.chunkCells = existing;
                 if (WorldgenPerfTracker.ACTIVE) {
                     WorldgenPerfTracker.stats().filteredChunkCacheHits++;
                 }
@@ -72,7 +96,10 @@ public class FilteredChunkCache {
                 if (WorldgenPerfTracker.ACTIVE) {
                     WorldgenPerfTracker.stats().filteredChunkCacheMisses++;
                 }
-                return this.cache.get(chunkKey);
+                Cell[] generated = this.cache.get(chunkKey);
+                mru.chunkKey = chunkKey;
+                mru.chunkCells = generated;
+                return generated;
             } else {
                 try {
                     inFlight.join();
@@ -135,13 +162,32 @@ public class FilteredChunkCache {
     }
 
     public Cell[] getIfPresent(int chunkX, int chunkZ) {
-        return this.cache.get(PosUtil.pack(chunkX, chunkZ));
+        long chunkKey = PosUtil.pack(chunkX, chunkZ);
+        ThreadMru mru = THREAD_MRU.get();
+        if (mru.chunkKey == chunkKey && mru.chunkCells != null) {
+            return mru.chunkCells;
+        }
+        Cell[] cells = this.cache.get(chunkKey);
+        if (cells != null) {
+            mru.chunkKey = chunkKey;
+            mru.chunkCells = cells;
+        }
+        return cells;
     }
 
     public Cell getExistingFilteredCell(int blockX, int blockZ) {
         int chunkX = blockX >> 4;
         int chunkZ = blockZ >> 4;
-        Cell[] chunkCells = this.cache.get(PosUtil.pack(chunkX, chunkZ));
+        long chunkKey = PosUtil.pack(chunkX, chunkZ);
+        ThreadMru mru = THREAD_MRU.get();
+        Cell[] chunkCells;
+        if (mru.chunkKey == chunkKey) {
+            chunkCells = mru.chunkCells;
+        } else {
+            chunkCells = this.cache.get(chunkKey);
+            mru.chunkKey = chunkKey;
+            mru.chunkCells = chunkCells;
+        }
         if (chunkCells != null) {
             int relX = blockX & 15;
             int relZ = blockZ & 15;
@@ -158,5 +204,6 @@ public class FilteredChunkCache {
         this.cache.clear();
         this.evictionQueue.clear();
         this.inFlightRegions.clear();
+        clearThreadCaches();
     }
 }

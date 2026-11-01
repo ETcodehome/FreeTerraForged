@@ -371,6 +371,10 @@ public final class UndergroundBiomeBanding {
 
 	public static void clearThreadCaches() {
 		UndergroundBiomeSurfaceProtection.clearThreadCaches();
+		BiomeSurfaceEnvelope.clearThreadCaches();
+		etcodehome.freeterraforged.world.worldgen.densityfunction.ClimateDepthFunction.clearThreadCaches();
+		etcodehome.freeterraforged.world.worldgen.cell.heightmap.FilteredChunkCache.clearThreadCaches();
+		etcodehome.freeterraforged.world.worldgen.cell.heightmap.RawChunkCache.clearThreadCaches();
 		Layout.clearRankThreadLocals();
 	}
 

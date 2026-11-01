@@ -17,15 +17,38 @@ public record ClimateDepthFunction(
 	int worldHeight
 ) implements MarkerFunction.Mapped {
 
+	private static final class ThreadMru {
+		int blockX = Integer.MIN_VALUE;
+		int blockZ = Integer.MIN_VALUE;
+		int surfaceY;
+	}
+	private static final ThreadLocal<ThreadMru> THREAD_MRU = ThreadLocal.withInitial(ThreadMru::new);
+
+	public static void clearThreadCaches() {
+		ThreadMru mru = THREAD_MRU.get();
+		mru.blockX = Integer.MIN_VALUE;
+		mru.blockZ = Integer.MIN_VALUE;
+	}
+
 	@Override
 	public double compute(FunctionContext ctx) {
-		WorldLookup lookup = this.deferredLookup.get();
-		if (lookup == null || lookup.getContext() == null || lookup.getContext().levels == null) {
-			return 0.0D;
+		int bx = ctx.blockX();
+		int bz = ctx.blockZ();
+		ThreadMru mru = THREAD_MRU.get();
+		int surfaceY;
+		if (mru.blockX == bx && mru.blockZ == bz) {
+			surfaceY = mru.surfaceY;
+		} else {
+			WorldLookup lookup = this.deferredLookup.get();
+			if (lookup == null || lookup.getContext() == null || lookup.getContext().levels == null) {
+				return 0.0D;
+			}
+			Cell cell = CellSampler.getCachedOrLookup(lookup, bx, bz, false);
+			surfaceY = lookup.getContext().levels.scale(cell.height);
+			mru.blockX = bx;
+			mru.blockZ = bz;
+			mru.surfaceY = surfaceY;
 		}
-
-		Cell cell = CellSampler.getCachedOrLookup(lookup, ctx.blockX(), ctx.blockZ(), false);
-		int surfaceY = lookup.getContext().levels.scale(cell.height);
 		int by = ctx.blockY();
 
 		if (by <= surfaceY) {

@@ -48,7 +48,6 @@ class MixinNoiseChunk implements IChunkCellsHolder {
 	private int chunkX, chunkZ;
 	@Nullable
 	private Aquifer.FluidPicker freeterraforged$fluidPicker;
-	private CellSampler.Cache2d cache2d;
 	@Nullable
 	private Cell[] freeterraforged$chunkCells;
 
@@ -115,7 +114,6 @@ class MixinNoiseChunk implements IChunkCellsHolder {
 					preset, generatorContext, generatorSettings
 				);
 				if (cellCountXZ > 1) {
-					this.cache2d = new CellSampler.Cache2d();
 					ChunkAccess activeChunk = freeterraforged$ACTIVE_CHUNK.get();
 					if (activeChunk instanceof IChunkCellsHolder holder
 							&& activeChunk.getPos().x == this.chunkX
@@ -255,7 +253,7 @@ class MixinNoiseChunk implements IChunkCellsHolder {
 	)
 	private void wrapNew(DensityFunction function, CallbackInfoReturnable<DensityFunction> callback) {
 		if((Object) this.randomState instanceof FTFRandomState randomState && function instanceof CellSampler mapped) {
-			callback.setReturnValue(mapped.new CacheChunk(this.freeterraforged$chunkCells, this.chunkX << 4, this.chunkZ << 4, this.cache2d));
+			callback.setReturnValue(mapped.new CacheChunk(this.freeterraforged$chunkCells, this.chunkX << 4, this.chunkZ << 4, null));
 		}
 	}
 
