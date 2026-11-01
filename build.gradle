@@ -58,17 +58,12 @@ allprojects {
     }
 }
 
-tasks.register("generatePresetTestReport") {
+tasks.register("archiveUnitTestReport") {
     group = "verification"
-    description = "Generates a paired local HTML report from test outputs in build/reports/preset-test-heightmaps"
+    description = "Archives automated unit test XML results to unit_tests_report.txt"
     doLast {
         def reportDir = file("build/reports/preset-test-heightmaps")
-        if (!reportDir.exists() || !reportDir.isDirectory()) {
-            logger.lifecycle("[FTF-Test] No report directory found at: ${reportDir.absolutePath}. Run preset tests first.")
-            return
-        }
-
-        // Archive automated unit test suite results as a diagnostic report log
+        reportDir.mkdirs()
         def testResultsDir = file("common/build/test-results/test")
         if (testResultsDir.exists() && testResultsDir.isDirectory()) {
             def unitTestReportFile = new File(reportDir, "unit_tests_report.txt")
@@ -110,6 +105,24 @@ tasks.register("generatePresetTestReport") {
             sb.append(String.format("Outcome: %s\n", (totalFailures == 0 && totalErrors == 0) ? "ALL TESTS PASSED" : "TEST FAILURES DETECTED"))
             unitTestReportFile.text = sb.toString()
             logger.lifecycle("[FTF-Test] Unit test outcomes archived to: ${unitTestReportFile.absolutePath}")
+        }
+    }
+}
+
+evaluationDependsOn(":common")
+project(":common").tasks.named("test").configure {
+    finalizedBy(rootProject.tasks.named("archiveUnitTestReport"))
+}
+
+tasks.register("generatePresetTestReport") {
+    group = "verification"
+    description = "Generates a paired local HTML report from test outputs in build/reports/preset-test-heightmaps"
+    dependsOn("archiveUnitTestReport")
+    doLast {
+        def reportDir = file("build/reports/preset-test-heightmaps")
+        if (!reportDir.exists() || !reportDir.isDirectory()) {
+            logger.lifecycle("[FTF-Test] No report directory found at: ${reportDir.absolutePath}. Run preset tests first.")
+            return
         }
 
         def generatorSource = file("common/src/main/java/etcodehome/freeterraforged/test/LocalTestReportGenerator.java")
