@@ -267,6 +267,20 @@ public final class UndergroundBiomeBanding {
 		return CandidateRole.UNKNOWN;
 	}
 
+	/** Classifies a sampled runtime climate point using the same shallow/deep boundary as band selection. */
+	public static CandidateRole classifyTarget(Climate.TargetPoint target) {
+		if (target == null) {
+			return CandidateRole.UNKNOWN;
+		}
+		long depth = target.depth();
+		if (depth < Climate.quantizeCoord(SURFACE_DEPTH)) {
+			return CandidateRole.SURFACE;
+		}
+		return depth < Climate.quantizeCoord(VANILLA_BOTTOM_DEPTH)
+			? CandidateRole.SHALLOW_CAVE
+			: CandidateRole.DEEP_CAVE;
+	}
+
 	private static boolean isWellFormed(Climate.ParameterPoint point) {
 		return point != null
 			&& isWellFormed(point.temperature())
