@@ -8,7 +8,7 @@ import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 import etcodehome.freeterraforged.world.worldgen.util.PosUtil;
 
 public class RawChunkCache {
-    private static final int MAX_ENTRIES = 2048;
+    public static final int MAX_ENTRIES = 2048;
 
     private static final class ThreadMru {
         long chunkKey = Long.MIN_VALUE;

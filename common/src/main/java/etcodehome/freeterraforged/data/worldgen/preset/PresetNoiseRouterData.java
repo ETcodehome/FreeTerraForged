@@ -60,7 +60,7 @@ public class PresetNoiseRouterData {
         ctx.register(NoiseRouterData.RIDGES, FTFDensityFunctions.cell(CellSampler.Field.WEIRDNESS));
 
         DensityFunction height = NoiseRouterData.registerAndWrap(ctx, HEIGHT, DensityFunctions.cache2d(FTFDensityFunctions.cell(CellSampler.Field.HEIGHT)));
-        DensityFunction offset = NoiseRouterData.registerAndWrap(ctx, NoiseRouterData.OFFSET, DensityFunctions.cache2d(DensityFunctions.add(DensityFunctions.constant(NoiseRouterData.GLOBAL_OFFSET - 0.5F), DensityFunctions.mul(height, DensityFunctions.constant(2.0D)))));
+        DensityFunction offset = NoiseRouterData.registerAndWrap(ctx, NoiseRouterData.OFFSET, DensityFunctions.cache2d(DensityFunctions.add(DensityFunctions.constant(-1.0D), DensityFunctions.mul(height, DensityFunctions.constant(2.0D)))));
         DensityFunction terrainDensity = DensityFunctions.add(DensityFunctions.yClampedGradient(-worldDepth, worldHeight, yGradientRange(-worldDepth), yGradientRange(worldHeight)), offset);
         DensityFunction factor = NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.FACTOR);
         ctx.register(NoiseRouterData.SLOPED_CHEESE, NoiseRouterData.noiseGradientDensity(DensityFunctions.cache2d(factor), terrainDensity));

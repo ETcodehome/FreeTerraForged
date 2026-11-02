@@ -2113,7 +2113,7 @@ public final class PresetValidationRunner {
 						int rawSize = gCtx.rawChunkCache != null ? gCtx.rawChunkCache.size() : -1;
 						FTFCommon.LOGGER.info("[FTF-Test] FTF Caches: filteredChunkCache={}, rawChunkCache={}",
 							filteredSize, rawSize);
-						if (filteredSize > 512 || rawSize > 512) {
+						if (filteredSize > etcodehome.freeterraforged.world.worldgen.cell.heightmap.FilteredChunkCache.MAX_ENTRIES || rawSize > etcodehome.freeterraforged.world.worldgen.cell.heightmap.RawChunkCache.MAX_ENTRIES) {
 							throw new AssertionError(String.format(
 								java.util.Locale.ROOT,
 								"FTF terrain cache exceeded capacity bounds! filteredChunkCache=%d (max 512), rawChunkCache=%d (max 512)",
