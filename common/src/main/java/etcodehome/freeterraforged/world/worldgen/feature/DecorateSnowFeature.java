@@ -8,13 +8,17 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.DoublePlantBlock;
 import net.minecraft.world.level.block.GrassBlock;
 import net.minecraft.world.level.block.SnowLayerBlock;
+import net.minecraft.world.level.block.SnowyDirtBlock;
 import net.minecraft.world.level.block.SpreadingSnowyDirtBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkGenerator;
@@ -23,6 +27,7 @@ import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
 import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfiguration;
+import etcodehome.freeterraforged.tags.FTFBlockTags;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 import etcodehome.freeterraforged.world.worldgen.IChunkCellsHolder;
@@ -39,6 +44,9 @@ public class DecorateSnowFeature extends Feature<Config> {
     private static final float SNOW_ROCK_HEIGHT = 95.0F / 255.0F;
     private static final float MIN = min(SnowLayerBlock.LAYERS);
     private static final float MAX = max(SnowLayerBlock.LAYERS);
+    // Level 1 matches vanilla's single snow layer, so a plant beside it shows only the vanilla gap.
+    // Deeper smoothed snow leaves a visible pit around the plant, which is what plant cover fills.
+    private static final int MIN_COVER_LEVEL = 2;
 
 	public DecorateSnowFeature(Codec<Config> codec) {
 		super(codec);
@@ -120,7 +128,9 @@ public class DecorateSnowFeature extends Feature<Config> {
 				            }
 
 				            if(state.is(Blocks.SNOW)) {
-				            	smoothSnow(chunk, pos, cell, levels, 0.0F);
+				            	smoothSnow(chunk, pos, getSnowLevel(cell, levels));
+				            } else if(config.coverPlants && pos.getY() == surfaceY + 1 && isCoverable(state)) {
+				            	coverPlant(level, chunk, pos, getSnowLevel(cell, levels));
 				            }
 				        }
 			        }
@@ -149,20 +159,55 @@ public class DecorateSnowFeature extends Feature<Config> {
         }
     }
     
-    private static void smoothSnow(ChunkAccess chunk, BlockPos.MutableBlockPos pos, Cell cell, Levels levels, float min) {
-
+    private static int getSnowLevel(Cell cell, Levels levels) {
 		float heightWithFractionalComponent = cell.height / levels.unit;
         float depth = getDepth(heightWithFractionalComponent);
-        if (depth > min) {
-            int level = getLevel(depth);
-            BlockState layer = getState(level);
-            if (layer.is(Blocks.AIR)) {
-                return;
-            }
-            chunk.setBlockState(pos, layer, false);
+        return depth > 0.0F ? getLevel(depth) : 0;
+    }
 
-           fixBaseBlock(chunk, pos, layer, level);
+    private static void smoothSnow(ChunkAccess chunk, BlockPos.MutableBlockPos pos, int level) {
+        BlockState layer = getState(level);
+        if (layer.is(Blocks.AIR)) {
+            return;
         }
+        chunk.setBlockState(pos, layer, false);
+
+        fixBaseBlock(chunk, pos, layer, level);
+    }
+
+    private static boolean isCoverable(BlockState state) {
+        // Never strand the other half of a tall plant, discard block entity data, or remove a fluid.
+        return state.is(FTFBlockTags.SNOW_COVERABLE)
+            && !state.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)
+            && !(state.getBlock() instanceof DoublePlantBlock)
+            && !state.hasBlockEntity()
+            && state.getFluidState().isEmpty();
+    }
+
+    /**
+     * Replaces a small plant with the snow depth its column would receive from {@link #smoothSnow}, using vanilla's
+     * snow placement conditions. Block light is not checked: lighting is not computed until after the features stage.
+     */
+    private static void coverPlant(WorldGenLevel level, ChunkAccess chunk, BlockPos.MutableBlockPos pos, int snowLevel) {
+        if (snowLevel < MIN_COVER_LEVEL
+            || pos.getY() < level.getMinBuildHeight()
+            || pos.getY() >= level.getMaxBuildHeight()
+            || !level.getBiome(pos).value().coldEnoughToSnow(pos)
+            || !Blocks.SNOW.defaultBlockState().canSurvive(level, pos)) {
+            return;
+        }
+
+        BlockState layer = getState(snowLevel);
+        chunk.setBlockState(pos, layer, false);
+        fixBaseBlock(chunk, pos, layer, snowLevel);
+
+        // Vanilla marks the ground under its snow as snowy; match the neighboring snow columns.
+        pos.move(Direction.DOWN);
+        BlockState below = chunk.getBlockState(pos);
+        if (below.hasProperty(SnowyDirtBlock.SNOWY) && !below.getValue(SnowyDirtBlock.SNOWY)) {
+            chunk.setBlockState(pos, below.setValue(SnowyDirtBlock.SNOWY, true), false);
+        }
+        pos.move(Direction.UP);
     }
 
     private static void fixBaseBlock(ChunkAccess chunk, BlockPos pos, BlockState layerMaterial, int level) {
@@ -209,11 +254,13 @@ public class DecorateSnowFeature extends Feature<Config> {
         return property.getPossibleValues().stream().max(Integer::compareTo).orElse(0);
     }
 
-	public record Config(boolean erode, boolean smooth, ScreeFeature.Config erodeConfig) implements FeatureConfiguration {
+	public record Config(boolean erode, boolean smooth, ScreeFeature.Config erodeConfig, boolean coverPlants) implements FeatureConfiguration {
 		public static final Codec<Config> CODEC = RecordCodecBuilder.create(instance -> instance.group(
 			Codec.BOOL.fieldOf("erode").forGetter(Config::erode),
 			Codec.BOOL.fieldOf("smooth").forGetter(Config::smooth),
-			ScreeFeature.Config.CODEC.fieldOf("erode_config").forGetter(Config::erodeConfig)
+			ScreeFeature.Config.CODEC.fieldOf("erode_config").forGetter(Config::erodeConfig),
+			// Optional so generated preset packs in existing worlds keep decoding with the original behavior.
+			Codec.BOOL.optionalFieldOf("cover_plants", false).forGetter(Config::coverPlants)
 		).apply(instance, Config::new));
 	}
 }

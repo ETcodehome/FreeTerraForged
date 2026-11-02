@@ -34,7 +34,8 @@ public final class LocalTestReportGenerator {
 		"presetValidation.twoStageReloadSpawnPersistence",
 		"presetValidation.nonFtfWorldResolution",
 		"presetValidation.modCompatibilityShims",
-		"presetValidation.biomeReplacementValidation"
+		"presetValidation.biomeReplacementValidation",
+		"presetValidation.snowCoverCompatibility"
 	);
 
 	public static void main(String[] args) {

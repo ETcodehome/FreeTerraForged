@@ -16,6 +16,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.JsonOps;
@@ -65,6 +66,11 @@ import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
 import etcodehome.freeterraforged.data.worldgen.preset.FTFWorldPresetDataPacks;
 import etcodehome.freeterraforged.data.worldgen.preset.FTFWorldPresets;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.ContinentType;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.MiscellaneousSettings;
+import etcodehome.freeterraforged.tags.FTFBlockTags;
+import etcodehome.freeterraforged.world.worldgen.feature.DecorateSnowFeature;
+import etcodehome.freeterraforged.world.worldgen.feature.ScreeFeature;
+import net.minecraft.world.level.block.Blocks;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Presets;
 import etcodehome.freeterraforged.platform.ConfigUtil;
@@ -237,6 +243,59 @@ public final class PresetValidationRunner {
 	}
 
 	public record TestRecord(String name, String notes, boolean passed, String error) {}
+
+	private static void verifySnowCoverCompatibility() {
+		// Presets saved before the setting existed must decode with it disabled.
+		MiscellaneousSettings enabled = MiscellaneousSettings.makeDefault();
+		if (enabled.snowCoversSmallPlants) {
+			throw new AssertionError("Default miscellaneous settings must not enable snow cover");
+		}
+		enabled.snowCoversSmallPlants = true;
+		JsonObject miscJson = MiscellaneousSettings.CODEC.encodeStart(JsonOps.INSTANCE, enabled)
+			.getOrThrow(msg -> new IllegalStateException("Failed to encode miscellaneous settings: " + msg))
+			.getAsJsonObject();
+		MiscellaneousSettings roundTrip = MiscellaneousSettings.CODEC.parse(JsonOps.INSTANCE, miscJson)
+			.getOrThrow(msg -> new IllegalStateException("Failed to decode miscellaneous settings: " + msg));
+		if (!roundTrip.snowCoversSmallPlants) {
+			throw new AssertionError("snowCoversSmallPlants=true did not survive a codec round trip");
+		}
+		if (!enabled.copy().snowCoversSmallPlants) {
+			throw new AssertionError("MiscellaneousSettings.copy() dropped snowCoversSmallPlants");
+		}
+		miscJson.remove("snowCoversSmallPlants");
+		MiscellaneousSettings legacy = MiscellaneousSettings.CODEC.parse(JsonOps.INSTANCE, miscJson)
+			.getOrThrow(msg -> new IllegalStateException("Legacy miscellaneous settings failed to decode: " + msg));
+		if (legacy.snowCoversSmallPlants) {
+			throw new AssertionError("Legacy miscellaneous settings without snowCoversSmallPlants decoded as enabled");
+		}
+
+		// Generated preset packs in existing worlds store decorate_snow configs without cover_plants.
+		DecorateSnowFeature.Config config = new DecorateSnowFeature.Config(true, true, new ScreeFeature.Config(0, 0, 0, 0, 0F, 0F, 0F, 0F, 0F), true);
+		JsonObject configJson = DecorateSnowFeature.Config.CODEC.encodeStart(JsonOps.INSTANCE, config)
+			.getOrThrow(msg -> new IllegalStateException("Failed to encode decorate_snow config: " + msg))
+			.getAsJsonObject();
+		if (!DecorateSnowFeature.Config.CODEC.parse(JsonOps.INSTANCE, configJson)
+			.getOrThrow(msg -> new IllegalStateException("Failed to decode decorate_snow config: " + msg)).coverPlants()) {
+			throw new AssertionError("cover_plants=true did not survive a codec round trip");
+		}
+		configJson.remove("cover_plants");
+		if (DecorateSnowFeature.Config.CODEC.parse(JsonOps.INSTANCE, configJson)
+			.getOrThrow(msg -> new IllegalStateException("Legacy decorate_snow config failed to decode: " + msg)).coverPlants()) {
+			throw new AssertionError("Legacy decorate_snow config without cover_plants decoded as enabled");
+		}
+
+		// The bundled tag must resolve to small ground plants only.
+		if (!Blocks.POPPY.defaultBlockState().is(FTFBlockTags.SNOW_COVERABLE)
+			|| !Blocks.SHORT_GRASS.defaultBlockState().is(FTFBlockTags.SNOW_COVERABLE)
+			|| !Blocks.PINK_PETALS.defaultBlockState().is(FTFBlockTags.SNOW_COVERABLE)) {
+			throw new AssertionError("snow_coverable is missing expected small plants");
+		}
+		if (Blocks.TALL_GRASS.defaultBlockState().is(FTFBlockTags.SNOW_COVERABLE)
+			|| Blocks.SNOW.defaultBlockState().is(FTFBlockTags.SNOW_COVERABLE)
+			|| Blocks.OAK_SAPLING.defaultBlockState().is(FTFBlockTags.SNOW_COVERABLE)) {
+			throw new AssertionError("snow_coverable contains blocks that must never be covered");
+		}
+	}
 
 	private static String validateAdaptiveBiomeSearchResolution() {
 		String topology = LocateSearchValidator.validateTopology();
@@ -1534,6 +1593,16 @@ public final class PresetValidationRunner {
 				true,
 				null
 			));
+
+			// -----------------------------------------------------------------------------------------
+			// Snow Cover Setting Legacy Compatibility & Bundled Tag Resolution (Issue #284)
+			// -----------------------------------------------------------------------------------------
+			currentTestName = "presetValidation.snowCoverCompatibility." + loader;
+			watchdog.setStep(currentTestName);
+			FTFCommon.LOGGER.info("[FTF-Test] Verifying snow cover setting compatibility & snow_coverable tag...");
+			verifySnowCoverCompatibility();
+			FTFCommon.LOGGER.info("[FTF-Test] PASSED: Legacy presets and decorate_snow configs without the snow cover field decode as disabled, enabled values round-trip, and snow_coverable resolves.");
+			testRecords.add(new TestRecord(currentTestName, "Legacy presets & decorate_snow configs decode with snow cover off; enabled values round-trip; snow_coverable resolves", true, null));
 
 			// -----------------------------------------------------------------------------------------
 			// Complete Summary Banner
