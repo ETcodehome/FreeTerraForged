@@ -71,6 +71,7 @@ import etcodehome.freeterraforged.platform.ConfigUtil;
 import etcodehome.freeterraforged.registries.FTFRegistries;
 import etcodehome.freeterraforged.world.worldgen.biome.BiomeCandidateRoles;
 import etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeBanding;
+import etcodehome.freeterraforged.world.worldgen.perf.WorldgenBenchmarkRunner;
 import etcodehome.freeterraforged.world.worldgen.runtime.BiomePlacementPlan;
 import etcodehome.freeterraforged.world.worldgen.search.BiomeSearchResolution;
 import etcodehome.freeterraforged.world.worldgen.search.LocateSearchValidator;
@@ -88,13 +89,18 @@ import net.minecraft.world.level.levelgen.flat.FlatLevelGeneratorSettings;
 import net.minecraft.world.level.levelgen.presets.WorldPreset;
 import net.minecraft.world.level.levelgen.presets.WorldPresets;
 import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
+import etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeBanding;
+import etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeTags;
+import etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeSurfaceProtection;
 import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementConfig;
 import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementConfigSnapshot;
 import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementPlan;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenOwner;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPlan;
+import net.minecraft.core.QuartPos;
 import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.biome.Climate;
+import net.minecraft.world.level.biome.MultiNoiseBiomeSourceParameterLists;
 
 public final class PresetValidationRunner {
 	private static boolean testsTriggered = false;
@@ -1357,6 +1363,276 @@ public final class PresetValidationRunner {
 			));
 
 			// -----------------------------------------------------------------------------------------
+			// Underground Biome Banding & Vertical Stacking in Deep Worlds
+			// -----------------------------------------------------------------------------------------
+			currentTestName = "presetValidation.undergroundBiomeBanding." + loader;
+			watchdog.setStep(currentTestName);
+			FTFCommon.LOGGER.info("[FTF-Test] Verifying Underground Biome Banding & Vertical Stacking in Deep Worlds...");
+
+			var parameterLists = server.registryAccess().lookupOrThrow(Registries.MULTI_NOISE_BIOME_SOURCE_PARAMETER_LIST);
+			var overworldParamsHolder = parameterLists.getOrThrow(MultiNoiseBiomeSourceParameterLists.OVERWORLD);
+			Climate.ParameterList<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> overworldEntries = overworldParamsHolder.value().parameters();
+
+			// 1. Configure deep world preset with vertical banding enabled
+			Preset deepPreset = Presets.makeFTFDefault();
+			deepPreset.world().properties.worldDepth = 512;
+			deepPreset.world().properties.worldHeight = 320;
+			deepPreset.climate().biomeShape.undergroundBiomeSize = 225;
+			deepPreset.climate().biomeShape.undergroundBiomeVerticalSize = 64;
+			deepPreset.climate().biomeShape.undergroundBiomeCoverage = 1.0F;
+			deepPreset.climate().biomeShape.undergroundBiomeClimateInfluence = 0.75F;
+			deepPreset.climate().biomeShape.undergroundBiomeBanding = true;
+
+			long seed = server.overworld().getSeed();
+			UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> bandedLayout = UndergroundBiomeBanding.apply(
+				deepPreset,
+				overworldEntries,
+				seed,
+				(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value))
+			);
+
+			if (bandedLayout.deepCandidateCount() != 3) {
+				throw new AssertionError("Deep stage should have exactly 3 cave candidates, found: " + bandedLayout.deepCandidateCount() + " (" + bandedLayout.deepCandidateValues() + ")");
+			}
+			if (bandedLayout.shallowCandidateCount() != 2) {
+				throw new AssertionError("Shallow stage should have exactly 2 cave candidates, found: " + bandedLayout.shallowCandidateCount() + " (" + bandedLayout.shallowCandidateValues() + ")");
+			}
+			for (var biome : bandedLayout.deepCandidateValues()) {
+				if (!UndergroundBiomeTags.isCave(biome)) {
+					throw new AssertionError("Deep candidates contain non-cave biome: " + biome);
+				}
+			}
+			for (var biome : bandedLayout.shallowCandidateValues()) {
+				if (!UndergroundBiomeTags.isCave(biome)) {
+					throw new AssertionError("Shallow candidates contain non-cave biome: " + biome);
+				}
+			}
+
+			// Sample a vertical column in the deep cave zone at steps of verticalSize (64 blocks)
+			Climate.TargetPoint target = Climate.target(0.0F, 0.0F, 0.0F, -0.5F, 1.5F, 0.0F);
+			int quartX = 0;
+			int quartZ = 0;
+			int verticalSizeBlocks = 64;
+
+			java.util.Set<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> stackedBiomes = new java.util.LinkedHashSet<>();
+			net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> previousBiome = null;
+			int stepTransitions = 0;
+			int sampleStepCount = 0;
+
+			// Sample Y levels corresponding to center of vertical bands from Y = -96 down to Y = -448
+			for (int blockY = -96; blockY >= -448; blockY -= verticalSizeBlocks) {
+				int quartY = QuartPos.fromBlock(blockY);
+				net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> currentBiome = bandedLayout.findValue(target, quartX, quartY, quartZ);
+				stackedBiomes.add(currentBiome);
+				if (previousBiome != null && !previousBiome.equals(currentBiome)) {
+					stepTransitions++;
+				}
+				previousBiome = currentBiome;
+				sampleStepCount++;
+			}
+
+			for (var biome : stackedBiomes) {
+				if (!UndergroundBiomeTags.isCave(biome)) {
+					throw new AssertionError("Underground banding sampled non-cave biome in stacked biomes: " + biome);
+				}
+			}
+			if (stackedBiomes.size() < 2) {
+				throw new AssertionError("Underground biome banding failed: expected multiple stacked cave biome types across vertical column, but only got " + stackedBiomes.size() + ": " + stackedBiomes);
+			}
+			if (stepTransitions < 2) {
+				throw new AssertionError("Underground biome banding failed: expected transitions at steps of verticalSize (" + verticalSizeBlocks + " blocks), but got " + stepTransitions + " transitions across " + sampleStepCount + " steps");
+			}
+
+			// 2. Verify columnar behavior when banding is disabled
+			Preset columnarPreset = deepPreset.copy();
+			columnarPreset.climate().biomeShape.undergroundBiomeBanding = false;
+			UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> columnarLayout = UndergroundBiomeBanding.apply(
+				columnarPreset,
+				overworldEntries,
+				seed,
+				(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value))
+			);
+
+			java.util.Set<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> columnarBiomes = new java.util.HashSet<>();
+			for (int blockY = -96; blockY >= -448; blockY -= verticalSizeBlocks) {
+				int quartY = QuartPos.fromBlock(blockY);
+				columnarBiomes.add(columnarLayout.findValue(target, quartX, quartY, quartZ));
+			}
+			if (columnarBiomes.size() != 1) {
+				throw new AssertionError("Underground biomes with banding disabled should be columnar (single biome down column), but got " + columnarBiomes.size() + ": " + columnarBiomes);
+			}
+
+			// 3. Verify that undergroundBiomeSize controls horizontal biome transition frequency
+			Preset smallSizePreset = deepPreset.copy();
+			smallSizePreset.climate().biomeShape.undergroundBiomeSize = 50;
+			UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> smallLayout = UndergroundBiomeBanding.apply(
+				smallSizePreset,
+				overworldEntries,
+				seed,
+				(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value))
+			);
+
+			Preset largeSizePreset = deepPreset.copy();
+			largeSizePreset.climate().biomeShape.undergroundBiomeSize = 500;
+			UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> largeLayout = UndergroundBiomeBanding.apply(
+				largeSizePreset,
+				overworldEntries,
+				seed,
+				(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value))
+			);
+
+			int smallTransitions = 0;
+			int largeTransitions = 0;
+			net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> prevSmall = null;
+			net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> prevLarge = null;
+			int fixedQuartY = QuartPos.fromBlock(-160);
+
+			for (int blockX = 0; blockX <= 1500; blockX += 16) {
+				int qX = QuartPos.fromBlock(blockX);
+				net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> bSmall = smallLayout.findValue(target, qX, fixedQuartY, 0);
+				net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> bLarge = largeLayout.findValue(target, qX, fixedQuartY, 0);
+				if (prevSmall != null && !prevSmall.equals(bSmall)) smallTransitions++;
+				if (prevLarge != null && !prevLarge.equals(bLarge)) largeTransitions++;
+				prevSmall = bSmall;
+				prevLarge = bLarge;
+			}
+
+			if (smallTransitions <= largeTransitions * 2) {
+				throw new AssertionError("undergroundBiomeSize not respected: small size (50) should have significantly more transitions than large size (500). Small=" + smallTransitions + ", Large=" + largeTransitions);
+			}
+
+			// 4. Verify 1024-block deep world with 100% cave coverage:
+			// At 0% (0.0F) climate influence: completely tolerant, rotating across all cave biomes
+			Preset extraDeepPreset = Presets.makeFTFDefault();
+			extraDeepPreset.world().properties.worldDepth = 1024;
+			extraDeepPreset.world().properties.worldHeight = 320;
+			extraDeepPreset.climate().biomeShape.undergroundBiomeSize = 225;
+			extraDeepPreset.climate().biomeShape.undergroundBiomeVerticalSize = 64;
+			extraDeepPreset.climate().biomeShape.undergroundBiomeCoverage = 1.0F;
+			extraDeepPreset.climate().biomeShape.undergroundBiomeClimateInfluence = 0.0F;
+			extraDeepPreset.climate().biomeShape.undergroundBiomeBanding = true;
+
+			UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> extraDeepLayout = UndergroundBiomeBanding.apply(
+				extraDeepPreset,
+				overworldEntries,
+				seed,
+				(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value)),
+				UndergroundBiomeTags::isCave
+			);
+
+			java.util.Set<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> deepWorldStackedBiomes = new java.util.LinkedHashSet<>();
+			int deepWorldTransitions = 0;
+			net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> prevDeepBiome = null;
+			for (int blockY = -96; blockY >= -1000; blockY -= 64) {
+				int quartY = QuartPos.fromBlock(blockY);
+				net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> b = extraDeepLayout.findValue(target, quartX, quartY, quartZ);
+				if (!UndergroundBiomeTags.isCave(b)) {
+					throw new AssertionError("1024-deep world at Y=" + blockY + " generated non-cave biome: " + b + "! Expected exclusively cave biomes with 100% coverage.");
+				}
+				deepWorldStackedBiomes.add(b);
+				if (prevDeepBiome != null && !prevDeepBiome.equals(b)) {
+					deepWorldTransitions++;
+				}
+				prevDeepBiome = b;
+			}
+			if (deepWorldStackedBiomes.size() != 3) {
+				throw new AssertionError("1024-deep world with 0% climate influence should rotate across all 3 cave biomes, but found " + deepWorldStackedBiomes.size() + ": " + deepWorldStackedBiomes);
+			}
+			if (deepWorldTransitions < 8) {
+				throw new AssertionError("1024-deep world should have frequent vertical banding transitions down 1000 blocks, but only got " + deepWorldTransitions);
+			}
+
+			// Verify 100% (1.0F) climate influence: always selected entirely by accurate climate parameter values
+			Preset accurateClimatePreset = extraDeepPreset.copy();
+			accurateClimatePreset.climate().biomeShape.undergroundBiomeClimateInfluence = 1.0F;
+			UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> accurateLayout = UndergroundBiomeBanding.apply(
+				accurateClimatePreset,
+				overworldEntries,
+				seed,
+				(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value)),
+				UndergroundBiomeTags::isCave
+			);
+			java.util.Set<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> accurateBiomes = new java.util.LinkedHashSet<>();
+			for (int blockY = -96; blockY >= -1000; blockY -= 64) {
+				int quartY = QuartPos.fromBlock(blockY);
+				net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> b = accurateLayout.findValue(target, quartX, quartY, quartZ);
+				accurateBiomes.add(b);
+			}
+			if (accurateBiomes.size() != 1) {
+				throw new AssertionError("1024-deep world with 100% climate influence should select exclusively the closest climate candidate, but found " + accurateBiomes.size() + ": " + accurateBiomes);
+			}
+
+			// 5. Verify 0% cave coverage underground: all sampled biomes must be background (non-cave) biomes
+			Preset zeroCoveragePreset = extraDeepPreset.copy();
+			zeroCoveragePreset.climate().biomeShape.undergroundBiomeCoverage = 0.0F;
+			UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> zeroCoverageLayout = UndergroundBiomeBanding.apply(
+				zeroCoveragePreset,
+				overworldEntries,
+				seed,
+				(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value)),
+				UndergroundBiomeTags::isCave
+			);
+			for (int blockY = -96; blockY >= -1000; blockY -= 128) {
+				int quartY = QuartPos.fromBlock(blockY);
+				net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> b = zeroCoverageLayout.findValue(target, quartX, quartY, quartZ);
+				if (UndergroundBiomeTags.isCave(b)) {
+					throw new AssertionError("0% coverage preset generated cave biome at Y=" + blockY + ": " + b);
+				}
+			}
+
+			// 6. Test Live UnifiedBiomeSource with liveSampler across subterranean depths
+			FTFCommon.LOGGER.info("[FTF-Test] Probing live server subterranean biome resolution via liveSampler...");
+			if (server.overworld().getChunkSource().getGenerator() instanceof TerraForgedChunkGenerator liveTfGen) {
+				var liveSampler = server.overworld().getChunkSource().randomState().sampler();
+				int nonCaveCount = 0;
+				int oceanInRockCount = 0;
+				int totalSubterraneanSamples = 0;
+				for (int cx = -100; cx <= 100; cx += 50) {
+					for (int cz = -100; cz <= 100; cz += 50) {
+						int qx = cx << 2;
+						int qz = cz << 2;
+						for (int blockY = -100; blockY >= -240; blockY -= 32) {
+							int qy = QuartPos.fromBlock(blockY);
+							var liveBiome = liveTfGen.getBiomeSource().getNoiseBiome(qx, qy, qz, liveSampler);
+							totalSubterraneanSamples++;
+							boolean isCave = UndergroundBiomeTags.isCave(liveBiome);
+							String path = liveBiome.unwrapKey().map(k -> k.location().getPath()).orElse("unknown");
+							if (!isCave) {
+								nonCaveCount++;
+								if (path.contains("ocean")) {
+									oceanInRockCount++;
+									FTFCommon.LOGGER.warn("[FTF-Test] Subterranean OCEAN in rock detected at ({}, Y={}, {}): {}", qx << 2, blockY, qz << 2, path);
+									if (oceanInRockCount == 1) {
+										var sampledTarget = liveSampler.sample(qx, qy, qz);
+										float cov = UndergroundBiomeSurfaceProtection.coverageFactor(liveSampler, sampledTarget, qx, qy, qz);
+										FTFCommon.LOGGER.warn("[FTF-Test] DEBUG sample at ({}, Y={}, {}): target.depth={}, cov={}, target.cont={}",
+											qx << 2, blockY, qz << 2, sampledTarget.depth(), cov, sampledTarget.continentalness());
+									}
+								}
+							}
+						}
+					}
+				}
+				FTFCommon.LOGGER.info("[FTF-Test] Subterranean live probe: total={}, nonCave={}, oceanInRock={}",
+					totalSubterraneanSamples, nonCaveCount, oceanInRockCount);
+			}
+
+			FTFCommon.LOGGER.info("[FTF-Test] PASSED: Underground biome banding verified (stacked biomes: {}, transitions: {}/{}, columnar: single, horizontal size 50 vs 500: {} vs {} transitions).",
+				stackedBiomes.stream().map(h -> h.unwrapKey().map(k -> k.location().getPath()).orElse("unknown")).toList(),
+				stepTransitions,
+				sampleStepCount - 1,
+				smallTransitions,
+				largeTransitions
+			);
+			testRecords.add(new TestRecord(
+				currentTestName,
+				String.format("Underground biome banding verified: %d stacked types in column, horizontal sizing 50 vs 500 (%d vs %d transitions)",
+					stackedBiomes.size(), smallTransitions, largeTransitions),
+				true,
+				null
+			));
+
+			// -----------------------------------------------------------------------------------------
 			// Live Biome Replacement System Validation & Edge Case Failsafe
 			// -----------------------------------------------------------------------------------------
 			currentTestName = "presetValidation.biomeReplacementValidation." + loader;
@@ -1531,6 +1807,395 @@ public final class PresetValidationRunner {
 			testRecords.add(new TestRecord(
 				currentTestName,
 				"Live chunk generator biome replacement validated (live sampling, edge cases, contradiction suppression, state restoration)",
+				true,
+				null
+			));
+
+			// -----------------------------------------------------------------------------------------
+			// World Generation Memory Leak Prevention Verification
+			// -----------------------------------------------------------------------------------------
+			currentTestName = "presetValidation.worldgenMemoryLeak." + loader;
+			watchdog.setStep(currentTestName);
+			FTFCommon.LOGGER.info("[FTF-Test] Verifying world generation memory leak prevention and ThreadLocal lifecycle...");
+
+			// 1. Verify that transient Climate.Sampler instances are not retained on Minecraft background workers
+			net.minecraft.world.level.biome.Climate.Sampler[] samplerHolder =
+				new net.minecraft.world.level.biome.Climate.Sampler[]{net.minecraft.world.level.biome.Climate.empty()};
+			java.lang.ref.WeakReference<net.minecraft.world.level.biome.Climate.Sampler> samplerLeakRef =
+				new java.lang.ref.WeakReference<>(samplerHolder[0]);
+
+			Climate.TargetPoint leakTarget = Climate.target(0.0F, 0.0F, 0.0F, -0.5F, 1.5F, 0.0F);
+			int leakWorkerTasks = Math.max(8, Runtime.getRuntime().availableProcessors() * 2);
+			java.util.concurrent.CountDownLatch leakLatch = new java.util.concurrent.CountDownLatch(leakWorkerTasks);
+			for (int t = 0; t < leakWorkerTasks; t++) {
+				final int threadOffset = t;
+				net.minecraft.Util.backgroundExecutor().execute(() -> {
+					try {
+						// Deep world column scan (256 vertical quarts = 1024 blocks depth)
+						for (int quartY = -128; quartY <= 128; quartY += 4) {
+							for (int q = 0; q < 8; q++) {
+								net.minecraft.world.level.biome.Climate.Sampler s = samplerHolder[0];
+								if (s != null) {
+									UndergroundBiomeSurfaceProtection.coverageFactor(s, leakTarget, (threadOffset + q) * 4, quartY, q * 4);
+								}
+							}
+						}
+					} finally {
+						leakLatch.countDown();
+					}
+				});
+			}
+			if (!leakLatch.await(10, java.util.concurrent.TimeUnit.SECONDS)) {
+				throw new AssertionError("Memory leak validation worker tasks timed out");
+			}
+
+			// 2. Verify that transient UndergroundBiomeBanding.Layout instances are not retained on Minecraft background workers
+			Preset transientPreset = Presets.makeFTFDefault();
+			transientPreset.climate().biomeShape.undergroundBiomeClimateInfluence = 0.75F;
+			transientPreset.climate().biomeShape.undergroundBiomeBanding = true;
+			@SuppressWarnings("unchecked")
+			UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>>[] layoutHolder =
+				new UndergroundBiomeBanding.Layout[]{
+					UndergroundBiomeBanding.apply(
+						transientPreset,
+						overworldEntries,
+						12345L,
+						(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value)),
+						UndergroundBiomeTags::isCave
+					)
+				};
+			java.lang.ref.WeakReference<UndergroundBiomeBanding.Layout<?>> layoutLeakRef =
+				new java.lang.ref.WeakReference<>(layoutHolder[0]);
+
+			java.util.concurrent.CountDownLatch layoutLatch = new java.util.concurrent.CountDownLatch(leakWorkerTasks);
+			for (int t = 0; t < leakWorkerTasks; t++) {
+				final int threadOffset = t;
+				net.minecraft.Util.backgroundExecutor().execute(() -> {
+					try {
+						for (int quartY = -128; quartY <= 128; quartY += 4) {
+							for (int q = 0; q < 8; q++) {
+								UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> l = layoutHolder[0];
+								if (l != null) {
+									l.findValue(leakTarget, (threadOffset + q) * 4, quartY, q * 4, 1.0F);
+								}
+							}
+						}
+					} finally {
+						layoutLatch.countDown();
+					}
+				});
+			}
+			if (!layoutLatch.await(10, java.util.concurrent.TimeUnit.SECONDS)) {
+				throw new AssertionError("Layout memory leak validation worker tasks timed out");
+			}
+
+			// Clear strong references while background worker threads are STILL RUNNING AND ALIVE!
+			samplerHolder[0] = null;
+			layoutHolder[0] = null;
+
+			// Verify garbage collection cleans up both weak references while threads remain alive in backgroundExecutor
+			boolean samplerCollected = false;
+			boolean layoutCollected = false;
+			for (int i = 0; i < 50; i++) {
+				if (!samplerCollected && samplerLeakRef.get() == null) samplerCollected = true;
+				if (!layoutCollected && layoutLeakRef.get() == null) layoutCollected = true;
+				if (samplerCollected && layoutCollected) break;
+				System.gc();
+				Thread.sleep(50);
+			}
+
+			if (!samplerCollected) {
+				throw new AssertionError("Memory leak detected: Climate.Sampler was retained in ThreadLocal or caches by persistent worker threads!");
+			}
+			if (!layoutCollected) {
+				throw new AssertionError("Memory leak detected: UndergroundBiomeBanding.Layout was retained in ThreadLocal or caches by persistent worker threads!");
+			}
+
+			// 3. Concrete Expanding Area Memory Leak Measurement on Deep World Presets (1024-block depth)
+			// Simulates player flying and generating a 1000x1000 block region in a 1024-deep world starting at middle of continent
+			BlockPos continentCenter = WorldgenBenchmarkRunner.resolveContinentCenter(server.overworld(), 0, 0);
+			int continentCenterX = continentCenter.getX();
+			int continentCenterZ = continentCenter.getZ();
+			FTFCommon.LOGGER.info(
+				"[FTF-Test] Measuring memory stability across 1000x1000 block region centered at continent middle ({}, {}) on 1024-deep world preset...",
+				continentCenterX, continentCenterZ
+			);
+			Preset leakDeepPreset = Presets.makeFTFDefault();
+			leakDeepPreset.world().properties.worldDepth = 1024;
+			leakDeepPreset.world().properties.worldHeight = 320;
+			leakDeepPreset.climate().biomeShape.undergroundBiomeSize = 225;
+			leakDeepPreset.climate().biomeShape.undergroundBiomeVerticalSize = 64;
+			leakDeepPreset.climate().biomeShape.undergroundBiomeCoverage = 1.0F;
+			leakDeepPreset.climate().biomeShape.undergroundBiomeClimateInfluence = 0.0F;
+			leakDeepPreset.climate().biomeShape.undergroundBiomeBanding = true;
+
+			final UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> deepAreaLayout =
+				UndergroundBiomeBanding.apply(
+					leakDeepPreset,
+					overworldEntries,
+					seed,
+					(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value)),
+					UndergroundBiomeTags::isCave
+				);
+
+			Climate.Sampler liveSamplerForLeak = server.overworld().getChunkSource().randomState().sampler();
+			int minChunkX = (continentCenterX - 500) >> 4;
+			int maxChunkX = (continentCenterX + 500) >> 4;
+			int minChunkZ = (continentCenterZ - 500) >> 4;
+			int maxChunkZ = (continentCenterZ + 500) >> 4;
+			int chunksSpanX = maxChunkX - minChunkX + 1;
+			int chunksSpanZ = maxChunkZ - minChunkZ + 1;
+			int areaBatches = 4;
+			long[] retainedHeapByBatch = new long[areaBatches];
+
+			for (int b = 0; b < areaBatches; b++) {
+				final int batchNum = b;
+				int zStart = minChunkZ + (b * chunksSpanZ) / areaBatches;
+				int zEnd = minChunkZ + ((b + 1) * chunksSpanZ) / areaBatches;
+				int batchChunkCount = chunksSpanX * (zEnd - zStart);
+				java.util.concurrent.CountDownLatch batchLatch = new java.util.concurrent.CountDownLatch(batchChunkCount);
+
+				for (int cz = zStart; cz < zEnd; cz++) {
+					final int chunkZ = cz;
+					for (int cx = minChunkX; cx <= maxChunkX; cx++) {
+						final int chunkX = cx;
+						net.minecraft.Util.backgroundExecutor().execute(() -> {
+							try {
+								int baseQuartX = chunkX << 2;
+								int baseQuartZ = chunkZ << 2;
+								// 1024 depth: quartY from -256 to 80 (336 vertical quarts)
+								for (int quartY = -256; quartY <= 80; quartY += 8) {
+									for (int qz = 0; qz < 4; qz += 2) {
+										for (int qx = 0; qx < 4; qx += 2) {
+											int qX = baseQuartX + qx;
+											int qZ = baseQuartZ + qz;
+											float coverage = UndergroundBiomeSurfaceProtection.coverageFactor(
+												liveSamplerForLeak, leakTarget, qX, quartY, qZ
+											);
+											net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> sampled =
+												deepAreaLayout.findValue(
+													leakTarget, qX, quartY, qZ, coverage,
+													(iqx, iqy, iqz) -> leakTarget
+												);
+											if (sampled == null) {
+												throw new AssertionError("Sampled biome was null");
+											}
+											// Subterranean cave checks: 100% cave coverage means cave biomes underground
+											if (quartY <= -16 && coverage >= 1.0F && !UndergroundBiomeTags.isCave(sampled)) {
+												String path = sampled.unwrapKey().map(k -> k.location().getPath()).orElse("unknown");
+												throw new AssertionError(String.format(
+													java.util.Locale.ROOT,
+													"Non-cave biome '%s' returned underground at (qx=%d, quartY=%d, qz=%d) when 100%% cave coverage configured!",
+													path, qX, quartY, qZ
+												));
+											}
+											// Surface protection check: cave biomes must not project through surface
+											if (coverage <= 0.0F && UndergroundBiomeTags.isCave(sampled)) {
+												String path = sampled.unwrapKey().map(k -> k.location().getPath()).orElse("unknown");
+												throw new AssertionError(String.format(
+													java.util.Locale.ROOT,
+													"Cave biome '%s' projected through surface at (qx=%d, quartY=%d, qz=%d) when coverage factor is 0.0!",
+													path, qX, quartY, qZ
+												));
+											}
+										}
+									}
+								}
+							} finally {
+								batchLatch.countDown();
+							}
+						});
+					}
+				}
+				if (!batchLatch.await(30, java.util.concurrent.TimeUnit.SECONDS)) {
+					throw new AssertionError("Deep area batch " + b + " timed out");
+				}
+
+				// Measure post-GC retained heap
+				for (int gc = 0; gc < 5; gc++) {
+					System.gc();
+					Thread.sleep(50);
+				}
+				retainedHeapByBatch[b] = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+				FTFCommon.LOGGER.info(
+					"[FTF-Test] Deep world (1024 depth) 1000x1000 block region batch {}/{} ({} chunks in batch): Retained heap = {} MB",
+					b + 1, areaBatches, batchChunkCount, retainedHeapByBatch[b] / (1024 * 1024)
+				);
+			}
+
+			// Clear layout caches
+			deepAreaLayout.clear();
+
+			// Check memory trend across batches
+			long initialHeap = retainedHeapByBatch[0];
+			long finalHeap = retainedHeapByBatch[areaBatches - 1];
+			long netGrowth = finalHeap - initialHeap;
+			FTFCommon.LOGGER.info(
+				"[FTF-Test] Deep world expanding area memory report (1000x1000 block region): Initial={} MB, Final={} MB, Net Growth={} MB",
+				initialHeap / (1024 * 1024), finalHeap / (1024 * 1024), netGrowth / (1024 * 1024)
+			);
+
+			if (netGrowth > 50L * 1024L * 1024L) {
+				throw new AssertionError(String.format(
+					java.util.Locale.ROOT,
+					"Memory leak detected during expanding area generation: heap climbed by %.2f MB across %d batches (Initial: %.2f MB, Final: %.2f MB)",
+					netGrowth / (1024.0 * 1024.0), areaBatches, initialHeap / (1024.0 * 1024.0), finalHeap / (1024.0 * 1024.0)
+				));
+			}
+
+			// 4. Live Server Chunk Generation Memory Stability Test Across Expanding Area
+			// Generates chunks via ServerChunkCache to verify that generated chunks, flow fields,
+			// cell caches, and structure plans do not leak monotonically as new terrain is explored.
+			FTFCommon.LOGGER.info("[FTF-Test] Measuring live server chunk generation memory stability across expanding area starting at continent center...");
+			ServerLevel liveLevel = server.overworld();
+			net.minecraft.server.level.ServerChunkCache liveChunkSource = liveLevel.getChunkSource();
+			net.minecraft.server.level.TicketType<net.minecraft.util.Unit> leakTicket =
+				net.minecraft.server.level.TicketType.create("ftf_leak_test", (a, b) -> 0);
+
+			int chunkBatches = 4;
+			int chunksPerLiveBatch = 20;
+			long[] liveChunkHeapByBatch = new long[chunkBatches];
+
+			for (int b = 0; b < chunkBatches; b++) {
+				java.util.List<net.minecraft.world.level.ChunkPos> batchPositions = new java.util.ArrayList<>(chunksPerLiveBatch);
+				java.util.List<java.util.concurrent.CompletableFuture<net.minecraft.server.level.ChunkResult<net.minecraft.world.level.chunk.ChunkAccess>>> futures =
+					new java.util.ArrayList<>(chunksPerLiveBatch);
+
+				for (int c = 0; c < chunksPerLiveBatch; c++) {
+					int chunkIdx = b * chunksPerLiveBatch + c;
+					int cx = minChunkX + (chunkIdx % 10);
+					int cz = minChunkZ + (chunkIdx / 10);
+					net.minecraft.world.level.ChunkPos pos = new net.minecraft.world.level.ChunkPos(cx, cz);
+					batchPositions.add(pos);
+					liveChunkSource.addRegionTicket(leakTicket, pos, 0, net.minecraft.util.Unit.INSTANCE);
+					futures.add(liveChunkSource.getChunkFuture(cx, cz, net.minecraft.world.level.chunk.status.ChunkStatus.FULL, true));
+				}
+
+				for (var f : futures) {
+					try {
+						f.get(30, java.util.concurrent.TimeUnit.SECONDS);
+					} catch (Exception ex) {
+						throw new AssertionError("Live chunk generation timed out or failed in batch " + b, ex);
+					}
+				}
+				futures.clear();
+
+				// Release tickets
+				for (net.minecraft.world.level.ChunkPos pos : batchPositions) {
+					liveChunkSource.removeRegionTicket(leakTicket, pos, 0, net.minecraft.util.Unit.INSTANCE);
+				}
+
+				// Tick chunk source and drain server task queues
+				int drainedTasks = 0;
+				for (int tick = 0; tick < 50; tick++) {
+					liveChunkSource.tick(() -> true, true);
+					while (liveChunkSource.pollTask()) {
+						drainedTasks++;
+					}
+					while (server.pollTask()) {
+						drainedTasks++;
+					}
+				}
+				// Flush any pending chunk writes to region files so background IO queues are clean
+				liveLevel.save(null, true, false);
+				while (server.pollTask()) {
+					drainedTasks++;
+				}
+				int chunkMapSize = liveChunkSource.chunkMap.size();
+				boolean hasWork = liveChunkSource.chunkMap.hasWork();
+				FTFCommon.LOGGER.info("[FTF-Test] Batch {} unloaded: drained {} server/chunk tasks, chunkMapSize={}, hasWork={}",
+					b + 1, drainedTasks, chunkMapSize, hasWork);
+
+				if ((Object) server.overworld().getChunkSource().randomState() instanceof FTFRandomState rtfRs) {
+					GeneratorContext gCtx = rtfRs.generatorContext();
+					if (gCtx != null) {
+						int filteredSize = gCtx.filteredChunkCache != null ? gCtx.filteredChunkCache.size() : -1;
+						int rawSize = gCtx.rawChunkCache != null ? gCtx.rawChunkCache.size() : -1;
+						FTFCommon.LOGGER.info("[FTF-Test] FTF Caches: filteredChunkCache={}, rawChunkCache={}",
+							filteredSize, rawSize);
+						if (filteredSize > etcodehome.freeterraforged.world.worldgen.cell.heightmap.FilteredChunkCache.MAX_ENTRIES || rawSize > etcodehome.freeterraforged.world.worldgen.cell.heightmap.RawChunkCache.MAX_ENTRIES) {
+							throw new AssertionError(String.format(
+								java.util.Locale.ROOT,
+								"FTF terrain cache exceeded capacity bounds! filteredChunkCache=%d (max 512), rawChunkCache=%d (max 512)",
+								filteredSize, rawSize
+							));
+						}
+					}
+				}
+
+				for (java.lang.reflect.Field f : net.minecraft.server.level.ChunkMap.class.getDeclaredFields()) {
+					try {
+						f.setAccessible(true);
+						Object val = f.get(liveChunkSource.chunkMap);
+						if (val instanceof java.util.Map<?, ?> m) {
+							FTFCommon.LOGGER.info("[FTF-Test] ChunkMap map field {}: size={}", f.getName(), m.size());
+						} else if (val instanceof it.unimi.dsi.fastutil.longs.Long2ObjectMap<?> lom) {
+							FTFCommon.LOGGER.info("[FTF-Test] ChunkMap Long2ObjectMap field {}: size={}", f.getName(), lom.size());
+						} else if (val instanceof it.unimi.dsi.fastutil.longs.LongSet ls) {
+							FTFCommon.LOGGER.info("[FTF-Test] ChunkMap LongSet field {}: size={}", f.getName(), ls.size());
+						}
+					} catch (Exception ignored) {}
+				}
+
+				// Measure post-GC retained heap
+				for (int gc = 0; gc < 5; gc++) {
+					System.gc();
+					Thread.sleep(50);
+				}
+				liveChunkHeapByBatch[b] = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+				int loadedCount = liveChunkSource.getLoadedChunksCount();
+				boolean sampleStillLoaded = liveChunkSource.hasChunk(batchPositions.get(0).x, batchPositions.get(0).z);
+				FTFCommon.LOGGER.info(
+					"[FTF-Test] Live chunk generation area batch {}/{} ({} chunks requested, loadedChunks={}, sampleStillLoaded={}): Retained heap = {} MB",
+					b + 1, chunkBatches, (b + 1) * chunksPerLiveBatch, loadedCount, sampleStillLoaded, liveChunkHeapByBatch[b] / (1024 * 1024)
+				);
+
+				if (b == 0 || b == chunkBatches - 1) {
+					try {
+						long pid = ProcessHandle.current().pid();
+						java.nio.file.Path jcmdPath = java.nio.file.Paths.get(System.getProperty("java.home"), "bin", "jcmd.exe");
+						if (!java.nio.file.Files.exists(jcmdPath)) {
+							jcmdPath = java.nio.file.Paths.get(System.getProperty("java.home"), "bin", "jcmd");
+						}
+						if (java.nio.file.Files.exists(jcmdPath)) {
+							Process proc = new ProcessBuilder(
+								jcmdPath.toString(),
+								String.valueOf(pid),
+								"GC.class_histogram"
+							).redirectErrorStream(true).start();
+							String histo = new String(proc.getInputStream().readAllBytes());
+							String[] lines = histo.split("\n");
+							FTFCommon.LOGGER.info("[FTF-Test] --- Class Histogram Top 25 (Batch {}) ---", b + 1);
+							for (int i = 0; i < Math.min(28, lines.length); i++) {
+								FTFCommon.LOGGER.info("[FTF-Test] {}", lines[i].trim());
+							}
+						}
+					} catch (Exception ex) {
+						FTFCommon.LOGGER.warn("[FTF-Test] Failed to run GC.class_histogram: {}", ex.getMessage());
+					}
+				}
+			}
+
+			long liveInitialHeap = liveChunkHeapByBatch[0];
+			long liveFinalHeap = liveChunkHeapByBatch[chunkBatches - 1];
+			long liveNetGrowth = liveFinalHeap - liveInitialHeap;
+			FTFCommon.LOGGER.info(
+				"[FTF-Test] Live chunk generation memory report: Initial={} MB, Final={} MB, Net Growth={} MB",
+				liveInitialHeap / (1024 * 1024), liveFinalHeap / (1024 * 1024), liveNetGrowth / (1024 * 1024)
+			);
+
+			if (liveNetGrowth > 175L * 1024L * 1024L) {
+				throw new AssertionError(String.format(
+					java.util.Locale.ROOT,
+					"Memory leak detected during live chunk generation: heap climbed by %.2f MB across %d batches (Initial: %.2f MB, Final: %.2f MB)",
+					liveNetGrowth / (1024.0 * 1024.0), chunkBatches, liveInitialHeap / (1024.0 * 1024.0), liveFinalHeap / (1024.0 * 1024.0)
+				));
+			}
+
+			FTFCommon.LOGGER.info("[FTF-Test] PASSED: World generation memory leak prevention verified (transient samplers and layouts reclaimed cleanly; expanding area memory stable).");
+			testRecords.add(new TestRecord(
+				currentTestName,
+				"World generation memory leak prevention verified: transient samplers and layouts collected cleanly by GC without ThreadLocal retention",
 				true,
 				null
 			));
