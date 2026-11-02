@@ -45,6 +45,9 @@ public interface FTFClimateSampler {
 	BiomeCellCache<WorldgenPlan> getBiomeCellCache();
 
 	record SpawnSearch(SpawnType type, BlockPos center) {
+		/** Safe semantics for samplers that are not attached to a live server spawn calculation. */
+		public static final SpawnSearch WORLD_ORIGIN = new SpawnSearch(SpawnType.WORLD_ORIGIN, BlockPos.ZERO);
+
 		public SpawnSearch {
 			java.util.Objects.requireNonNull(type, "type");
 			java.util.Objects.requireNonNull(center, "center");

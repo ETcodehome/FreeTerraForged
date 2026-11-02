@@ -638,6 +638,7 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 			this.rawName = rawName;
 			this.displayName = displayName;
 			this.preset = preset;
+			this.preset.presentation().setPresetName(rawName);
 			this.builtin = builtin;
 			this.legacy = legacy;
 		}
@@ -755,6 +756,7 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 			FTFCommon.LOGGER.info("Encoding Preset - {}", this.rawName);
 
 			if (!this.builtin) {
+				this.preset.presentation().setPresetName(this.rawName);
 				this.preset.presentation().updateLastModified();
 
 				Path path = this.getPath();

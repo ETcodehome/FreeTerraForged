@@ -26,6 +26,7 @@ final class PreviewState {
 
     PreviewGrid grid;
     PreviewComputationCache.GridLease gridLease;
+    IPreviewHandler.PreparedContext.Lease contextLease;
     BiomePreview.Sidecar biomes;
     WorldSettings.Properties frameProperties;
     Levels frameLevels;

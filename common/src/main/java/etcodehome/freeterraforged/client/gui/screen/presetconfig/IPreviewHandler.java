@@ -16,7 +16,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.screens.worldselection.WorldCreationContext;
 import net.minecraft.core.HolderGetter;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.RegistryAccess;
@@ -50,7 +49,7 @@ public interface IPreviewHandler {
 
     PreviewState state();
 
-    PresetEditorPage page();
+    PreviewController page();
 
     /** Routes inherited widget calls through Minecraft's remapped type in production jars. */
     Button widget();
@@ -170,16 +169,12 @@ public interface IPreviewHandler {
         state.isRunning = true;
         state.isDirty = false;
 
-        PresetEditorPage page = page();
-        WorldCreationContext settings;
+        PreviewController page = page();
         PreviewRequestKeyFactory.Input requestedInput;
         RenderMode mode;
         boolean biomePipeline;
         try {
-            settings = page.getScreen().getSettings();
-            requestedInput = page.getScreen().previewRequestKeys().capture(
-                    settings, page.preset.getPreset()
-            );
+            requestedInput = page.capturePreviewInput();
             mode = getRenderMode();
             biomePipeline = mode == RenderMode.BIOME;
         } catch (RuntimeException | LinkageError error) {
@@ -190,7 +185,7 @@ public interface IPreviewHandler {
             }
             return;
         }
-        long seed = settings.options().seed();
+        long seed = requestedInput.seed();
         int zoomLevel = getZoom();
         int localOffsetX = page.previewNavigationX();
         int localOffsetZ = page.previewNavigationZ();
@@ -202,12 +197,12 @@ public interface IPreviewHandler {
             PreparedContext.Lease lease = null;
             try {
 				cancellation.check();
-				BiomePreview.CacheKey requestedKey = page.getScreen().previewRequestKeys().create(
+				BiomePreview.CacheKey requestedKey = page.previewRequestKeys().create(
 					requestedInput, cancellation::isCancelled
 				);
 				page.previewCache().advance(requestedKey);
-				page.getScreen().previewRequests().advance(requestedKey);
-                lease = page.getScreen().previewRequests().acquire(
+				page.previewRequests().advance(requestedKey);
+				lease = page.previewRequests().acquire(
 					requestedKey,
 					cancellation::isCancelled,
 					poolCancelled -> {
@@ -270,16 +265,21 @@ public interface IPreviewHandler {
 
                 int cx;
                 int cz;
-                if (properties.spawnType == SpawnType.CONTINENT_CENTER) {
+                if (localNavigated) {
+                    // Explicit navigation targets are exact. Continent-center spawning controls the
+                    // initial preview and spawn marker, but must not replace a searched coordinate.
+                    cx = localOffsetX;
+                    cz = localOffsetZ;
+                } else if (properties.spawnType == SpawnType.CONTINENT_CENTER) {
                     long nearestContinentCenter = generatorContext.lookup.getHeightmap().continent().getNearestCenter(
-                            localNavigated ? localOffsetX : 0,
-                            localNavigated ? localOffsetZ : 0
+                            0,
+                            0
                     );
                     cx = PosUtil.unpackLeft(nearestContinentCenter);
                     cz = PosUtil.unpackRight(nearestContinentCenter);
                 } else {
-                    cx = localNavigated ? localOffsetX : (properties.spawnType == SpawnType.USER_SELECTED ? properties.spawnX : 0);
-                    cz = localNavigated ? localOffsetZ : (properties.spawnType == SpawnType.USER_SELECTED ? properties.spawnZ : 0);
+                    cx = properties.spawnType == SpawnType.USER_SELECTED ? properties.spawnX : 0;
+                    cz = properties.spawnType == SpawnType.USER_SELECTED ? properties.spawnZ : 0;
                 }
 
                 PreviewComputationCache.GridKey gridKey = new PreviewComputationCache.GridKey(
@@ -334,7 +334,7 @@ public interface IPreviewHandler {
                                 )
                                 : null;
                         return new FrameResult(
-                                lease, biomes, preGen.cx, preGen.cz,
+                                lease, preGen.lease.owner().acquire(), biomes, preGen.cx, preGen.cz,
                                 preGen.properties, preGen.levels,
                                 rasterData, params.width, params.height, failure
                         );
@@ -430,8 +430,10 @@ public interface IPreviewHandler {
                     && !cancellation.isCancelled()
                     && mode == getRenderMode()) {
                 PreviewComputationCache.GridLease previousLease = state.gridLease;
+				PreparedContext.Lease previousContextLease = state.contextLease;
                 try {
                     state.gridLease = result.lease;
+					state.contextLease = result.contextLease;
                     state.grid = result.lease.grid();
                     state.biomes = result.biomes;
                     state.frameProperties = result.properties;
@@ -457,6 +459,7 @@ public interface IPreviewHandler {
                     }
                 } finally {
                     if (previousLease != null) previousLease.close();
+					if (previousContextLease != null) previousContextLease.close();
                 }
             }
 
@@ -568,6 +571,15 @@ public interface IPreviewHandler {
 		} finally {
 			state.gridLease = null;
 			state.grid = null;
+			try {
+				if (state.contextLease != null) {
+					state.contextLease.close();
+				}
+			} catch (RuntimeException | Error contextFailure) {
+				failure = mergeFailure(failure, contextFailure);
+			} finally {
+				state.contextLease = null;
+			}
 			state.biomes = null;
 			state.frameProperties = null;
 			state.frameLevels = null;
@@ -595,7 +607,7 @@ public interface IPreviewHandler {
 	}
 
     default float getLegendScale() {
-        int index = page().getScreen().minecraft.options.guiScale().get() - 1;
+        int index = Minecraft.getInstance().options.guiScale().get() - 1;
         if (index < 0 || index >= LEGEND_SCALES.length) {
             index = LEGEND_SCALES.length - 1;
         }
@@ -672,7 +684,7 @@ public interface IPreviewHandler {
     }
 
     default String getSpawnCoords(int cx, int cz) {
-        WorldSettings.Properties props = page().preset.getPreset().world().properties;
+        WorldSettings.Properties props = page().preset().world().properties;
         if (props.spawnType == SpawnType.USER_SELECTED) {
             return "x" + props.spawnX + " z" + props.spawnZ;
         }
@@ -748,17 +760,7 @@ public interface IPreviewHandler {
                 PreviewState state = self.state();
                 if (self.updateLegend((int) guiX, (int) guiY) && !state.hoveredCoords.isEmpty()) {
                     self.playClickSound();
-                    WorldSettings.Properties props = self.page().preset.getPreset().world().properties;
-                    props.spawnType = SpawnType.USER_SELECTED;
-                    props.spawnX = state.hoveredCoordX;
-                    props.spawnZ = state.hoveredCoordZ;
-
-                    if (self.page() instanceof WorldSettingsPage worldPage) {
-                        worldPage.spawnType.setValue(SpawnType.USER_SELECTED);
-                    }
-
-                    self.page().resetPreviewNavigation();
-                    self.page().regenerate();
+                    self.page().selectPreviewPoint(state.hoveredCoordX, state.hoveredCoordZ);
                 }
             }
         };
@@ -956,6 +958,7 @@ public interface IPreviewHandler {
 
     final class FrameResult implements AutoCloseable {
         final PreviewComputationCache.GridLease lease;
+		final PreparedContext.Lease contextLease;
         final PreviewGrid grid;
         final BiomePreview.Sidecar biomes;
         final int centerX;
@@ -971,6 +974,7 @@ public interface IPreviewHandler {
 
         FrameResult(
                 PreviewComputationCache.GridLease lease,
+				PreparedContext.Lease contextLease,
                 BiomePreview.Sidecar biomes,
                 int centerX,
                 int centerZ,
@@ -982,6 +986,7 @@ public interface IPreviewHandler {
                 PreviewFailure failure
         ) {
             this.lease = lease;
+			this.contextLease = contextLease;
             this.grid = lease.grid();
             this.biomes = biomes;
             this.centerX = centerX;
@@ -997,7 +1002,23 @@ public interface IPreviewHandler {
         @Override
         public void close() {
             if (this.closed.compareAndSet(false, true)) {
-                this.lease.close();
+				Throwable failure = null;
+				try {
+					this.lease.close();
+				} catch (RuntimeException | Error closeFailure) {
+					failure = closeFailure;
+				}
+				try {
+					this.contextLease.close();
+				} catch (RuntimeException | Error closeFailure) {
+					failure = mergeFailure(failure, closeFailure);
+				}
+				if (failure instanceof RuntimeException runtime) {
+					throw runtime;
+				}
+				if (failure instanceof Error error) {
+					throw error;
+				}
             }
         }
     }

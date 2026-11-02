@@ -1,9 +1,6 @@
 package etcodehome.freeterraforged.mixin;
 
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
-import etcodehome.freeterraforged.world.worldgen.biome.ClimatePointCache;
-import etcodehome.freeterraforged.world.worldgen.biome.FTFClimateSampler;
-import etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeClimatePolicy;
 import org.spongepowered.asm.mixin.Implements;
 import org.spongepowered.asm.mixin.Interface;
 import org.spongepowered.asm.mixin.Mixin;
@@ -12,10 +9,8 @@ import org.spongepowered.asm.mixin.Unique;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 
-import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.biome.Climate;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
-import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.biome.ClimateQueryPolicy;
 import etcodehome.freeterraforged.world.worldgen.biome.ClimateQuerySemantics;
 import etcodehome.freeterraforged.world.worldgen.biome.FTFClimateSampler;
@@ -29,12 +24,8 @@ import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 @Mixin(Climate.Sampler.class)
 @Implements(@Interface(iface = FTFClimateSampler.class, prefix = "freeterraforged$FTFClimateSampler$"))
 class MixinClimateSampler {
-	@Unique
-	private static final FTFClimateSampler.SpawnSearch freeterraforged$defaultSpawnSearch = new FTFClimateSampler.SpawnSearch(
-		etcodehome.freeterraforged.data.worldgen.preset.settings.SpawnType.WORLD_ORIGIN,
-		BlockPos.ZERO
-	);
-	private volatile FTFClimateSampler.SpawnSearch spawnSearch = freeterraforged$defaultSpawnSearch;
+	@Unique private volatile FTFClimateSampler.SpawnSearch freeterraforged$spawnSearch =
+		FTFClimateSampler.SpawnSearch.WORLD_ORIGIN;
 	@Unique private volatile ClimateQuerySemantics freeterraforged$querySemantics =
 		ClimateQuerySemantics.passthrough();
 	private volatile WorldgenPlan worldgenPlan;
@@ -97,11 +88,17 @@ class MixinClimateSampler {
 	}
 
 	public void freeterraforged$FTFClimateSampler$setSpawnSearch(FTFClimateSampler.SpawnSearch spawnSearch) {
-		this.spawnSearch = java.util.Objects.requireNonNull(spawnSearch, "spawnSearch");
+		this.freeterraforged$spawnSearch = java.util.Objects.requireNonNull(spawnSearch, "spawnSearch");
 	}
 
 	public FTFClimateSampler.SpawnSearch freeterraforged$FTFClimateSampler$getSpawnSearch() {
-		return this.spawnSearch;
+		/*
+		 * Climate samplers are also constructed outside the live server bootstrap (notably by the
+		 * preset preview). Keep the interface's non-null contract true even when a construction path
+		 * has not supplied server-specific spawn metadata yet.
+		 */
+		FTFClimateSampler.SpawnSearch search = this.freeterraforged$spawnSearch;
+		return search == null ? FTFClimateSampler.SpawnSearch.WORLD_ORIGIN : search;
 	}
 
 	public synchronized void freeterraforged$FTFClimateSampler$setClimateQuerySemantics(

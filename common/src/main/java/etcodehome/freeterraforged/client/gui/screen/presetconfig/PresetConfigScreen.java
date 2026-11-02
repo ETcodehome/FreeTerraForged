@@ -28,6 +28,7 @@ public class PresetConfigScreen extends LinkedPageScreen {
 	private final PreviewComputationCache previewCache = new PreviewComputationCache();
 	private final PreviewRequestPool previewRequests = new PreviewRequestPool();
 	private final PreviewRequestKeyFactory previewRequestKeys = new PreviewRequestKeyFactory();
+	private PreviewNavigation previewNavigation;
 	private String seed;
 	private boolean seedInitialized;
 	private boolean resourcesClosed;
@@ -64,6 +65,34 @@ public class PresetConfigScreen extends LinkedPageScreen {
 
 	public void removeWidgetFromScreen(AbstractWidget widget) {
 		this.removeWidget(widget);
+	}
+
+	void setPreviewNavigation(PreviewNavigation navigation) {
+		this.previewNavigation = navigation;
+	}
+
+	void clearPreviewNavigation(PreviewNavigation navigation) {
+		if (this.previewNavigation == navigation) {
+			this.previewNavigation = null;
+		}
+	}
+
+	@Override
+	public boolean mouseClicked(double mouseX, double mouseY, int button) {
+		if (this.previewNavigation != null
+			&& this.previewNavigation.mouseClicked(this, mouseX, mouseY, button)) {
+			return true;
+		}
+		return super.mouseClicked(mouseX, mouseY, button);
+	}
+
+	@Override
+	public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+		if (this.previewNavigation != null
+			&& this.previewNavigation.mouseScrolled(mouseX, mouseY, scrollX, scrollY)) {
+			return true;
+		}
+		return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
 	}
 
 	public void setSeed(String seed) {
