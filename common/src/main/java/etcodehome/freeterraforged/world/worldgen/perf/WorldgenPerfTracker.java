@@ -218,6 +218,12 @@ public final class WorldgenPerfTracker {
 	private static volatile long startWallNanos = 0L;
 	private static volatile long stopWallNanos = 0L;
 	private static volatile String activeContextLabel = "manual";
+	private static volatile long initialGcCollections = 0L;
+	private static volatile long initialGcTimeMs = 0L;
+	private static volatile long initialYoungGcCollections = 0L;
+	private static volatile long initialYoungGcTimeMs = 0L;
+	private static volatile long initialOldGcCollections = 0L;
+	private static volatile long initialOldGcTimeMs = 0L;
 
 	private WorldgenPerfTracker() {
 	}
@@ -247,6 +253,31 @@ public final class WorldgenPerfTracker {
 		activeContextLabel = contextLabel != null ? contextLabel : "manual";
 		startWallNanos = System.nanoTime();
 		stopWallNanos = 0L;
+		initialGcCollections = 0L;
+		initialGcTimeMs = 0L;
+		initialYoungGcCollections = 0L;
+		initialYoungGcTimeMs = 0L;
+		initialOldGcCollections = 0L;
+		initialOldGcTimeMs = 0L;
+		try {
+			for (java.lang.management.GarbageCollectorMXBean gc : java.lang.management.ManagementFactory.getGarbageCollectorMXBeans()) {
+				long count = gc.getCollectionCount();
+				long time = gc.getCollectionTime();
+				if (count > 0) {
+					initialGcCollections += count;
+					initialGcTimeMs += time;
+					String name = gc.getName().toLowerCase(Locale.ROOT);
+					if (name.contains("young") || name.contains("eden") || name.contains("scavenge") || name.contains("copy") || name.contains("g1 young") || name.contains("parnew")) {
+						initialYoungGcCollections += count;
+						initialYoungGcTimeMs += time;
+					} else {
+						initialOldGcCollections += count;
+						initialOldGcTimeMs += time;
+					}
+				}
+			}
+		} catch (Throwable ignored) {
+		}
 		ACTIVE = true;
 	}
 
@@ -670,8 +701,64 @@ public final class WorldgenPerfTracker {
 			lines.add(fieldSummary.toString().stripTrailing());
 		}
 
+		long curGcCollections = 0L;
+		long curGcTimeMs = 0L;
+		long curYoungCollections = 0L;
+		long curYoungTimeMs = 0L;
+		long curOldCollections = 0L;
+		long curOldTimeMs = 0L;
+		try {
+			for (java.lang.management.GarbageCollectorMXBean gc : java.lang.management.ManagementFactory.getGarbageCollectorMXBeans()) {
+				long count = gc.getCollectionCount();
+				long time = gc.getCollectionTime();
+				if (count > 0) {
+					curGcCollections += count;
+					curGcTimeMs += time;
+					String name = gc.getName().toLowerCase(Locale.ROOT);
+					if (name.contains("young") || name.contains("eden") || name.contains("scavenge") || name.contains("copy") || name.contains("g1 young") || name.contains("parnew")) {
+						curYoungCollections += count;
+						curYoungTimeMs += time;
+					} else {
+						curOldCollections += count;
+						curOldTimeMs += time;
+					}
+				}
+			}
+		} catch (Throwable ignored) {
+		}
+
+		long deltaGcCollections = Math.max(0L, curGcCollections - initialGcCollections);
+		long deltaGcTimeMs = Math.max(0L, curGcTimeMs - initialGcTimeMs);
+		long deltaYoungCollections = Math.max(0L, curYoungCollections - initialYoungGcCollections);
+		long deltaYoungTimeMs = Math.max(0L, curYoungTimeMs - initialYoungGcTimeMs);
+		long deltaOldCollections = Math.max(0L, curOldCollections - initialOldGcCollections);
+		long deltaOldTimeMs = Math.max(0L, curOldTimeMs - initialOldGcTimeMs);
+
+		java.lang.management.MemoryUsage heap = null;
+		try {
+			heap = java.lang.management.ManagementFactory.getMemoryMXBean().getHeapMemoryUsage();
+		} catch (Throwable ignored) {
+		}
+
 		lines.add("--------------------------------------------------------------------------------");
-		lines.add("6. PARALLEL THREAD UTILIZATION (Sorted by Work Time):");
+		lines.add("6. JVM GARBAGE COLLECTION & HEAP ACTIVITY:");
+		lines.add(String.format(Locale.ROOT,
+			"   GC Collections (Total)             : %,d collections (%8.1f ms pause time)",
+			deltaGcCollections, (double) deltaGcTimeMs));
+		lines.add(String.format(Locale.ROOT,
+			"     - Young Generation               : %,d collections (%8.1f ms)",
+			deltaYoungCollections, (double) deltaYoungTimeMs));
+		lines.add(String.format(Locale.ROOT,
+			"     - Old / Full Generation          : %,d collections (%8.1f ms)",
+			deltaOldCollections, (double) deltaOldTimeMs));
+		if (heap != null) {
+			lines.add(String.format(Locale.ROOT,
+				"   Heap Memory at Report              : %8.1f MB used / %8.1f MB committed (Max: %8.1f MB)",
+				heap.getUsed() / (1024.0 * 1024.0), heap.getCommitted() / (1024.0 * 1024.0), heap.getMax() / (1024.0 * 1024.0)));
+		}
+
+		lines.add("--------------------------------------------------------------------------------");
+		lines.add("7. PARALLEL THREAD UTILIZATION (Sorted by Work Time):");
 		activeThreads.sort(Comparator.comparingLong(ThreadStats::totalStageWorkNanos).reversed());
 		for (ThreadStats ts : activeThreads) {
 			long workNanos = ts.totalStageWorkNanos();

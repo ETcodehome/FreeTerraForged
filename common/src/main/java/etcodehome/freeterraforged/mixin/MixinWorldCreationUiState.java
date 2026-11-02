@@ -52,7 +52,8 @@ public class MixinWorldCreationUiState {
 		WorldDataConfiguration configuration,
 		CallbackInfoReturnable<Boolean> callback
 	) {
-		if (FTFWorldPresetDataPacks.requiresFullDataPackReload(configuration)) {
+		if (FTFWorldPresetDataPacks.requiresFullDataPackReload(configuration)
+			|| (this.settings != null && FTFWorldPresetDataPacks.requiresFullDataPackReload(this.settings.dataConfiguration()))) {
 			callback.setReturnValue(false);
 		}
 	}

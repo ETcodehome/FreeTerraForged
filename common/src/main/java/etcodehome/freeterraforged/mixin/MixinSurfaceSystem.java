@@ -77,7 +77,10 @@ class MixinSurfaceSystem {
 			argsOnly = true
 	)
 	private SurfaceRules.RuleSource freeterraforged$optimizeSurfaceRule(SurfaceRules.RuleSource ruleSource) {
-		return etcodehome.freeterraforged.world.worldgen.surface.rule.FastStrataSequenceRule.optimize(ruleSource);
+		if ((Object) this.randomState instanceof FTFRandomState ftfRandomState && ftfRandomState.generatorContext() != null) {
+			return etcodehome.freeterraforged.world.worldgen.surface.rule.FastStrataSequenceRule.optimize(ruleSource);
+		}
+		return ruleSource;
 	}
 
 	// INJECT AT HEAD to carve out rivers and lakes before surface rules run

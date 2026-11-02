@@ -25,6 +25,31 @@ public final class FTFLanguageProvider {
 			this.add(FTFTranslationKeys.NO_ERROR_MESSAGE, "{No error message}");
 
 			this.add(FTFTranslationKeys.GUI_INPUT_PROMPT, "Type preset name");
+			this.add("freeterraforged.commands.locate.options.unknown", "Unknown locate option: %s.");
+			this.add("freeterraforged.commands.locate.options.duplicate", "Locate option %s was supplied more than once.");
+			this.add("freeterraforged.commands.locate.options.missing_value", "Locate option %s requires a value.");
+			this.add("freeterraforged.commands.locate.options.whole_number", "The value for %s must be a whole number.");
+			this.add("freeterraforged.commands.locate.options.timeout", "Locate timeout must be at least 1 second; received %s.");
+			this.add("freeterraforged.commands.locate.options.workers", "Locate workers must be between 1 and %s; received %s.");
+			this.add("freeterraforged.commands.locate.terrain.unknown", "Unknown terrain type: %s.");
+			this.add("freeterraforged.commands.locate.terrain.not_ftf", "No FreeTerraForged world is available.");
+			this.add("freeterraforged.commands.locate.terrain.no_active_search", "No FreeTerraForged locate search is running.");
+			this.add("freeterraforged.commands.locate.terrain.cancelled", "Stopped the locate search for %s.");
+			this.add("freeterraforged.commands.locate.terrain.already_running", "A terrain search for %s is already running. Use '/ftf locate cancel' to stop it first.");
+			this.add("freeterraforged.commands.locate.terrain.searching", "Searching for terrain %s for up to %s seconds...");
+			this.add("freeterraforged.commands.locate.terrain.failed", "Could not search for terrain %s because of an unexpected error. Check the server log for details.");
+			this.add("freeterraforged.commands.locate.terrain.timed_out", "Could not find terrain %s within %s seconds.");
+			this.add("freeterraforged.commands.locate.terrain.not_found", "Could not find terrain %s before reaching Minecraft's world limits.");
+			this.add("freeterraforged.commands.locate.terrain.success", "Found %s terrain at %s (%s blocks away).");
+			this.add("freeterraforged.commands.locate.biome.invalid", "Invalid biome ID or tag: %s.");
+			this.add("freeterraforged.commands.locate.biome.not_ftf", "No FreeTerraForged world is available.");
+			this.add("freeterraforged.commands.locate.biome.already_running", "A biome search for %s is already running. Use '/ftf locate cancel' to stop it first.");
+			this.add("freeterraforged.commands.locate.biome.searching", "Searching for biome %s for up to %s seconds...");
+			this.add("freeterraforged.commands.locate.biome.failed", "Could not search for biome %s because of an unexpected error. Check the server log for details.");
+			this.add("freeterraforged.commands.locate.biome.impossible", "This FreeTerraForged world does not generate %s.");
+			this.add("freeterraforged.commands.locate.biome.timed_out", "Could not find biome %s within %s seconds.");
+			this.add("freeterraforged.commands.locate.biome.not_found", "Could not find biome %s before reaching Minecraft's world limits.");
+			this.add("freeterraforged.commands.locate.biome.success", "Found biome %s at %s (%s blocks away).");
 
 			this.add(FTFTranslationKeys.GUI_SELECT_PRESET_MISSING_LEGACY_PRESETS, "Couldn't find any legacy presets");
 			this.add(FTFTranslationKeys.GUI_SELECT_PRESET_TITLE, "Presets & Defaults");

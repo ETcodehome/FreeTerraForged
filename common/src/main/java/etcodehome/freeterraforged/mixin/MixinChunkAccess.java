@@ -1,5 +1,6 @@
 package etcodehome.freeterraforged.mixin;
 
+import java.lang.ref.SoftReference;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.Mixin;
 import org.jetbrains.annotations.Nullable;
@@ -19,7 +20,7 @@ public abstract class MixinChunkAccess implements IFlowFieldHolder, IChunkCellsH
 
 	@Unique
 	@Nullable
-	private volatile Cell[] freeterraforged$chunkCells;
+	private volatile SoftReference<Cell[]> freeterraforged$chunkCellsRef;
 
 	@Override
 	public ChunkFlowField freeterraforged$getFlowField() {
@@ -45,26 +46,29 @@ public abstract class MixinChunkAccess implements IFlowFieldHolder, IChunkCellsH
 	@Override
 	@Nullable
 	public Cell[] freeterraforged$getChunkCells() {
-		return this.freeterraforged$chunkCells;
+		SoftReference<Cell[]> ref = this.freeterraforged$chunkCellsRef;
+		return ref != null ? ref.get() : null;
 	}
 
 	@Override
 	public void freeterraforged$setChunkCells(Cell[] cells) {
-		this.freeterraforged$chunkCells = cells;
+		this.freeterraforged$chunkCellsRef = cells != null ? new SoftReference<>(cells) : null;
 	}
 
 	@Override
 	public Cell[] freeterraforged$getOrCreateChunkCells(GeneratorContext context) {
-		Cell[] current = this.freeterraforged$chunkCells;
+		SoftReference<Cell[]> ref = this.freeterraforged$chunkCellsRef;
+		Cell[] current = ref != null ? ref.get() : null;
 		if (current != null) {
 			return current;
 		}
 		synchronized (this) {
-			current = this.freeterraforged$chunkCells;
+			ref = this.freeterraforged$chunkCellsRef;
+			current = ref != null ? ref.get() : null;
 			if (current == null) {
 				ChunkAccess chunk = (ChunkAccess) (Object) this;
 				current = context.filteredChunkCache.getFilteredChunk(chunk.getPos().x, chunk.getPos().z);
-				this.freeterraforged$chunkCells = current;
+				this.freeterraforged$chunkCellsRef = new SoftReference<>(current);
 			}
 		}
 		return current;

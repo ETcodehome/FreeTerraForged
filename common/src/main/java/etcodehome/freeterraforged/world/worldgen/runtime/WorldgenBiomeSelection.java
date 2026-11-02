@@ -2,6 +2,7 @@ package etcodehome.freeterraforged.world.worldgen.runtime;
 
 import java.util.Collections;
 import java.util.LinkedHashSet;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -38,6 +39,14 @@ public final class WorldgenBiomeSelection {
 		plan.providerSelection().directInput().ifPresent(input -> possible.addAll(input.possibleOutputs()));
 		possible.addAll(plan.selectionDecoration().possibleOutputs());
 		Set<Holder<Biome>> transformed = plan.biomeReplacement().plan().transformPossible(possible);
+		if (plan.owner().selectedStem().generator() instanceof TerraForgedChunkGenerator terraForged) {
+			Set<Holder<Biome>> external = terraForged.externalPossibleBiomes();
+			if (!external.isEmpty()) {
+				LinkedHashSet<Holder<Biome>> merged = new LinkedHashSet<>(transformed);
+				merged.addAll(external);
+				transformed = merged;
+			}
+		}
 		if (transformed.isEmpty()) {
 			throw new IllegalStateException(
 				"FTF candidate-provider plan exposes no possible biomes; biome_composition="
@@ -118,7 +127,17 @@ public final class WorldgenBiomeSelection {
 
 	static Executable prepare(WorldgenPlan plan, Set<Holder<Biome>> possibleBiomes) {
 		requireExecutablePlan(plan);
-		return new Executable(plan, possibleBiomes);
+		return new Executable(plan, possibleBiomes, null, null);
+	}
+
+	static Executable prepare(
+		WorldgenPlan plan,
+		Set<Holder<Biome>> possibleBiomes,
+		@org.jetbrains.annotations.Nullable ClimateQuerySemantics fallbackSemantics,
+		@org.jetbrains.annotations.Nullable WorldgenRuntimeBinding ownerBinding
+	) {
+		requireExecutablePlan(plan);
+		return new Executable(plan, possibleBiomes, fallbackSemantics, ownerBinding);
 	}
 
 	public static final class Executable {
@@ -133,7 +152,23 @@ public final class WorldgenBiomeSelection {
 		private final boolean isolatedParallelRead;
 		private final Set<Holder<Biome>> possibleBiomes;
 
+		@org.jetbrains.annotations.Nullable
+		private final ClimateQuerySemantics fallbackSemantics;
+		@org.jetbrains.annotations.Nullable
+		private final WorldgenRuntimeBinding ownerBinding;
+
 		private Executable(WorldgenPlan plan, Set<Holder<Biome>> possibleBiomes) {
+			this(plan, possibleBiomes, null, null);
+		}
+
+		private Executable(
+			WorldgenPlan plan,
+			Set<Holder<Biome>> possibleBiomes,
+			@org.jetbrains.annotations.Nullable ClimateQuerySemantics fallbackSemantics,
+			@org.jetbrains.annotations.Nullable WorldgenRuntimeBinding ownerBinding
+		) {
+			this.fallbackSemantics = fallbackSemantics;
+			this.ownerBinding = ownerBinding;
 			this.plan = plan;
 			this.directInput = plan.providerSelection().directInput().orElse(null);
 			this.providers = plan.providerSelection();
@@ -187,13 +222,19 @@ public final class WorldgenBiomeSelection {
 			ClimateQuerySemantics querySemantics = rtfSampler.climateQuerySemantics();
 			GeneratorContext generatorContext = querySemantics.surfaceContext();
 			if (generatorContext == null) {
-				throw new IllegalStateException("FTF biome selection sampler has no generator context");
+				generatorContext = this.adoptFallbackSemantics(rtfSampler, "FTF biome selection sampler has no generator context");
 			}
 
 			WorldgenPlans.SpatialResult spatial = rtfSampler.getBiomeCellCache()
 				.find(this.plan, quartX, quartZ);
 			if (spatial == null) {
-				try (Resource<Cell> resource = Cell.getResource()) {
+				etcodehome.freeterraforged.world.worldgen.biome.BiomeColumnCache colCache =
+					etcodehome.freeterraforged.world.worldgen.biome.BiomeColumnCache.get();
+				if (colCache.quartX == quartX && colCache.quartZ == quartZ) {
+					spatial = this.requireSpatialResolver().resolve(
+						colCache.regionX, colCache.regionZ
+					);
+				} else try (Resource<Cell> resource = Cell.getResource()) {
 					Cell cell = resource.get().reset();
 					generatorContext.lookup.applyBiomeRegion(
 						cell, QuartPos.toBlock(quartX), QuartPos.toBlock(quartZ)
@@ -248,12 +289,65 @@ public final class WorldgenBiomeSelection {
 			ClimateQuerySemantics querySemantics = rtfSampler.climateQuerySemantics();
 			GeneratorContext generatorContext = querySemantics.surfaceContext();
 			if (generatorContext == null) {
-				throw new IllegalStateException("FTF biome selection requires its owned sampler context");
+				generatorContext = this.adoptFallbackSemantics(rtfSampler, "FTF biome selection requires its owned sampler context");
 			}
 			WorldgenPlans.SpatialResult spatial = this.requireSpatialResolver()
 				.resolve(biomeCellX, biomeCellZ);
 			return this.select(
 				spatial, this.samplerDecoration.sample(sampler, quartX, quartY, quartZ),
+				quartX, quartY, quartZ, sampler, generatorContext
+			);
+		}
+
+		/**
+		 * Resolves an FTF candidate from a target already produced by this plan's sampler-decoration stage.
+		 * Locate uses this to classify a cave stage and select its biome without sampling every coordinate twice.
+		 */
+		public Holder<Biome> resolveSampledInCell(
+			int quartX,
+			int quartY,
+			int quartZ,
+			Climate.Sampler sampler,
+			Climate.TargetPoint target,
+			long biomeCellX,
+			long biomeCellZ
+		) {
+			if (this.directInput != null) {
+				throw new IllegalStateException(
+					"A direct custom biome source cannot resolve from a pre-sampled FTF target"
+				);
+			}
+			if (this.isolatedParallelRead) {
+				return this.resolveSampledOwnedInCell(
+					quartX, quartY, quartZ, sampler, target, biomeCellX, biomeCellZ
+				);
+			}
+			return this.execution.execute(
+				QUERY_FACETS,
+				() -> this.resolveSampledOwnedInCell(
+					quartX, quartY, quartZ, sampler, target, biomeCellX, biomeCellZ
+				)
+			);
+		}
+
+		private Holder<Biome> resolveSampledOwnedInCell(
+			int quartX,
+			int quartY,
+			int quartZ,
+			Climate.Sampler sampler,
+			Climate.TargetPoint target,
+			long biomeCellX,
+			long biomeCellZ
+		) {
+			FTFClimateSampler rtfSampler = requireOwnedSampler(sampler);
+			GeneratorContext generatorContext = rtfSampler.climateQuerySemantics().surfaceContext();
+			if (generatorContext == null) {
+				throw new IllegalStateException("FTF biome selection requires its owned sampler context");
+			}
+			WorldgenPlans.SpatialResult spatial = this.requireSpatialResolver()
+				.resolve(biomeCellX, biomeCellZ);
+			return this.select(
+				spatial, Objects.requireNonNull(target, "sampled climate target"),
 				quartX, quartY, quartZ, sampler, generatorContext
 			);
 		}
@@ -295,7 +389,7 @@ public final class WorldgenBiomeSelection {
 			FTFClimateSampler rtfSampler = requireOwnedSampler(sampler);
 			GeneratorContext generatorContext = rtfSampler.climateQuerySemantics().surfaceContext();
 			if (generatorContext == null) {
-				throw new IllegalStateException("FTF biome selection requires its owned sampler context");
+				generatorContext = this.adoptFallbackSemantics(rtfSampler, "FTF biome selection requires its owned sampler context");
 			}
 			WorldgenPlans.SpatialResult spatial = this.requireSpatialResolver()
 				.resolve(biomeCellX, biomeCellZ);
@@ -352,6 +446,20 @@ public final class WorldgenBiomeSelection {
 				throw new IllegalStateException("FTF biome selection has no spatial resolver");
 			}
 			return this.spatialResolver;
+		}
+
+		private GeneratorContext adoptFallbackSemantics(FTFClimateSampler rtfSampler, String missingMessage) {
+			if (this.fallbackSemantics != null) {
+				if (this.ownerBinding != null && rtfSampler.getWorldgenPlan() == null) {
+					rtfSampler.setWorldgenBinding(this.ownerBinding);
+				}
+				rtfSampler.adoptClimateQuerySemantics(this.fallbackSemantics);
+				GeneratorContext adopted = rtfSampler.climateQuerySemantics().surfaceContext();
+				if (adopted != null) {
+					return adopted;
+				}
+			}
+			throw new IllegalStateException(missingMessage);
 		}
 
 		private static FTFClimateSampler requireOwnedSampler(Climate.Sampler sampler) {

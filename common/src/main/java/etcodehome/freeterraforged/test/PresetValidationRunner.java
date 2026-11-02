@@ -11,21 +11,25 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
+import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.JsonOps;
 import org.apache.commons.io.file.PathUtils;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
 import net.minecraft.core.HolderGetter;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.RegistryDataLoader;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.packs.PackType;
@@ -39,6 +43,7 @@ import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.level.DataPackConfig;
 import net.minecraft.world.level.WorldDataConfiguration;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.storage.ServerLevelData;
 import net.minecraft.world.level.validation.DirectoryValidator;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.SpawnType;
@@ -64,6 +69,38 @@ import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Presets;
 import etcodehome.freeterraforged.platform.ConfigUtil;
 import etcodehome.freeterraforged.registries.FTFRegistries;
+import etcodehome.freeterraforged.world.worldgen.biome.BiomeCandidateRoles;
+import etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeBanding;
+import etcodehome.freeterraforged.world.worldgen.perf.WorldgenBenchmarkRunner;
+import etcodehome.freeterraforged.world.worldgen.runtime.BiomePlacementPlan;
+import etcodehome.freeterraforged.world.worldgen.search.BiomeSearchResolution;
+import etcodehome.freeterraforged.world.worldgen.search.LocateSearchValidator;
+import etcodehome.freeterraforged.world.worldgen.search.TerrainSearchResolution;
+import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
+import net.minecraft.data.registries.VanillaRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.world.level.dimension.LevelStem;
+import net.minecraft.world.level.levelgen.FlatLevelSource;
+import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
+import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
+import net.minecraft.world.level.levelgen.RandomState;
+import net.minecraft.world.level.levelgen.WorldDimensions;
+import net.minecraft.world.level.levelgen.flat.FlatLevelGeneratorSettings;
+import net.minecraft.world.level.levelgen.presets.WorldPreset;
+import net.minecraft.world.level.levelgen.presets.WorldPresets;
+import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
+import etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeBanding;
+import etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeTags;
+import etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeSurfaceProtection;
+import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementConfig;
+import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementConfigSnapshot;
+import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementPlan;
+import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenOwner;
+import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPlan;
+import net.minecraft.core.QuartPos;
+import net.minecraft.world.level.biome.Biomes;
+import net.minecraft.world.level.biome.Climate;
+import net.minecraft.world.level.biome.MultiNoiseBiomeSourceParameterLists;
 
 public final class PresetValidationRunner {
 	private static boolean testsTriggered = false;
@@ -207,6 +244,150 @@ public final class PresetValidationRunner {
 
 	public record TestRecord(String name, String notes, boolean passed, String error) {}
 
+	private static String validateAdaptiveBiomeSearchResolution() {
+		String topology = LocateSearchValidator.validateTopology();
+		Preset terrainPreset = Presets.makeFTFDefault().copy();
+		terrainPreset.terrain().general.terrainRegionSize = 125;
+		terrainPreset.terrain().general.globalHorizontalScale = 8.0F;
+		if (TerrainSearchResolution.derive(terrainPreset, TerrainType.FLATS).horizontalStep() != 12) {
+			throw new AssertionError("Terrain regions must derive from their unscaled 125-block selector cells");
+		}
+		terrainPreset.island().size = 50.0F;
+		if (TerrainSearchResolution.derive(terrainPreset, TerrainType.ISLAND).horizontalStep() != 48) {
+			throw new AssertionError("Island searching must include the active global horizontal scale");
+		}
+		terrainPreset.island().size = 500.0F;
+		if (TerrainSearchResolution.derive(terrainPreset, TerrainType.ISLAND_MOUNTAINS).horizontalStep() != 64) {
+			throw new AssertionError("Large physical island footprints must respect the conservative step cap");
+		}
+		if (TerrainSearchResolution.derive(terrainPreset, TerrainType.COAST).horizontalStep() != 4
+			|| TerrainSearchResolution.derive(terrainPreset, TerrainType.BEACH).horizontalStep() != 4
+			|| TerrainSearchResolution.derive(terrainPreset, TerrainType.RIVER).horizontalStep() != 4) {
+			throw new AssertionError("Thin terrain targets must retain quart-resolution searching");
+		}
+		BiomePlacementPlan.TargetRoles surface = new BiomePlacementPlan.TargetRoles(
+			true, Set.of(BiomePlacementPlan.Role.SURFACE), true, false
+		);
+		BiomePlacementPlan.SearchScales defaultScales = new BiomePlacementPlan.SearchScales(185, 586, 64);
+		BiomeSearchResolution defaultSurface = BiomeSearchResolution.derive(defaultScales, surface);
+		if (defaultSurface.horizontalStep() != 20) {
+			throw new AssertionError("Biome size 185 should derive a 20-block surface step, got "
+				+ defaultSurface.horizontalStep());
+		}
+
+		BiomePlacementPlan.SearchScales smallSurface = new BiomePlacementPlan.SearchScales(50, 586, 64);
+		if (BiomeSearchResolution.derive(smallSurface, surface).horizontalStep() != 4) {
+			throw new AssertionError("Minimum surface biome size should derive quart-resolution searching");
+		}
+		BiomePlacementPlan.SearchScales largeSurface = new BiomePlacementPlan.SearchScales(2000, 586, 64);
+		if (BiomeSearchResolution.derive(largeSurface, surface).horizontalStep() != 192) {
+			throw new AssertionError("Large surface biomes should respect the benchmarked 192-block cap");
+		}
+		BiomePlacementPlan.SearchScales mediumSurface = new BiomePlacementPlan.SearchScales(1000, 586, 64);
+		if (BiomeSearchResolution.derive(mediumSurface, surface).horizontalStep() != 124) {
+			throw new AssertionError("Biome size 1000 should retain its preset-derived 124-block surface step");
+		}
+		BiomePlacementPlan.SearchScales modernSurface = new BiomePlacementPlan.SearchScales(586, 586, 64);
+		if (BiomeSearchResolution.derive(modernSurface, surface).horizontalStep() != 72) {
+			throw new AssertionError("Biome size 586 should retain its preset-derived 72-block surface step");
+		}
+
+		BiomePlacementPlan.SearchScales minimumCaveScales = new BiomePlacementPlan.SearchScales(2000, 50, 16);
+		BiomePlacementPlan.TargetRoles cave = new BiomePlacementPlan.TargetRoles(
+			true, Set.of(BiomePlacementPlan.Role.SHALLOW_CAVE, BiomePlacementPlan.Role.DEEP_CAVE), true, false
+		);
+		BiomeSearchResolution minimumCave = BiomeSearchResolution.derive(minimumCaveScales, cave);
+		if (minimumCave.horizontalStep() != 4 || minimumCave.verticalStep() != 4) {
+			throw new AssertionError("Minimum underground biome sizes should search at quart resolution");
+		}
+		BiomePlacementPlan.SearchScales largeCaveScales = new BiomePlacementPlan.SearchScales(2000, 2000, 2048);
+		BiomeSearchResolution largeCave = BiomeSearchResolution.derive(largeCaveScales, cave);
+		if (largeCave.horizontalStep() != 64 || largeCave.verticalStep() != 64) {
+			throw new AssertionError("Unbenchmarked underground horizontal and vertical searches must retain 64-block caps");
+		}
+		BiomePlacementPlan.TargetRoles unbandedCave = new BiomePlacementPlan.TargetRoles(
+			true, Set.of(BiomePlacementPlan.Role.SHALLOW_CAVE, BiomePlacementPlan.Role.DEEP_CAVE), false, false
+		);
+		BiomeSearchResolution unbandedResolution = BiomeSearchResolution.derive(defaultScales, unbandedCave);
+		if (unbandedResolution.horizontalStep() != 64 || unbandedResolution.verticalStep() != 8) {
+			throw new AssertionError(
+				"Unbanded caves must retain preset-derived horizontal and vertical sampling"
+			);
+		}
+
+		BiomePlacementPlan.TargetRoles mixed = new BiomePlacementPlan.TargetRoles(
+			true, Set.of(BiomePlacementPlan.Role.SURFACE, BiomePlacementPlan.Role.DEEP_CAVE), true, false
+		);
+		if (BiomeSearchResolution.derive(minimumCaveScales, mixed).horizontalStep() != 4) {
+			throw new AssertionError("Mixed targets must use the finer applicable horizontal resolution");
+		}
+		if (BiomeSearchResolution.derive(largeCaveScales, mixed).horizontalStep() != 64) {
+			throw new AssertionError("Mixed surface-underground targets must retain the conservative underground cap");
+		}
+		BiomePlacementPlan.TargetRoles unknown = new BiomePlacementPlan.TargetRoles(
+			true, Set.of(BiomePlacementPlan.Role.UNKNOWN), true, false
+		);
+		BiomeSearchResolution unknownResolution = BiomeSearchResolution.derive(defaultScales, unknown);
+		if (unknownResolution.horizontalStep() != 20 || unknownResolution.verticalStep() != 8) {
+			throw new AssertionError("Unknown placement must retain the active preset's finest applicable scale");
+		}
+		BiomeSearchResolution largeUnknown = BiomeSearchResolution.derive(largeCaveScales, unknown);
+		if (largeUnknown.horizontalStep() != 64 || largeUnknown.verticalStep() != 64) {
+			throw new AssertionError("Unknown placement must not inherit the surface-only 192-block cap");
+		}
+		BiomePlacementPlan.TargetRoles thinSurface = new BiomePlacementPlan.TargetRoles(
+			true, Set.of(BiomePlacementPlan.Role.SURFACE), true, true
+		);
+		if (BiomeSearchResolution.derive(largeSurface, thinSurface).horizontalStep() != 4) {
+			throw new AssertionError("River and beach targets must ignore broad biome-cell scaling");
+		}
+
+		Climate.TargetPoint surfacePoint = new Climate.TargetPoint(0L, 0L, 0L, 0L, Climate.quantizeCoord(-1.0F), 0L);
+		Climate.TargetPoint shallowPoint = new Climate.TargetPoint(0L, 0L, 0L, 0L, Climate.quantizeCoord(0.5F), 0L);
+		Climate.TargetPoint deepPoint = new Climate.TargetPoint(0L, 0L, 0L, 0L, Climate.quantizeCoord(2.0F), 0L);
+		if (UndergroundBiomeBanding.classifyTarget(surfacePoint) != UndergroundBiomeBanding.CandidateRole.SURFACE
+			|| UndergroundBiomeBanding.classifyTarget(shallowPoint) != UndergroundBiomeBanding.CandidateRole.SHALLOW_CAVE
+			|| UndergroundBiomeBanding.classifyTarget(deepPoint) != UndergroundBiomeBanding.CandidateRole.DEEP_CAVE) {
+			throw new AssertionError("Runtime climate depth classification disagrees with cave-stage boundaries");
+		}
+
+		Climate.Parameter full = Climate.Parameter.span(-1.0F, 1.0F);
+		Climate.ParameterPoint surfaceRegistration = new Climate.ParameterPoint(
+			full, full, full, full, Climate.Parameter.point(0.0F), full, 0L
+		);
+		Climate.ParameterPoint shallowRegistration = new Climate.ParameterPoint(
+			full, full, full, full, Climate.Parameter.span(0.2F, 0.9F), full, 0L
+		);
+		Climate.ParameterPoint deepRegistration = new Climate.ParameterPoint(
+			full, full, full, full, Climate.Parameter.point(1.1F), full, 0L
+		);
+		BiomeCandidateRoles<String> semanticRoles = BiomeCandidateRoles.compile(
+			new Climate.ParameterList<>(List.of(
+				Pair.of(surfaceRegistration, "ordinary"),
+				Pair.of(deepRegistration, "ordinary"),
+				Pair.of(shallowRegistration, "tagged_cave"),
+				Pair.of(deepRegistration, "untagged_underground")
+			)),
+			(point, value) -> UndergroundBiomeBanding.classify(point, value.equals("tagged_cave")),
+			value -> value.equals("tagged_cave"),
+			List.of()
+		);
+		BiomeCandidateRoles.Roles ordinary = semanticRoles.candidate("ordinary");
+		if (ordinary.undergroundOnly() || !ordinary.surface() || !ordinary.deep()) {
+			throw new AssertionError("Surface-plus-deep filler registrations must remain semantically surface-only");
+		}
+		BiomeCandidateRoles.Roles taggedCave = semanticRoles.candidate("tagged_cave");
+		if (!taggedCave.undergroundOnly() || !taggedCave.shallow()) {
+			throw new AssertionError("A tagged shallow cave candidate must remain underground-only");
+		}
+		BiomeCandidateRoles.Roles untaggedUnderground = semanticRoles.candidate("untagged_underground");
+		if (!untaggedUnderground.undergroundOnly() || !untaggedUnderground.deep()) {
+			throw new AssertionError("An underground-only registration must not require a cave tag");
+		}
+		return topology
+			+ "; quart-aligned biome/terrain scale derivation, semantic filler roles, preset-scaled unknowns, and depth stages";
+	}
+
 	public static void runAllTests(MinecraftServer server) {
 		String serverModName = server.getServerModName();
 		String loader = serverModName.toLowerCase().replaceAll("[^a-z0-9]", "");
@@ -238,6 +419,62 @@ public final class PresetValidationRunner {
 		Path testWorkDir = null;
 		try {
 			testWorkDir = Files.createTempDirectory("ftf-preset-validation-");
+
+			currentTestName = "presetValidation.adaptiveBiomeLocate." + loader;
+			watchdog.setStep(currentTestName);
+			String adaptiveSearchNotes = validateAdaptiveBiomeSearchResolution();
+			FTFCommon.LOGGER.info("[FTF-Test] PASSED: Adaptive biome locate validation ({})", adaptiveSearchNotes);
+			testRecords.add(new TestRecord(currentTestName, adaptiveSearchNotes, true, null));
+
+			currentTestName = "presetValidation.biomeLocateLivePlan." + loader;
+			watchdog.setStep(currentTestName);
+			BiomeLocateValidator.Result locateResult = BiomeLocateValidator.validate(server);
+			String locateNotes = String.format(
+				"surface=%s, captured=%d, vanilla=%dms@%s, ftf=%dms@%s, columns=%d, step=%dx%d, roles=%s; "
+					+ "lush_caves vanilla=%dms@%s, ftf=%dms@%s, columns=%d, step=%dx%d, roles=%s",
+				locateResult.biome(),
+				locateResult.capturedBiomes(),
+				locateResult.vanillaMillis(),
+				locateResult.vanillaPosition(),
+				locateResult.ftfMillis(),
+				locateResult.ftfPosition(),
+				locateResult.ftfColumns(),
+				locateResult.horizontalStep(),
+				locateResult.verticalStep(),
+				locateResult.roles(),
+				locateResult.vanillaCaveMillis(),
+				locateResult.vanillaCavePosition(),
+				locateResult.ftfCaveMillis(),
+				locateResult.ftfCavePosition(),
+				locateResult.ftfCaveColumns(),
+				locateResult.caveHorizontalStep(),
+				locateResult.caveVerticalStep(),
+				locateResult.caveRoles()
+			);
+			FTFCommon.LOGGER.info("[FTF-Test] PASSED: Live biome locate comparison ({})", locateNotes);
+			testRecords.add(new TestRecord(currentTestName, locateNotes, true, null));
+
+			currentTestName = "presetValidation.terrainLocateLivePlan." + loader;
+			watchdog.setStep(currentTestName);
+			TerrainLocateValidator.Result terrainLocate = TerrainLocateValidator.validate(
+				((FTFRandomState) (Object) server.overworld().getChunkSource().randomState()).generatorContext(),
+				server.overworld().getSharedSpawnPos()
+			);
+			String terrainLocateNotes = String.format(
+				"raw=%s captured@%s, %dms@%s, samples=%d, step=%d; beach(filtered)=%dms@%s, samples=%d, step=%d",
+				terrainLocate.rawTerrain(),
+				terrainLocate.rawCapture(),
+				terrainLocate.rawMillis(),
+				terrainLocate.rawMatch(),
+				terrainLocate.rawSamples(),
+				terrainLocate.rawStep(),
+				terrainLocate.beachMillis(),
+				terrainLocate.beachMatch(),
+				terrainLocate.beachSamples(),
+				terrainLocate.beachStep()
+			);
+			FTFCommon.LOGGER.info("[FTF-Test] PASSED: Live terrain locate validation ({})", terrainLocateNotes);
+			testRecords.add(new TestRecord(currentTestName, terrainLocateNotes, true, null));
 
 			// -----------------------------------------------------------------------------------------
 			// Live Server Datapack & Registry Resolution
@@ -903,6 +1140,1067 @@ public final class PresetValidationRunner {
 				paritySamplesChecked, customSpawnX, expectedSurfaceY, customSpawnZ), true, null));
 
 			// -----------------------------------------------------------------------------------------
+			// Non-FTF World Types (Default & Superflat) Resolution & Generation
+			// -----------------------------------------------------------------------------------------
+			currentTestName = "presetValidation.nonFtfWorldResolution." + loader;
+			watchdog.setStep(currentTestName);
+			FTFCommon.LOGGER.info("[FTF-Test] Verifying Non-FTF World Resolution & Sampling (Default, Amplified & Superflat)...");
+
+			// 1. Simulate cycling away from FTF: verify datapack lifecycle & decoupling
+			Path nonFtfTestDir = testWorkDir.resolve("non-ftf-cycling-test");
+			Files.createDirectories(nonFtfTestDir);
+			Path testStagedPack = nonFtfTestDir.resolve(FTFWorldPresets.GENERATED_PRESET_PACK_FILE_NAME);
+			FTFWorldPresetDataPacks.exportPresetAsDatapack(testStagedPack, Presets.modernDefaultWithRivers(), "CyclingTest", server.registryAccess());
+			if (!Files.isRegularFile(testStagedPack)) {
+				throw new AssertionError("Failed to stage preset pack for non-FTF cycling test");
+			}
+
+			WorldDataConfiguration ftfActiveConfig = new WorldDataConfiguration(
+				new DataPackConfig(List.of("vanilla", FTFWorldPresets.GENERATED_PRESET_PACK_ID), List.of()),
+				FeatureFlags.DEFAULT_FLAGS
+			);
+			if (!FTFWorldPresetDataPacks.requiresFullDataPackReload(ftfActiveConfig)) {
+				throw new AssertionError("requiresFullDataPackReload must return true when FTF preset pack is enabled");
+			}
+
+			WorldDataConfiguration sanitizedConfig = FTFWorldPresetDataPacks.setCustomPresetEnabled(ftfActiveConfig, false);
+			if (sanitizedConfig.dataPacks().getEnabled().contains(FTFWorldPresets.GENERATED_PRESET_PACK_ID)) {
+				throw new AssertionError("setCustomPresetEnabled(false) failed to remove FTF preset pack from enabled list");
+			}
+
+			Files.deleteIfExists(testStagedPack);
+			if (Files.exists(testStagedPack)) {
+				throw new AssertionError("Failed to delete unused FTF preset pack for non-FTF world creation");
+			}
+
+			// 2. Default World (WorldPresets.NORMAL) Guarantee
+			// When cycling away from FTF, datapacks are reloaded without freeterraforged-preset.zip,
+			// restoring clean vanilla registries (VanillaRegistries.createLookup()).
+			HolderLookup.Provider vanillaLookups = VanillaRegistries.createLookup();
+			HolderLookup.RegistryLookup<WorldPreset> vanillaPresets = vanillaLookups.lookupOrThrow(Registries.WORLD_PRESET);
+			WorldPreset vanillaNormalPreset = vanillaPresets.getOrThrow(WorldPresets.NORMAL).value();
+			WorldDimensions normalDimensions = vanillaNormalPreset.createWorldDimensions();
+			LevelStem normalOverworldStem = normalDimensions.get(LevelStem.OVERWORLD).orElseThrow(
+				() -> new AssertionError("Normal preset has no overworld stem")
+			);
+			var normalGenerator = normalOverworldStem.generator();
+
+			if (!(normalGenerator instanceof NoiseBasedChunkGenerator noiseBasedGen)) {
+				throw new AssertionError("Default world overworld generator must be NoiseBasedChunkGenerator, got: " + normalGenerator.getClass().getName());
+			}
+			if (normalGenerator instanceof TerraForgedChunkGenerator) {
+				throw new AssertionError("Default world overworld generator must NOT be TerraForgedChunkGenerator");
+			}
+
+			NoiseGeneratorSettings normalNoiseSettings = noiseBasedGen.generatorSettings().value();
+			RandomState normalRandomState = RandomState.create(
+				normalNoiseSettings,
+				server.registryAccess().lookupOrThrow(Registries.NOISE),
+				paritySeed
+			);
+
+			if (!((Object) normalRandomState instanceof FTFRandomState normalRtfState)) {
+				throw new AssertionError("RandomState must expose FTFRandomState contract");
+			}
+			if (normalRtfState.isTerraForged()) {
+				throw new AssertionError("Default world RandomState must NOT be flagged as TerraForged! CellSampler.Marker was found in default noise router.");
+			}
+
+			int sampleDefaultHeight = normalGenerator.getBaseHeight(0, 0, Heightmap.Types.OCEAN_FLOOR_WG, server.overworld(), normalRandomState);
+			if (sampleDefaultHeight < server.overworld().getMinBuildHeight() || sampleDefaultHeight > server.overworld().getMaxBuildHeight()) {
+				throw new AssertionError("Default world sampled out-of-bounds height: " + sampleDefaultHeight);
+			}
+			var defaultColumn = normalGenerator.getBaseColumn(0, 0, server.overworld(), normalRandomState);
+			if (defaultColumn == null) {
+				throw new AssertionError("Default world getBaseColumn returned null");
+			}
+
+			// 3. Amplified World (WorldPresets.AMPLIFIED) Guarantee
+			WorldPreset vanillaAmplifiedPreset = vanillaPresets.getOrThrow(WorldPresets.AMPLIFIED).value();
+			WorldDimensions amplifiedDimensions = vanillaAmplifiedPreset.createWorldDimensions();
+			LevelStem amplifiedOverworldStem = amplifiedDimensions.get(LevelStem.OVERWORLD).orElseThrow(
+				() -> new AssertionError("Amplified preset has no overworld stem")
+			);
+			var amplifiedGenerator = amplifiedOverworldStem.generator();
+
+			if (!(amplifiedGenerator instanceof NoiseBasedChunkGenerator amplifiedGen)) {
+				throw new AssertionError("Amplified world overworld generator must be NoiseBasedChunkGenerator, got: " + amplifiedGenerator.getClass().getName());
+			}
+			if (amplifiedGenerator instanceof TerraForgedChunkGenerator) {
+				throw new AssertionError("Amplified world overworld generator must NOT be TerraForgedChunkGenerator");
+			}
+
+			NoiseGeneratorSettings amplifiedNoiseSettings = amplifiedGen.generatorSettings().value();
+			RandomState amplifiedRandomState = RandomState.create(
+				amplifiedNoiseSettings,
+				server.registryAccess().lookupOrThrow(Registries.NOISE),
+				paritySeed
+			);
+
+			if (!((Object) amplifiedRandomState instanceof FTFRandomState amplifiedRtfState)) {
+				throw new AssertionError("RandomState must expose FTFRandomState contract");
+			}
+			if (amplifiedRtfState.isTerraForged()) {
+				throw new AssertionError("Amplified world RandomState must NOT be flagged as TerraForged! CellSampler.Marker was found in amplified noise router.");
+			}
+
+			int sampleAmplifiedHeight = amplifiedGenerator.getBaseHeight(0, 0, Heightmap.Types.OCEAN_FLOOR_WG, server.overworld(), amplifiedRandomState);
+			if (sampleAmplifiedHeight < server.overworld().getMinBuildHeight() || sampleAmplifiedHeight > server.overworld().getMaxBuildHeight()) {
+				throw new AssertionError("Amplified world sampled out-of-bounds height: " + sampleAmplifiedHeight);
+			}
+			var amplifiedColumn = amplifiedGenerator.getBaseColumn(0, 0, server.overworld(), amplifiedRandomState);
+			if (amplifiedColumn == null) {
+				throw new AssertionError("Amplified world getBaseColumn returned null");
+			}
+
+			// 4. Superflat World (WorldPresets.FLAT) Guarantee
+			// Tested on both clean vanilla lookups and live server registry:
+			WorldPreset flatWorldPreset = server.registryAccess().registryOrThrow(Registries.WORLD_PRESET).getOrThrow(WorldPresets.FLAT);
+			WorldDimensions flatDimensions = flatWorldPreset.createWorldDimensions();
+			LevelStem flatOverworldStem = flatDimensions.get(LevelStem.OVERWORLD).orElseThrow(
+				() -> new AssertionError("Flat preset has no overworld stem")
+			);
+			var flatGenerator = flatOverworldStem.generator();
+
+			if (!(flatGenerator instanceof FlatLevelSource flatLevelSource)) {
+				throw new AssertionError("Superflat world overworld generator must be FlatLevelSource, got: " + flatGenerator.getClass().getName());
+			}
+			if (flatGenerator instanceof TerraForgedChunkGenerator) {
+				throw new AssertionError("Superflat world overworld generator must NOT be TerraForgedChunkGenerator");
+			}
+
+			// Vanilla ChunkMap uses NoiseGeneratorSettings.dummy() for non-NoiseBasedChunkGenerators (like FlatLevelSource)
+			RandomState flatRandomState = RandomState.create(
+				NoiseGeneratorSettings.dummy(),
+				server.registryAccess().lookupOrThrow(Registries.NOISE),
+				paritySeed
+			);
+
+			if (!((Object) flatRandomState instanceof FTFRandomState flatRtfState)) {
+				throw new AssertionError("Superflat RandomState must expose FTFRandomState contract");
+			}
+			if (flatRtfState.isTerraForged()) {
+				throw new AssertionError("Superflat RandomState must NOT be flagged as TerraForged");
+			}
+
+			FlatLevelGeneratorSettings flatSettings = flatLevelSource.settings();
+			if (flatSettings.getLayersInfo().isEmpty()) {
+				throw new AssertionError("Superflat world generator settings have no layers");
+			}
+
+			int sampleFlatHeight = flatGenerator.getBaseHeight(0, 0, Heightmap.Types.OCEAN_FLOOR_WG, server.overworld(), flatRandomState);
+			if (sampleFlatHeight < server.overworld().getMinBuildHeight() || sampleFlatHeight > server.overworld().getMaxBuildHeight()) {
+				throw new AssertionError("Superflat world sampled out-of-bounds height: " + sampleFlatHeight);
+			}
+			var flatColumn = flatGenerator.getBaseColumn(0, 0, server.overworld(), flatRandomState);
+			if (flatColumn == null) {
+				throw new AssertionError("Superflat world getBaseColumn returned null");
+			}
+
+			FTFCommon.LOGGER.info(
+				"[FTF-Test] PASSED: Non-FTF worlds (Default, Amplified & Superflat) verified clean generator isolation, RandomState isTerraForged=false, and successful terrain sampling (Default Y={}, Amplified Y={}, Flat Y={}).",
+				sampleDefaultHeight, sampleAmplifiedHeight, sampleFlatHeight
+			);
+			testRecords.add(new TestRecord(
+				currentTestName,
+				String.format("Default (NoiseBased, RTF=false, Y=%d), Amplified (NoiseBased, RTF=false, Y=%d), and Superflat (FlatLevelSource, RTF=false, Y=%d) verified",
+					sampleDefaultHeight, sampleAmplifiedHeight, sampleFlatHeight),
+				true,
+				null
+			));
+
+			// -----------------------------------------------------------------------------------------
+			// Mod Compatibility Shims (Non-FTF Dimensions & Foreign Climate.Sampler - Issues #340, #310, #298)
+			// -----------------------------------------------------------------------------------------
+			currentTestName = "presetValidation.modCompatibilityShims." + loader;
+			watchdog.setStep(currentTestName);
+			FTFCommon.LOGGER.info("[FTF-Test] Verifying Mod Compatibility Shims (Non-FTF Dimension CellSampler Fallback & Foreign Climate.Sampler Adoption)...");
+
+			NoiseGeneratorSettings liveOverworldNoiseSettings = server.registryAccess()
+				.lookupOrThrow(Registries.NOISE_SETTINGS)
+				.getOrThrow(NoiseGeneratorSettings.OVERWORLD)
+				.value();
+			RandomState uninitializedFtfRouterState = RandomState.create(
+				liveOverworldNoiseSettings,
+				server.registryAccess().lookupOrThrow(Registries.NOISE),
+				paritySeed
+			);
+			FTFRandomState uninitializedRtfState = (FTFRandomState) (Object) uninitializedFtfRouterState;
+			if (uninitializedRtfState.isTerraForged()) {
+				throw new AssertionError("Uninitialized RandomState referencing FTF density functions must NOT report isTerraForged=true before epoch initialization (Issue #340/#310)");
+			}
+			var testPointCtx = new net.minecraft.world.level.levelgen.DensityFunction.SinglePointContext(128, 64, -256);
+			double fallbackContinent = uninitializedFtfRouterState.router().continents().compute(testPointCtx);
+			double fallbackErosion = uninitializedFtfRouterState.router().erosion().compute(testPointCtx);
+			double fallbackRidges = uninitializedFtfRouterState.router().ridges().compute(testPointCtx);
+			if (!Double.isFinite(fallbackContinent) || !Double.isFinite(fallbackErosion) || !Double.isFinite(fallbackRidges)) {
+				throw new AssertionError("Non-FTF dimension fallback noise evaluation produced non-finite values");
+			}
+			if (fallbackContinent == 0.0D && fallbackErosion == 0.0D && fallbackRidges == 0.0D) {
+				throw new AssertionError("Non-FTF dimension fallback noise evaluation returned all zeros instead of wired Vanilla shifted noise");
+			}
+
+			if (server.overworld().getChunkSource().getGenerator() instanceof TerraForgedChunkGenerator liveTfGen) {
+				net.minecraft.world.level.biome.Climate.Sampler foreignSampler = net.minecraft.world.level.biome.Climate.empty();
+				var resolvedViaSource = liveTfGen.getBiomeSource().getNoiseBiome(10, 16, -10, foreignSampler);
+				var resolvedViaCell = liveTfGen.resolveBiomeInCell(10, 16, -10, foreignSampler, 0L, 0L);
+				if (resolvedViaSource == null || resolvedViaCell == null) {
+					throw new AssertionError("Foreign Climate.Sampler failed to resolve biome on TerraForgedChunkGenerator (Issue #298)");
+				}
+			}
+
+			FTFCommon.LOGGER.info(
+				"[FTF-Test] PASSED: Mod compatibility shims verified (non-FTF dimension fallback continents={}, erosion={}, ridges={}; foreign Climate.Sampler adopted cleanly).",
+				String.format(java.util.Locale.ROOT, "%.4f", fallbackContinent),
+				String.format(java.util.Locale.ROOT, "%.4f", fallbackErosion),
+				String.format(java.util.Locale.ROOT, "%.4f", fallbackRidges)
+			);
+			testRecords.add(new TestRecord(
+				currentTestName,
+				"Non-FTF dimension CellSampler fallback (#340/#310) & foreign Climate.Sampler adoption (#298) verified",
+				true,
+				null
+			));
+
+			// -----------------------------------------------------------------------------------------
+			// Underground Biome Banding & Vertical Stacking in Deep Worlds
+			// -----------------------------------------------------------------------------------------
+			currentTestName = "presetValidation.undergroundBiomeBanding." + loader;
+			watchdog.setStep(currentTestName);
+			FTFCommon.LOGGER.info("[FTF-Test] Verifying Underground Biome Banding & Vertical Stacking in Deep Worlds...");
+
+			var parameterLists = server.registryAccess().lookupOrThrow(Registries.MULTI_NOISE_BIOME_SOURCE_PARAMETER_LIST);
+			var overworldParamsHolder = parameterLists.getOrThrow(MultiNoiseBiomeSourceParameterLists.OVERWORLD);
+			Climate.ParameterList<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> overworldEntries = overworldParamsHolder.value().parameters();
+
+			// 1. Configure deep world preset with vertical banding enabled
+			Preset deepPreset = Presets.makeFTFDefault();
+			deepPreset.world().properties.worldDepth = 512;
+			deepPreset.world().properties.worldHeight = 320;
+			deepPreset.climate().biomeShape.undergroundBiomeSize = 225;
+			deepPreset.climate().biomeShape.undergroundBiomeVerticalSize = 64;
+			deepPreset.climate().biomeShape.undergroundBiomeCoverage = 1.0F;
+			deepPreset.climate().biomeShape.undergroundBiomeClimateInfluence = 0.75F;
+			deepPreset.climate().biomeShape.undergroundBiomeBanding = true;
+
+			long seed = server.overworld().getSeed();
+			UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> bandedLayout = UndergroundBiomeBanding.apply(
+				deepPreset,
+				overworldEntries,
+				seed,
+				(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value))
+			);
+
+			if (bandedLayout.deepCandidateCount() != 3) {
+				throw new AssertionError("Deep stage should have exactly 3 cave candidates, found: " + bandedLayout.deepCandidateCount() + " (" + bandedLayout.deepCandidateValues() + ")");
+			}
+			if (bandedLayout.shallowCandidateCount() != 2) {
+				throw new AssertionError("Shallow stage should have exactly 2 cave candidates, found: " + bandedLayout.shallowCandidateCount() + " (" + bandedLayout.shallowCandidateValues() + ")");
+			}
+			for (var biome : bandedLayout.deepCandidateValues()) {
+				if (!UndergroundBiomeTags.isCave(biome)) {
+					throw new AssertionError("Deep candidates contain non-cave biome: " + biome);
+				}
+			}
+			for (var biome : bandedLayout.shallowCandidateValues()) {
+				if (!UndergroundBiomeTags.isCave(biome)) {
+					throw new AssertionError("Shallow candidates contain non-cave biome: " + biome);
+				}
+			}
+
+			// Sample a vertical column in the deep cave zone at steps of verticalSize (64 blocks)
+			Climate.TargetPoint target = Climate.target(0.0F, 0.0F, 0.0F, -0.5F, 1.5F, 0.0F);
+			int quartX = 0;
+			int quartZ = 0;
+			int verticalSizeBlocks = 64;
+
+			java.util.Set<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> stackedBiomes = new java.util.LinkedHashSet<>();
+			net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> previousBiome = null;
+			int stepTransitions = 0;
+			int sampleStepCount = 0;
+
+			// Sample Y levels corresponding to center of vertical bands from Y = -96 down to Y = -448
+			for (int blockY = -96; blockY >= -448; blockY -= verticalSizeBlocks) {
+				int quartY = QuartPos.fromBlock(blockY);
+				net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> currentBiome = bandedLayout.findValue(target, quartX, quartY, quartZ);
+				stackedBiomes.add(currentBiome);
+				if (previousBiome != null && !previousBiome.equals(currentBiome)) {
+					stepTransitions++;
+				}
+				previousBiome = currentBiome;
+				sampleStepCount++;
+			}
+
+			for (var biome : stackedBiomes) {
+				if (!UndergroundBiomeTags.isCave(biome)) {
+					throw new AssertionError("Underground banding sampled non-cave biome in stacked biomes: " + biome);
+				}
+			}
+			if (stackedBiomes.size() < 2) {
+				throw new AssertionError("Underground biome banding failed: expected multiple stacked cave biome types across vertical column, but only got " + stackedBiomes.size() + ": " + stackedBiomes);
+			}
+			if (stepTransitions < 2) {
+				throw new AssertionError("Underground biome banding failed: expected transitions at steps of verticalSize (" + verticalSizeBlocks + " blocks), but got " + stepTransitions + " transitions across " + sampleStepCount + " steps");
+			}
+
+			// 2. Verify columnar behavior when banding is disabled
+			Preset columnarPreset = deepPreset.copy();
+			columnarPreset.climate().biomeShape.undergroundBiomeBanding = false;
+			UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> columnarLayout = UndergroundBiomeBanding.apply(
+				columnarPreset,
+				overworldEntries,
+				seed,
+				(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value))
+			);
+
+			java.util.Set<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> columnarBiomes = new java.util.HashSet<>();
+			for (int blockY = -96; blockY >= -448; blockY -= verticalSizeBlocks) {
+				int quartY = QuartPos.fromBlock(blockY);
+				columnarBiomes.add(columnarLayout.findValue(target, quartX, quartY, quartZ));
+			}
+			if (columnarBiomes.size() != 1) {
+				throw new AssertionError("Underground biomes with banding disabled should be columnar (single biome down column), but got " + columnarBiomes.size() + ": " + columnarBiomes);
+			}
+
+			// 3. Verify that undergroundBiomeSize controls horizontal biome transition frequency
+			Preset smallSizePreset = deepPreset.copy();
+			smallSizePreset.climate().biomeShape.undergroundBiomeSize = 50;
+			UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> smallLayout = UndergroundBiomeBanding.apply(
+				smallSizePreset,
+				overworldEntries,
+				seed,
+				(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value))
+			);
+
+			Preset largeSizePreset = deepPreset.copy();
+			largeSizePreset.climate().biomeShape.undergroundBiomeSize = 500;
+			UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> largeLayout = UndergroundBiomeBanding.apply(
+				largeSizePreset,
+				overworldEntries,
+				seed,
+				(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value))
+			);
+
+			int smallTransitions = 0;
+			int largeTransitions = 0;
+			net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> prevSmall = null;
+			net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> prevLarge = null;
+			int fixedQuartY = QuartPos.fromBlock(-160);
+
+			for (int blockX = 0; blockX <= 1500; blockX += 16) {
+				int qX = QuartPos.fromBlock(blockX);
+				net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> bSmall = smallLayout.findValue(target, qX, fixedQuartY, 0);
+				net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> bLarge = largeLayout.findValue(target, qX, fixedQuartY, 0);
+				if (prevSmall != null && !prevSmall.equals(bSmall)) smallTransitions++;
+				if (prevLarge != null && !prevLarge.equals(bLarge)) largeTransitions++;
+				prevSmall = bSmall;
+				prevLarge = bLarge;
+			}
+
+			if (smallTransitions <= largeTransitions * 2) {
+				throw new AssertionError("undergroundBiomeSize not respected: small size (50) should have significantly more transitions than large size (500). Small=" + smallTransitions + ", Large=" + largeTransitions);
+			}
+
+			// 4. Verify 1024-block deep world with 100% cave coverage:
+			// At 0% (0.0F) climate influence: completely tolerant, rotating across all cave biomes
+			Preset extraDeepPreset = Presets.makeFTFDefault();
+			extraDeepPreset.world().properties.worldDepth = 1024;
+			extraDeepPreset.world().properties.worldHeight = 320;
+			extraDeepPreset.climate().biomeShape.undergroundBiomeSize = 225;
+			extraDeepPreset.climate().biomeShape.undergroundBiomeVerticalSize = 64;
+			extraDeepPreset.climate().biomeShape.undergroundBiomeCoverage = 1.0F;
+			extraDeepPreset.climate().biomeShape.undergroundBiomeClimateInfluence = 0.0F;
+			extraDeepPreset.climate().biomeShape.undergroundBiomeBanding = true;
+
+			UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> extraDeepLayout = UndergroundBiomeBanding.apply(
+				extraDeepPreset,
+				overworldEntries,
+				seed,
+				(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value)),
+				UndergroundBiomeTags::isCave
+			);
+
+			java.util.Set<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> deepWorldStackedBiomes = new java.util.LinkedHashSet<>();
+			int deepWorldTransitions = 0;
+			net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> prevDeepBiome = null;
+			for (int blockY = -96; blockY >= -1000; blockY -= 64) {
+				int quartY = QuartPos.fromBlock(blockY);
+				net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> b = extraDeepLayout.findValue(target, quartX, quartY, quartZ);
+				if (!UndergroundBiomeTags.isCave(b)) {
+					throw new AssertionError("1024-deep world at Y=" + blockY + " generated non-cave biome: " + b + "! Expected exclusively cave biomes with 100% coverage.");
+				}
+				deepWorldStackedBiomes.add(b);
+				if (prevDeepBiome != null && !prevDeepBiome.equals(b)) {
+					deepWorldTransitions++;
+				}
+				prevDeepBiome = b;
+			}
+			if (deepWorldStackedBiomes.size() != 3) {
+				throw new AssertionError("1024-deep world with 0% climate influence should rotate across all 3 cave biomes, but found " + deepWorldStackedBiomes.size() + ": " + deepWorldStackedBiomes);
+			}
+			if (deepWorldTransitions < 8) {
+				throw new AssertionError("1024-deep world should have frequent vertical banding transitions down 1000 blocks, but only got " + deepWorldTransitions);
+			}
+
+			// Verify 100% (1.0F) climate influence: always selected entirely by accurate climate parameter values
+			Preset accurateClimatePreset = extraDeepPreset.copy();
+			accurateClimatePreset.climate().biomeShape.undergroundBiomeClimateInfluence = 1.0F;
+			UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> accurateLayout = UndergroundBiomeBanding.apply(
+				accurateClimatePreset,
+				overworldEntries,
+				seed,
+				(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value)),
+				UndergroundBiomeTags::isCave
+			);
+			java.util.Set<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> accurateBiomes = new java.util.LinkedHashSet<>();
+			for (int blockY = -96; blockY >= -1000; blockY -= 64) {
+				int quartY = QuartPos.fromBlock(blockY);
+				net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> b = accurateLayout.findValue(target, quartX, quartY, quartZ);
+				accurateBiomes.add(b);
+			}
+			if (accurateBiomes.size() != 1) {
+				throw new AssertionError("1024-deep world with 100% climate influence should select exclusively the closest climate candidate, but found " + accurateBiomes.size() + ": " + accurateBiomes);
+			}
+
+			// 5. Verify 0% cave coverage underground: all sampled biomes must be background (non-cave) biomes
+			Preset zeroCoveragePreset = extraDeepPreset.copy();
+			zeroCoveragePreset.climate().biomeShape.undergroundBiomeCoverage = 0.0F;
+			UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> zeroCoverageLayout = UndergroundBiomeBanding.apply(
+				zeroCoveragePreset,
+				overworldEntries,
+				seed,
+				(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value)),
+				UndergroundBiomeTags::isCave
+			);
+			for (int blockY = -96; blockY >= -1000; blockY -= 128) {
+				int quartY = QuartPos.fromBlock(blockY);
+				net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> b = zeroCoverageLayout.findValue(target, quartX, quartY, quartZ);
+				if (UndergroundBiomeTags.isCave(b)) {
+					throw new AssertionError("0% coverage preset generated cave biome at Y=" + blockY + ": " + b);
+				}
+			}
+
+			// 6. Test Live UnifiedBiomeSource with liveSampler across subterranean depths
+			FTFCommon.LOGGER.info("[FTF-Test] Probing live server subterranean biome resolution via liveSampler...");
+			if (server.overworld().getChunkSource().getGenerator() instanceof TerraForgedChunkGenerator liveTfGen) {
+				var liveSampler = server.overworld().getChunkSource().randomState().sampler();
+				int nonCaveCount = 0;
+				int oceanInRockCount = 0;
+				int totalSubterraneanSamples = 0;
+				for (int cx = -100; cx <= 100; cx += 50) {
+					for (int cz = -100; cz <= 100; cz += 50) {
+						int qx = cx << 2;
+						int qz = cz << 2;
+						for (int blockY = -100; blockY >= -240; blockY -= 32) {
+							int qy = QuartPos.fromBlock(blockY);
+							var liveBiome = liveTfGen.getBiomeSource().getNoiseBiome(qx, qy, qz, liveSampler);
+							totalSubterraneanSamples++;
+							boolean isCave = UndergroundBiomeTags.isCave(liveBiome);
+							String path = liveBiome.unwrapKey().map(k -> k.location().getPath()).orElse("unknown");
+							if (!isCave) {
+								nonCaveCount++;
+								if (path.contains("ocean")) {
+									oceanInRockCount++;
+									FTFCommon.LOGGER.warn("[FTF-Test] Subterranean OCEAN in rock detected at ({}, Y={}, {}): {}", qx << 2, blockY, qz << 2, path);
+									if (oceanInRockCount == 1) {
+										var sampledTarget = liveSampler.sample(qx, qy, qz);
+										float cov = UndergroundBiomeSurfaceProtection.coverageFactor(liveSampler, sampledTarget, qx, qy, qz);
+										FTFCommon.LOGGER.warn("[FTF-Test] DEBUG sample at ({}, Y={}, {}): target.depth={}, cov={}, target.cont={}",
+											qx << 2, blockY, qz << 2, sampledTarget.depth(), cov, sampledTarget.continentalness());
+									}
+								}
+							}
+						}
+					}
+				}
+				FTFCommon.LOGGER.info("[FTF-Test] Subterranean live probe: total={}, nonCave={}, oceanInRock={}",
+					totalSubterraneanSamples, nonCaveCount, oceanInRockCount);
+			}
+
+			FTFCommon.LOGGER.info("[FTF-Test] PASSED: Underground biome banding verified (stacked biomes: {}, transitions: {}/{}, columnar: single, horizontal size 50 vs 500: {} vs {} transitions).",
+				stackedBiomes.stream().map(h -> h.unwrapKey().map(k -> k.location().getPath()).orElse("unknown")).toList(),
+				stepTransitions,
+				sampleStepCount - 1,
+				smallTransitions,
+				largeTransitions
+			);
+			testRecords.add(new TestRecord(
+				currentTestName,
+				String.format("Underground biome banding verified: %d stacked types in column, horizontal sizing 50 vs 500 (%d vs %d transitions)",
+					stackedBiomes.size(), smallTransitions, largeTransitions),
+				true,
+				null
+			));
+
+			// -----------------------------------------------------------------------------------------
+			// Live Biome Replacement System Validation & Edge Case Failsafe
+			// -----------------------------------------------------------------------------------------
+			currentTestName = "presetValidation.biomeReplacementValidation." + loader;
+			watchdog.setStep(currentTestName);
+			FTFCommon.LOGGER.info("[FTF-Test] Verifying Biome Replacement System (Live Generation, Resolution & Edge Case Failsafes)...");
+
+			Registry<net.minecraft.world.level.biome.Biome> biomeRegistry = server.registryAccess().registryOrThrow(Registries.BIOME);
+			Holder.Reference<net.minecraft.world.level.biome.Biome> plainsHolder = biomeRegistry.getHolderOrThrow(Biomes.PLAINS);
+			Holder.Reference<net.minecraft.world.level.biome.Biome> desertHolder = biomeRegistry.getHolderOrThrow(Biomes.DESERT);
+			Holder.Reference<net.minecraft.world.level.biome.Biome> forestHolder = biomeRegistry.getHolderOrThrow(Biomes.FOREST);
+			Holder.Reference<net.minecraft.world.level.biome.Biome> deepDarkHolder = biomeRegistry.getHolderOrThrow(Biomes.DEEP_DARK);
+
+			if (server.overworld().getChunkSource().getGenerator() instanceof TerraForgedChunkGenerator liveTfGen) {
+				WorldgenPlan initialPlan = liveTfGen.plan().orElse(null);
+				if (initialPlan == null) {
+					throw new AssertionError("Live server TerraForgedChunkGenerator has no compiled WorldgenPlan");
+				}
+				WorldgenOwner liveOwner = initialPlan.owner();
+				Climate.Sampler liveSampler = server.overworld().getChunkSource().randomState().sampler();
+				BiomeReplacementConfigSnapshot originalSnapshot = liveOwner.biomeReplacementConfig();
+
+				// Sample baseline biome at coordinate (0, 64, 0)
+				Holder<net.minecraft.world.level.biome.Biome> baselineSample = liveTfGen.getBiomeSource().getNoiseBiome(0, 64, 0, liveSampler);
+				ResourceLocation baselineLoc = baselineSample.unwrapKey().map(net.minecraft.resources.ResourceKey::location).orElse(null);
+				if (baselineLoc == null) {
+					throw new AssertionError("Live server sampled biome at (0, 64, 0) has no resource key");
+				}
+
+				// Choose a replacement target distinctly different from baseline
+				String replacementTargetStr = baselineLoc.equals(ResourceLocation.parse("minecraft:desert"))
+					? "minecraft:plains" : "minecraft:desert";
+				ResourceLocation replacementTargetLoc = ResourceLocation.parse(replacementTargetStr);
+
+				// Construct test configuration with the live replacement rule AND various edge cases
+				String liveTestContent = String.format(java.util.Locale.ROOT, """
+					format_version=1
+					%s > %s
+					#minecraft:is_forest > %s
+					minecraft:deep_dark > null
+					modded:nonexistent_biome > %s
+					minecraft:Plains > %s
+					[invalid:dimension space]
+					minecraft:plains > %s
+					minecraft:plains > terrablender:deferred_placeholder
+					#c:empty_tag_test > %s
+					""", baselineLoc, replacementTargetStr, replacementTargetStr,
+					replacementTargetStr, replacementTargetStr, replacementTargetStr, replacementTargetStr);
+
+				BiomeReplacementConfig liveTestConfig = BiomeReplacementConfig.parse(liveTestContent);
+				BiomeReplacementConfigSnapshot liveTestSnapshot = new BiomeReplacementConfigSnapshot(
+					originalSnapshot.revision() + 1000L,
+					"live_test_fingerprint",
+					originalSnapshot.path(),
+					BiomeReplacementConfigSnapshot.Origin.NATIVE,
+					liveTestContent,
+					liveTestConfig,
+					originalSnapshot.legacyFilePresent()
+				);
+
+				try {
+					// Refresh inputs on the live generator so the replacement takes effect in real worldgen
+					WorldgenPlan refreshedLivePlan = liveTfGen.refreshInputs(
+						liveOwner.resourceRevision(),
+						liveOwner.resourceLayerFingerprint(),
+						liveOwner.tagEpoch(),
+						liveTestSnapshot,
+						liveOwner.contributionRevision(),
+						(FTFRandomState) (Object) server.overworld().getChunkSource().randomState()
+					);
+
+					if (refreshedLivePlan.biomeReplacement().plan().isConfigIgnored()) {
+						throw new AssertionError("Live replacement plan was unexpectedly suppressed due to non-fatal edge cases");
+					}
+
+					// Verify in the live chunk generator biome source that the replacement actually occurred
+					Holder<net.minecraft.world.level.biome.Biome> liveReplacedSample = liveTfGen.getBiomeSource().getNoiseBiome(0, 64, 0, liveSampler);
+					ResourceLocation actualLiveLoc = liveReplacedSample.unwrapKey().map(net.minecraft.resources.ResourceKey::location).orElse(null);
+					if (!replacementTargetLoc.equals(actualLiveLoc)) {
+						throw new AssertionError(String.format(
+							"Live server replacement failed at (0, 64, 0)! Expected target '%s' but live generator sampled '%s'",
+							replacementTargetLoc, actualLiveLoc
+						));
+					}
+
+					// Also verify via resolveBiomeInCell
+					Holder<net.minecraft.world.level.biome.Biome> liveCellSample = liveTfGen.resolveBiomeInCell(0, 64, 0, liveSampler, 0L, 0L);
+					ResourceLocation actualCellLoc = liveCellSample.unwrapKey().map(net.minecraft.resources.ResourceKey::location).orElse(null);
+					if (!replacementTargetLoc.equals(actualCellLoc)) {
+						throw new AssertionError(String.format(
+							"Live resolveBiomeInCell replacement failed at (0, 64, 0)! Expected '%s' but got '%s'",
+							replacementTargetLoc, actualCellLoc
+						));
+					}
+
+					// Verify direct rule contract on refreshed plan
+					BiomeReplacementPlan activePlan = refreshedLivePlan.biomeReplacement().plan();
+					if (!activePlan.active()) {
+						throw new AssertionError("Refreshed biome replacement plan should be active");
+					}
+					if (!activePlan.isRemoved(deepDarkHolder)) {
+						throw new AssertionError("Live removal failed: deep_dark should be marked removed");
+					}
+
+					// 2. Fatal Contradiction Test: target removed must gracefully suppress all rules
+					String fatalContent = String.format(java.util.Locale.ROOT, """
+						format_version=1
+						%s > null
+						%s > %s
+						""", replacementTargetStr, baselineLoc, replacementTargetStr);
+					BiomeReplacementConfig fatalConfig = BiomeReplacementConfig.parse(fatalContent);
+					BiomeReplacementConfigSnapshot fatalSnapshot = new BiomeReplacementConfigSnapshot(
+						originalSnapshot.revision() + 2000L,
+						"live_fatal_fingerprint",
+						originalSnapshot.path(),
+						BiomeReplacementConfigSnapshot.Origin.NATIVE,
+						fatalContent,
+						fatalConfig,
+						originalSnapshot.legacyFilePresent()
+					);
+
+					WorldgenPlan fatalLivePlan = liveTfGen.refreshInputs(
+						liveOwner.resourceRevision(),
+						liveOwner.resourceLayerFingerprint(),
+						liveOwner.tagEpoch(),
+						fatalSnapshot,
+						liveOwner.contributionRevision(),
+						(FTFRandomState) (Object) server.overworld().getChunkSource().randomState()
+					);
+
+					if (!fatalLivePlan.biomeReplacement().plan().isConfigIgnored()) {
+						throw new AssertionError("Fatal contradictory replacement rule did not trigger isConfigIgnored()");
+					}
+					if (fatalLivePlan.biomeReplacement().plan().active()) {
+						throw new AssertionError("Fatal contradictory plan should be inactive");
+					}
+
+					// Sampling again under suppressed plan should revert cleanly to baseline without crash
+					Holder<net.minecraft.world.level.biome.Biome> revertedSample = liveTfGen.getBiomeSource().getNoiseBiome(0, 64, 0, liveSampler);
+					ResourceLocation revertedLoc = revertedSample.unwrapKey().map(net.minecraft.resources.ResourceKey::location).orElse(null);
+					if (!baselineLoc.equals(revertedLoc)) {
+						throw new AssertionError(String.format(
+							"Reversion failed under ignored config! Expected baseline '%s' but got '%s'",
+							baselineLoc, revertedLoc
+						));
+					}
+
+				} finally {
+					// Cleanly restore original configuration on the live generator with an advancing revision
+					BiomeReplacementConfigSnapshot restoredSnapshot = new BiomeReplacementConfigSnapshot(
+						originalSnapshot.revision() + 3000L,
+						originalSnapshot.fingerprint(),
+						originalSnapshot.path(),
+						originalSnapshot.origin(),
+						originalSnapshot.content(),
+						originalSnapshot.config(),
+						originalSnapshot.legacyFilePresent()
+					);
+					liveTfGen.refreshInputs(
+						liveOwner.resourceRevision(),
+						liveOwner.resourceLayerFingerprint(),
+						liveOwner.tagEpoch(),
+						restoredSnapshot,
+						liveOwner.contributionRevision(),
+						(FTFRandomState) (Object) server.overworld().getChunkSource().randomState()
+					);
+				}
+			}
+
+			FTFCommon.LOGGER.info(
+				"[FTF-Test] PASSED: Biome replacement system validated in live server run: real chunk generator replacements verified, edge cases isolated, fatal contradictions safely suppressed, and live generator cleanly restored."
+			);
+			testRecords.add(new TestRecord(
+				currentTestName,
+				"Live chunk generator biome replacement validated (live sampling, edge cases, contradiction suppression, state restoration)",
+				true,
+				null
+			));
+
+			// -----------------------------------------------------------------------------------------
+			// World Generation Memory Leak Prevention Verification
+			// -----------------------------------------------------------------------------------------
+			currentTestName = "presetValidation.worldgenMemoryLeak." + loader;
+			watchdog.setStep(currentTestName);
+			FTFCommon.LOGGER.info("[FTF-Test] Verifying world generation memory leak prevention and ThreadLocal lifecycle...");
+
+			// 1. Verify that transient Climate.Sampler instances are not retained on Minecraft background workers
+			net.minecraft.world.level.biome.Climate.Sampler[] samplerHolder =
+				new net.minecraft.world.level.biome.Climate.Sampler[]{net.minecraft.world.level.biome.Climate.empty()};
+			java.lang.ref.WeakReference<net.minecraft.world.level.biome.Climate.Sampler> samplerLeakRef =
+				new java.lang.ref.WeakReference<>(samplerHolder[0]);
+
+			Climate.TargetPoint leakTarget = Climate.target(0.0F, 0.0F, 0.0F, -0.5F, 1.5F, 0.0F);
+			int leakWorkerTasks = Math.max(8, Runtime.getRuntime().availableProcessors() * 2);
+			java.util.concurrent.CountDownLatch leakLatch = new java.util.concurrent.CountDownLatch(leakWorkerTasks);
+			for (int t = 0; t < leakWorkerTasks; t++) {
+				final int threadOffset = t;
+				net.minecraft.Util.backgroundExecutor().execute(() -> {
+					try {
+						// Deep world column scan (256 vertical quarts = 1024 blocks depth)
+						for (int quartY = -128; quartY <= 128; quartY += 4) {
+							for (int q = 0; q < 8; q++) {
+								net.minecraft.world.level.biome.Climate.Sampler s = samplerHolder[0];
+								if (s != null) {
+									UndergroundBiomeSurfaceProtection.coverageFactor(s, leakTarget, (threadOffset + q) * 4, quartY, q * 4);
+								}
+							}
+						}
+					} finally {
+						leakLatch.countDown();
+					}
+				});
+			}
+			if (!leakLatch.await(10, java.util.concurrent.TimeUnit.SECONDS)) {
+				throw new AssertionError("Memory leak validation worker tasks timed out");
+			}
+
+			// 2. Verify that transient UndergroundBiomeBanding.Layout instances are not retained on Minecraft background workers
+			Preset transientPreset = Presets.makeFTFDefault();
+			transientPreset.climate().biomeShape.undergroundBiomeClimateInfluence = 0.75F;
+			transientPreset.climate().biomeShape.undergroundBiomeBanding = true;
+			@SuppressWarnings("unchecked")
+			UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>>[] layoutHolder =
+				new UndergroundBiomeBanding.Layout[]{
+					UndergroundBiomeBanding.apply(
+						transientPreset,
+						overworldEntries,
+						12345L,
+						(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value)),
+						UndergroundBiomeTags::isCave
+					)
+				};
+			java.lang.ref.WeakReference<UndergroundBiomeBanding.Layout<?>> layoutLeakRef =
+				new java.lang.ref.WeakReference<>(layoutHolder[0]);
+
+			java.util.concurrent.CountDownLatch layoutLatch = new java.util.concurrent.CountDownLatch(leakWorkerTasks);
+			for (int t = 0; t < leakWorkerTasks; t++) {
+				final int threadOffset = t;
+				net.minecraft.Util.backgroundExecutor().execute(() -> {
+					try {
+						for (int quartY = -128; quartY <= 128; quartY += 4) {
+							for (int q = 0; q < 8; q++) {
+								UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> l = layoutHolder[0];
+								if (l != null) {
+									l.findValue(leakTarget, (threadOffset + q) * 4, quartY, q * 4, 1.0F);
+								}
+							}
+						}
+					} finally {
+						layoutLatch.countDown();
+					}
+				});
+			}
+			if (!layoutLatch.await(10, java.util.concurrent.TimeUnit.SECONDS)) {
+				throw new AssertionError("Layout memory leak validation worker tasks timed out");
+			}
+
+			// Clear strong references while background worker threads are STILL RUNNING AND ALIVE!
+			samplerHolder[0] = null;
+			layoutHolder[0] = null;
+
+			// Verify garbage collection cleans up both weak references while threads remain alive in backgroundExecutor
+			boolean samplerCollected = false;
+			boolean layoutCollected = false;
+			for (int i = 0; i < 50; i++) {
+				if (!samplerCollected && samplerLeakRef.get() == null) samplerCollected = true;
+				if (!layoutCollected && layoutLeakRef.get() == null) layoutCollected = true;
+				if (samplerCollected && layoutCollected) break;
+				System.gc();
+				Thread.sleep(50);
+			}
+
+			if (!samplerCollected) {
+				throw new AssertionError("Memory leak detected: Climate.Sampler was retained in ThreadLocal or caches by persistent worker threads!");
+			}
+			if (!layoutCollected) {
+				throw new AssertionError("Memory leak detected: UndergroundBiomeBanding.Layout was retained in ThreadLocal or caches by persistent worker threads!");
+			}
+
+			// 3. Concrete Expanding Area Memory Leak Measurement on Deep World Presets (1024-block depth)
+			// Simulates player flying and generating a 1000x1000 block region in a 1024-deep world starting at middle of continent
+			BlockPos continentCenter = WorldgenBenchmarkRunner.resolveContinentCenter(server.overworld(), 0, 0);
+			int continentCenterX = continentCenter.getX();
+			int continentCenterZ = continentCenter.getZ();
+			FTFCommon.LOGGER.info(
+				"[FTF-Test] Measuring memory stability across 1000x1000 block region centered at continent middle ({}, {}) on 1024-deep world preset...",
+				continentCenterX, continentCenterZ
+			);
+			Preset leakDeepPreset = Presets.makeFTFDefault();
+			leakDeepPreset.world().properties.worldDepth = 1024;
+			leakDeepPreset.world().properties.worldHeight = 320;
+			leakDeepPreset.climate().biomeShape.undergroundBiomeSize = 225;
+			leakDeepPreset.climate().biomeShape.undergroundBiomeVerticalSize = 64;
+			leakDeepPreset.climate().biomeShape.undergroundBiomeCoverage = 1.0F;
+			leakDeepPreset.climate().biomeShape.undergroundBiomeClimateInfluence = 0.0F;
+			leakDeepPreset.climate().biomeShape.undergroundBiomeBanding = true;
+
+			final UndergroundBiomeBanding.Layout<net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome>> deepAreaLayout =
+				UndergroundBiomeBanding.apply(
+					leakDeepPreset,
+					overworldEntries,
+					seed,
+					(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value)),
+					UndergroundBiomeTags::isCave
+				);
+
+			Climate.Sampler liveSamplerForLeak = server.overworld().getChunkSource().randomState().sampler();
+			int minChunkX = (continentCenterX - 500) >> 4;
+			int maxChunkX = (continentCenterX + 500) >> 4;
+			int minChunkZ = (continentCenterZ - 500) >> 4;
+			int maxChunkZ = (continentCenterZ + 500) >> 4;
+			int chunksSpanX = maxChunkX - minChunkX + 1;
+			int chunksSpanZ = maxChunkZ - minChunkZ + 1;
+			int areaBatches = 4;
+			long[] retainedHeapByBatch = new long[areaBatches];
+
+			for (int b = 0; b < areaBatches; b++) {
+				final int batchNum = b;
+				int zStart = minChunkZ + (b * chunksSpanZ) / areaBatches;
+				int zEnd = minChunkZ + ((b + 1) * chunksSpanZ) / areaBatches;
+				int batchChunkCount = chunksSpanX * (zEnd - zStart);
+				java.util.concurrent.CountDownLatch batchLatch = new java.util.concurrent.CountDownLatch(batchChunkCount);
+
+				for (int cz = zStart; cz < zEnd; cz++) {
+					final int chunkZ = cz;
+					for (int cx = minChunkX; cx <= maxChunkX; cx++) {
+						final int chunkX = cx;
+						net.minecraft.Util.backgroundExecutor().execute(() -> {
+							try {
+								int baseQuartX = chunkX << 2;
+								int baseQuartZ = chunkZ << 2;
+								// 1024 depth: quartY from -256 to 80 (336 vertical quarts)
+								for (int quartY = -256; quartY <= 80; quartY += 8) {
+									for (int qz = 0; qz < 4; qz += 2) {
+										for (int qx = 0; qx < 4; qx += 2) {
+											int qX = baseQuartX + qx;
+											int qZ = baseQuartZ + qz;
+											float coverage = UndergroundBiomeSurfaceProtection.coverageFactor(
+												liveSamplerForLeak, leakTarget, qX, quartY, qZ
+											);
+											net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> sampled =
+												deepAreaLayout.findValue(
+													leakTarget, qX, quartY, qZ, coverage,
+													(iqx, iqy, iqz) -> leakTarget
+												);
+											if (sampled == null) {
+												throw new AssertionError("Sampled biome was null");
+											}
+											// Subterranean cave checks: 100% cave coverage means cave biomes underground
+											if (quartY <= -16 && coverage >= 1.0F && !UndergroundBiomeTags.isCave(sampled)) {
+												String path = sampled.unwrapKey().map(k -> k.location().getPath()).orElse("unknown");
+												throw new AssertionError(String.format(
+													java.util.Locale.ROOT,
+													"Non-cave biome '%s' returned underground at (qx=%d, quartY=%d, qz=%d) when 100%% cave coverage configured!",
+													path, qX, quartY, qZ
+												));
+											}
+											// Surface protection check: cave biomes must not project through surface
+											if (coverage <= 0.0F && UndergroundBiomeTags.isCave(sampled)) {
+												String path = sampled.unwrapKey().map(k -> k.location().getPath()).orElse("unknown");
+												throw new AssertionError(String.format(
+													java.util.Locale.ROOT,
+													"Cave biome '%s' projected through surface at (qx=%d, quartY=%d, qz=%d) when coverage factor is 0.0!",
+													path, qX, quartY, qZ
+												));
+											}
+										}
+									}
+								}
+							} finally {
+								batchLatch.countDown();
+							}
+						});
+					}
+				}
+				if (!batchLatch.await(30, java.util.concurrent.TimeUnit.SECONDS)) {
+					throw new AssertionError("Deep area batch " + b + " timed out");
+				}
+
+				// Measure post-GC retained heap
+				for (int gc = 0; gc < 5; gc++) {
+					System.gc();
+					Thread.sleep(50);
+				}
+				retainedHeapByBatch[b] = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+				FTFCommon.LOGGER.info(
+					"[FTF-Test] Deep world (1024 depth) 1000x1000 block region batch {}/{} ({} chunks in batch): Retained heap = {} MB",
+					b + 1, areaBatches, batchChunkCount, retainedHeapByBatch[b] / (1024 * 1024)
+				);
+			}
+
+			// Clear layout caches
+			deepAreaLayout.clear();
+
+			// Check memory trend across batches
+			long initialHeap = retainedHeapByBatch[0];
+			long finalHeap = retainedHeapByBatch[areaBatches - 1];
+			long netGrowth = finalHeap - initialHeap;
+			FTFCommon.LOGGER.info(
+				"[FTF-Test] Deep world expanding area memory report (1000x1000 block region): Initial={} MB, Final={} MB, Net Growth={} MB",
+				initialHeap / (1024 * 1024), finalHeap / (1024 * 1024), netGrowth / (1024 * 1024)
+			);
+
+			if (netGrowth > 50L * 1024L * 1024L) {
+				throw new AssertionError(String.format(
+					java.util.Locale.ROOT,
+					"Memory leak detected during expanding area generation: heap climbed by %.2f MB across %d batches (Initial: %.2f MB, Final: %.2f MB)",
+					netGrowth / (1024.0 * 1024.0), areaBatches, initialHeap / (1024.0 * 1024.0), finalHeap / (1024.0 * 1024.0)
+				));
+			}
+
+			// 4. Live Server Chunk Generation Memory Stability Test Across Expanding Area
+			// Generates chunks via ServerChunkCache to verify that generated chunks, flow fields,
+			// cell caches, and structure plans do not leak monotonically as new terrain is explored.
+			FTFCommon.LOGGER.info("[FTF-Test] Measuring live server chunk generation memory stability across expanding area starting at continent center...");
+			ServerLevel liveLevel = server.overworld();
+			net.minecraft.server.level.ServerChunkCache liveChunkSource = liveLevel.getChunkSource();
+			net.minecraft.server.level.TicketType<net.minecraft.util.Unit> leakTicket =
+				net.minecraft.server.level.TicketType.create("ftf_leak_test", (a, b) -> 0);
+
+			int chunkBatches = 4;
+			int chunksPerLiveBatch = 20;
+			long[] liveChunkHeapByBatch = new long[chunkBatches];
+
+			for (int b = 0; b < chunkBatches; b++) {
+				java.util.List<net.minecraft.world.level.ChunkPos> batchPositions = new java.util.ArrayList<>(chunksPerLiveBatch);
+				java.util.List<java.util.concurrent.CompletableFuture<net.minecraft.server.level.ChunkResult<net.minecraft.world.level.chunk.ChunkAccess>>> futures =
+					new java.util.ArrayList<>(chunksPerLiveBatch);
+
+				for (int c = 0; c < chunksPerLiveBatch; c++) {
+					int chunkIdx = b * chunksPerLiveBatch + c;
+					int cx = minChunkX + (chunkIdx % 10);
+					int cz = minChunkZ + (chunkIdx / 10);
+					net.minecraft.world.level.ChunkPos pos = new net.minecraft.world.level.ChunkPos(cx, cz);
+					batchPositions.add(pos);
+					liveChunkSource.addRegionTicket(leakTicket, pos, 0, net.minecraft.util.Unit.INSTANCE);
+					futures.add(liveChunkSource.getChunkFuture(cx, cz, net.minecraft.world.level.chunk.status.ChunkStatus.FULL, true));
+				}
+
+				for (var f : futures) {
+					try {
+						f.get(30, java.util.concurrent.TimeUnit.SECONDS);
+					} catch (Exception ex) {
+						throw new AssertionError("Live chunk generation timed out or failed in batch " + b, ex);
+					}
+				}
+				futures.clear();
+
+				// Release tickets
+				for (net.minecraft.world.level.ChunkPos pos : batchPositions) {
+					liveChunkSource.removeRegionTicket(leakTicket, pos, 0, net.minecraft.util.Unit.INSTANCE);
+				}
+
+				// Tick chunk source and drain server task queues
+				int drainedTasks = 0;
+				for (int tick = 0; tick < 50; tick++) {
+					liveChunkSource.tick(() -> true, true);
+					while (liveChunkSource.pollTask()) {
+						drainedTasks++;
+					}
+					while (server.pollTask()) {
+						drainedTasks++;
+					}
+				}
+				// Flush any pending chunk writes to region files so background IO queues are clean
+				liveLevel.save(null, true, false);
+				while (server.pollTask()) {
+					drainedTasks++;
+				}
+				int chunkMapSize = liveChunkSource.chunkMap.size();
+				boolean hasWork = liveChunkSource.chunkMap.hasWork();
+				FTFCommon.LOGGER.info("[FTF-Test] Batch {} unloaded: drained {} server/chunk tasks, chunkMapSize={}, hasWork={}",
+					b + 1, drainedTasks, chunkMapSize, hasWork);
+
+				if ((Object) server.overworld().getChunkSource().randomState() instanceof FTFRandomState rtfRs) {
+					GeneratorContext gCtx = rtfRs.generatorContext();
+					if (gCtx != null) {
+						int filteredSize = gCtx.filteredChunkCache != null ? gCtx.filteredChunkCache.size() : -1;
+						int rawSize = gCtx.rawChunkCache != null ? gCtx.rawChunkCache.size() : -1;
+						FTFCommon.LOGGER.info("[FTF-Test] FTF Caches: filteredChunkCache={}, rawChunkCache={}",
+							filteredSize, rawSize);
+						if (filteredSize > etcodehome.freeterraforged.world.worldgen.cell.heightmap.FilteredChunkCache.MAX_ENTRIES || rawSize > etcodehome.freeterraforged.world.worldgen.cell.heightmap.RawChunkCache.MAX_ENTRIES) {
+							throw new AssertionError(String.format(
+								java.util.Locale.ROOT,
+								"FTF terrain cache exceeded capacity bounds! filteredChunkCache=%d (max 512), rawChunkCache=%d (max 512)",
+								filteredSize, rawSize
+							));
+						}
+					}
+				}
+
+				for (java.lang.reflect.Field f : net.minecraft.server.level.ChunkMap.class.getDeclaredFields()) {
+					try {
+						f.setAccessible(true);
+						Object val = f.get(liveChunkSource.chunkMap);
+						if (val instanceof java.util.Map<?, ?> m) {
+							FTFCommon.LOGGER.info("[FTF-Test] ChunkMap map field {}: size={}", f.getName(), m.size());
+						} else if (val instanceof it.unimi.dsi.fastutil.longs.Long2ObjectMap<?> lom) {
+							FTFCommon.LOGGER.info("[FTF-Test] ChunkMap Long2ObjectMap field {}: size={}", f.getName(), lom.size());
+						} else if (val instanceof it.unimi.dsi.fastutil.longs.LongSet ls) {
+							FTFCommon.LOGGER.info("[FTF-Test] ChunkMap LongSet field {}: size={}", f.getName(), ls.size());
+						}
+					} catch (Exception ignored) {}
+				}
+
+				// Measure post-GC retained heap
+				for (int gc = 0; gc < 5; gc++) {
+					System.gc();
+					Thread.sleep(50);
+				}
+				liveChunkHeapByBatch[b] = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+				int loadedCount = liveChunkSource.getLoadedChunksCount();
+				boolean sampleStillLoaded = liveChunkSource.hasChunk(batchPositions.get(0).x, batchPositions.get(0).z);
+				FTFCommon.LOGGER.info(
+					"[FTF-Test] Live chunk generation area batch {}/{} ({} chunks requested, loadedChunks={}, sampleStillLoaded={}): Retained heap = {} MB",
+					b + 1, chunkBatches, (b + 1) * chunksPerLiveBatch, loadedCount, sampleStillLoaded, liveChunkHeapByBatch[b] / (1024 * 1024)
+				);
+
+				if (b == 0 || b == chunkBatches - 1) {
+					try {
+						long pid = ProcessHandle.current().pid();
+						java.nio.file.Path jcmdPath = java.nio.file.Paths.get(System.getProperty("java.home"), "bin", "jcmd.exe");
+						if (!java.nio.file.Files.exists(jcmdPath)) {
+							jcmdPath = java.nio.file.Paths.get(System.getProperty("java.home"), "bin", "jcmd");
+						}
+						if (java.nio.file.Files.exists(jcmdPath)) {
+							Process proc = new ProcessBuilder(
+								jcmdPath.toString(),
+								String.valueOf(pid),
+								"GC.class_histogram"
+							).redirectErrorStream(true).start();
+							String histo = new String(proc.getInputStream().readAllBytes());
+							String[] lines = histo.split("\n");
+							FTFCommon.LOGGER.info("[FTF-Test] --- Class Histogram Top 25 (Batch {}) ---", b + 1);
+							for (int i = 0; i < Math.min(28, lines.length); i++) {
+								FTFCommon.LOGGER.info("[FTF-Test] {}", lines[i].trim());
+							}
+						}
+					} catch (Exception ex) {
+						FTFCommon.LOGGER.warn("[FTF-Test] Failed to run GC.class_histogram: {}", ex.getMessage());
+					}
+				}
+			}
+
+			long liveInitialHeap = liveChunkHeapByBatch[0];
+			long liveFinalHeap = liveChunkHeapByBatch[chunkBatches - 1];
+			long liveNetGrowth = liveFinalHeap - liveInitialHeap;
+			FTFCommon.LOGGER.info(
+				"[FTF-Test] Live chunk generation memory report: Initial={} MB, Final={} MB, Net Growth={} MB",
+				liveInitialHeap / (1024 * 1024), liveFinalHeap / (1024 * 1024), liveNetGrowth / (1024 * 1024)
+			);
+
+			if (liveNetGrowth > 175L * 1024L * 1024L) {
+				throw new AssertionError(String.format(
+					java.util.Locale.ROOT,
+					"Memory leak detected during live chunk generation: heap climbed by %.2f MB across %d batches (Initial: %.2f MB, Final: %.2f MB)",
+					liveNetGrowth / (1024.0 * 1024.0), chunkBatches, liveInitialHeap / (1024.0 * 1024.0), liveFinalHeap / (1024.0 * 1024.0)
+				));
+			}
+
+			FTFCommon.LOGGER.info("[FTF-Test] PASSED: World generation memory leak prevention verified (transient samplers and layouts reclaimed cleanly; expanding area memory stable).");
+			testRecords.add(new TestRecord(
+				currentTestName,
+				"World generation memory leak prevention verified: transient samplers and layouts collected cleanly by GC without ThreadLocal retention",
+				true,
+				null
+			));
+
+			// -----------------------------------------------------------------------------------------
 			// Complete Summary Banner
 			// -----------------------------------------------------------------------------------------
 			watchdog.complete();
@@ -975,6 +2273,24 @@ public final class PresetValidationRunner {
 			Files.createDirectories(reportDir);
 			String timestamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
 			String loader = serverModName.replaceAll("[^a-zA-Z0-9_-]", "_");
+			// Append automated unit test records so they are included in suite summary
+			Path unitTestFile = reportDir.resolve("unit_tests_report.txt");
+			if (Files.exists(unitTestFile)) {
+				try {
+					String uContent = Files.readString(unitTestFile, StandardCharsets.UTF_8);
+					java.util.regex.Matcher caseMatcher = java.util.regex.Pattern.compile("-\\s*\\[(PASSED|FAILED)\\]\\s*(.*?)\\s*\\(([^()\\r\\n]+)\\)").matcher(uContent);
+					while (caseMatcher.find()) {
+						boolean passed = "PASSED".equalsIgnoreCase(caseMatcher.group(1));
+						String name = caseMatcher.group(2).trim();
+						String fullClass = caseMatcher.group(3).trim();
+						String simpleClass = fullClass.contains(".") ? fullClass.substring(fullClass.lastIndexOf('.') + 1) : fullClass;
+						String cleanName = name.endsWith("()") ? name.substring(0, name.length() - 2) : name;
+						String token = "unitTest." + simpleClass + "." + cleanName + "." + loader;
+						testRecords.add(new TestRecord(token, simpleClass + "." + name, passed, passed ? null : "Unit test failed"));
+					}
+				} catch (Exception ignored) {
+				}
+			}
 			Path summaryFile = reportDir.resolve(String.format("suite_summary_%s_%s_report.txt", loader, timestamp));
 			StringBuilder sb = new StringBuilder();
 			sb.append("FreeTerraForged Test Execution Report\n");

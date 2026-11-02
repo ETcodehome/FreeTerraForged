@@ -116,7 +116,7 @@ max-tick-time=-1
 tasks.register("runPresetTest") {
     group = "verification"
     description = "Runs the headless FreeTerraForged preset persistence and resolution tests"
-    dependsOn("runPresetTestServer")
+    dependsOn(":common:test", "runPresetTestServer")
 }
 
 processResources {

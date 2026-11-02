@@ -80,7 +80,7 @@ public class DecorateSnowFeature extends Feature<Config> {
 					}
 					int scaledY = levels.scale(cell.height);
 			        int surfaceY = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
-			        if(scaledY == surfaceY && scaledY >= generator.getSeaLevel()) {
+			        if(Math.abs(scaledY - surfaceY) <= 2 && surfaceY >= generator.getSeaLevel()) {
 				        pos.set(worldX, surfaceY, worldZ);
 				        
 				        if(config.erode) {
@@ -150,9 +150,9 @@ public class DecorateSnowFeature extends Feature<Config> {
     }
     
     private static void smoothSnow(ChunkAccess chunk, BlockPos.MutableBlockPos pos, Cell cell, Levels levels, float min) {
-
-		float heightWithFractionalComponent = cell.height / levels.unit;
-        float depth = getDepth(heightWithFractionalComponent);
+        float continuousHeight = cell.height / levels.unit;
+        int groundY = pos.getY() - 1;
+        float depth = continuousHeight - groundY;
         if (depth > min) {
             int level = getLevel(depth);
             BlockState layer = getState(level);
@@ -161,12 +161,12 @@ public class DecorateSnowFeature extends Feature<Config> {
             }
             chunk.setBlockState(pos, layer, false);
 
-           fixBaseBlock(chunk, pos, layer, level);
+            fixBaseBlock(chunk, pos, layer, level);
         }
     }
 
     private static void fixBaseBlock(ChunkAccess chunk, BlockPos pos, BlockState layerMaterial, int level) {
-        if (level > 1 && layerMaterial.is(Blocks.SNOW)) {
+        if (level > 1 && (layerMaterial.is(Blocks.SNOW) || layerMaterial.is(Blocks.SNOW_BLOCK))) {
             BlockPos pos1 = pos.below();
             BlockState below = chunk.getBlockState(pos1);
 
@@ -189,12 +189,12 @@ public class DecorateSnowFeature extends Feature<Config> {
     }
     
     private static int getLevel(float depth) {
-        if (depth > 1) {
-            depth = getDepth(depth);
-        } else if (depth < 0) {
-            depth = 0;
+        if (depth >= 1.0F) {
+            return (int) MAX;
+        } else if (depth <= 0.0F) {
+            return (int) MIN;
         }
-        return NoiseUtil.round(depth * MAX);
+        return Math.max((int) MIN, Math.min((int) MAX, NoiseUtil.round(depth * MAX)));
     }
 
     private static float getDepth(float height) {

@@ -72,7 +72,17 @@ public record BiomeReplacementConfig(
 		}
 	}
 
-	public record Diagnostic(Severity severity, String code, int line, String message) {
+	public record Diagnostic(
+		Severity severity,
+		String code,
+		int line,
+		String message,
+		boolean invalidatesConfig
+	) {
+		public Diagnostic(Severity severity, String code, int line, String message) {
+			this(severity, code, line, message, severity == Severity.ERROR);
+		}
+
 		public Diagnostic {
 			severity = Objects.requireNonNull(severity, "severity");
 			code = Objects.requireNonNull(code, "code");

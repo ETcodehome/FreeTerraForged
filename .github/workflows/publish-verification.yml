@@ -247,6 +247,50 @@ jobs:
               }
             }
 
+            // Parse automated unit test report if present
+            let unitTestSummary = null;
+            const unitTestFile = path.join(reportDir, 'unit_tests_report.txt');
+            if (fs.existsSync(unitTestFile)) {
+              try {
+                const uContent = fs.readFileSync(unitTestFile, 'utf8');
+                let uTotal = 0, uFailures = 0, uErrors = 0, uSkipped = 0;
+                const totMatch = uContent.match(/TOTALS:\s*(\d+)\s*Tests,\s*(\d+)\s*Failures,\s*(\d+)\s*Errors,\s*(\d+)\s*Skipped/);
+                if (totMatch) {
+                  uTotal = parseInt(totMatch[1], 10);
+                  uFailures = parseInt(totMatch[2], 10);
+                  uErrors = parseInt(totMatch[3], 10);
+                  uSkipped = parseInt(totMatch[4], 10);
+                }
+                const uTests = [];
+                const caseRegex = /-\s*\[(PASSED|FAILED)\]\s*(.*?)\s*\(([^()\r\n]+)\)/g;
+                let cMatch;
+                while ((cMatch = caseRegex.exec(uContent)) !== null) {
+                  const passed = cMatch[1] === 'PASSED';
+                  const name = cMatch[2].trim();
+                  const fullClass = cMatch[3].trim();
+                  const simpleClass = fullClass.includes('.') ? fullClass.substring(fullClass.lastIndexOf('.') + 1) : fullClass;
+                  uTests.push({ name, fullClass, simpleClass, passed });
+                }
+                if (uTotal === 0 && uTests.length > 0) {
+                  uTotal = uTests.length;
+                  uFailures = uTests.filter(t => !t.passed).length;
+                }
+                if (uFailures > 0 || uErrors > 0) {
+                  failures.push(`Automated unit test suite failed: ${uFailures} failure(s), ${uErrors} error(s) across ${uTotal} tests.`);
+                }
+                unitTestSummary = {
+                  total: uTotal,
+                  failures: uFailures,
+                  errors: uErrors,
+                  skipped: uSkipped,
+                  passed: uFailures === 0 && uErrors === 0 && uTotal > 0,
+                  tests: uTests
+                };
+              } catch (e) {
+                // Ignore parse errors
+              }
+            }
+
             const overallPassed = failures.length === 0;
 
             // Asset URL Base for visual PNGs
@@ -284,11 +328,12 @@ jobs:
             let report = '';
             const totalExpected = baseTestTokens.length * 2;
             const passedCount = parsedSuites.filter(s => s.passed && baseTestTokens.some(b => s.token.startsWith(b))).length;
+            const unitMetric = unitTestSummary ? ` | ${unitTestSummary.total - unitTestSummary.failures} / ${unitTestSummary.total} Unit Tests` : '';
 
             if (overallPassed) {
-              report += `![Pass](https://img.shields.io/badge/verification-passed-brightgreen?style=for-the-badge)&nbsp;&nbsp;Commit: [\`${sha}\`](${commitUrl}) | Run: [#${context.payload.workflow_run.id}](${runUrl}) | ${passedCount} / ${totalExpected} Tests Run\n\n`;
+              report += `![Pass](https://img.shields.io/badge/verification-passed-brightgreen?style=for-the-badge)&nbsp;&nbsp;Commit: [\`${sha}\`](${commitUrl}) | Run: [#${context.payload.workflow_run.id}](${runUrl}) | ${passedCount} / ${totalExpected} System Tests${unitMetric}\n\n`;
             } else {
-              report += `![Fail](https://img.shields.io/badge/verification-failed-red?style=for-the-badge)&nbsp;&nbsp;Commit: [\`${sha}\`](${commitUrl}) | Run: [#${context.payload.workflow_run.id}](${runUrl}) | ${passedCount} / ${totalExpected} Tests Run\n\n`;
+              report += `![Fail](https://img.shields.io/badge/verification-failed-red?style=for-the-badge)&nbsp;&nbsp;Commit: [\`${sha}\`](${commitUrl}) | Run: [#${context.payload.workflow_run.id}](${runUrl}) | ${passedCount} / ${totalExpected} System Tests${unitMetric}\n\n`;
               report += `> [!CAUTION]\n`;
               report += `> **Failures:**\n`;
               for (const f of failures) {
@@ -297,6 +342,8 @@ jobs:
               report += `\n`;
             }
 
+            report += `### &#127757; Headless Worldgen & Preset System Tests\n\n`;
+            report += `**Results**: ${passedCount} / ${totalExpected} System Tests Passed across Fabric & NeoForge\n\n`;
             // Compact 3-column true HTML table definition:
             report += `<table>\n<tbody>\n`;
 
@@ -336,6 +383,19 @@ jobs:
             }
 
             report += `</tbody>\n</table>\n\n`;
+
+            // Explicit Summary Table for Automated Unit Tests
+            if (unitTestSummary && unitTestSummary.tests.length > 0) {
+              const uPassed = unitTestSummary.total - unitTestSummary.failures;
+              report += `### &#129514; Automated Unit Tests (\`:common:test\`)\n\n`;
+              report += `**Results**: ${uPassed} / ${unitTestSummary.total} Tests Passed\n\n`;
+              report += `<table>\n<thead>\n<tr><th align="center" width="40"><sub>Status</sub></th><th align="left"><sub>Test Method</sub></th><th align="left"><sub>Suite / Class</sub></th></tr>\n</thead>\n<tbody>\n`;
+              for (const ut of unitTestSummary.tests) {
+                const statusIcon = ut.passed ? ':white_check_mark:' : ':x:';
+                report += `<tr>\n<td align="center"><sub>${statusIcon}</sub></td>\n<td><sub><code>${ut.name}</code></sub></td>\n<td><sub><code>${ut.simpleClass}</code></sub></td>\n</tr>\n`;
+              }
+              report += `</tbody>\n</table>\n\n`;
+            }
 
             // Collapsible Detailed Logs
             if (detailedReports.length > 0) {
