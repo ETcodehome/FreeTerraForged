@@ -22,6 +22,17 @@ public interface FTFClimateSampler {
 		@Nullable GeneratorContext context
 	);
 
+	default void adoptClimateQuerySemantics(ClimateQuerySemantics semantics) {
+		if (semantics != null) {
+			setClimateQuerySemantics(
+				semantics.policy(),
+				semantics.preset(),
+				semantics.seed(),
+				semantics.surfaceContext()
+			);
+		}
+	}
+
 	ClimateQuerySemantics climateQuerySemantics();
 
 	void setWorldgenPlan(@Nullable WorldgenPlan plan);

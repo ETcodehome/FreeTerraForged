@@ -6,6 +6,7 @@ import java.util.function.Supplier;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.KeyDispatchCodec;
 import net.minecraft.world.level.levelgen.DensityFunction;
+import net.minecraft.world.level.levelgen.DensityFunctions;
 import org.jetbrains.annotations.Nullable;
 
 import com.mojang.serialization.Codec;
@@ -29,10 +30,20 @@ import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 import etcodehome.freeterraforged.world.worldgen.util.PosUtil;
 
-public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) implements MarkerFunction.Mapped {
+public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, DensityFunction fallback) implements MarkerFunction.Mapped {
+	public CellSampler {
+		java.util.Objects.requireNonNull(deferredLookup, "deferredLookup");
+		java.util.Objects.requireNonNull(field, "field");
+		fallback = fallback != null ? fallback : DensityFunctions.zero();
+	}
+
+	public CellSampler(Supplier<WorldLookup> deferredLookup, Field field) {
+		this(deferredLookup, field, DensityFunctions.zero());
+	}
 	private static final float DEEP_OCEAN_MAX = Climate.unquantizeCoord(Climate.quantizeCoord(Continentalness.DEEP_OCEAN.max()) - 1);
 	private static final float SHALLOW_OCEAN_MIN = Climate.unquantizeCoord(Climate.quantizeCoord(Continentalness.OCEAN.min()) + 1);
 	private static final ThreadLocal<Cache2d> CELL = ThreadLocal.withInitial(Cache2d::new);
+	private static final ThreadLocal<LookupFrame> LOOKUP_OVERRIDE = new ThreadLocal<>();
 
 	public static Cache2d threadCache2d() {
 		return CELL.get();
@@ -40,6 +51,59 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 
 	public static Cell getCachedOrLookup(WorldLookup lookup, int blockX, int blockZ, boolean sampleClimate) {
 		return CELL.get().getAndUpdate(lookup, blockX, blockZ, sampleClimate);
+	}
+
+	/**
+	 * Installs a worker-thread-local authoritative cell source for a bounded query.
+	 *
+	 * <p>The override is consulted before the ordinary 2D and filtered-chunk caches. This is important for locate and
+	 * preview queries: a previously cached raw cell must not replace the query's filtered terrain state. Overrides may
+	 * be nested and must be closed in stack order on the thread that opened them.
+	 */
+	public static LookupScope pushLookupOverride(WorldLookup owner, LookupOverride lookup) {
+		java.util.Objects.requireNonNull(owner, "world lookup");
+		java.util.Objects.requireNonNull(lookup, "cell lookup override");
+		LookupFrame previous = LOOKUP_OVERRIDE.get();
+		LookupFrame frame = new LookupFrame(owner, lookup, previous);
+		LOOKUP_OVERRIDE.set(frame);
+		return new LookupScope(frame);
+	}
+
+	@FunctionalInterface
+	public interface LookupOverride {
+		@Nullable Cell lookup(int blockX, int blockZ, boolean sampleClimate);
+	}
+
+	public static final class LookupScope implements AutoCloseable {
+		private final LookupFrame frame;
+		private boolean closed;
+
+		private LookupScope(LookupFrame frame) {
+			this.frame = frame;
+		}
+
+		@Override
+		public void close() {
+			if (this.closed) {
+				return;
+			}
+			if (LOOKUP_OVERRIDE.get() != this.frame) {
+				throw new IllegalStateException("FTF cell lookup overrides must close in stack order");
+			}
+			this.closed = true;
+			if (this.frame.previous == null) {
+				LOOKUP_OVERRIDE.remove();
+			} else {
+				LOOKUP_OVERRIDE.set(this.frame.previous);
+			}
+		}
+	}
+
+	private record LookupFrame(
+		WorldLookup owner,
+		LookupOverride lookup,
+		@Nullable LookupFrame previous
+	) {
 	}
 
 	/**
@@ -86,7 +150,7 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 	public double compute(DensityFunction.FunctionContext ctx) {
 		WorldLookup worldLookup = this.deferredLookup.get();
 		if (worldLookup == null) {
-			throw new IllegalStateException("FTF cell sampler used before its world lookup was initialized");
+			return this.fallback.compute(ctx);
 		}
 		Cell cell = CELL.get().getAndUpdate(worldLookup, ctx.blockX(), ctx.blockZ(), true);
 		if (WorldgenPerfTracker.ACTIVE) {
@@ -144,6 +208,14 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 		}
 		
 		public Cell getAndUpdate(WorldLookup lookup, int blockX, int blockZ, boolean sampleClimate) {
+			for (LookupFrame frame = LOOKUP_OVERRIDE.get(); frame != null; frame = frame.previous) {
+				if (frame.owner == lookup) {
+					Cell overridden = frame.lookup.lookup(blockX, blockZ, sampleClimate);
+					if (overridden != null) {
+						return overridden;
+					}
+				}
+			}
 			long packedPos = PosUtil.pack(blockX, blockZ);
 			boolean sameOwner = this.lastLookup.get() == lookup;
 			if (!sameOwner) {
@@ -233,6 +305,10 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 			this(null, 0, 0, cache2d);
 		}
 
+		public Field field() {
+			return CellSampler.this.field;
+		}
+
 		@Override
 		public double compute(FunctionContext ctx) {
 			int bx = ctx.blockX();
@@ -242,6 +318,13 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 			}
 
 			WorldLookup worldLookup = CellSampler.this.deferredLookup.get();
+			if (worldLookup == null) {
+				double val = CellSampler.this.fallback.compute(ctx);
+				this.lastX = bx;
+				this.lastZ = bz;
+				this.lastValue = val;
+				return val;
+			}
 			Cell cell;
 			int relX = bx - this.minBlockX;
 			int relZ = bz - this.minBlockZ;
