@@ -41,7 +41,7 @@ public class WorldSettings {
                 "continent.bridgeReach",
                 "gui.slider.bridgeReach",
                 0.0F,
-                1.0F,
+                10.0F,
                 0.25F
         );
 

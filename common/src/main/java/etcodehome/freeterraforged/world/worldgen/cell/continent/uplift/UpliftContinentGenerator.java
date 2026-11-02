@@ -537,6 +537,22 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         return this.plateUpliftBridge;
     }
 
+    @Override
+    public boolean isInBridgedSector(int cx, int cz, float dx, float dz) {
+        if (this.bridgeChance <= 0.0F || this.plateUpliftBridge == null) {
+            return false;
+        }
+        return this.plateUpliftBridge.isInBridgedSector(cx, cz, dx, dz);
+    }
+
+    @Override
+    public boolean isInBridgedSector(float x, float z) {
+        if (this.bridgeChance <= 0.0F || this.plateUpliftBridge == null) {
+            return false;
+        }
+        return this.plateUpliftBridge.isInBridgedSector(x, z);
+    }
+
     public float getTectonicPlateUplift() {
         return this.plateUpliftBridge != null ? this.plateUpliftBridge.getTectonicPlateUplift() : 0.0F;
     }

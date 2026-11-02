@@ -51,6 +51,7 @@ public class PlateUpliftBridge {
         final float[] my = new float[8];
         final float[] len = new float[8];
         final float[] planeValue = new float[8];
+        final float[] loHi = new float[2];
     }
 
     private static final ThreadLocal<BridgeScratch> SCRATCH = ThreadLocal.withInitial(BridgeScratch::new);
@@ -209,77 +210,16 @@ public class PlateUpliftBridge {
             return clampedMin;
         }
 
-        // Clip bisector minIndex symmetrically using the union bounding box of cell and neighbor
-        int ncx = s.cx[minIndex];
-        int ncy = s.cy[minIndex];
-        int minCx = Math.min(cellX, ncx) - 1;
-        int maxCx = Math.max(cellX, ncx) + 1;
-        int minCy = Math.min(cellY, ncy) - 1;
-        int maxCy = Math.max(cellY, ncy) + 1;
-        float mxK = s.mx[minIndex];
-        float myK = s.my[minIndex];
-
-        float tx = -s.ny[minIndex];
-        float ty = s.nx[minIndex];
-        float lo = -1.0e9F;
-        float hi = 1.0e9F;
-        boolean ok = true;
-
-        for (int cy = minCy; cy <= maxCy && ok; ++cy) {
-            for (int cx = minCx; cx <= maxCx && ok; ++cx) {
-                if ((cx == cellX && cy == cellY) || (cx == ncx && cy == ncy)) {
-                    continue;
-                }
-                NoiseUtil.Vec2f vecC = NoiseUtil.cell(this.seed, cx, cy);
-                float pxC = cx + vecC.x() * this.jitter;
-                float pyC = cy + vecC.y() * this.jitter;
-
-                float dACx = pxC - cellPointX;
-                float dACy = pyC - cellPointY;
-                float lenACSq = dACx * dACx + dACy * dACy;
-                if (lenACSq < 1.0e-5F) {
-                    continue;
-                }
-
-                float invAC = 1.0F / NoiseUtil.sqrt(lenACSq);
-                float nACx = dACx * invAC;
-                float nACy = dACy * invAC;
-                float mACx = (cellPointX + pxC) * 0.5F;
-                float mACy = (cellPointY + pyC) * 0.5F;
-
-                float a = tx * nACx + ty * nACy;
-                float b = (mACx - mxK) * nACx + (mACy - myK) * nACy;
-                if (Math.abs(a) < 1.0e-6F) {
-                    if (b < 0.0F) {
-                        ok = false;
-                    }
-                    continue;
-                }
-                float t = b / a;
-                if (a > 0.0F) {
-                    if (t < hi) {
-                        hi = t;
-                    }
-                } else if (t > lo) {
-                    lo = t;
-                }
-            }
-        }
-
-        if (!ok || lo >= hi) {
+        if (!this.clipBisector(cellX, cellY, cellPointX, cellPointY, minIndex, s, s.loHi)) {
             return clampedMin;
         }
 
-        // Clamp unbounded edges to a generous radius relative to Delaunay length
-        lo = Math.max(lo, -3.0F * s.len[minIndex]);
-        hi = Math.min(hi, 3.0F * s.len[minIndex]);
-
-        // Hard cutoff threshold: sectors of the peak pyramid less than 20 degrees wide never bridge
-        if (lo >= hi || isSectorTooThin(lo, hi, s.len[minIndex])) {
-            return clampedMin;
-        }
+        float lo = s.loHi[0];
+        float hi = s.loHi[1];
 
         // Tangent parameter t_edge along the bisector where the ray from peak (cellPointX, cellPointY) through (x, y) intersects the edge
+        float tx = -s.ny[minIndex];
+        float ty = s.nx[minIndex];
         float d_tan = (x - cellPointX) * tx + (y - cellPointY) * ty;
         float t_edge = d_tan / r;
 
@@ -362,5 +302,336 @@ public class PlateUpliftBridge {
 
     public void setSaddleHeight(float saddleHeight) {
         this.saddleHeight = saddleHeight;
+    }
+
+    public boolean clipBisector(int cellX, int cellY, float cellPointX, float cellPointY, int minIndex, BridgeScratch s, float[] loHi) {
+        int ncx = s.cx[minIndex];
+        int ncy = s.cy[minIndex];
+        int minCx = Math.min(cellX, ncx) - 1;
+        int maxCx = Math.max(cellX, ncx) + 1;
+        int minCy = Math.min(cellY, ncy) - 1;
+        int maxCy = Math.max(cellY, ncy) + 1;
+        float mxK = s.mx[minIndex];
+        float myK = s.my[minIndex];
+
+        float tx = -s.ny[minIndex];
+        float ty = s.nx[minIndex];
+        float lo = -1.0e9F;
+        float hi = 1.0e9F;
+        boolean ok = true;
+
+        for (int cy = minCy; cy <= maxCy && ok; ++cy) {
+            for (int cx = minCx; cx <= maxCx && ok; ++cx) {
+                if ((cx == cellX && cy == cellY) || (cx == ncx && cy == ncy)) {
+                    continue;
+                }
+                NoiseUtil.Vec2f vecC = NoiseUtil.cell(this.seed, cx, cy);
+                float pxC = cx + vecC.x() * this.jitter;
+                float pyC = cy + vecC.y() * this.jitter;
+
+                float dACx = pxC - cellPointX;
+                float dACy = pyC - cellPointY;
+                float lenACSq = dACx * dACx + dACy * dACy;
+                if (lenACSq < 1.0e-5F) {
+                    continue;
+                }
+
+                float invAC = 1.0F / NoiseUtil.sqrt(lenACSq);
+                float nACx = dACx * invAC;
+                float nACy = dACy * invAC;
+                float mACx = (cellPointX + pxC) * 0.5F;
+                float mACy = (cellPointY + pyC) * 0.5F;
+
+                float a = tx * nACx + ty * nACy;
+                float b = (mACx - mxK) * nACx + (mACy - myK) * nACy;
+                if (Math.abs(a) < 1.0e-6F) {
+                    if (b < 0.0F) {
+                        ok = false;
+                    }
+                    continue;
+                }
+                float t = b / a;
+                if (a > 0.0F) {
+                    if (t < hi) {
+                        hi = t;
+                    }
+                } else if (t > lo) {
+                    lo = t;
+                }
+            }
+        }
+
+        if (!ok || lo >= hi) {
+            return false;
+        }
+
+        lo = Math.max(lo, -3.0F * s.len[minIndex]);
+        hi = Math.min(hi, 3.0F * s.len[minIndex]);
+
+        if (lo >= hi || isSectorTooThin(lo, hi, s.len[minIndex])) {
+            return false;
+        }
+
+        loHi[0] = lo;
+        loHi[1] = hi;
+        return true;
+    }
+
+    /**
+     * Returns true if a ray from the continent centroid peak at unwarped coordinates (cx, cz)
+     * in direction (dx, dz) points into a bridged sector connecting to an adjacent bridged continent.
+     */
+    public boolean isInBridgedSector(int cx, int cz, float dx, float dz) {
+        if (this.generator.getBridgeChance() <= 0.0F) {
+            return false;
+        }
+
+        float x = cx * this.frequency;
+        float y = cz * this.frequency;
+
+        int xi = NoiseUtil.floor(x);
+        int yi = NoiseUtil.floor(y);
+
+        int cellX = xi;
+        int cellY = yi;
+        float cellPointX = x;
+        float cellPointY = y;
+        float nearestSq = Float.MAX_VALUE;
+
+        for (int cy = yi - 1; cy <= yi + 1; ++cy) {
+            for (int cx2 = xi - 1; cx2 <= xi + 1; ++cx2) {
+                NoiseUtil.Vec2f vec = NoiseUtil.cell(this.seed, cx2, cy);
+                float px = cx2 + vec.x() * this.jitter;
+                float py = cy + vec.y() * this.jitter;
+                float dist2 = Line.distSq(x, y, px, py);
+
+                if (dist2 < nearestSq) {
+                    nearestSq = dist2;
+                    cellPointX = px;
+                    cellPointY = py;
+                    cellX = cx2;
+                    cellY = cy;
+                }
+            }
+        }
+
+        if (!this.generator.canBridge(cellX, cellY)) {
+            return false;
+        }
+
+        BridgeScratch s = SCRATCH.get();
+
+        int nIndex = 0;
+        int bridgedMask = 0;
+        for (int cy2 = cellY - 1; cy2 <= cellY + 1; ++cy2) {
+            for (int cx2 = cellX - 1; cx2 <= cellX + 1; ++cx2) {
+                if (cx2 != cellX || cy2 != cellY) {
+                    NoiseUtil.Vec2f vec2 = NoiseUtil.cell(this.seed, cx2, cy2);
+                    s.cx[nIndex] = cx2;
+                    s.cy[nIndex] = cy2;
+                    s.neighborX[nIndex] = cx2 + vec2.x() * this.jitter;
+                    s.neighborY[nIndex] = cy2 + vec2.y() * this.jitter;
+                    if (this.generator.isBridged(cellX, cellY, cx2, cy2)) {
+                        bridgedMask |= (1 << nIndex);
+                    }
+                    nIndex++;
+                }
+            }
+        }
+
+        if (bridgedMask == 0) {
+            return false;
+        }
+
+        int minIndex = -1;
+        float minS = Float.MAX_VALUE;
+
+        for (int i = 0; i < 8; i++) {
+            float px2 = s.neighborX[i];
+            float py2 = s.neighborY[i];
+            float dX = px2 - cellPointX;
+            float dY = py2 - cellPointY;
+            float lenSq = dX * dX + dY * dY;
+
+            if (lenSq > 0.00001F) {
+                float len = NoiseUtil.sqrt(lenSq);
+                float inv = 1.0F / len;
+                s.len[i] = len;
+                s.nx[i] = dX * inv;
+                s.ny[i] = dY * inv;
+                s.mx[i] = (cellPointX + px2) * 0.5F;
+                s.my[i] = (cellPointY + py2) * 0.5F;
+
+                float dotN = dx * s.nx[i] + dz * s.ny[i];
+                if (dotN > 0.0001F) {
+                    float sDist = (0.5F * len) / dotN;
+                    if (sDist < minS) {
+                        minS = sDist;
+                        minIndex = i;
+                    }
+                }
+            }
+        }
+
+        if (minIndex < 0 || (bridgedMask & (1 << minIndex)) == 0) {
+            return false;
+        }
+
+        if (!this.clipBisector(cellX, cellY, cellPointX, cellPointY, minIndex, s, s.loHi)) {
+            return false;
+        }
+
+        float lo = s.loHi[0];
+        float hi = s.loHi[1];
+
+        float tx = -s.ny[minIndex];
+        float ty = s.nx[minIndex];
+        float dotN = dx * s.nx[minIndex] + dz * s.ny[minIndex];
+        float dotT = dx * tx + dz * ty;
+        float tEdge = 0.5F * s.len[minIndex] * (dotT / dotN);
+
+        float t_mid = 0.5F * (lo + hi);
+        float halfLen = 0.5F * (hi - lo);
+        if (halfLen <= 1.0e-6F) {
+            return false;
+        }
+
+        float uEdge = (tEdge - t_mid) / halfLen;
+        return uEdge >= -1.0F && uEdge <= 1.0F;
+    }
+
+    /**
+     * Returns true if the unwarped coordinates (rawX, rawY) lie inside a bridged sector connecting
+     * two adjacent bridged continents.
+     */
+    public boolean isInBridgedSector(float rawX, float rawY) {
+        if (this.generator.getBridgeChance() <= 0.0F) {
+            return false;
+        }
+
+        float x = rawX * this.frequency;
+        float y = rawY * this.frequency;
+
+        int xi = NoiseUtil.floor(x);
+        int yi = NoiseUtil.floor(y);
+
+        int cellX = xi;
+        int cellY = yi;
+        float cellPointX = x;
+        float cellPointY = y;
+        float nearestSq = Float.MAX_VALUE;
+
+        for (int cy = yi - 1; cy <= yi + 1; ++cy) {
+            for (int cx = xi - 1; cx <= xi + 1; ++cx) {
+                NoiseUtil.Vec2f vec = NoiseUtil.cell(this.seed, cx, cy);
+                float px = cx + vec.x() * this.jitter;
+                float py = cy + vec.y() * this.jitter;
+                float dist2 = Line.distSq(x, y, px, py);
+
+                if (dist2 < nearestSq) {
+                    nearestSq = dist2;
+                    cellPointX = px;
+                    cellPointY = py;
+                    cellX = cx;
+                    cellY = cy;
+                }
+            }
+        }
+
+        if (!this.generator.canBridge(cellX, cellY)) {
+            return false;
+        }
+
+        BridgeScratch s = SCRATCH.get();
+
+        int nIndex = 0;
+        int bridgedMask = 0;
+        for (int cy2 = cellY - 1; cy2 <= cellY + 1; ++cy2) {
+            for (int cx2 = cellX - 1; cx2 <= cellX + 1; ++cx2) {
+                if (cx2 != cellX || cy2 != cellY) {
+                    NoiseUtil.Vec2f vec2 = NoiseUtil.cell(this.seed, cx2, cy2);
+                    s.cx[nIndex] = cx2;
+                    s.cy[nIndex] = cy2;
+                    s.neighborX[nIndex] = cx2 + vec2.x() * this.jitter;
+                    s.neighborY[nIndex] = cy2 + vec2.y() * this.jitter;
+                    if (this.generator.isBridged(cellX, cellY, cx2, cy2)) {
+                        bridgedMask |= (1 << nIndex);
+                    }
+                    nIndex++;
+                }
+            }
+        }
+
+        if (bridgedMask == 0) {
+            return false;
+        }
+
+        int minIndex = -1;
+        float minGradient = Float.MAX_VALUE;
+
+        for (int i = 0; i < 8; i++) {
+            float px2 = s.neighborX[i];
+            float py2 = s.neighborY[i];
+            float dx = px2 - cellPointX;
+            float dy = py2 - cellPointY;
+            float lenSq = dx * dx + dy * dy;
+
+            if (lenSq > 0.00001F) {
+                float len = NoiseUtil.sqrt(lenSq);
+                float inv = 1.0F / len;
+                s.len[i] = len;
+                s.nx[i] = dx * inv;
+                s.ny[i] = dy * inv;
+                float mx = (cellPointX + px2) * 0.5F;
+                float my = (cellPointY + py2) * 0.5F;
+
+                float h_c = 0.5F * lenSq;
+                float h_x = (mx - x) * dx + (my - y) * dy;
+
+                if (h_c > 0.00001F) {
+                    float planeValue = h_x / h_c;
+                    s.planeValue[i] = planeValue;
+                    if (planeValue < minGradient) {
+                        minGradient = planeValue;
+                        minIndex = i;
+                    }
+                } else {
+                    s.planeValue[i] = 1.0F;
+                }
+            } else {
+                s.planeValue[i] = 1.0F;
+            }
+        }
+
+        if (minIndex < 0 || (bridgedMask & (1 << minIndex)) == 0) {
+            return false;
+        }
+
+        float clampedMin = NoiseUtil.clamp(minGradient, 0.0F, 1.0F);
+        float r = 1.0F - clampedMin;
+        if (r <= 0.0001F) {
+            return true;
+        }
+
+        if (!this.clipBisector(cellX, cellY, cellPointX, cellPointY, minIndex, s, s.loHi)) {
+            return false;
+        }
+
+        float lo = s.loHi[0];
+        float hi = s.loHi[1];
+
+        float tx = -s.ny[minIndex];
+        float ty = s.nx[minIndex];
+        float d_tan = (x - cellPointX) * tx + (y - cellPointY) * ty;
+        float t_edge = d_tan / r;
+
+        float t_mid = 0.5F * (lo + hi);
+        float halfLen = 0.5F * (hi - lo);
+        if (halfLen <= 1.0e-6F) {
+            return false;
+        }
+
+        float uEdge = (t_edge - t_mid) / halfLen;
+        return uEdge >= -1.0F && uEdge <= 1.0F;
     }
 }

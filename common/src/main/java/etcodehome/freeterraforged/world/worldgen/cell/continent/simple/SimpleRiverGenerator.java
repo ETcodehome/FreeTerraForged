@@ -38,9 +38,10 @@ public class SimpleRiverGenerator extends BaseRiverGenerator<SimpleContinent> {
 			settings.valleySize = valleyWidth;
 			RiverWarp riverWarp = RiverWarp.create(0.1F, 0.85F, random);
 			FTFRiverCarver carver = new UpliftRiverCarver(river, riverWarp, this.main, settings, this.levels, this.lake, this.continent instanceof UpliftContinentGenerator);
-			// Abandon roots whose mouth would sit on a bridged cell border (still land) or cross into a neighbour cell.
+			// Abandon roots that start or point into a bridged sector between adjacent bridged continents,
+			// or whose mouth would sit on a bridged cell border (still land) or cross into a neighbour cell.
 			// Everything above has already consumed its random values, so continents without bridged borders generate exactly as before.
-			if (this.terminatesOnLand(x3, z3) || this.endsInNeighbourCell(x, z, x3, z3)) {
+			if (this.isInBridgedSector(x, z, dx, dz) || this.isInBridgedSector(x2, z2) || this.terminatesOnLand(x3, z3) || this.endsInNeighbourCell(x, z, x3, z3)) {
 				continue;
 			}
 			Network.Builder branch = Network.builder(carver);

@@ -104,7 +104,7 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
                 if (this.continent.getEdgeValue(x1, z1) >= this.minEdgeValue) {
                     float x2 = x1 - dx * length;
                     float z2 = z1 - dz * length;
-                    if (this.continent.getEdgeValue(x2, z2) >= this.minEdgeValue && !this.endsInNeighbourCell(x1, z1, x2, z2)) {
+                    if (this.continent.getEdgeValue(x2, z2) >= this.minEdgeValue && !this.endsInNeighbourCell(x1, z1, x2, z2) && !this.isInBridgedSector(x2, z2)) {
                         RiverConfig forkConfig = parent.carver.createForkConfig(offset, this.levels);
                         River river = new River(x2, z2, x1, z1);
                         if (!this.riverOverlaps(river, parent, rivers)) {
@@ -130,6 +130,14 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
             return uplift.getBridgeChance() > 0.0F;
         }
         return this.bridgeAware;
+    }
+
+    public boolean isInBridgedSector(int cx, int cz, float dx, float dz) {
+        return this.isBridgeAware() && this.continent.isInBridgedSector(cx, cz, dx, dz);
+    }
+
+    public boolean isInBridgedSector(float x, float z) {
+        return this.isBridgeAware() && this.continent.isInBridgedSector(x, z);
     }
 
     /**
