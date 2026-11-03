@@ -2,17 +2,15 @@ package etcodehome.freeterraforged.world.worldgen.cell.continent.uplift;
 
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
-import etcodehome.freeterraforged.world.worldgen.noise.module.Line;
 
 /**
- * Handles tectonic plate uplift bridging between adjacent bridged continents.
+ * Handles tectonic plate uplift bridging between adjacent bridged continents,
+ * centering uplift peaks and river spokes on true Voronoi centroids.
  * <p>
- * When continents are bridged into a single landmass, their uplift peaks would
- * otherwise drop down to 0.0 at the Voronoi cell boundary, creating a deep trough
- * between the two mountain masses. This class creates an elevated bridge / saddle
- * between the two peaks across the bridged Voronoi edge, while ensuring that all
- * sectors facing unbridged borders (where rivers generate and flow to the sea)
- * remain unmodified and slope cleanly to the coast.
+ * Continent peaks are placed at the true geometric centroid of each Voronoi polygon,
+ * ensuring all facets of the uplift pyramid slope evenly from the central peak down to
+ * the Voronoi boundary edges. When continents are bridged into a single landmass, an elevated
+ * bridge / saddle connects the centroid peaks across the bridged Voronoi edge.
  */
 public class PlateUpliftBridge {
     public static final float DEFAULT_SADDLE_HEIGHT = 0.75F;
@@ -22,14 +20,79 @@ public class PlateUpliftBridge {
 
     /**
      * Returns true if the sector of the peak pyramid subtended by the Voronoi edge [lo, hi]
-     * from the peak (at Delaunay distance len to neighbor) has an angular width less than 20 degrees.
+     * from the centroid peak has an angular width less than 20 degrees.
      */
-    public static boolean isSectorTooThin(float lo, float hi, float len) {
-        float halfL = 0.5F * len;
-        float dot = halfL * halfL + lo * hi;
-        float cross = halfL * (hi - lo);
+    public static boolean isSectorTooThin(float lo, float hi, float dPerp, float mTan) {
+        float t1 = lo - mTan;
+        float t2 = hi - mTan;
+        float dot = dPerp * dPerp + t1 * t2;
+        float cross = dPerp * (hi - lo);
         return dot > 0.0F && cross < dot * MIN_SECTOR_ANGLE_TAN;
     }
+
+    public static boolean isSectorTooThin(float lo, float hi, float len) {
+        return isSectorTooThin(lo, hi, 0.5F * len, 0.0F);
+    }
+
+    public static final class CellVoronoi {
+        public int cellX = Integer.MIN_VALUE;
+        public int cellY = Integer.MIN_VALUE;
+        public float seedX;
+        public float seedY;
+        public float centroidX;
+        public float centroidY;
+        public int edgeCount;
+
+        public final int[] ncx = new int[16];
+        public final int[] ncy = new int[16];
+        public final float[] neighborX = new float[16];
+        public final float[] neighborY = new float[16];
+        public final float[] dx = new float[16];
+        public final float[] dy = new float[16];
+        public final float[] mx = new float[16];
+        public final float[] my = new float[16];
+        public final float[] nx = new float[16];
+        public final float[] ny = new float[16];
+        public final float[] tx = new float[16];
+        public final float[] ty = new float[16];
+        public final float[] len = new float[16];
+        public final float[] lo = new float[16];
+        public final float[] hi = new float[16];
+        public final float[] tMid = new float[16];
+        public final float[] halfLen = new float[16];
+        public final float[] hc = new float[16];
+        public final float[] mTan = new float[16];
+        public final boolean[] isBridged = new boolean[16];
+        public final boolean[] isTectonicActive = new boolean[16];
+    }
+
+    private static final class BridgeScratch {
+        final CellVoronoi[] cache = new CellVoronoi[8];
+
+        final int[] candCx = new int[25];
+        final int[] candCy = new int[25];
+        final float[] candX = new float[25];
+        final float[] candY = new float[25];
+
+        final float[] edgeLo = new float[16];
+        final float[] edgeHi = new float[16];
+        final float[] edgeLen = new float[16];
+        final float[] edgeNx = new float[16];
+        final float[] edgeNy = new float[16];
+        final float[] edgeTx = new float[16];
+        final float[] edgeTy = new float[16];
+        final float[] edgeMx = new float[16];
+        final float[] edgeMy = new float[16];
+        final int[] edgeCandIdx = new int[16];
+
+        BridgeScratch() {
+            for (int i = 0; i < cache.length; i++) {
+                cache[i] = new CellVoronoi();
+            }
+        }
+    }
+
+    private static final ThreadLocal<BridgeScratch> SCRATCH = ThreadLocal.withInitial(BridgeScratch::new);
 
     protected final UpliftContinentGenerator generator;
     protected final int seed;
@@ -40,22 +103,6 @@ public class PlateUpliftBridge {
     protected volatile float tectonicRounding;
     protected volatile float saddleHeight;
 
-    private static final class BridgeScratch {
-        final float[] neighborX = new float[8];
-        final float[] neighborY = new float[8];
-        final int[] cx = new int[8];
-        final int[] cy = new int[8];
-        final float[] nx = new float[8];
-        final float[] ny = new float[8];
-        final float[] mx = new float[8];
-        final float[] my = new float[8];
-        final float[] len = new float[8];
-        final float[] planeValue = new float[8];
-        final float[] loHi = new float[2];
-    }
-
-    private static final ThreadLocal<BridgeScratch> SCRATCH = ThreadLocal.withInitial(BridgeScratch::new);
-
     public PlateUpliftBridge(UpliftContinentGenerator generator, int seed, float jitter, int tectonicSeed, float tectonicPlateUplift) {
         this(generator, seed, jitter, tectonicSeed, tectonicPlateUplift, DEFAULT_TECTONIC_ROUNDING, DEFAULT_SADDLE_HEIGHT);
     }
@@ -65,10 +112,14 @@ public class PlateUpliftBridge {
     }
 
     public PlateUpliftBridge(UpliftContinentGenerator generator, int seed, float jitter, int tectonicSeed, float tectonicPlateUplift, float tectonicRounding, float saddleHeight) {
+        this(generator, seed, jitter, generator != null ? generator.frequency : 1.0F / 4000.0F, tectonicSeed, tectonicPlateUplift, tectonicRounding, saddleHeight);
+    }
+
+    public PlateUpliftBridge(UpliftContinentGenerator generator, int seed, float jitter, float frequency, int tectonicSeed, float tectonicPlateUplift, float tectonicRounding, float saddleHeight) {
         this.generator = generator;
         this.seed = seed;
         this.jitter = jitter;
-        this.frequency = generator.frequency;
+        this.frequency = frequency;
         this.tectonicSeed = tectonicSeed;
         this.tectonicPlateUplift = tectonicPlateUplift;
         this.tectonicRounding = tectonicRounding;
@@ -92,12 +143,199 @@ public class PlateUpliftBridge {
      */
     public boolean isTectonicUpliftActive(int ax, int ay, int bx, int by) {
         return this.tectonicPlateUplift > 0.0F
+                && this.generator != null
                 && this.generator.isBridged(ax, ay, bx, by)
                 && this.tectonicRoll(ax, ay, bx, by) < this.tectonicPlateUplift;
     }
 
     /**
+     * Retrieves the cached Voronoi polygon and centroid geometry for the given grid cell.
+     */
+    public CellVoronoi getVoronoi(int cellX, int cellY) {
+        BridgeScratch s = SCRATCH.get();
+        int hash = (cellX * 31 + cellY) & 7;
+        CellVoronoi v = s.cache[hash];
+        if (v.cellX == cellX && v.cellY == cellY) {
+            return v;
+        }
+
+        this.populateVoronoi(cellX, cellY, v, s);
+        return v;
+    }
+
+    /**
+     * Populates the Voronoi polygon, true geometric centroid, and face geometry for cell (cellX, cellY).
+     */
+    public void populateVoronoi(int cellX, int cellY, CellVoronoi v, BridgeScratch s) {
+        v.cellX = cellX;
+        v.cellY = cellY;
+
+        NoiseUtil.Vec2f vec0 = NoiseUtil.cell(this.seed, cellX, cellY);
+        v.seedX = cellX + vec0.x() * this.jitter;
+        v.seedY = cellY + vec0.y() * this.jitter;
+
+        int candCount = 0;
+        for (int dy = -2; dy <= 2; dy++) {
+            int cy = cellY + dy;
+            for (int dx = -2; dx <= 2; dx++) {
+                if (dx == 0 && dy == 0) {
+                    continue;
+                }
+                int cx = cellX + dx;
+                NoiseUtil.Vec2f vec = NoiseUtil.cell(this.seed, cx, cy);
+                s.candCx[candCount] = cx;
+                s.candCy[candCount] = cy;
+                s.candX[candCount] = cx + vec.x() * this.jitter;
+                s.candY[candCount] = cy + vec.y() * this.jitter;
+                candCount++;
+            }
+        }
+
+        int e = 0;
+        for (int i = 0; i < candCount; i++) {
+            float px = s.candX[i];
+            float py = s.candY[i];
+            float diffX = px - v.seedX;
+            float diffY = py - v.seedY;
+            float lenSq = diffX * diffX + diffY * diffY;
+            if (lenSq < 1.0e-5F) {
+                continue;
+            }
+
+            float len = NoiseUtil.sqrt(lenSq);
+            float inv = 1.0F / len;
+            float nx = diffX * inv;
+            float ny = diffY * inv;
+            float mx = (v.seedX + px) * 0.5F;
+            float my = (v.seedY + py) * 0.5F;
+            float tx = -ny;
+            float ty = nx;
+
+            float lo = -1.0e9F;
+            float hi = 1.0e9F;
+            boolean ok = true;
+
+            for (int j = 0; j < candCount; j++) {
+                if (j == i) {
+                    continue;
+                }
+                float pxJ = s.candX[j];
+                float pyJ = s.candY[j];
+                float diffJx = pxJ - v.seedX;
+                float diffJy = pyJ - v.seedY;
+                float lenJSq = diffJx * diffJx + diffJy * diffJy;
+                if (lenJSq < 1.0e-5F) {
+                    continue;
+                }
+
+                float invJ = 1.0F / NoiseUtil.sqrt(lenJSq);
+                float nxJ = diffJx * invJ;
+                float nyJ = diffJy * invJ;
+                float mxJ = (v.seedX + pxJ) * 0.5F;
+                float myJ = (v.seedY + pyJ) * 0.5F;
+
+                float a = tx * nxJ + ty * nyJ;
+                float b = (mxJ - mx) * nxJ + (myJ - my) * nyJ;
+                if (Math.abs(a) < 1.0e-6F) {
+                    if (b < 0.0F) {
+                        ok = false;
+                        break;
+                    }
+                    continue;
+                }
+                float t = b / a;
+                if (a > 0.0F) {
+                    if (t < hi) {
+                        hi = t;
+                    }
+                } else if (t > lo) {
+                    lo = t;
+                }
+            }
+
+            if (ok && lo < hi && e < 16) {
+                s.edgeLo[e] = lo;
+                s.edgeHi[e] = hi;
+                s.edgeLen[e] = len;
+                s.edgeNx[e] = nx;
+                s.edgeNy[e] = ny;
+                s.edgeTx[e] = tx;
+                s.edgeTy[e] = ty;
+                s.edgeMx[e] = mx;
+                s.edgeMy[e] = my;
+                s.edgeCandIdx[e] = i;
+                e++;
+            }
+        }
+
+        // Exact polygon centroid via star decomposition into triangles from seed point v.seed
+        float totalWeight = 0.0F;
+        float numX = 0.0F;
+        float numY = 0.0F;
+        for (int k = 0; k < e; k++) {
+            float l = s.edgeLen[k];
+            float span = s.edgeHi[k] - s.edgeLo[k];
+            float w = l * span;
+            totalWeight += w;
+            float tMid = (s.edgeLo[k] + s.edgeHi[k]) * 0.5F;
+            float dcX = (l * s.edgeNx[k] + 2.0F * tMid * s.edgeTx[k]) * (1.0F / 3.0F);
+            float dcY = (l * s.edgeNy[k] + 2.0F * tMid * s.edgeTy[k]) * (1.0F / 3.0F);
+            numX += w * dcX;
+            numY += w * dcY;
+        }
+
+        float invW = totalWeight > 1.0e-6F ? (1.0F / totalWeight) : 0.0F;
+        v.centroidX = totalWeight > 1.0e-6F ? (v.seedX + numX * invW) : v.seedX;
+        v.centroidY = totalWeight > 1.0e-6F ? (v.seedY + numY * invW) : v.seedY;
+        v.edgeCount = e;
+
+        boolean cellCanBridge = this.generator != null && this.generator.canBridge(cellX, cellY);
+
+        for (int k = 0; k < e; k++) {
+            int cIdx = s.edgeCandIdx[k];
+            int ncx = s.candCx[cIdx];
+            int ncy = s.candCy[cIdx];
+            v.ncx[k] = ncx;
+            v.ncy[k] = ncy;
+            v.neighborX[k] = s.candX[cIdx];
+            v.neighborY[k] = s.candY[cIdx];
+            v.dx[k] = s.candX[cIdx] - v.seedX;
+            v.dy[k] = s.candY[cIdx] - v.seedY;
+            v.mx[k] = s.edgeMx[k];
+            v.my[k] = s.edgeMy[k];
+            v.nx[k] = s.edgeNx[k];
+            v.ny[k] = s.edgeNy[k];
+            v.tx[k] = s.edgeTx[k];
+            v.ty[k] = s.edgeTy[k];
+            v.len[k] = s.edgeLen[k];
+            v.lo[k] = s.edgeLo[k];
+            v.hi[k] = s.edgeHi[k];
+            v.tMid[k] = (s.edgeLo[k] + s.edgeHi[k]) * 0.5F;
+            v.halfLen[k] = (s.edgeHi[k] - s.edgeLo[k]) * 0.5F;
+
+            // Height normalization factor: distance from centroid peak to bisector edge along edge normal
+            float hcVal = (v.mx[k] - v.centroidX) * v.dx[k] + (v.my[k] - v.centroidY) * v.dy[k];
+            v.hc[k] = Math.max(hcVal, 1.0e-5F);
+            v.mTan[k] = (v.mx[k] - v.centroidX) * v.tx[k] + (v.my[k] - v.centroidY) * v.ty[k];
+
+            boolean isImmediateNeighbor = Math.abs(ncx - cellX) <= 1 && Math.abs(ncy - cellY) <= 1;
+            float dPerp = v.hc[k] / v.len[k];
+            boolean notTooThin = !isSectorTooThin(v.lo[k], v.hi[k], dPerp, v.mTan[k]);
+
+            v.isBridged[k] = isImmediateNeighbor
+                    && cellCanBridge
+                    && this.generator.isBridged(cellX, cellY, ncx, ncy)
+                    && notTooThin;
+
+            v.isTectonicActive[k] = v.isBridged[k]
+                    && this.tectonicPlateUplift > 0.0F
+                    && this.tectonicRoll(cellX, cellY, ncx, ncy) < this.tectonicPlateUplift;
+        }
+    }
+
+    /**
      * Computes the uplift gradient for cell at the given unwarped coordinates (rawX, rawY).
+     * The peak of the uplift pyramid is centered on the true Voronoi centroid of the continent.
      * Connects peaks across bridged borders where tectonic plate uplift is active, while
      * strictly preserving the original slope to 0.0 along borders where rivers flow to ocean.
      */
@@ -110,81 +348,38 @@ public class PlateUpliftBridge {
 
         int cellX = xi;
         int cellY = yi;
-        float cellPointX = x;
-        float cellPointY = y;
         float nearestSq = Float.MAX_VALUE;
 
-        // Find the closest Voronoi cell seed
+        // Find the closest Voronoi cell seed to determine cell ownership
         for (int cy = yi - 1; cy <= yi + 1; ++cy) {
             for (int cx = xi - 1; cx <= xi + 1; ++cx) {
                 NoiseUtil.Vec2f vec = NoiseUtil.cell(this.seed, cx, cy);
                 float px = cx + vec.x() * this.jitter;
                 float py = cy + vec.y() * this.jitter;
-                float dist2 = Line.distSq(x, y, px, py);
+                float dX = px - x;
+                float dY = py - y;
+                float dist2 = dX * dX + dY * dY;
 
                 if (dist2 < nearestSq) {
                     nearestSq = dist2;
-                    cellPointX = px;
-                    cellPointY = py;
                     cellX = cx;
                     cellY = cy;
                 }
             }
         }
 
-        BridgeScratch s = SCRATCH.get();
-
-        // Collect the 8 immediate neighboring seeds
-        int nIndex = 0;
-        for (int cy2 = cellY - 1; cy2 <= cellY + 1; ++cy2) {
-            for (int cx2 = cellX - 1; cx2 <= cellX + 1; ++cx2) {
-                if (cx2 != cellX || cy2 != cellY) {
-                    NoiseUtil.Vec2f vec2 = NoiseUtil.cell(this.seed, cx2, cy2);
-                    s.cx[nIndex] = cx2;
-                    s.cy[nIndex] = cy2;
-                    s.neighborX[nIndex] = cx2 + vec2.x() * this.jitter;
-                    s.neighborY[nIndex] = cy2 + vec2.y() * this.jitter;
-                    nIndex++;
-                }
-            }
-        }
+        CellVoronoi v = this.getVoronoi(cellX, cellY);
 
         int minIndex = -1;
         float minGradient = Float.MAX_VALUE;
 
-        for (int i = 0; i < 8; i++) {
-            float px2 = s.neighborX[i];
-            float py2 = s.neighborY[i];
-            float dx = px2 - cellPointX;
-            float dy = py2 - cellPointY;
-            float lenSq = dx * dx + dy * dy;
-
-            if (lenSq > 0.00001F) {
-                float len = NoiseUtil.sqrt(lenSq);
-                float inv = 1.0F / len;
-                s.len[i] = len;
-                s.nx[i] = dx * inv;
-                s.ny[i] = dy * inv;
-                float mx = (cellPointX + px2) * 0.5F;
-                float my = (cellPointY + py2) * 0.5F;
-                s.mx[i] = mx;
-                s.my[i] = my;
-
-                float h_c = 0.5F * lenSq;
-                float h_x = (mx - x) * dx + (my - y) * dy;
-
-                if (h_c > 0.00001F) {
-                    float planeValue = h_x / h_c;
-                    s.planeValue[i] = planeValue;
-                    if (planeValue < minGradient) {
-                        minGradient = planeValue;
-                        minIndex = i;
-                    }
-                } else {
-                    s.planeValue[i] = 1.0F;
-                }
-            } else {
-                s.planeValue[i] = 1.0F;
+        // Evaluate all valid Voronoi faces of the pyramid centered on the centroid peak
+        for (int i = 0; i < v.edgeCount; i++) {
+            float h_x = (v.mx[i] - x) * v.dx[i] + (v.my[i] - y) * v.dy[i];
+            float planeValue = h_x / v.hc[i];
+            if (planeValue < minGradient) {
+                minGradient = planeValue;
+                minIndex = i;
             }
         }
 
@@ -195,63 +390,47 @@ public class PlateUpliftBridge {
         float clampedMin = NoiseUtil.clamp(minGradient, 0.0F, 1.0F);
 
         // Fast path: if tectonic plate uplift is inactive globally or on this specific border
-        if (this.tectonicPlateUplift <= 0.0F) {
+        if (!v.isTectonicActive[minIndex]) {
             return clampedMin;
         }
 
-        boolean isActive = this.isTectonicUpliftActive(cellX, cellY, s.cx[minIndex], s.cy[minIndex]);
-        if (!isActive) {
-            return clampedMin;
-        }
-
-        // Progress r along the sector towards the bridged edge: 0.0 at cell center peak, 1.0 at Voronoi edge
+        // Progress r along the sector towards the bridged edge: 0.0 at centroid peak, 1.0 at Voronoi edge
         float r = 1.0F - clampedMin;
         if (r <= 0.01F) {
             return clampedMin;
         }
 
-        if (!this.clipBisector(cellX, cellY, cellPointX, cellPointY, minIndex, s, s.loHi)) {
-            return clampedMin;
-        }
+        // Ray from centroid through (x, y) intersecting bisector line
+        float d_tan = (x - v.centroidX) * v.tx[minIndex] + (y - v.centroidY) * v.ty[minIndex];
+        float t_edge = d_tan / r - v.mTan[minIndex];
 
-        float lo = s.loHi[0];
-        float hi = s.loHi[1];
-
-        // Tangent parameter t_edge along the bisector where the ray from peak (cellPointX, cellPointY) through (x, y) intersects the edge
-        float tx = -s.ny[minIndex];
-        float ty = s.nx[minIndex];
-        float d_tan = (x - cellPointX) * tx + (y - cellPointY) * ty;
-        float t_edge = d_tan / r;
-
-        // Measure distance from the true center of the Voronoi edge relative to half-width
-        float t_mid = 0.5F * (lo + hi);
-        float halfLen = 0.5F * (hi - lo);
+        float halfLen = v.halfLen[minIndex];
         if (halfLen <= 1.0e-6F) {
             return clampedMin;
         }
 
-        float uEdge = (t_edge - t_mid) / halfLen;
+        float uEdge = (t_edge - v.tMid[minIndex]) / halfLen;
         if (uEdge <= -1.0F || uEdge >= 1.0F) {
             return clampedMin;
         }
 
         float fraction;
-        if (this.tectonicRounding <= 0.0F || Math.abs(t_mid) < 1.0e-4F) {
+        if (this.tectonicRounding <= 0.0F || Math.abs(v.tMid[minIndex]) < 1.0e-4F) {
             fraction = Math.abs(uEdge);
         } else {
-            // Circumcircle through Peak 1 (-halfL, 0), Chord intersection (0, t_mid), and Peak 2 (+halfL, 0)
-            float halfL = 0.5F * s.len[minIndex];
-            float h2 = halfL * halfL;
-            float cy = 0.5F * (t_mid - h2 / t_mid);
+            float dPerp = v.hc[minIndex] / v.len[minIndex];
+            float h2 = dPerp * dPerp;
+            float tMid = v.tMid[minIndex];
+            float cy = 0.5F * (tMid - h2 / tMid);
             float M = Math.abs(cy);
             float rFactor = r * (2.0F - r);
             float radicand = M * M + rFactor * h2;
             float denom = NoiseUtil.sqrt(radicand) + M;
-            float sign = t_mid >= 0.0F ? 1.0F : -1.0F;
+            float sign = tMid >= 0.0F ? 1.0F : -1.0F;
             float tArcDivR = sign * ((2.0F - r) * h2 / denom);
 
             // Interpolate path between straight chord (0.0 rounding) and circular arc (1.0 rounding)
-            float uCrest = this.tectonicRounding * ((tArcDivR - t_mid) / halfLen);
+            float uCrest = this.tectonicRounding * ((tArcDivR - tMid) / halfLen);
             uCrest = NoiseUtil.clamp(uCrest, -0.80F, 0.80F);
 
             // Lateral distance from the curved ridge centerline to (x, y)
@@ -304,85 +483,12 @@ public class PlateUpliftBridge {
         this.saddleHeight = saddleHeight;
     }
 
-    public boolean clipBisector(int cellX, int cellY, float cellPointX, float cellPointY, int minIndex, BridgeScratch s, float[] loHi) {
-        int ncx = s.cx[minIndex];
-        int ncy = s.cy[minIndex];
-        int minCx = Math.min(cellX, ncx) - 1;
-        int maxCx = Math.max(cellX, ncx) + 1;
-        int minCy = Math.min(cellY, ncy) - 1;
-        int maxCy = Math.max(cellY, ncy) + 1;
-        float mxK = s.mx[minIndex];
-        float myK = s.my[minIndex];
-
-        float tx = -s.ny[minIndex];
-        float ty = s.nx[minIndex];
-        float lo = -1.0e9F;
-        float hi = 1.0e9F;
-        boolean ok = true;
-
-        for (int cy = minCy; cy <= maxCy && ok; ++cy) {
-            for (int cx = minCx; cx <= maxCx && ok; ++cx) {
-                if ((cx == cellX && cy == cellY) || (cx == ncx && cy == ncy)) {
-                    continue;
-                }
-                NoiseUtil.Vec2f vecC = NoiseUtil.cell(this.seed, cx, cy);
-                float pxC = cx + vecC.x() * this.jitter;
-                float pyC = cy + vecC.y() * this.jitter;
-
-                float dACx = pxC - cellPointX;
-                float dACy = pyC - cellPointY;
-                float lenACSq = dACx * dACx + dACy * dACy;
-                if (lenACSq < 1.0e-5F) {
-                    continue;
-                }
-
-                float invAC = 1.0F / NoiseUtil.sqrt(lenACSq);
-                float nACx = dACx * invAC;
-                float nACy = dACy * invAC;
-                float mACx = (cellPointX + pxC) * 0.5F;
-                float mACy = (cellPointY + pyC) * 0.5F;
-
-                float a = tx * nACx + ty * nACy;
-                float b = (mACx - mxK) * nACx + (mACy - myK) * nACy;
-                if (Math.abs(a) < 1.0e-6F) {
-                    if (b < 0.0F) {
-                        ok = false;
-                    }
-                    continue;
-                }
-                float t = b / a;
-                if (a > 0.0F) {
-                    if (t < hi) {
-                        hi = t;
-                    }
-                } else if (t > lo) {
-                    lo = t;
-                }
-            }
-        }
-
-        if (!ok || lo >= hi) {
-            return false;
-        }
-
-        lo = Math.max(lo, -3.0F * s.len[minIndex]);
-        hi = Math.min(hi, 3.0F * s.len[minIndex]);
-
-        if (lo >= hi || isSectorTooThin(lo, hi, s.len[minIndex])) {
-            return false;
-        }
-
-        loHi[0] = lo;
-        loHi[1] = hi;
-        return true;
-    }
-
     /**
      * Returns true if a ray from the continent centroid peak at unwarped coordinates (cx, cz)
      * in direction (dx, dz) points into a bridged sector connecting to an adjacent bridged continent.
      */
     public boolean isInBridgedSector(int cx, int cz, float dx, float dz) {
-        if (this.generator.getBridgeChance() <= 0.0F) {
+        if (this.generator == null || this.generator.getBridgeChance() <= 0.0F) {
             return false;
         }
 
@@ -394,8 +500,6 @@ public class PlateUpliftBridge {
 
         int cellX = xi;
         int cellY = yi;
-        float cellPointX = x;
-        float cellPointY = y;
         float nearestSq = Float.MAX_VALUE;
 
         for (int cy = yi - 1; cy <= yi + 1; ++cy) {
@@ -403,12 +507,12 @@ public class PlateUpliftBridge {
                 NoiseUtil.Vec2f vec = NoiseUtil.cell(this.seed, cx2, cy);
                 float px = cx2 + vec.x() * this.jitter;
                 float py = cy + vec.y() * this.jitter;
-                float dist2 = Line.distSq(x, y, px, py);
+                float dX = px - x;
+                float dY = py - y;
+                float dist2 = dX * dX + dY * dY;
 
                 if (dist2 < nearestSq) {
                     nearestSq = dist2;
-                    cellPointX = px;
-                    cellPointY = py;
                     cellX = cx2;
                     cellY = cy;
                 }
@@ -419,84 +523,36 @@ public class PlateUpliftBridge {
             return false;
         }
 
-        BridgeScratch s = SCRATCH.get();
-
-        int nIndex = 0;
-        int bridgedMask = 0;
-        for (int cy2 = cellY - 1; cy2 <= cellY + 1; ++cy2) {
-            for (int cx2 = cellX - 1; cx2 <= cellX + 1; ++cx2) {
-                if (cx2 != cellX || cy2 != cellY) {
-                    NoiseUtil.Vec2f vec2 = NoiseUtil.cell(this.seed, cx2, cy2);
-                    s.cx[nIndex] = cx2;
-                    s.cy[nIndex] = cy2;
-                    s.neighborX[nIndex] = cx2 + vec2.x() * this.jitter;
-                    s.neighborY[nIndex] = cy2 + vec2.y() * this.jitter;
-                    if (this.generator.isBridged(cellX, cellY, cx2, cy2)) {
-                        bridgedMask |= (1 << nIndex);
-                    }
-                    nIndex++;
-                }
-            }
-        }
-
-        if (bridgedMask == 0) {
-            return false;
-        }
+        CellVoronoi v = this.getVoronoi(cellX, cellY);
 
         int minIndex = -1;
         float minS = Float.MAX_VALUE;
 
-        for (int i = 0; i < 8; i++) {
-            float px2 = s.neighborX[i];
-            float py2 = s.neighborY[i];
-            float dX = px2 - cellPointX;
-            float dY = py2 - cellPointY;
-            float lenSq = dX * dX + dY * dY;
-
-            if (lenSq > 0.00001F) {
-                float len = NoiseUtil.sqrt(lenSq);
-                float inv = 1.0F / len;
-                s.len[i] = len;
-                s.nx[i] = dX * inv;
-                s.ny[i] = dY * inv;
-                s.mx[i] = (cellPointX + px2) * 0.5F;
-                s.my[i] = (cellPointY + py2) * 0.5F;
-
-                float dotN = dx * s.nx[i] + dz * s.ny[i];
-                if (dotN > 0.0001F) {
-                    float sDist = (0.5F * len) / dotN;
-                    if (sDist < minS) {
-                        minS = sDist;
-                        minIndex = i;
-                    }
+        for (int i = 0; i < v.edgeCount; i++) {
+            float dotN = dx * v.nx[i] + dz * v.ny[i];
+            if (dotN > 0.0001F) {
+                float distToEdge = v.hc[i] / v.len[i];
+                float sDist = distToEdge / dotN;
+                if (sDist < minS) {
+                    minS = sDist;
+                    minIndex = i;
                 }
             }
         }
 
-        if (minIndex < 0 || (bridgedMask & (1 << minIndex)) == 0) {
+        if (minIndex < 0 || !v.isBridged[minIndex]) {
             return false;
         }
 
-        if (!this.clipBisector(cellX, cellY, cellPointX, cellPointY, minIndex, s, s.loHi)) {
-            return false;
-        }
+        float dotT = dx * v.tx[minIndex] + dz * v.ty[minIndex];
+        float tEdge = minS * dotT - v.mTan[minIndex];
 
-        float lo = s.loHi[0];
-        float hi = s.loHi[1];
-
-        float tx = -s.ny[minIndex];
-        float ty = s.nx[minIndex];
-        float dotN = dx * s.nx[minIndex] + dz * s.ny[minIndex];
-        float dotT = dx * tx + dz * ty;
-        float tEdge = 0.5F * s.len[minIndex] * (dotT / dotN);
-
-        float t_mid = 0.5F * (lo + hi);
-        float halfLen = 0.5F * (hi - lo);
+        float halfLen = v.halfLen[minIndex];
         if (halfLen <= 1.0e-6F) {
             return false;
         }
 
-        float uEdge = (tEdge - t_mid) / halfLen;
+        float uEdge = (tEdge - v.tMid[minIndex]) / halfLen;
         return uEdge >= -1.0F && uEdge <= 1.0F;
     }
 
@@ -505,7 +561,7 @@ public class PlateUpliftBridge {
      * two adjacent bridged continents.
      */
     public boolean isInBridgedSector(float rawX, float rawY) {
-        if (this.generator.getBridgeChance() <= 0.0F) {
+        if (this.generator == null || this.generator.getBridgeChance() <= 0.0F) {
             return false;
         }
 
@@ -517,8 +573,6 @@ public class PlateUpliftBridge {
 
         int cellX = xi;
         int cellY = yi;
-        float cellPointX = x;
-        float cellPointY = y;
         float nearestSq = Float.MAX_VALUE;
 
         for (int cy = yi - 1; cy <= yi + 1; ++cy) {
@@ -526,12 +580,12 @@ public class PlateUpliftBridge {
                 NoiseUtil.Vec2f vec = NoiseUtil.cell(this.seed, cx, cy);
                 float px = cx + vec.x() * this.jitter;
                 float py = cy + vec.y() * this.jitter;
-                float dist2 = Line.distSq(x, y, px, py);
+                float dX = px - x;
+                float dY = py - y;
+                float dist2 = dX * dX + dY * dY;
 
                 if (dist2 < nearestSq) {
                     nearestSq = dist2;
-                    cellPointX = px;
-                    cellPointY = py;
                     cellX = cx;
                     cellY = cy;
                 }
@@ -542,96 +596,39 @@ public class PlateUpliftBridge {
             return false;
         }
 
-        BridgeScratch s = SCRATCH.get();
-
-        int nIndex = 0;
-        int bridgedMask = 0;
-        for (int cy2 = cellY - 1; cy2 <= cellY + 1; ++cy2) {
-            for (int cx2 = cellX - 1; cx2 <= cellX + 1; ++cx2) {
-                if (cx2 != cellX || cy2 != cellY) {
-                    NoiseUtil.Vec2f vec2 = NoiseUtil.cell(this.seed, cx2, cy2);
-                    s.cx[nIndex] = cx2;
-                    s.cy[nIndex] = cy2;
-                    s.neighborX[nIndex] = cx2 + vec2.x() * this.jitter;
-                    s.neighborY[nIndex] = cy2 + vec2.y() * this.jitter;
-                    if (this.generator.isBridged(cellX, cellY, cx2, cy2)) {
-                        bridgedMask |= (1 << nIndex);
-                    }
-                    nIndex++;
-                }
-            }
-        }
-
-        if (bridgedMask == 0) {
-            return false;
-        }
+        CellVoronoi v = this.getVoronoi(cellX, cellY);
 
         int minIndex = -1;
         float minGradient = Float.MAX_VALUE;
 
-        for (int i = 0; i < 8; i++) {
-            float px2 = s.neighborX[i];
-            float py2 = s.neighborY[i];
-            float dx = px2 - cellPointX;
-            float dy = py2 - cellPointY;
-            float lenSq = dx * dx + dy * dy;
-
-            if (lenSq > 0.00001F) {
-                float len = NoiseUtil.sqrt(lenSq);
-                float inv = 1.0F / len;
-                s.len[i] = len;
-                s.nx[i] = dx * inv;
-                s.ny[i] = dy * inv;
-                float mx = (cellPointX + px2) * 0.5F;
-                float my = (cellPointY + py2) * 0.5F;
-
-                float h_c = 0.5F * lenSq;
-                float h_x = (mx - x) * dx + (my - y) * dy;
-
-                if (h_c > 0.00001F) {
-                    float planeValue = h_x / h_c;
-                    s.planeValue[i] = planeValue;
-                    if (planeValue < minGradient) {
-                        minGradient = planeValue;
-                        minIndex = i;
-                    }
-                } else {
-                    s.planeValue[i] = 1.0F;
-                }
-            } else {
-                s.planeValue[i] = 1.0F;
+        for (int i = 0; i < v.edgeCount; i++) {
+            float h_x = (v.mx[i] - x) * v.dx[i] + (v.my[i] - y) * v.dy[i];
+            float planeValue = h_x / v.hc[i];
+            if (planeValue < minGradient) {
+                minGradient = planeValue;
+                minIndex = i;
             }
         }
 
-        if (minIndex < 0 || (bridgedMask & (1 << minIndex)) == 0) {
+        if (minIndex < 0 || !v.isBridged[minIndex]) {
             return false;
         }
 
         float clampedMin = NoiseUtil.clamp(minGradient, 0.0F, 1.0F);
         float r = 1.0F - clampedMin;
         if (r <= 0.0001F) {
-            return true;
-        }
-
-        if (!this.clipBisector(cellX, cellY, cellPointX, cellPointY, minIndex, s, s.loHi)) {
             return false;
         }
 
-        float lo = s.loHi[0];
-        float hi = s.loHi[1];
+        float d_tan = (x - v.centroidX) * v.tx[minIndex] + (y - v.centroidY) * v.ty[minIndex];
+        float t_edge = d_tan / r - v.mTan[minIndex];
 
-        float tx = -s.ny[minIndex];
-        float ty = s.nx[minIndex];
-        float d_tan = (x - cellPointX) * tx + (y - cellPointY) * ty;
-        float t_edge = d_tan / r;
-
-        float t_mid = 0.5F * (lo + hi);
-        float halfLen = 0.5F * (hi - lo);
+        float halfLen = v.halfLen[minIndex];
         if (halfLen <= 1.0e-6F) {
             return false;
         }
 
-        float uEdge = (t_edge - t_mid) / halfLen;
+        float uEdge = (t_edge - v.tMid[minIndex]) / halfLen;
         return uEdge >= -1.0F && uEdge <= 1.0F;
     }
 }

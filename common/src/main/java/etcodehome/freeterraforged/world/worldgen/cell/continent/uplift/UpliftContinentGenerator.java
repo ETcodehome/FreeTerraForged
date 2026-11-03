@@ -129,8 +129,9 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         // RiverCache / getRivermap() / getNearestCenter() all rely on cell.continentX/continentZ so if we return early
         // without setting them they keep whatever value this pooled Cell last held (often a leftover
         // (0,0) from a previous tile), causing an unrelated continents rivers to be carved here instead.
-        cell.continentX = Math.round(cellPointX / this.frequency);
-        cell.continentZ = Math.round(cellPointY / this.frequency);
+        PlateUpliftBridge.CellVoronoi voronoi = this.plateUpliftBridge.getVoronoi(cellX, cellY);
+        cell.continentX = Math.round(voronoi.centroidX / this.frequency);
+        cell.continentZ = Math.round(voronoi.centroidY / this.frequency);
 
         // early exit guard to avoid processing skipped continents
         if (this.shouldSkip(cellX, cellY)) {
@@ -499,8 +500,8 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         int xi = NoiseUtil.floor(px);
         int yi = NoiseUtil.floor(py);
         float nearest = Float.MAX_VALUE;
-        float bestPx = px;
-        float bestPy = py;
+        int bestCellX = xi;
+        int bestCellY = yi;
 
         for (int cy = yi - 1; cy <= yi + 1; ++cy) {
             for (int cx = xi - 1; cx <= xi + 1; ++cx) {
@@ -510,13 +511,14 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
                 float dist2 = Line.distSq(px, py, cpx, cpy);
                 if (dist2 < nearest) {
                     nearest = dist2;
-                    bestPx = cpx;
-                    bestPy = cpy;
+                    bestCellX = cx;
+                    bestCellY = cy;
                 }
             }
         }
-        int cx = Math.round(bestPx / this.frequency);
-        int cz = Math.round(bestPy / this.frequency);
+        PlateUpliftBridge.CellVoronoi voronoi = this.plateUpliftBridge.getVoronoi(bestCellX, bestCellY);
+        int cx = Math.round(voronoi.centroidX / this.frequency);
+        int cz = Math.round(voronoi.centroidY / this.frequency);
         return PosUtil.pack(cx, cz);
     }
 
