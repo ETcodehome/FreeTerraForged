@@ -16,7 +16,9 @@ import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.Pr
 public class Presets {
 
 	public static Preset makeFTFDefault() {
-		return modernDefaultWithRivers();
+		Preset preset = modernDefaultWithRivers();
+		preset.presentation().setPresetName("FreeTerraForged");
+		return preset;
 	}
 	
 	public static Preset makeLegacyDefault() {
