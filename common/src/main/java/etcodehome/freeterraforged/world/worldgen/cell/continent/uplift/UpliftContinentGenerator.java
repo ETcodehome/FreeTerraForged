@@ -30,7 +30,6 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
     protected WorldSettings.Continent continentSettings;
 
     protected volatile float bridgeChance;
-    protected volatile float bridgeReach;
     protected PlateUpliftBridge plateUpliftBridge;
     private final int bridgeSeed;
 
@@ -87,7 +86,6 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         this.levels = context.levels;
 
         this.bridgeChance = settings.continent.bridgeChance;
-        this.bridgeReach = settings.continent.bridgeReach;
 
         // Must stay the LAST seed.next() so existing noise seeds above are not shifted.
         this.bridgeSeed = seed.next();
@@ -279,12 +277,11 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
             return bestSq == Float.MAX_VALUE ? 4.0F : bestSq;
         }
 
-        // Fast path 2: single-pass check if any neighbor is bridged within bridgeReach.
-        // If an open bridged border is within bridgeReach, run the bridged boundary path.
+        // Fast path 2: single-pass check if any neighbor is bridged within 1.0F cell unit.
+        // If an open bridged border is within 1.0F, run the bridged boundary path.
         // Otherwise, bestClosedSq is already computed over all closed borders.
         boolean anyOpenNear = false;
         float bestClosedSq = Float.MAX_VALUE;
-        float reach = this.bridgeReach;
         for (int i = 0; i < 8; i++) {
             int cx2 = cellX + NBR_DX[i];
             int cy2 = cellY + NBR_DY[i];
@@ -294,8 +291,8 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
             boolean open = this.canBridge(cx2, cy2) && this.bridgeRoll(cellX, cellY, cx2, cy2) < this.bridgeChance;
             float dist = getDistance(x, y, ax, ay, px2, py2);
             if (open) {
-                // An open border influences coastal shaping only if the sample point is within bridgeReach
-                if (dist < reach * reach) {
+                // An open border influences coastal shaping only if the sample point is within 1.0F (1.0 * 1.0 = 1.0F)
+                if (dist < 1.0F) {
                     anyOpenNear = true;
                 }
             } else if (dist < bestClosedSq) {
@@ -529,10 +526,6 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
 
     public float getBridgeChance() {
         return this.bridgeChance;
-    }
-
-    public float getBridgeReach() {
-        return this.bridgeReach;
     }
 
     public PlateUpliftBridge getPlateUpliftBridge() {

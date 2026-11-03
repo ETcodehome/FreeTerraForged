@@ -37,14 +37,6 @@ public class WorldSettings {
                 0.18F
         );
 
-        public static final GenericFloatSetting bridgeReachSetting = new GenericFloatSetting(
-                "continent.bridgeReach",
-                "gui.slider.bridgeReach",
-                0.0F,
-                1.0F,
-                0.25F
-        );
-
         public static final GenericFloatSetting tectonicPlateUpliftSetting = new GenericFloatSetting(
                 "continent.tectonicPlateUplift",
                 "gui.slider.tectonicPlateUplift",
@@ -72,7 +64,6 @@ public class WorldSettings {
     		Codec.FLOAT.optionalFieldOf("continentNoiseGain", 0.26F).forGetter((o) -> o.continentNoiseGain),
     		Codec.FLOAT.optionalFieldOf("continentNoiseLacunarity", 4.33F).forGetter((o) -> o.continentNoiseLacunarity),
     		Codec.FLOAT.optionalFieldOf("bridgeChance", bridgeChanceSetting.defaultValue).forGetter((o) -> o.bridgeChance),
-    		Codec.FLOAT.optionalFieldOf("bridgeReach", bridgeReachSetting.defaultValue).forGetter((o) -> o.bridgeReach),
     		Codec.FLOAT.optionalFieldOf("tectonicPlateUplift", tectonicPlateUpliftSetting.defaultValue).forGetter((o) -> o.tectonicPlateUplift),
     		Codec.FLOAT.optionalFieldOf("tectonicRounding", tectonicRoundingSetting.defaultValue).forGetter((o) -> o.tectonicRounding)
     	).apply(instance, Continent::new));
@@ -87,11 +78,10 @@ public class WorldSettings {
         public float continentNoiseGain;
         public float continentNoiseLacunarity;
         public float bridgeChance;
-        public float bridgeReach;
         public float tectonicPlateUplift;
         public float tectonicRounding;
         
-        public Continent(ContinentType continentType, DistanceFunction continentShape, int continentScale, float continentJitter, float continentSkipping, float continentSizeVariance, int continentNoiseOctaves, float continentNoiseGain, float continentNoiseLacunarity, float bridgeChance, float bridgeReach, float tectonicPlateUplift, float tectonicRounding) {
+        public Continent(ContinentType continentType, DistanceFunction continentShape, int continentScale, float continentJitter, float continentSkipping, float continentSizeVariance, int continentNoiseOctaves, float continentNoiseGain, float continentNoiseLacunarity, float bridgeChance, float tectonicPlateUplift, float tectonicRounding) {
             this.continentType = continentType;
             this.continentShape = continentShape;
             this.continentScale = continentScale;
@@ -102,25 +92,24 @@ public class WorldSettings {
             this.continentNoiseGain = continentNoiseGain;
             this.continentNoiseLacunarity = continentNoiseLacunarity;
             this.bridgeChance = bridgeChance;
-            this.bridgeReach = bridgeReach;
             this.tectonicPlateUplift = tectonicPlateUplift;
             this.tectonicRounding = tectonicRounding;
         }
 
-        public Continent(ContinentType continentType, DistanceFunction continentShape, int continentScale, float continentJitter, float continentSkipping, float continentSizeVariance, int continentNoiseOctaves, float continentNoiseGain, float continentNoiseLacunarity, float bridgeChance, float bridgeReach, float tectonicPlateUplift) {
-            this(continentType, continentShape, continentScale, continentJitter, continentSkipping, continentSizeVariance, continentNoiseOctaves, continentNoiseGain, continentNoiseLacunarity, bridgeChance, bridgeReach, tectonicPlateUplift, tectonicRoundingSetting.defaultValue);
+        public Continent(ContinentType continentType, DistanceFunction continentShape, int continentScale, float continentJitter, float continentSkipping, float continentSizeVariance, int continentNoiseOctaves, float continentNoiseGain, float continentNoiseLacunarity, float bridgeChance, float tectonicPlateUplift) {
+            this(continentType, continentShape, continentScale, continentJitter, continentSkipping, continentSizeVariance, continentNoiseOctaves, continentNoiseGain, continentNoiseLacunarity, bridgeChance, tectonicPlateUplift, tectonicRoundingSetting.defaultValue);
         }
 
-        public Continent(ContinentType continentType, DistanceFunction continentShape, int continentScale, float continentJitter, float continentSkipping, float continentSizeVariance, int continentNoiseOctaves, float continentNoiseGain, float continentNoiseLacunarity, float bridgeChance, float bridgeReach) {
-            this(continentType, continentShape, continentScale, continentJitter, continentSkipping, continentSizeVariance, continentNoiseOctaves, continentNoiseGain, continentNoiseLacunarity, bridgeChance, bridgeReach, tectonicPlateUpliftSetting.defaultValue, tectonicRoundingSetting.defaultValue);
+        public Continent(ContinentType continentType, DistanceFunction continentShape, int continentScale, float continentJitter, float continentSkipping, float continentSizeVariance, int continentNoiseOctaves, float continentNoiseGain, float continentNoiseLacunarity, float bridgeChance) {
+            this(continentType, continentShape, continentScale, continentJitter, continentSkipping, continentSizeVariance, continentNoiseOctaves, continentNoiseGain, continentNoiseLacunarity, bridgeChance, tectonicPlateUpliftSetting.defaultValue, tectonicRoundingSetting.defaultValue);
         }
 
         public Continent(ContinentType continentType, DistanceFunction continentShape, int continentScale, float continentJitter, float continentSkipping, float continentSizeVariance, int continentNoiseOctaves, float continentNoiseGain, float continentNoiseLacunarity) {
-            this(continentType, continentShape, continentScale, continentJitter, continentSkipping, continentSizeVariance, continentNoiseOctaves, continentNoiseGain, continentNoiseLacunarity, bridgeChanceSetting.defaultValue, bridgeReachSetting.defaultValue, tectonicPlateUpliftSetting.defaultValue, tectonicRoundingSetting.defaultValue);
+            this(continentType, continentShape, continentScale, continentJitter, continentSkipping, continentSizeVariance, continentNoiseOctaves, continentNoiseGain, continentNoiseLacunarity, bridgeChanceSetting.defaultValue, tectonicPlateUpliftSetting.defaultValue, tectonicRoundingSetting.defaultValue);
         }
         
         public Continent copy() {
-        	return new Continent(this.continentType, this.continentShape, this.continentScale, this.continentJitter, this.continentSkipping, this.continentSizeVariance, this.continentNoiseOctaves, this.continentNoiseGain, this.continentNoiseLacunarity, this.bridgeChance, this.bridgeReach, this.tectonicPlateUplift, this.tectonicRounding);
+        	return new Continent(this.continentType, this.continentShape, this.continentScale, this.continentJitter, this.continentSkipping, this.continentSizeVariance, this.continentNoiseOctaves, this.continentNoiseGain, this.continentNoiseLacunarity, this.bridgeChance, this.tectonicPlateUplift, this.tectonicRounding);
         }
     }
     
@@ -223,7 +212,6 @@ public class WorldSettings {
                 0.2516F,
                 5.7262F,
                 Continent.bridgeChanceSetting.defaultValue,
-                Continent.bridgeReachSetting.defaultValue,
                 Continent.tectonicPlateUpliftSetting.defaultValue,
                 Continent.tectonicRoundingSetting.defaultValue
             ),

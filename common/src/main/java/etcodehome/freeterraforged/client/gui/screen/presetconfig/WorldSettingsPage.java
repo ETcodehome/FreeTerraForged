@@ -29,7 +29,6 @@ public class WorldSettingsPage extends PresetEditorPage {
 	private Slider continentNoiseGain;
 	private Slider continentNoiseLacunarity;
 	private Slider bridgeChance;
-	private Slider bridgeReach;
 	private Slider tectonicPlateUplift;
 	private Slider tectonicRounding;
 
@@ -125,12 +124,6 @@ public class WorldSettingsPage extends PresetEditorPage {
 				continent.bridgeChance,
 				WorldSettings.Continent.bridgeChanceSetting,
 				val -> continent.bridgeChance = val,
-				this::regenerate
-		);
-		this.bridgeReach = PresetWidgets.createFloatSlider(
-				continent.bridgeReach,
-				WorldSettings.Continent.bridgeReachSetting,
-				val -> continent.bridgeReach = val,
 				this::regenerate
 		);
 		this.tectonicPlateUplift = PresetWidgets.createFloatSlider(
@@ -237,7 +230,6 @@ public class WorldSettingsPage extends PresetEditorPage {
 		this.left.addWidget(this.continentNoiseGain);
 		this.left.addWidget(this.continentNoiseLacunarity);
 		this.left.addWidget(this.bridgeChance);
-		this.left.addWidget(this.bridgeReach);
 		this.left.addWidget(this.tectonicPlateUplift);
 		this.left.addWidget(this.tectonicRounding);
 
@@ -280,7 +272,6 @@ public class WorldSettingsPage extends PresetEditorPage {
 		// ensures that terrains never drop below continental uplift resulting in floating rivers
 		boolean isUpliftContinent = type == ContinentType.UPLIFT;
 		this.bridgeChance.active = isUpliftContinent;
-		this.bridgeReach.active = isUpliftContinent;
 		this.tectonicPlateUplift.active = isUpliftContinent;
 		this.tectonicRounding.active = isUpliftContinent;
 		if(isUpliftContinent){
