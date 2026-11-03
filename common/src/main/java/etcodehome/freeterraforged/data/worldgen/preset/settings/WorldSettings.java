@@ -34,7 +34,7 @@ public class WorldSettings {
                 "gui.slider.bridgeChance",
                 0.0F,
                 1.0F,
-                0.18F
+                1.0F
         );
 
         public static final GenericFloatSetting tectonicPlateUpliftSetting = new GenericFloatSetting(
@@ -50,7 +50,7 @@ public class WorldSettings {
                 "gui.slider.tectonicRounding",
                 0.0F,
                 1.0F,
-                0.50F
+                1.0F
         );
 
         public static final GenericFloatSetting macroWarpStrengthSetting = new GenericFloatSetting(
@@ -58,7 +58,7 @@ public class WorldSettings {
                 "gui.slider.macroWarpStrength",
                 0.0F,
                 2.0F,
-                0.67F
+                2.0F
         );
 
         public static final GenericFloatSetting coastalComplexitySetting = new GenericFloatSetting(
@@ -66,7 +66,7 @@ public class WorldSettings {
                 "gui.slider.coastalComplexity",
                 0.0F,
                 1.0F,
-                0.50F
+                1.0F
         );
 
     	public static final Codec<Continent> CODEC = RecordCodecBuilder.create(instance -> instance.group(
@@ -230,10 +230,10 @@ public class WorldSettings {
             new Continent(
                 ContinentType.UPLIFT,
                 DistanceFunction.EUCLIDEAN,
-                4000,
-                0.8F,
-                0.2F,
-                0.6161F,
+                3000,
+                1.0F,
+                0.686F,
+                0.4F,
                 5,
                 0.2516F,
                 5.7262F,
