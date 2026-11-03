@@ -2,6 +2,7 @@ package etcodehome.freeterraforged.world.worldgen.cell.continent.uplift;
 
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Handles tectonic plate uplift bridging between adjacent bridged continents,
@@ -35,6 +36,7 @@ public class PlateUpliftBridge {
     }
 
     public static final class CellVoronoi {
+        public int instanceId = -1;
         public int cellX = Integer.MIN_VALUE;
         public int cellY = Integer.MIN_VALUE;
         public float seedX;
@@ -43,47 +45,47 @@ public class PlateUpliftBridge {
         public float centroidY;
         public int edgeCount;
 
-        public final int[] ncx = new int[16];
-        public final int[] ncy = new int[16];
-        public final float[] neighborX = new float[16];
-        public final float[] neighborY = new float[16];
-        public final float[] dx = new float[16];
-        public final float[] dy = new float[16];
-        public final float[] mx = new float[16];
-        public final float[] my = new float[16];
-        public final float[] nx = new float[16];
-        public final float[] ny = new float[16];
-        public final float[] tx = new float[16];
-        public final float[] ty = new float[16];
-        public final float[] len = new float[16];
-        public final float[] lo = new float[16];
-        public final float[] hi = new float[16];
-        public final float[] tMid = new float[16];
-        public final float[] halfLen = new float[16];
-        public final float[] hc = new float[16];
-        public final float[] mTan = new float[16];
-        public final boolean[] isBridged = new boolean[16];
-        public final boolean[] isTectonicActive = new boolean[16];
+        public final int[] ncx = new int[24];
+        public final int[] ncy = new int[24];
+        public final float[] neighborX = new float[24];
+        public final float[] neighborY = new float[24];
+        public final float[] dx = new float[24];
+        public final float[] dy = new float[24];
+        public final float[] mx = new float[24];
+        public final float[] my = new float[24];
+        public final float[] nx = new float[24];
+        public final float[] ny = new float[24];
+        public final float[] tx = new float[24];
+        public final float[] ty = new float[24];
+        public final float[] len = new float[24];
+        public final float[] lo = new float[24];
+        public final float[] hi = new float[24];
+        public final float[] tMid = new float[24];
+        public final float[] halfLen = new float[24];
+        public final float[] hc = new float[24];
+        public final float[] mTan = new float[24];
+        public final boolean[] isBridged = new boolean[24];
+        public final boolean[] isTectonicActive = new boolean[24];
     }
 
     private static final class BridgeScratch {
-        final CellVoronoi[] cache = new CellVoronoi[8];
+        final CellVoronoi[] cache = new CellVoronoi[64];
 
-        final int[] candCx = new int[25];
-        final int[] candCy = new int[25];
-        final float[] candX = new float[25];
-        final float[] candY = new float[25];
+        final int[] candCx = new int[64];
+        final int[] candCy = new int[64];
+        final float[] candX = new float[64];
+        final float[] candY = new float[64];
 
-        final float[] edgeLo = new float[16];
-        final float[] edgeHi = new float[16];
-        final float[] edgeLen = new float[16];
-        final float[] edgeNx = new float[16];
-        final float[] edgeNy = new float[16];
-        final float[] edgeTx = new float[16];
-        final float[] edgeTy = new float[16];
-        final float[] edgeMx = new float[16];
-        final float[] edgeMy = new float[16];
-        final int[] edgeCandIdx = new int[16];
+        final float[] edgeLo = new float[24];
+        final float[] edgeHi = new float[24];
+        final float[] edgeLen = new float[24];
+        final float[] edgeNx = new float[24];
+        final float[] edgeNy = new float[24];
+        final float[] edgeTx = new float[24];
+        final float[] edgeTy = new float[24];
+        final float[] edgeMx = new float[24];
+        final float[] edgeMy = new float[24];
+        final int[] edgeCandIdx = new int[24];
 
         BridgeScratch() {
             for (int i = 0; i < cache.length; i++) {
@@ -94,7 +96,16 @@ public class PlateUpliftBridge {
 
     private static final ThreadLocal<BridgeScratch> SCRATCH = ThreadLocal.withInitial(BridgeScratch::new);
 
-    protected final UpliftContinentGenerator generator;
+    public interface BridgeProvider {
+        boolean canBridge(int cx, int cy);
+        boolean isBridged(int ax, int ay, int bx, int by);
+        float getBridgeChance();
+    }
+
+    private static final AtomicInteger INSTANCE_COUNTER = new AtomicInteger();
+    private final int instanceId = INSTANCE_COUNTER.incrementAndGet();
+
+    protected final BridgeProvider generator;
     protected final int seed;
     protected final float jitter;
     protected final float frequency;
@@ -103,19 +114,19 @@ public class PlateUpliftBridge {
     protected volatile float tectonicRounding;
     protected volatile float saddleHeight;
 
-    public PlateUpliftBridge(UpliftContinentGenerator generator, int seed, float jitter, int tectonicSeed, float tectonicPlateUplift) {
+    public PlateUpliftBridge(BridgeProvider generator, int seed, float jitter, int tectonicSeed, float tectonicPlateUplift) {
         this(generator, seed, jitter, tectonicSeed, tectonicPlateUplift, DEFAULT_TECTONIC_ROUNDING, DEFAULT_SADDLE_HEIGHT);
     }
 
-    public PlateUpliftBridge(UpliftContinentGenerator generator, int seed, float jitter, int tectonicSeed, float tectonicPlateUplift, float tectonicRounding) {
+    public PlateUpliftBridge(BridgeProvider generator, int seed, float jitter, int tectonicSeed, float tectonicPlateUplift, float tectonicRounding) {
         this(generator, seed, jitter, tectonicSeed, tectonicPlateUplift, tectonicRounding, DEFAULT_SADDLE_HEIGHT);
     }
 
-    public PlateUpliftBridge(UpliftContinentGenerator generator, int seed, float jitter, int tectonicSeed, float tectonicPlateUplift, float tectonicRounding, float saddleHeight) {
-        this(generator, seed, jitter, generator != null ? generator.frequency : 1.0F / 4000.0F, tectonicSeed, tectonicPlateUplift, tectonicRounding, saddleHeight);
+    public PlateUpliftBridge(BridgeProvider generator, int seed, float jitter, int tectonicSeed, float tectonicPlateUplift, float tectonicRounding, float saddleHeight) {
+        this(generator, seed, jitter, generator instanceof UpliftContinentGenerator ? ((UpliftContinentGenerator) generator).frequency : 1.0F / 4000.0F, tectonicSeed, tectonicPlateUplift, tectonicRounding, saddleHeight);
     }
 
-    public PlateUpliftBridge(UpliftContinentGenerator generator, int seed, float jitter, float frequency, int tectonicSeed, float tectonicPlateUplift, float tectonicRounding, float saddleHeight) {
+    public PlateUpliftBridge(BridgeProvider generator, int seed, float jitter, float frequency, int tectonicSeed, float tectonicPlateUplift, float tectonicRounding, float saddleHeight) {
         this.generator = generator;
         this.seed = seed;
         this.jitter = jitter;
@@ -153,13 +164,14 @@ public class PlateUpliftBridge {
      */
     public CellVoronoi getVoronoi(int cellX, int cellY) {
         BridgeScratch s = SCRATCH.get();
-        int hash = (cellX * 31 + cellY) & 7;
+        int hash = ((cellX & 7) << 3) | (cellY & 7);
         CellVoronoi v = s.cache[hash];
-        if (v.cellX == cellX && v.cellY == cellY) {
+        if (v.instanceId == this.instanceId && v.cellX == cellX && v.cellY == cellY) {
             return v;
         }
 
         this.populateVoronoi(cellX, cellY, v, s);
+        v.instanceId = this.instanceId;
         return v;
     }
 
@@ -175,9 +187,9 @@ public class PlateUpliftBridge {
         v.seedY = cellY + vec0.y() * this.jitter;
 
         int candCount = 0;
-        for (int dy = -2; dy <= 2; dy++) {
+        for (int dy = -3; dy <= 3; dy++) {
             int cy = cellY + dy;
-            for (int dx = -2; dx <= 2; dx++) {
+            for (int dx = -3; dx <= 3; dx++) {
                 if (dx == 0 && dy == 0) {
                     continue;
                 }
@@ -253,7 +265,7 @@ public class PlateUpliftBridge {
                 }
             }
 
-            if (ok && lo < hi && e < 16) {
+            if (ok && lo < hi && e < s.edgeLo.length) {
                 s.edgeLo[e] = lo;
                 s.edgeHi[e] = hi;
                 s.edgeLen[e] = len;
@@ -318,12 +330,10 @@ public class PlateUpliftBridge {
             v.hc[k] = Math.max(hcVal, 1.0e-5F);
             v.mTan[k] = (v.mx[k] - v.centroidX) * v.tx[k] + (v.my[k] - v.centroidY) * v.ty[k];
 
-            boolean isImmediateNeighbor = Math.abs(ncx - cellX) <= 1 && Math.abs(ncy - cellY) <= 1;
-            float dPerp = v.hc[k] / v.len[k];
-            boolean notTooThin = !isSectorTooThin(v.lo[k], v.hi[k], dPerp, v.mTan[k]);
+            // Symmetric sector width check based on Delaunay span (strictly identical between Cell A and Cell B)
+            boolean notTooThin = !isSectorTooThin(v.lo[k], v.hi[k], v.len[k]);
 
-            v.isBridged[k] = isImmediateNeighbor
-                    && cellCanBridge
+            v.isBridged[k] = cellCanBridge
                     && this.generator.isBridged(cellX, cellY, ncx, ncy)
                     && notTooThin;
 
@@ -418,8 +428,9 @@ public class PlateUpliftBridge {
         if (this.tectonicRounding <= 0.0F || Math.abs(v.tMid[minIndex]) < 1.0e-4F) {
             fraction = Math.abs(uEdge);
         } else {
-            float dPerp = v.hc[minIndex] / v.len[minIndex];
-            float h2 = dPerp * dPerp;
+            // Use symmetric half-distance between seeds so arc geometry is identical from both sides of the border
+            float halfDelaunay = 0.5F * v.len[minIndex];
+            float h2 = halfDelaunay * halfDelaunay;
             float tMid = v.tMid[minIndex];
             float cy = 0.5F * (tMid - h2 / tMid);
             float M = Math.abs(cy);
