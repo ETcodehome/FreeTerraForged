@@ -10,4 +10,12 @@ public interface SimpleContinent extends Continent {
 	default float getDistanceToOcean(int cx, int cz, float dx, float dy) {
 		return 1.0F;
 	}
+
+	default boolean isInBridgedSector(int cx, int cz, float dx, float dz) {
+		return false;
+	}
+
+	default boolean isInBridgedSector(float x, float z) {
+		return false;
+	}
 }
