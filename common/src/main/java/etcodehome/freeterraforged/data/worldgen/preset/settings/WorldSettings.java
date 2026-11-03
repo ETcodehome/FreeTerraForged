@@ -53,6 +53,22 @@ public class WorldSettings {
                 0.50F
         );
 
+        public static final GenericFloatSetting macroWarpStrengthSetting = new GenericFloatSetting(
+                "continent.macroWarpStrength",
+                "gui.slider.macroWarpStrength",
+                0.0F,
+                2.0F,
+                0.67F
+        );
+
+        public static final GenericFloatSetting coastalComplexitySetting = new GenericFloatSetting(
+                "continent.coastalComplexity",
+                "gui.slider.coastalComplexity",
+                0.0F,
+                1.0F,
+                0.50F
+        );
+
     	public static final Codec<Continent> CODEC = RecordCodecBuilder.create(instance -> instance.group(
     		ContinentType.CODEC.fieldOf("continentType").forGetter((o) -> o.continentType),
     		DistanceFunction.CODEC.optionalFieldOf("continentShape", DistanceFunction.EUCLIDEAN).forGetter((o) -> o.continentShape),
@@ -65,7 +81,9 @@ public class WorldSettings {
     		Codec.FLOAT.optionalFieldOf("continentNoiseLacunarity", 4.33F).forGetter((o) -> o.continentNoiseLacunarity),
     		Codec.FLOAT.optionalFieldOf("bridgeChance", bridgeChanceSetting.defaultValue).forGetter((o) -> o.bridgeChance),
     		Codec.FLOAT.optionalFieldOf("tectonicPlateUplift", tectonicPlateUpliftSetting.defaultValue).forGetter((o) -> o.tectonicPlateUplift),
-    		Codec.FLOAT.optionalFieldOf("tectonicRounding", tectonicRoundingSetting.defaultValue).forGetter((o) -> o.tectonicRounding)
+    		Codec.FLOAT.optionalFieldOf("tectonicRounding", tectonicRoundingSetting.defaultValue).forGetter((o) -> o.tectonicRounding),
+    		Codec.FLOAT.optionalFieldOf("macroWarpStrength", macroWarpStrengthSetting.defaultValue).forGetter((o) -> o.macroWarpStrength),
+    		Codec.FLOAT.optionalFieldOf("coastalComplexity", coastalComplexitySetting.defaultValue).forGetter((o) -> o.coastalComplexity)
     	).apply(instance, Continent::new));
     	
         public ContinentType continentType;
@@ -80,8 +98,10 @@ public class WorldSettings {
         public float bridgeChance;
         public float tectonicPlateUplift;
         public float tectonicRounding;
+        public float macroWarpStrength;
+        public float coastalComplexity;
         
-        public Continent(ContinentType continentType, DistanceFunction continentShape, int continentScale, float continentJitter, float continentSkipping, float continentSizeVariance, int continentNoiseOctaves, float continentNoiseGain, float continentNoiseLacunarity, float bridgeChance, float tectonicPlateUplift, float tectonicRounding) {
+        public Continent(ContinentType continentType, DistanceFunction continentShape, int continentScale, float continentJitter, float continentSkipping, float continentSizeVariance, int continentNoiseOctaves, float continentNoiseGain, float continentNoiseLacunarity, float bridgeChance, float tectonicPlateUplift, float tectonicRounding, float macroWarpStrength, float coastalComplexity) {
             this.continentType = continentType;
             this.continentShape = continentShape;
             this.continentScale = continentScale;
@@ -94,22 +114,28 @@ public class WorldSettings {
             this.bridgeChance = bridgeChance;
             this.tectonicPlateUplift = tectonicPlateUplift;
             this.tectonicRounding = tectonicRounding;
+            this.macroWarpStrength = macroWarpStrength;
+            this.coastalComplexity = coastalComplexity;
+        }
+
+        public Continent(ContinentType continentType, DistanceFunction continentShape, int continentScale, float continentJitter, float continentSkipping, float continentSizeVariance, int continentNoiseOctaves, float continentNoiseGain, float continentNoiseLacunarity, float bridgeChance, float tectonicPlateUplift, float tectonicRounding) {
+            this(continentType, continentShape, continentScale, continentJitter, continentSkipping, continentSizeVariance, continentNoiseOctaves, continentNoiseGain, continentNoiseLacunarity, bridgeChance, tectonicPlateUplift, tectonicRounding, macroWarpStrengthSetting.defaultValue, coastalComplexitySetting.defaultValue);
         }
 
         public Continent(ContinentType continentType, DistanceFunction continentShape, int continentScale, float continentJitter, float continentSkipping, float continentSizeVariance, int continentNoiseOctaves, float continentNoiseGain, float continentNoiseLacunarity, float bridgeChance, float tectonicPlateUplift) {
-            this(continentType, continentShape, continentScale, continentJitter, continentSkipping, continentSizeVariance, continentNoiseOctaves, continentNoiseGain, continentNoiseLacunarity, bridgeChance, tectonicPlateUplift, tectonicRoundingSetting.defaultValue);
+            this(continentType, continentShape, continentScale, continentJitter, continentSkipping, continentSizeVariance, continentNoiseOctaves, continentNoiseGain, continentNoiseLacunarity, bridgeChance, tectonicPlateUplift, tectonicRoundingSetting.defaultValue, macroWarpStrengthSetting.defaultValue, coastalComplexitySetting.defaultValue);
         }
 
         public Continent(ContinentType continentType, DistanceFunction continentShape, int continentScale, float continentJitter, float continentSkipping, float continentSizeVariance, int continentNoiseOctaves, float continentNoiseGain, float continentNoiseLacunarity, float bridgeChance) {
-            this(continentType, continentShape, continentScale, continentJitter, continentSkipping, continentSizeVariance, continentNoiseOctaves, continentNoiseGain, continentNoiseLacunarity, bridgeChance, tectonicPlateUpliftSetting.defaultValue, tectonicRoundingSetting.defaultValue);
+            this(continentType, continentShape, continentScale, continentJitter, continentSkipping, continentSizeVariance, continentNoiseOctaves, continentNoiseGain, continentNoiseLacunarity, bridgeChance, tectonicPlateUpliftSetting.defaultValue, tectonicRoundingSetting.defaultValue, macroWarpStrengthSetting.defaultValue, coastalComplexitySetting.defaultValue);
         }
 
         public Continent(ContinentType continentType, DistanceFunction continentShape, int continentScale, float continentJitter, float continentSkipping, float continentSizeVariance, int continentNoiseOctaves, float continentNoiseGain, float continentNoiseLacunarity) {
-            this(continentType, continentShape, continentScale, continentJitter, continentSkipping, continentSizeVariance, continentNoiseOctaves, continentNoiseGain, continentNoiseLacunarity, bridgeChanceSetting.defaultValue, tectonicPlateUpliftSetting.defaultValue, tectonicRoundingSetting.defaultValue);
+            this(continentType, continentShape, continentScale, continentJitter, continentSkipping, continentSizeVariance, continentNoiseOctaves, continentNoiseGain, continentNoiseLacunarity, bridgeChanceSetting.defaultValue, tectonicPlateUpliftSetting.defaultValue, tectonicRoundingSetting.defaultValue, macroWarpStrengthSetting.defaultValue, coastalComplexitySetting.defaultValue);
         }
         
         public Continent copy() {
-        	return new Continent(this.continentType, this.continentShape, this.continentScale, this.continentJitter, this.continentSkipping, this.continentSizeVariance, this.continentNoiseOctaves, this.continentNoiseGain, this.continentNoiseLacunarity, this.bridgeChance, this.tectonicPlateUplift, this.tectonicRounding);
+        	return new Continent(this.continentType, this.continentShape, this.continentScale, this.continentJitter, this.continentSkipping, this.continentSizeVariance, this.continentNoiseOctaves, this.continentNoiseGain, this.continentNoiseLacunarity, this.bridgeChance, this.tectonicPlateUplift, this.tectonicRounding, this.macroWarpStrength, this.coastalComplexity);
         }
     }
     
@@ -213,7 +239,9 @@ public class WorldSettings {
                 5.7262F,
                 Continent.bridgeChanceSetting.defaultValue,
                 Continent.tectonicPlateUpliftSetting.defaultValue,
-                Continent.tectonicRoundingSetting.defaultValue
+                Continent.tectonicRoundingSetting.defaultValue,
+                Continent.macroWarpStrengthSetting.defaultValue,
+                Continent.coastalComplexitySetting.defaultValue
             ),
             new ControlPoints(
                 0.0F,

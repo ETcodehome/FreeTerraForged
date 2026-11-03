@@ -29,6 +29,8 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
 
     protected WorldSettings.Continent continentSettings;
 
+    protected final float macroWarpStrength;
+    protected final float coastalComplexity;
     protected volatile float bridgeChance;
     protected PlateUpliftBridge plateUpliftBridge;
     private final int bridgeSeed;
@@ -38,11 +40,22 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
     private static final int[] NBR_DY = { -1, -1, -1, 0, 0, 1, 1, 1 };
 
     protected UpliftContinentGenerator(int seed, float jitter, float frequency, float bridgeChance) {
+        this(seed, jitter, frequency, bridgeChance, WorldSettings.Continent.macroWarpStrengthSetting.defaultValue, WorldSettings.Continent.coastalComplexitySetting.defaultValue);
+    }
+
+    protected UpliftContinentGenerator(int seed, float jitter, float frequency, float bridgeChance, float macroWarpStrength, float coastalComplexity) {
         super(seed, jitter);
         this.frequency = frequency;
         this.bridgeChance = bridgeChance;
+        this.macroWarpStrength = macroWarpStrength;
+        this.coastalComplexity = coastalComplexity;
+        this.controlPoints = WorldSettings.makeDefault().controlPoints;
         this.bridgeSeed = seed ^ 0x5a5a5a5a;
         this.plateUpliftBridge = new PlateUpliftBridge(this, seed, jitter, frequency, 9999, 0.8F, 0.5F, 0.75F);
+    }
+
+    public void setControlPoints(WorldSettings.ControlPoints controlPoints) {
+        this.controlPoints = controlPoints;
     }
 
     public UpliftContinentGenerator(Seed seed, GeneratorContext context) {
@@ -50,6 +63,8 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         WorldSettings settings = context.preset.world();
         int tectonicScale = settings.continent.continentScale * 4;
         this.continentSettings = settings.continent;
+        this.macroWarpStrength = settings.continent.macroWarpStrength;
+        this.coastalComplexity = settings.continent.coastalComplexity;
         this.frequency = 1.0F / tectonicScale;
         this.varianceSeed = seed.next();
         this.variance = settings.continent.continentSizeVariance;
@@ -64,13 +79,13 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
 
         float frequency = 1.0F / this.frequency;
 
-        Noise cliffNoise = Noises.simplex2(seed.next(), this.continentScale / 2, 2);
+        Noise cliffNoise = Noises.simplex2(seed.next(), this.continentScale / 2, 3, 2.2F, 0.35F);
         cliffNoise = Noises.clamp(cliffNoise, 0.1F, 0.25F);
         cliffNoise = Noises.map(cliffNoise, 0.0F, 1.0F);
         cliffNoise = Noises.frequency(cliffNoise, frequency);
         this.cliffNoise = cliffNoise;
 
-        Noise bayNoise = Noises.simplex(seed.next(), 100, 1);
+        Noise bayNoise = Noises.simplex(seed.next(), 100, 2, 2.5F, 0.4F);
         bayNoise = Noises.mul(bayNoise, 0.1F);
         bayNoise = Noises.add(bayNoise, 0.9F);
         bayNoise = Noises.frequency(bayNoise, frequency);
@@ -447,15 +462,40 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         return this.plateUpliftBridge != null ? this.plateUpliftBridge.getTectonicRounding() : 0.0F;
     }
 
+    public float getMacroWarpStrength() {
+        return this.macroWarpStrength;
+    }
+
+    public float getCoastalComplexity() {
+        return this.coastalComplexity;
+    }
+
     protected Domain createWarp(int seedX, int seedZ, int tectonicScale, WorldSettings.Continent continent, boolean applyLacunarity) {
-        int warpScale = NoiseUtil.round(tectonicScale * 0.225F);
-        float strength = NoiseUtil.round(tectonicScale * 0.33F);
-        float lacunarity = applyLacunarity ? continent.continentNoiseLacunarity : 0.0F;
-        return Domains.domain(
-                Noises.perlin2(seedX, warpScale, continent.continentNoiseOctaves, lacunarity, continent.continentNoiseGain),
-                Noises.perlin2(seedZ, warpScale, continent.continentNoiseOctaves, lacunarity, continent.continentNoiseGain),
-                Noises.constant(strength)
+        int mesoWarpScale = NoiseUtil.round(tectonicScale * 0.225F);
+        float mesoStrength = NoiseUtil.round(tectonicScale * 0.33F);
+        float mesoLacunarity = applyLacunarity ? continent.continentNoiseLacunarity : 0.0F;
+        Domain mesoWarp = Domains.domain(
+                Noises.perlin2(seedX, mesoWarpScale, continent.continentNoiseOctaves, mesoLacunarity, continent.continentNoiseGain),
+                Noises.perlin2(seedZ, mesoWarpScale, continent.continentNoiseOctaves, mesoLacunarity, continent.continentNoiseGain),
+                Noises.constant(mesoStrength)
         );
+
+        if (continent.macroWarpStrength <= 0.0F) {
+            return mesoWarp;
+        }
+
+        int macroWarpScale = NoiseUtil.round(tectonicScale * 0.75F);
+        float macroStrength = tectonicScale * 0.40F * continent.macroWarpStrength;
+        float macroLacunarity = applyLacunarity ? 2.2F : 0.0F;
+        int macroSeedX = seedX + 7919;
+        int macroSeedZ = seedZ + 104729;
+        Domain macroWarp = Domains.domain(
+                Noises.perlin2(macroSeedX, macroWarpScale, 3, macroLacunarity, 0.35F),
+                Noises.perlin2(macroSeedZ, macroWarpScale, 3, macroLacunarity, 0.35F),
+                Noises.constant(macroStrength)
+        );
+
+        return Domains.add(macroWarp, mesoWarp);
     }
 
     public float getContinentSizeModifier(int cellX, int cellY) {
@@ -487,12 +527,18 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
     }
 
     protected float getCoastalDistanceValue(float x, float y, float distance) {
+        if (this.coastalComplexity <= 0.0F) {
+            return distance;
+        }
         if (distance > this.controlPoints.shallowOcean && distance < this.controlPoints.inland) {
             float alpha = distance / this.controlPoints.inland;
-            float cliff = this.cliffNoise.compute(x, y, 0);
+            float rawCliff = this.cliffNoise.compute(x, y, 0);
+            float cliff = NoiseUtil.lerp(1.0F, rawCliff, this.coastalComplexity);
             distance = NoiseUtil.lerp(distance * cliff, distance, alpha);
             if (distance < this.controlPoints.shallowOcean) {
-                distance = this.controlPoints.shallowOcean * this.bayNoise.compute(x, y, 0);
+                float rawBay = this.bayNoise.compute(x, y, 0);
+                float bay = NoiseUtil.lerp(1.0F, rawBay, this.coastalComplexity);
+                distance = this.controlPoints.shallowOcean * bay;
             }
         }
         return distance;

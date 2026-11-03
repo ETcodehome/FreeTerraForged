@@ -274,4 +274,86 @@ class VoronoiCentroidPeakTest {
 
         assertEquals(eps, dist, 0.005F, "Distance to coast near skipped neighbor must accurately match distance to coastal border");
     }
+
+    @Test
+    void testMacroWarpStrengthAndContinuity() {
+        int seedX = 12345;
+        int seedZ = 67890;
+        int tectonicScale = 16000;
+
+        etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.Continent continentNoMacro =
+                new etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.Continent(
+                        etcodehome.freeterraforged.data.worldgen.preset.settings.ContinentType.UPLIFT,
+                        etcodehome.freeterraforged.world.worldgen.noise.function.DistanceFunction.EUCLIDEAN,
+                        4000, 0.8F, 0.2F, 0.6161F, 5, 0.2516F, 5.7262F, 0.18F, 0.50F, 0.50F, 0.0F, 0.50F
+                );
+
+        etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.Continent continentWithMacro =
+                new etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.Continent(
+                        etcodehome.freeterraforged.data.worldgen.preset.settings.ContinentType.UPLIFT,
+                        etcodehome.freeterraforged.world.worldgen.noise.function.DistanceFunction.EUCLIDEAN,
+                        4000, 0.8F, 0.2F, 0.6161F, 5, 0.2516F, 5.7262F, 0.18F, 0.50F, 0.50F, 0.67F, 0.50F
+                );
+
+        UpliftContinentGenerator gen = new UpliftContinentGenerator(100, 0.8F, 1.0F / 16000.0F, 0.18F);
+
+        etcodehome.freeterraforged.world.worldgen.noise.domain.Domain warpNoMacro =
+                gen.createWarp(seedX, seedZ, tectonicScale, continentNoMacro, true);
+        etcodehome.freeterraforged.world.worldgen.noise.domain.Domain warpWithMacro =
+                gen.createWarp(seedX, seedZ, tectonicScale, continentWithMacro, true);
+
+        // At macroWarpStrength == 0, warp should equal meso warp
+        float x = 5000.0F;
+        float z = -3000.0F;
+        float offX0 = warpNoMacro.getOffsetX(x, z, 0);
+        float offZ0 = warpNoMacro.getOffsetZ(x, z, 0);
+
+        // At macroWarpStrength == 0.67, offset should differ because macro warp is added
+        float offXMacro = warpWithMacro.getOffsetX(x, z, 0);
+        float offZMacro = warpWithMacro.getOffsetZ(x, z, 0);
+        assertNotEquals(offX0, offXMacro, "Macro warp must alter offset when macroWarpStrength > 0");
+
+        // Verify continuity of the macro warp contribution across block space
+        for (float testX = -1000.0F; testX <= 1000.0F; testX += 200.0F) {
+            for (float testZ = -1000.0F; testZ <= 1000.0F; testZ += 200.0F) {
+                float macroOnlyCur = warpWithMacro.getOffsetX(testX, testZ, 0) - warpNoMacro.getOffsetX(testX, testZ, 0);
+                float macroOnlyNext = warpWithMacro.getOffsetX(testX + 1.0F, testZ, 0) - warpNoMacro.getOffsetX(testX + 1.0F, testZ, 0);
+                float macroDiff = Math.abs(macroOnlyNext - macroOnlyCur);
+                assertTrue(macroDiff < 1.0F, "Macro warp displacement must be smooth and continuous, step delta was " + macroDiff);
+            }
+        }
+    }
+
+    @Test
+    void testCoastalComplexityModulation() {
+        UpliftContinentGenerator genZero = new UpliftContinentGenerator(200, 0.8F, 1.0F / 4000.0F, 0.0F, 0.0F, 0.0F);
+        genZero.setControlPoints(new etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.ControlPoints(
+                0.0F, 0.074F, 0.102F, 0.13144F, 0.2210F, 0.3576F, 0.4717F
+        ));
+
+        // Distance in transition zone between shallowOcean (0.13144) and inland (0.4717)
+        float testDist = 0.25F;
+        float modZero = genZero.getCoastalDistanceValue(100.0F, 200.0F, testDist);
+        assertEquals(testDist, modZero, 1e-6F, "At coastalComplexity = 0, coastal distance must remain completely unperturbed");
+    }
+
+    @Test
+    void testContinentCodecOptionalFields() {
+        com.google.gson.JsonObject json = new com.google.gson.JsonObject();
+        json.addProperty("continentType", "UPLIFT");
+        json.addProperty("continentScale", 4000);
+        json.addProperty("continentJitter", 0.8F);
+
+        com.mojang.serialization.DataResult<etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.Continent> result =
+                etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.Continent.CODEC.parse(
+                        com.mojang.serialization.JsonOps.INSTANCE, json
+                );
+
+        assertTrue(result.result().isPresent(), "Parsing minimal JSON should succeed");
+        etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.Continent parsed = result.result().get();
+        assertEquals(etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.Continent.macroWarpStrengthSetting.defaultValue,
+                parsed.macroWarpStrength, 1e-5F, "Default macroWarpStrength must be populated");
+        assertEquals(etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.Continent.coastalComplexitySetting.defaultValue,
+                parsed.coastalComplexity, 1e-5F, "Default coastalComplexity must be populated");
+    }
 }

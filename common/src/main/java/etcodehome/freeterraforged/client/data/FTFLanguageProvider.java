@@ -115,6 +115,11 @@ public final class FTFLanguageProvider {
 			this.add(FTFTranslationKeys.GUI_SLIDER_CONTINENT_NOISE_OCTAVES , "Continent Noise Octaves");
 			this.add(FTFTranslationKeys.GUI_SLIDER_CONTINENT_NOISE_GAIN, "Continent Noise Gain");
 			this.add(FTFTranslationKeys.GUI_SLIDER_CONTINENT_NOISE_LACUNARITY, "Continent Noise Lacunarity");
+			this.add(FTFTranslationKeys.GUI_SLIDER_BRIDGE_CHANCE, "Bridge Chance");
+			this.add(FTFTranslationKeys.GUI_SLIDER_TECTONIC_PLATE_UPLIFT, "Tectonic Plate Uplift");
+			this.add(FTFTranslationKeys.GUI_SLIDER_TECTONIC_ROUNDING, "Tectonic Rounding");
+			this.add(FTFTranslationKeys.GUI_SLIDER_MACRO_WARP_STRENGTH, "Macro Warp Strength");
+			this.add(FTFTranslationKeys.GUI_SLIDER_COASTAL_COMPLEXITY, "Coastal Complexity");
 			this.add(FTFTranslationKeys.GUI_SLIDER_ISLAND_INLAND, "Island Inland");
 			this.add(FTFTranslationKeys.GUI_SLIDER_ISLAND_COAST, "Island Coast");
 			this.add(FTFTranslationKeys.GUI_SLIDER_DEEP_OCEAN, "Deep Ocean");
@@ -278,6 +283,11 @@ public final class FTFLanguageProvider {
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_CONTINENT_NOISE_OCTAVES), "The number of octaves of noise used to distort the continent.");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_CONTINENT_NOISE_GAIN), "The contribution strength of each noise octave.");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_CONTINENT_NOISE_LACUNARITY), "The frequency multiplier for each noise octave.");
+			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_BRIDGE_CHANCE), "Controls the probability that adjacent eligible continents bridge together into merged landmasses.");
+			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_TECTONIC_PLATE_UPLIFT), "Controls the probability that adjacent bridged continents connect their tectonic uplift peaks into continuous ridges.");
+			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_TECTONIC_ROUNDING), "Controls the bias from a straight line pathway to an organic, smooth arc for connecting uplift peaks.");
+			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_MACRO_WARP_STRENGTH), "Controls the strength of large-scale domain warping, creating sweeping continental arcs and tectonic curvature.");
+			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_COASTAL_COMPLEXITY), "Controls the fractal irregularity and indentation of coastlines, creating natural bays, capes, and inlets.");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_ISLAND_INLAND), "Controls the point below which island coasts transition into island. The greater the gap to the island coasts slider, the more gradual the transition.");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_ISLAND_COAST), "Controls the point below which deep oceans transition into island coasts. The greater the gap to the deep ocean slider, the more gradual the transition.");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_DEEP_OCEAN), "Controls the point above which deep oceans transition into shallow oceans. The greater the gap to the shallow ocean slider, the more gradual the transition.");
