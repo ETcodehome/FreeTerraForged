@@ -12,6 +12,16 @@ public final class WorldgenLifecycle {
 	public static void tagsReloaded(MinecraftServer server, long resourceRevision) {
 		String fingerprint = WorldgenFingerprints.tags(server.registryAccess());
 		String resourceLayers = WorldgenFingerprints.resourceLayers(server, resourceRevision);
+		BiomeReplacementConfigSnapshot biomeConfig;
+		try {
+			biomeConfig = BiomeReplacementConfigStore.capture();
+		} catch (RuntimeException failure) {
+			FTFCommon.LOGGER.error(
+				"Could not capture the FTF biome replacement config during resource reload; previous immutable plans remain active",
+				failure
+			);
+			return;
+		}
 		int refreshed = 0;
 		int rejected = 0;
 		for (ServerLevel level : server.getAllLevels()) {
@@ -30,22 +40,22 @@ public final class WorldgenLifecycle {
 			);
 			try {
 				if (refresh(
-					level, generator, epoch, resourceRevision, resourceLayers, tags, contributions,
-					"resource reload"
+					level, generator, epoch, resourceRevision, resourceLayers, tags, biomeConfig,
+					contributions, "resource reload"
 				)) {
 					refreshed++;
 				}
 			} catch (RuntimeException | LinkageError failure) {
 				rejected++;
 				FTFCommon.LOGGER.error(
-					"Rejected FTF worldgen input epoch for dimension={} resource_revision={}; the previous immutable plan remains active",
-					level.dimension().location(), resourceRevision, failure
+					"Rejected FTF worldgen input epoch for dimension={} resource_revision={} biome_replacement_revision={}; the previous immutable plan remains active",
+					level.dimension().location(), resourceRevision, biomeConfig.revision(), failure
 				);
 			}
 		}
 		FTFCommon.LOGGER.info(
-			"Processed FTF worldgen input epochs: tags={} refreshed={} rejected={}",
-			fingerprint, refreshed, rejected
+			"Processed FTF worldgen input epochs: tags={} biome_replacement_revision={} refreshed={} rejected={}",
+			fingerprint, biomeConfig.revision(), refreshed, rejected
 		);
 	}
 
@@ -56,6 +66,7 @@ public final class WorldgenLifecycle {
 		long resourceRevision,
 		String resourceLayers,
 		TagEpoch tags,
+		BiomeReplacementConfigSnapshot biomeConfig,
 		WorldgenContributionRevision.Snapshot contributions,
 		String reason
 	) {
@@ -63,7 +74,9 @@ public final class WorldgenLifecycle {
 			IllegalStateException failure = new IllegalStateException(
 				"Contribution revision acquisition failed: " + contributions.failures()
 			);
-			generator.rejectInputSnapshot(resourceRevision, resourceLayers, tags, contributions, failure);
+			generator.rejectInputSnapshot(
+				resourceRevision, resourceLayers, tags, biomeConfig, contributions, failure
+			);
 			throw failure;
 		}
 		if (contributions.regressesFrom(epoch.contributionRevision())) {
@@ -71,27 +84,44 @@ public final class WorldgenLifecycle {
 				"Contribution revision regressed from " + epoch.contributionRevision().revisions()
 					+ " to " + contributions.revisions()
 			);
-			generator.rejectInputSnapshot(resourceRevision, resourceLayers, tags, contributions, failure);
+			generator.rejectInputSnapshot(
+				resourceRevision, resourceLayers, tags, biomeConfig, contributions, failure
+			);
 			throw failure;
 		}
 		if (resourceRevision < epoch.resourceRevision()) {
 			IllegalStateException failure = new IllegalStateException(
 				"Resource revision regressed from " + epoch.resourceRevision() + " to " + resourceRevision
 			);
-			generator.rejectInputSnapshot(resourceRevision, resourceLayers, tags, contributions, failure);
+			generator.rejectInputSnapshot(
+				resourceRevision, resourceLayers, tags, biomeConfig, contributions, failure
+			);
+			throw failure;
+		}
+		if (biomeConfig.revision() < epoch.biomeReplacementConfig().revision()) {
+			IllegalStateException failure = new IllegalStateException(
+				"Biome replacement revision regressed from "
+					+ epoch.biomeReplacementConfig().revision() + " to " + biomeConfig.revision()
+			);
+			generator.rejectInputSnapshot(
+				resourceRevision, resourceLayers, tags, biomeConfig, contributions, failure
+			);
 			throw failure;
 		}
 		boolean resourcesChanged = resourceRevision > epoch.resourceRevision();
 		boolean tagsAdvanced = tags.sequence() > epoch.tagEpoch().sequence();
 		boolean contributionsAdvanced = contributions.strictlyAdvances(epoch.contributionRevision());
-		if (!resourcesChanged && !tagsAdvanced && !contributionsAdvanced) {
+		boolean biomeConfigAdvanced = biomeConfig.revision() > epoch.biomeReplacementConfig().revision();
+		if (!resourcesChanged && !tagsAdvanced && !contributionsAdvanced && !biomeConfigAdvanced) {
 			return false;
 		}
 		if (!((Object) level.getChunkSource().randomState() instanceof FTFRandomState randomState)) {
 			throw new IllegalStateException("FTF generator has no owned random-state contract");
 		}
 		try {
-			generator.refreshInputs(resourceRevision, resourceLayers, tags, contributions, randomState);
+			generator.refreshInputs(
+				resourceRevision, resourceLayers, tags, biomeConfig, contributions, randomState
+			);
 			return true;
 		} catch (Exception failure) {
 			throw new IllegalStateException(

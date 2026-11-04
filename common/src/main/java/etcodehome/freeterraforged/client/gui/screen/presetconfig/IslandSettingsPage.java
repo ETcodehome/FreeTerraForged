@@ -18,7 +18,8 @@ public class IslandSettingsPage extends PresetEditorPage {
 	public void init() {
 		super.init();
 
-		IslandSettings s = PM.islandSettings;
+		IslandSettings s = this.preset.getPreset().island();
+		PM.islandSettings = s;
 
 		this.left.addWidget(PresetWidgets.createLabel(FTFTranslationKeys.GUI_LABEL_ISLAND));
 		this.left.addWidget(PresetWidgets.createToggle(s.spawnIslands, IslandSettings.spawnIslandsSetting, val -> s.spawnIslands = val, this::regenerate));

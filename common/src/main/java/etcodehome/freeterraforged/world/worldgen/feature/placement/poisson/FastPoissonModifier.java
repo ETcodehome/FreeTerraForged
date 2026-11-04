@@ -8,7 +8,10 @@ import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
+import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
+import etcodehome.freeterraforged.world.worldgen.cell.heightmap.WorldLookup;
+import etcodehome.freeterraforged.world.worldgen.feature.placement.FTFPlacementModifiers;
+import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.RandomSource;
@@ -19,13 +22,6 @@ import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.placement.PlacementContext;
 import net.minecraft.world.level.levelgen.placement.PlacementModifier;
 import net.minecraft.world.level.levelgen.placement.PlacementModifierType;
-import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
-import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.TileCache;
-import etcodehome.freeterraforged.world.worldgen.feature.placement.FTFPlacementModifiers;
-import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
-import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
 
 public class FastPoissonModifier extends PlacementModifier {
 	public static final MapCodec<FastPoissonModifier> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
@@ -74,15 +70,13 @@ public class FastPoissonModifier extends PlacementModifier {
 			&& (Object) randomState instanceof FTFRandomState rtfRandomState) {
 			GeneratorContext generatorContext = rtfRandomState.generatorContext();
 			if (generatorContext != null) {
-				try (TileCache.Lease tileLease = generatorContext.cache.acquireAtChunk(chunkX, chunkZ)) {
-					return this.getPositions(
-						seed,
-						levelSeed,
-						chunkX,
-						chunkZ,
-						tileLease.tile().getChunkReader(chunkX, chunkZ)
-					);
-				}
+				return this.getPositions(
+					seed,
+					levelSeed,
+					chunkX,
+					chunkZ,
+					generatorContext.lookup
+				);
 			}
 		}
 		return this.getPositions(seed, levelSeed, chunkX, chunkZ, null);
@@ -93,9 +87,9 @@ public class FastPoissonModifier extends PlacementModifier {
 		return FTFPlacementModifiers.FAST_POISSON;
 	}
 
-	private Stream<BlockPos> getPositions(int seed, long levelSeed, int chunkX, int chunkZ, Tile.Chunk tileChunk) {
+	private Stream<BlockPos> getPositions(int seed, long levelSeed, int chunkX, int chunkZ, WorldLookup lookup) {
 		FastPoisson poisson = FastPoisson.LOCAL_POISSON.get();
-		DensityNoise density = this.getDensityNoise(seed, tileChunk);
+		DensityNoise density = this.getDensityNoise(seed, lookup);
 		FastPoissonContext poissonConfig = new FastPoissonContext(this.radius, this.jitter, this.scale, density);
 		Stream.Builder<BlockPos> builder = Stream.builder();
 		poisson.visit(seed, chunkX, chunkZ, new Random(levelSeed), poissonConfig, builder, (x, z, b) -> {
@@ -104,10 +98,10 @@ public class FastPoissonModifier extends PlacementModifier {
 		return builder.build();
 	}
 
-	private DensityNoise getDensityNoise(int seed, Tile.Chunk tileChunk) {
-		BiomeVariance biomeVariance = tileChunk == null
+	private DensityNoise getDensityNoise(int seed, WorldLookup lookup) {
+		BiomeVariance biomeVariance = lookup == null
 			? BiomeVariance.NONE
-			: new BiomeVariance(tileChunk, this.biomeFade);
+			: new BiomeVariance(lookup, this.biomeFade);
 
 		Noise densityVariance = Noises.one();
 		if (this.densityVariation > 0) {

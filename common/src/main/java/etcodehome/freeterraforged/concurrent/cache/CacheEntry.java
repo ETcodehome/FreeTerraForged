@@ -28,7 +28,11 @@ public class CacheEntry<T> extends LazyCallable<T> implements ExpiringEntry {
 	@Override
 	public T get() {
 		this.timestamp = System.currentTimeMillis();
-		return super.get();
+		T v = this.value;
+		if (v != null) return v;
+		v = this.create();          // no monitor held
+		this.value = v;             // idempotent: every caller sees the same result
+		return v;
 	}
 
 	@Override

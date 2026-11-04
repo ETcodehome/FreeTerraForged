@@ -25,11 +25,10 @@ import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
 import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfiguration;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
+import etcodehome.freeterraforged.world.worldgen.IChunkCellsHolder;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.TileCache;
 import etcodehome.freeterraforged.world.worldgen.feature.DecorateSnowFeature.Config;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
@@ -58,27 +57,37 @@ public class DecorateSnowFeature extends Feature<Config> {
 			int chunkX = chunkPos.x;
 			int chunkZ = chunkPos.z;
 			ChunkAccess chunk = level.getChunk(chunkX, chunkZ);
-			try (TileCache.Lease lease = generatorContext.cache.acquireAtChunk(chunkX, chunkZ)) {
-				Tile.Chunk tileChunk = lease.tile().getChunkReader(chunkX, chunkZ);
-				etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap heightmap = generatorContext.generator.getHeightmap();
-				Levels levels = heightmap.levels();
-				Noise rand = Noises.white(heightmap.climate().randomSeed(), 1);
-				BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
-				Config config = placeContext.config();
-				ScreeFeature.Config erodeConfig = config.erodeConfig();
-			
-			for(int x = 0; x < 16; x++) {
-				for(int z = 0; z < 16; z++) {
-		        	Cell cell = tileChunk.getCell(x, z);
+			etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap heightmap = generatorContext.heightmap;
+			Levels levels = heightmap.levels();
+			Noise rand = Noises.white(heightmap.climate().randomSeed(), 1);
+			BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+			Config config = placeContext.config();
+			ScreeFeature.Config erodeConfig = config.erodeConfig();
+			Cell fallbackCell = new Cell();
+			IChunkCellsHolder cellsHolder = chunk instanceof IChunkCellsHolder h ? h : null;
+			Cell[] chunkCells = cellsHolder != null ? cellsHolder.freeterraforged$getOrCreateChunkCells(generatorContext) : null;
+
+			for(int z = 0; z < 16; z++) {
+				for(int x = 0; x < 16; x++) {
+					int worldX = chunkPos.getBlockX(x);
+					int worldZ = chunkPos.getBlockZ(z);
+					Cell cell;
+					if (chunkCells != null) {
+						cell = chunkCells[z * 16 + x];
+					} else {
+						cell = fallbackCell.reset();
+						generatorContext.lookup.applyCell(cell, worldX, worldZ, false, false);
+					}
 					int scaledY = levels.scale(cell.height);
 			        int surfaceY = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
-			        if(scaledY == surfaceY && scaledY >= generator.getSeaLevel()) {
-		        		int worldX = chunkPos.getBlockX(x);
-		        		int worldZ = chunkPos.getBlockZ(z);
+			        if(Math.abs(scaledY - surfaceY) <= 2 && surfaceY >= generator.getSeaLevel()) {
 				        pos.set(worldX, surfaceY, worldZ);
 				        
 				        if(config.erode) {
 				        	if(level.getBiome(pos).value().getTemperature(pos) <= 0.25) {
+					            if (cell.gradient == 0.0F) {
+					                generatorContext.lookup.computeSteepness(cell, worldX, worldZ);
+					            }
 					            float var = -ColumnDecorator.sampleNoise(worldX, worldZ, 16, 0);
 					            float hNoise = rand.compute(worldX, worldZ, 4) * erodeConfig.heightModifier();
 					            float sNoise = rand.compute(worldX, worldZ, 5) * erodeConfig.slopeModifier();
@@ -118,7 +127,6 @@ public class DecorateSnowFeature extends Feature<Config> {
 				}
 			}
 				return true;
-			}
 		} else {
 			// Gracefully abort generation if the active dimension context is missing or non-FreeTerraForged
 			return false;
@@ -142,9 +150,9 @@ public class DecorateSnowFeature extends Feature<Config> {
     }
     
     private static void smoothSnow(ChunkAccess chunk, BlockPos.MutableBlockPos pos, Cell cell, Levels levels, float min) {
-
-		float heightWithFractionalComponent = cell.height / levels.unit;
-        float depth = getDepth(heightWithFractionalComponent);
+        float continuousHeight = cell.height / levels.unit;
+        int groundY = pos.getY() - 1;
+        float depth = continuousHeight - groundY;
         if (depth > min) {
             int level = getLevel(depth);
             BlockState layer = getState(level);
@@ -153,12 +161,12 @@ public class DecorateSnowFeature extends Feature<Config> {
             }
             chunk.setBlockState(pos, layer, false);
 
-           fixBaseBlock(chunk, pos, layer, level);
+            fixBaseBlock(chunk, pos, layer, level);
         }
     }
 
     private static void fixBaseBlock(ChunkAccess chunk, BlockPos pos, BlockState layerMaterial, int level) {
-        if (level > 1 && layerMaterial.is(Blocks.SNOW)) {
+        if (level > 1 && (layerMaterial.is(Blocks.SNOW) || layerMaterial.is(Blocks.SNOW_BLOCK))) {
             BlockPos pos1 = pos.below();
             BlockState below = chunk.getBlockState(pos1);
 
@@ -181,12 +189,12 @@ public class DecorateSnowFeature extends Feature<Config> {
     }
     
     private static int getLevel(float depth) {
-        if (depth > 1) {
-            depth = getDepth(depth);
-        } else if (depth < 0) {
-            depth = 0;
+        if (depth >= 1.0F) {
+            return (int) MAX;
+        } else if (depth <= 0.0F) {
+            return (int) MIN;
         }
-        return NoiseUtil.round(depth * MAX);
+        return Math.max((int) MIN, Math.min((int) MAX, NoiseUtil.round(depth * MAX)));
     }
 
     private static float getDepth(float height) {

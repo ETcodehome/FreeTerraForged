@@ -1,8 +1,6 @@
 package etcodehome.freeterraforged.mixin;
 
-import etcodehome.freeterraforged.registries.FTFRegistries;
-import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
-import etcodehome.freeterraforged.world.worldgen.biome.FTFClimateSampler;
+import java.util.function.BooleanSupplier;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -13,12 +11,18 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.biome.Climate;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.storage.ServerLevelData;
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.SpawnType;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
 import etcodehome.freeterraforged.registries.FTFRegistries;
+import etcodehome.freeterraforged.test.PresetValidationRunner;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 import etcodehome.freeterraforged.world.worldgen.biome.FTFClimateSampler;
+import etcodehome.freeterraforged.world.worldgen.perf.WorldgenBenchmarkRunner;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenResourceRevision;
 
 @Mixin(MinecraftServer.class)
@@ -46,21 +50,54 @@ class MixinMinecraftServer implements WorldgenResourceRevision {
     private static void findSpawnPosition(ServerLevel serverLevel, ServerLevelData serverLevelData, boolean bl, boolean bl2, CallbackInfo callback) {
 		RandomState randomState = serverLevel.getChunkSource().randomState();
 		Climate.Sampler sampler = randomState.sampler();
-		serverLevel.registryAccess().lookup(FTFRegistries.PRESET).flatMap((registry) -> {
-			return registry.get(Preset.KEY);
-		}).ifPresent((preset) -> {
-			if ((Object) randomState instanceof FTFRandomState rtfRandomState
-				&& (Object) sampler instanceof FTFClimateSampler rtfClimateSampler
-				&& rtfRandomState.plan() != null
-				&& rtfClimateSampler.getWorldgenPlan() != null) {
-				var properties = preset.value().world().properties;
-				BlockPos searchCenter = properties.spawnType.getSearchCenter(
-					rtfRandomState.generatorContext(), properties
-				);
-				rtfClimateSampler.setSpawnSearch(new FTFClimateSampler.SpawnSearch(
-					properties.spawnType, searchCenter
-				));
-			}
-		});
+		WorldSettings.Properties properties = serverLevel.registryAccess().lookup(FTFRegistries.PRESET)
+			.flatMap((registry) -> registry.get(Preset.KEY))
+			.map(preset -> preset.value().world().properties)
+			.orElseGet(() -> PresetManager.PM.isLoaded ? PresetManager.PM.worldSettings.properties : null);
+
+		if (properties != null
+			&& (Object) randomState instanceof FTFRandomState rtfRandomState
+			&& (Object) sampler instanceof FTFClimateSampler rtfClimateSampler
+			&& rtfRandomState.generatorContext() != null) {
+			BlockPos searchCenter = properties.spawnType.getSearchCenter(
+				rtfRandomState.generatorContext(), properties
+			);
+			rtfClimateSampler.setSpawnSearch(new FTFClimateSampler.SpawnSearch(
+				properties.spawnType, searchCenter
+			));
+		}
     }
+
+	@Inject(
+		at = @At("TAIL"),
+		method = "setInitialSpawn"
+	)
+	private static void freeterraforged$applyUserSelectedSpawn(ServerLevel serverLevel, ServerLevelData serverLevelData, boolean bl, boolean bl2, CallbackInfo callback) {
+		if (bl) {
+			return;
+		}
+		WorldSettings.Properties properties = serverLevel.registryAccess().lookup(FTFRegistries.PRESET)
+			.flatMap(registry -> registry.get(Preset.KEY))
+			.map(preset -> preset.value().world().properties)
+			.orElseGet(() -> PresetManager.PM.isLoaded ? PresetManager.PM.worldSettings.properties : null);
+
+		if (properties != null && properties.spawnType == SpawnType.USER_SELECTED) {
+			int x = properties.spawnX;
+			int z = properties.spawnZ;
+			int y = serverLevel.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z);
+			if (y < serverLevel.getMinBuildHeight() + 1) {
+				y = serverLevel.getSeaLevel() + 1;
+			}
+			while (y < serverLevel.getMaxBuildHeight() && (serverLevel.getBlockState(new BlockPos(x, y, z)).blocksMotion() || serverLevel.getBlockState(new BlockPos(x, y + 1, z)).blocksMotion())) {
+				y++;
+			}
+			serverLevelData.setSpawn(new BlockPos(x, y, z), 0.0f);
+		}
+	}
+
+	@Inject(at = @At("TAIL"), method = "tickServer")
+	private void freeterraforged$onTickServer(BooleanSupplier hasTimeLeft, CallbackInfo ci) {
+		WorldgenBenchmarkRunner.onServerTick((MinecraftServer) (Object) this);
+		PresetValidationRunner.onServerTick((MinecraftServer) (Object) this);
+	}
 }

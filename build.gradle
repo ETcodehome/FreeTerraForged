@@ -57,3 +57,86 @@ allprojects {
         withSourcesJar()
     }
 }
+
+tasks.register("archiveUnitTestReport") {
+    group = "verification"
+    description = "Archives automated unit test XML results to unit_tests_report.txt"
+    doLast {
+        def reportDir = file("build/reports/preset-test-heightmaps")
+        reportDir.mkdirs()
+        def testResultsDir = file("common/build/test-results/test")
+        if (testResultsDir.exists() && testResultsDir.isDirectory()) {
+            def unitTestReportFile = new File(reportDir, "unit_tests_report.txt")
+            def sb = new StringBuilder()
+            sb.append("FreeTerraForged Automated Unit Test Suite Results\n")
+            sb.append("================================================\n")
+            int totalTests = 0
+            int totalFailures = 0
+            int totalErrors = 0
+            int totalSkipped = 0
+            testResultsDir.eachFileMatch(~/TEST-.*\.xml/) { xmlFile ->
+                String content = xmlFile.text
+                def suiteMatcher = (content =~ /<testsuite[^>]*name="([^"]+)"[^>]*tests="(\d+)"[^>]*skipped="(\d+)"[^>]*failures="(\d+)"[^>]*errors="(\d+)"/)
+                if (suiteMatcher.find()) {
+                    String sName = suiteMatcher.group(1)
+                    int sTests = suiteMatcher.group(2) as int
+                    int sSkipped = suiteMatcher.group(3) as int
+                    int sFailures = suiteMatcher.group(4) as int
+                    int sErrors = suiteMatcher.group(5) as int
+                    totalTests += sTests
+                    totalSkipped += sSkipped
+                    totalFailures += sFailures
+                    totalErrors += sErrors
+                    sb.append(String.format("Suite: %s | Tests: %d, Failures: %d, Errors: %d, Skipped: %d\n",
+                        sName, sTests, sFailures, sErrors, sSkipped))
+                }
+                def caseMatcher = (content =~ /<testcase[^>]*name="([^"]+)"[^>]*classname="([^"]+)"(?:(?!\/>|>).)*?(?:\/>|>([\s\S]*?)<\/testcase>)/)
+                caseMatcher.each { match ->
+                    String cName = match[1]
+                    String cClass = match[2]
+                    String body = match.size() > 3 ? (match[3] ?: "") : ""
+                    String status = (body.contains("<failure") || body.contains("<error")) ? "FAILED" : "PASSED"
+                    sb.append(String.format("  - [%s] %s (%s)\n", status, cName, cClass))
+                }
+            }
+            sb.append("================================================\n")
+            sb.append(String.format("TOTALS: %d Tests, %d Failures, %d Errors, %d Skipped\n",
+                totalTests, totalFailures, totalErrors, totalSkipped))
+            sb.append(String.format("Outcome: %s\n", (totalFailures == 0 && totalErrors == 0) ? "ALL TESTS PASSED" : "TEST FAILURES DETECTED"))
+            unitTestReportFile.text = sb.toString()
+            logger.lifecycle("[FTF-Test] Unit test outcomes archived to: ${unitTestReportFile.absolutePath}")
+        }
+    }
+}
+
+evaluationDependsOn(":common")
+project(":common").tasks.named("test").configure {
+    finalizedBy(rootProject.tasks.named("archiveUnitTestReport"))
+}
+
+tasks.register("generatePresetTestReport") {
+    group = "verification"
+    description = "Generates a paired local HTML report from test outputs in build/reports/preset-test-heightmaps"
+    dependsOn("archiveUnitTestReport")
+    doLast {
+        def reportDir = file("build/reports/preset-test-heightmaps")
+        if (!reportDir.exists() || !reportDir.isDirectory()) {
+            logger.lifecycle("[FTF-Test] No report directory found at: ${reportDir.absolutePath}. Run preset tests first.")
+            return
+        }
+
+        def generatorSource = file("common/src/main/java/etcodehome/freeterraforged/test/LocalTestReportGenerator.java")
+        if (generatorSource.exists()) {
+            project.exec {
+                commandLine("java", generatorSource.absolutePath, reportDir.absolutePath)
+            }
+        }
+    }
+}
+
+tasks.register("runPresetTest") {
+    group = "verification"
+    description = "Runs headless preset validation on both Fabric and NeoForge"
+    dependsOn(":common:test", ":fabric:runPresetTest", ":neoforge:runPresetTest")
+    finalizedBy("generatePresetTestReport")
+}

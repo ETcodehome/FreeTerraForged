@@ -1,6 +1,7 @@
 MIT License
 
 Copyright (c) 2023 ReTerraForged
+Copyright (c) 2026 FreeTerraForged Contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,3 +20,25 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+===============================================================================
+Exceptions and Exclusions
+===============================================================================
+
+The following source file is excluded from the MIT License and is licensed
+under the Mozilla Public License, Version 2.0 (MPL-2.0):
+
+- common/src/main/java/etcodehome/freeterraforged/world/worldgen/densityfunction/tile/filter/Erosion.java
+  Single-pass procedural erosion filter based on Runevision's Phacelle Noise
+  algorithm / Fast & Gorgeous Erosion Filter.
+  Source: https://www.shadertoy.com/view/wXcfWn
+
+  Copyright (c) Rune Skovbo Johansen (runevision)
+  Copyright (c) 2026 FreeTerraForged Contributors
+
+  This Source Code Form is subject to the terms of the Mozilla Public
+  License, v. 2.0. If a copy of the MPL was not distributed with this
+  file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+  Mozilla Public License 2.0 Full Text:
+  https://www.mozilla.org/MPL/2.0/

@@ -9,9 +9,10 @@ import net.minecraft.world.level.levelgen.placement.PlacementContext;
 import net.minecraft.world.level.levelgen.placement.RandomOffsetPlacement;
 import etcodehome.freeterraforged.world.worldgen.feature.placement.ChunkLocalPlacementClassifier.ChunkConfinement;
 import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
+import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPlan;
 
 public final class ChunkLocalFeaturePlacement {
-	private static final ThreadLocal<State> ACTIVE = new ThreadLocal<>();
+	private static final ThreadLocal<State> ACTIVE = ThreadLocal.withInitial(State::new);
 
 	private ChunkLocalFeaturePlacement() {
 	}
@@ -21,16 +22,22 @@ public final class ChunkLocalFeaturePlacement {
 			return false;
 		}
 		State state = ACTIVE.get();
-		if (state != null) {
+		if (state.depth > 0) {
 			state.depth++;
 			return true;
 		}
-		ChunkLocalPlacementClassifier.Classification classification = generator.plan()
-			.map(plan -> plan.placedFeatures().chunkLocalClassification(feature))
-			.orElseGet(ChunkLocalPlacementClassifier.Classification::rejected);
-		ACTIVE.set(classification.eligible()
-			? new State(classification.confinement(), new ChunkPos(origin))
-			: new State(null, null));
+		state.depth = 1;
+		WorldgenPlan plan = generator.plan().orElse(null);
+		ChunkLocalPlacementClassifier.Classification classification = plan != null
+			? plan.placedFeatures().chunkLocalClassification(feature)
+			: ChunkLocalPlacementClassifier.Classification.rejected();
+		if (classification.eligible()) {
+			state.confinement = classification.confinement();
+			state.rootMinX = (origin.getX() >> 4) << 4;
+			state.rootMinZ = (origin.getZ() >> 4) << 4;
+		} else {
+			state.confinement = null;
+		}
 		return true;
 	}
 
@@ -39,12 +46,10 @@ public final class ChunkLocalFeaturePlacement {
 			return;
 		}
 		State state = ACTIVE.get();
-		if (state == null) {
+		if (state.depth <= 0) {
 			throw new IllegalStateException("Chunk-local placement scope underflow");
 		}
-		if (state.depth-- == 0) {
-			ACTIVE.remove();
-		}
+		state.depth--;
 	}
 
 	public static Stream<BlockPos> constrain(
@@ -52,12 +57,12 @@ public final class ChunkLocalFeaturePlacement {
 		Stream<BlockPos> positions
 	) {
 		State state = ACTIVE.get();
-		if (state == null || !state.active() || state.depth == 0
+		if (!state.active() || state.depth == 0
 			|| !state.confinement.contains(placement)) {
 			return positions;
 		}
-		int minX = state.root.getMinBlockX();
-		int minZ = state.root.getMinBlockZ();
+		int minX = state.rootMinX;
+		int minZ = state.rootMinZ;
 		return positions.map(position -> new BlockPos(
 			wrap(position.getX(), minX),
 			position.getY(),
@@ -70,14 +75,10 @@ public final class ChunkLocalFeaturePlacement {
 	}
 
 	private static final class State {
-		private final ChunkConfinement confinement;
-		private final ChunkPos root;
+		private ChunkConfinement confinement;
+		private int rootMinX;
+		private int rootMinZ;
 		private int depth;
-
-		private State(ChunkConfinement confinement, ChunkPos root) {
-			this.confinement = confinement;
-			this.root = root;
-		}
 
 		private boolean active() {
 			return this.confinement != null;

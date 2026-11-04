@@ -13,7 +13,7 @@ public class Rivermap implements ExpiringEntry {
     private Domain lakeWarp;
     private Domain riverWarp;
     private Network[] networks;
-    private long timestamp;
+    private volatile long timestamp;
     
     public Rivermap(int x, int z, Network[] networks, GenWarp warp) {
         this.timestamp = System.currentTimeMillis();
@@ -39,6 +39,11 @@ public class Rivermap implements ExpiringEntry {
     @Override
     public long getTimestamp() {
         return this.timestamp;
+    }
+
+    @Override
+    public void touch() {
+        this.timestamp = System.currentTimeMillis();
     }
     
     public int getX() {

@@ -88,7 +88,7 @@ public record SurfaceColumnPlan(
 	}
 
 	public void apply(WorldGenRegion region, ChunkGenerator generator, ChunkAccess chunk, Set<Holder<Biome>> possibleBiomes) {
-		if (this.roots.isEmpty() || SharedConstants.debugVoidTerrain(chunk.getPos())) return;
+		if (this.roots.isEmpty() || SharedConstants.debugVoidTerrain(chunk.getPos()) || this.byBiome.isEmpty()) return;
 		Set<Holder<Biome>> biomes = new java.util.HashSet<>();
 		// SURFACE already requires BIOMES at radius one, matching decoration's eligibility neighborhood.
 		ChunkPos.rangeClosed(chunk.getPos(), 1).forEach(pos -> {
@@ -96,7 +96,8 @@ public record SurfaceColumnPlan(
 		});
 		biomes.retainAll(possibleBiomes);
 		Set<PlacedFeature> selected = identitySet();
-		for (Holder<Biome> biome : biomes) selected.addAll(this.byBiome.getOrDefault(biome.unwrapKey().orElseThrow(), Set.of()));
+		for (Holder<Biome> biome : biomes) selected.addAll(this.byBiome.getOrDefault(biome.unwrapKey().orElse(null), Set.of()));
+		if (selected.isEmpty()) return;
 		var origin = SectionPos.of(chunk.getPos(), region.getMinSection()).origin();
 		var random = new WorldgenRandom(new XoroshiroRandomSource(0));
 		long decorationSeed = random.setDecorationSeed(region.getSeed(), origin.getX(), origin.getZ());

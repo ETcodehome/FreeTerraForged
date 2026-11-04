@@ -115,6 +115,28 @@ final class BiomePreviewColors {
             .orElseGet(() -> color(id));
     }
 
+    static int hatch(int nativeColor) {
+        return neutralOverlay(nativeColor, 0.32F);
+    }
+
+    static int overrideTint(int nativeColor) {
+        return neutralOverlay(nativeColor, 0.10F);
+    }
+
+    private static int neutralOverlay(int nativeColor, float amount) {
+        int first = nativeColor & 0xFF;
+        int second = nativeColor >>> 8 & 0xFF;
+        int third = nativeColor >>> 16 & 0xFF;
+        int neutral = (first + second + third) / 3 >= 128 ? 0 : 255;
+        int mixedFirst = Math.round(first + (neutral - first) * amount);
+        int mixedSecond = Math.round(second + (neutral - second) * amount);
+        int mixedThird = Math.round(third + (neutral - third) * amount);
+        return nativeColor & 0xFF000000
+            | mixedFirst
+            | mixedSecond << 8
+            | mixedThird << 16;
+    }
+
     private static Map.Entry<ResourceLocation, Integer> entry(String path, int rgb) {
         return Map.entry(ResourceLocation.withDefaultNamespace(path), rgb);
     }

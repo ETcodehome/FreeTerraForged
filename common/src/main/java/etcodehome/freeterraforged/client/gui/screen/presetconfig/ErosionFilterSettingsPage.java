@@ -17,7 +17,8 @@ class ErosionFilterSettingsPage extends PresetEditorPage {
 	public void init() {
 		super.init();
 
-		ErosionFilterSettings s = PresetManager.PM.erosionFilterSettings;
+		ErosionFilterSettings s = this.preset.getPreset().erosionFilters();
+		PresetManager.PM.erosionFilterSettings = s;
 
 		this.left.addWidget(PresetWidgets.createFloatSlider(s.scale, ErosionFilterSettings.scaleSetting, val -> s.scale = val, this::regenerate));
 		this.left.addWidget(PresetWidgets.createFloatSlider(s.strengthMultiplier, ErosionFilterSettings.strengthMultiplierSetting, val -> s.strengthMultiplier = val, this::regenerate));

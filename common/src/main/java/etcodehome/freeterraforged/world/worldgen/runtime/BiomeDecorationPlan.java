@@ -1,5 +1,7 @@
 package etcodehome.freeterraforged.world.worldgen.runtime;
 
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -15,20 +17,60 @@ public record BiomeDecorationPlan(
 	List<Holder.Reference<Structure>> structures,
 	List<StepFeatureData> featureSteps,
 	Map<net.minecraft.resources.ResourceKey<Biome>, BiomeGenerationSettings> generationSettings,
-	Set<Holder<Biome>> possibleBiomes
+	Set<Holder<Biome>> possibleBiomes,
+	Map<Holder<Biome>, BiomeGenerationSettings> holderGenerationSettings,
+	List<Structure> resolvedStructures
 ) {
 	public BiomeDecorationPlan {
 		structures = List.copyOf(structures);
 		featureSteps = List.copyOf(featureSteps);
 		generationSettings = Map.copyOf(generationSettings);
 		possibleBiomes = Set.copyOf(possibleBiomes);
+		holderGenerationSettings = holderGenerationSettings != null ? holderGenerationSettings : Map.of();
+		resolvedStructures = resolvedStructures != null ? List.copyOf(resolvedStructures) : List.of();
+	}
+
+	public BiomeDecorationPlan(
+		List<Holder.Reference<Structure>> structures,
+		List<StepFeatureData> featureSteps,
+		Map<net.minecraft.resources.ResourceKey<Biome>, BiomeGenerationSettings> generationSettings,
+		Set<Holder<Biome>> possibleBiomes
+	) {
+		this(
+			structures,
+			featureSteps,
+			generationSettings,
+			possibleBiomes,
+			buildHolderMap(possibleBiomes, generationSettings),
+			structures.stream().map(Holder.Reference::value).toList()
+		);
+	}
+
+	private static Map<Holder<Biome>, BiomeGenerationSettings> buildHolderMap(
+		Set<Holder<Biome>> possibleBiomes,
+		Map<net.minecraft.resources.ResourceKey<Biome>, BiomeGenerationSettings> generationSettings
+	) {
+		Map<Holder<Biome>, BiomeGenerationSettings> map = new IdentityHashMap<>(possibleBiomes.size());
+		for (Holder<Biome> holder : possibleBiomes) {
+			holder.unwrapKey().ifPresent(k -> {
+				BiomeGenerationSettings s = generationSettings.get(k);
+				if (s != null) {
+					map.put(holder, s);
+				}
+			});
+		}
+		return Collections.unmodifiableMap(map);
 	}
 
 	public Stream<Structure> structureValues() {
-		return this.structures.stream().map(Holder.Reference::value);
+		return this.resolvedStructures.stream();
 	}
 
 	public BiomeGenerationSettings generationSettings(Holder<Biome> biome) {
+		BiomeGenerationSettings cached = this.holderGenerationSettings.get(biome);
+		if (cached != null) {
+			return cached;
+		}
 		var key = biome.unwrapKey().orElseThrow(() -> new IllegalStateException(
 			"Biome decoration selected an unregistered biome: " + biome
 		));

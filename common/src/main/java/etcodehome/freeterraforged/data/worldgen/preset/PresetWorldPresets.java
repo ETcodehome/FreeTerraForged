@@ -17,7 +17,6 @@ import net.minecraft.world.level.dimension.LevelStem;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 import net.minecraft.world.level.levelgen.presets.WorldPreset;
-import net.minecraft.world.level.levelgen.presets.WorldPresets;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
 
@@ -57,7 +56,7 @@ public final class PresetWorldPresets {
 		Holder<NoiseGeneratorSettings> endSettings = noiseSettings.getOrThrow(NoiseGeneratorSettings.END);
 		LevelStem end = new LevelStem(endType, new NoiseBasedChunkGenerator(TheEndBiomeSource.create(biomes), endSettings));
 
-		context.register(WorldPresets.NORMAL, new WorldPreset(Map.of(
+		context.register(FTFWorldPresets.FREETERRAFORGED, new WorldPreset(Map.of(
 			LevelStem.OVERWORLD, overworld,
 			LevelStem.NETHER, nether,
 			LevelStem.END, end

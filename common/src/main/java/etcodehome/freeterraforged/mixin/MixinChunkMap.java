@@ -15,6 +15,7 @@ import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.progress.ChunkProgressListener;
 import net.minecraft.util.thread.BlockableEventLoop;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.chunk.LightChunkGetter;
 import net.minecraft.world.level.entity.ChunkStatusUpdateListener;
@@ -24,12 +25,15 @@ import net.minecraft.world.level.dimension.LevelStem;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.storage.DimensionDataStorage;
 import net.minecraft.world.level.storage.LevelStorageSource;
+import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 import etcodehome.freeterraforged.world.worldgen.FlowSettingsSnapshot;
 import etcodehome.freeterraforged.world.worldgen.IFlowSettingsHolder;
+import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementConfigStore;
 import etcodehome.freeterraforged.world.worldgen.runtime.TagEpoch;
 import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenEpoch;
+import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenSettingsIdentity;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenFingerprints;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenResourceRevision;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenContributionRevision;
@@ -40,7 +44,10 @@ public class MixinChunkMap {
 	private RandomState randomState;
 
 	@Inject(
-		at = @At("TAIL"),
+		at = @At(
+			value = "INVOKE",
+			target = "Lnet/minecraft/world/level/chunk/ChunkGenerator;createState(Lnet/minecraft/core/HolderLookup;Lnet/minecraft/world/level/levelgen/RandomState;J)Lnet/minecraft/world/level/chunk/ChunkGeneratorStructureState;"
+		),
 		method = "<init>"
 	)
 	public void ChunkMap(ServerLevel serverLevel, LevelStorageSource.LevelStorageAccess storageAccess, DataFixer dataFixer, StructureTemplateManager templateLoader, Executor executor, BlockableEventLoop<Runnable> eventLoop, LightChunkGetter lightChunkGetter, ChunkGenerator chunkGenerator, ChunkProgressListener chunkProgressListener, ChunkStatusUpdateListener chunkStatusListener, Supplier<DimensionDataStorage> dimensionStorage, int viewDistance, boolean syncChunkWrites, CallbackInfo callback) {
@@ -52,9 +59,12 @@ public class MixinChunkMap {
 			throw new IllegalStateException("RandomState does not expose the FTF ownership contract");
 		}
 		if (!(chunkGenerator instanceof TerraForgedChunkGenerator terraForged)) {
-			if (rtfRandomState.isTerraForged()) {
-				throw new IllegalStateException(
-					"FTF density functions require the registered TerraForged generator root"
+			if (serverLevel.dimension() == Level.OVERWORLD) {
+				String settingsIdentity = WorldgenSettingsIdentity.describe(chunkGenerator);
+				FTFCommon.LOGGER.warn(
+					"FTF terrain generation is inactive for the Overworld: resolved generator is {}. "
+						+ "The world will use that generator; select the FreeTerraForged world type to use FTF terrain.",
+					settingsIdentity
 				);
 			}
 			return;
@@ -79,6 +89,7 @@ public class MixinChunkMap {
 				resourceRevision
 			),
 			new TagEpoch(0L, WorldgenFingerprints.tags(serverLevel.registryAccess())),
+			BiomeReplacementConfigStore.capture(),
 			WorldgenContributionRevision.snapshot(dimension, providerCatalog)
 		);
 		try {

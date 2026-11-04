@@ -1,28 +1,17 @@
 package etcodehome.freeterraforged.client.gui.screen.presetconfig;
 
 import java.io.IOException;
-import java.net.URI;
-import java.nio.file.AtomicMoveNotSupportedException;
-import java.nio.file.FileSystem;
-import java.nio.file.FileSystems;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.util.Map;
 
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Renderable;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.narration.NarratableEntry;
 import net.minecraft.client.gui.components.toasts.SystemToast.SystemToastId;
-import org.apache.commons.io.file.PathUtils;
 
-import com.google.common.collect.ImmutableMap;
 import com.mojang.datafixers.util.Pair;
 import net.minecraft.client.gui.screens.worldselection.CreateWorldScreen;
 import net.minecraft.client.gui.screens.worldselection.WorldCreationContext;
-import net.minecraft.core.RegistryAccess;
-import net.minecraft.data.DataGenerator;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.packs.repository.PackRepository;
 import net.minecraft.world.level.levelgen.WorldOptions;
@@ -30,8 +19,9 @@ import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.client.gui.Toasts;
 import etcodehome.freeterraforged.client.gui.screen.page.LinkedPageScreen;
 import etcodehome.freeterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
-import etcodehome.freeterraforged.data.worldgen.Datapacks;
-import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
+import etcodehome.freeterraforged.data.worldgen.preset.FTFWorldPresetDataPacks;
+import etcodehome.freeterraforged.data.worldgen.preset.FTFWorldPresets;
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
 
 public class PresetConfigScreen extends LinkedPageScreen {
 	private CreateWorldScreen parent;
@@ -112,16 +102,21 @@ public class PresetConfigScreen extends LinkedPageScreen {
 	}
 
 	public SaveResult applyPreset(PresetEntry preset) throws IOException {
+		PresetManager.PM.ingestFromPreset(preset);
 		Pair<Path, PackRepository> path = this.parent.getDataPackSelectionSettings(this.parent.getUiState().getSettings().dataConfiguration());
 		if(path == null) {
 			throw new IOException("Unable to create the temporary datapack repository");
 		}
-		Path exportPath = path.getFirst().resolve("freeterraforged-preset.zip");
+		Path exportPath = path.getFirst().resolve(FTFWorldPresets.GENERATED_PRESET_PACK_FILE_NAME);
 		this.exportAsDatapack(exportPath, preset);
 		PackRepository repository = path.getSecond();
 		repository.reload();
-		if(!repository.addPack("file/" + exportPath.getFileName())) {
-			throw new IOException("The generated ReTerraForged datapack was not discovered by Minecraft");
+		String generatedPackId = FTFWorldPresets.GENERATED_PRESET_PACK_ID;
+		if (!repository.isAvailable(generatedPackId)) {
+			throw new IOException("The generated FreeTerraForged preset datapack was not discovered by Minecraft");
+		}
+		if (!repository.getSelectedIds().contains(generatedPackId) && !repository.addPack(generatedPackId)) {
+			throw new IOException("The generated FreeTerraForged preset datapack could not be selected");
 		}
 		// Publish the seed before reload captures WorldOptions.
 		this.applySeedToParent();
@@ -131,26 +126,22 @@ public class PresetConfigScreen extends LinkedPageScreen {
 	}
 
 	public SaveResult reportPresetApplyFailure(IOException exception) {
-		FTFCommon.LOGGER.error("Failed to stage the ReTerraForged preset datapack", exception);
+		FTFCommon.LOGGER.error("Failed to stage the FreeTerraForged preset datapack", exception);
 		Component message = exception.getMessage() == null ? Component.literal(exception.getClass().getSimpleName()) : Component.literal(exception.getMessage());
 		Toasts.notify("dataPack.validation.failed", message, SystemToastId.PACK_LOAD_FAILURE);
 		return SaveResult.STAY_OPEN;
 	}
 
+	public void updateDefaultPresetIfSource(PresetListPage.PresetEntry presetEntry) throws IOException {
+	}
+
 	public void exportAsDatapack(Path outputPath, PresetListPage.PresetEntry presetEntry) throws IOException {
-		Path datagenPath = Files.createTempDirectory("datagen-target-");
-		Path datagenOutputPath = datagenPath.resolve("output");
-		try {
-			RegistryAccess registryAccess = this.getSettings().worldgenLoadContext();
-			Preset preset = presetEntry.getPreset();
-			Component presetName = presetEntry.getName();
-			DataGenerator dataGenerator = Datapacks.makePreset(preset, registryAccess, datagenPath, datagenOutputPath, presetName.getString());
-			dataGenerator.run();
-			writeZipAtomically(datagenOutputPath, outputPath);
-		} finally {
-			PathUtils.deleteDirectory(datagenPath);
-		}
-		FTFCommon.LOGGER.info("Exported datapack to {}", outputPath);
+		FTFWorldPresetDataPacks.exportPresetAsDatapack(
+			outputPath,
+			presetEntry.getPreset(),
+			presetEntry.getName().getString(),
+			this.getSettings().worldgenLoadContext()
+		);
 	}
 
 	private void releaseResources() {
@@ -188,33 +179,5 @@ public class PresetConfigScreen extends LinkedPageScreen {
 		if (failure != null) {
 			FTFCommon.LOGGER.error("Failed closing preset-screen resources", failure);
 		}
-	}
-
-	private static void writeZipAtomically(Path input, Path output) throws IOException {
-		Path parent = output.getParent();
-		if(parent == null) {
-			throw new IOException("Preset datapack output has no parent directory: " + output);
-		}
-		Files.createDirectories(parent);
-		Path temporary = Files.createTempFile(parent, output.getFileName().toString(), ".tmp");
-		try {
-			Files.delete(temporary);
-			copyToZip(input, temporary);
-			try {
-				Files.move(temporary, output, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-			} catch(AtomicMoveNotSupportedException exception) {
-				Files.move(temporary, output, StandardCopyOption.REPLACE_EXISTING);
-			}
-		} finally {
-			Files.deleteIfExists(temporary);
-		}
-	}
-
-	private static void copyToZip(Path input, Path output) throws IOException {
-		Map<String, String> env = ImmutableMap.of("create", "true");
-	    URI uri = URI.create("jar:" + output.toUri());
-	    try (FileSystem fs = FileSystems.newFileSystem(uri, env)) {
-	        PathUtils.copyDirectory(input, fs.getPath("/"), StandardCopyOption.REPLACE_EXISTING);
-	    }
 	}
 }

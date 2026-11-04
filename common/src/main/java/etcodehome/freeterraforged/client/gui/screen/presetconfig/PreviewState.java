@@ -8,7 +8,7 @@ import net.minecraft.network.chat.Component;
 import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
+import etcodehome.freeterraforged.world.worldgen.cell.heightmap.PreviewGrid;
 
 /**
  * Mutable state shared by every IPreviewHandler. Preview2D and Preview3D each own a
@@ -24,8 +24,8 @@ final class PreviewState {
     };
     final String[] legendValues = {"", "", "", ""};
 
-    Tile tile;
-    PreviewComputationCache.TileLease tileLease;
+    PreviewGrid grid;
+    PreviewComputationCache.GridLease gridLease;
     BiomePreview.Sidecar biomes;
     WorldSettings.Properties frameProperties;
     Levels frameLevels;
@@ -39,7 +39,7 @@ final class PreviewState {
     volatile PreviewCancellation generationCancellation;
     volatile PreviewFailure previewFailure;
 
-    // On-demand rasterization (re-render current tile without a full regenerate)
+    // On-demand rasterization (re-render current grid without a full regenerate)
     volatile PreviewCancellation rasterCancellation;
     final AtomicLong rasterRequestVersion = new AtomicLong();
     CompletableFuture<?> pendingRasterization;

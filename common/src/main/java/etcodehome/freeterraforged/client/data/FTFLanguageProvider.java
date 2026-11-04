@@ -17,10 +17,39 @@ public final class FTFLanguageProvider {
 		protected void addTranslations() {
 			this.add(FTFTranslationKeys.METADATA_DESCRIPTION, "FreeTerraForged resources");
 			this.add(FTFTranslationKeys.PRESET_METADATA_DESCRIPTION, "FreeTerraForged preset");
+			this.add(FTFTranslationKeys.DEFAULT_PRESET_PACK_DESCRIPTION, "FreeTerraForged default world preset");
+			this.add(FTFTranslationKeys.DEFAULT_PRESET_PACK_NAME, "FreeTerraForged Default Preset");
+			this.add("resourcePack.ftf_default_preset.name", "FreeTerraForged Default Preset");
+			this.add("generator.freeterraforged.freeterraforged", "FTF Enhanced");
 			this.add(FTFTranslationKeys.MUD_SWAMPS_METADATA_DESCRIPTION, "Changes the swamp material to mud");
 			this.add(FTFTranslationKeys.NO_ERROR_MESSAGE, "{No error message}");
 
 			this.add(FTFTranslationKeys.GUI_INPUT_PROMPT, "Type preset name");
+			this.add("freeterraforged.commands.locate.options.unknown", "Unknown locate option: %s.");
+			this.add("freeterraforged.commands.locate.options.duplicate", "Locate option %s was supplied more than once.");
+			this.add("freeterraforged.commands.locate.options.missing_value", "Locate option %s requires a value.");
+			this.add("freeterraforged.commands.locate.options.whole_number", "The value for %s must be a whole number.");
+			this.add("freeterraforged.commands.locate.options.timeout", "Locate timeout must be at least 1 second; received %s.");
+			this.add("freeterraforged.commands.locate.options.workers", "Locate workers must be between 1 and %s; received %s.");
+			this.add("freeterraforged.commands.locate.terrain.unknown", "Unknown terrain type: %s.");
+			this.add("freeterraforged.commands.locate.terrain.not_ftf", "No FreeTerraForged world is available.");
+			this.add("freeterraforged.commands.locate.terrain.no_active_search", "No FreeTerraForged locate search is running.");
+			this.add("freeterraforged.commands.locate.terrain.cancelled", "Stopped the locate search for %s.");
+			this.add("freeterraforged.commands.locate.terrain.already_running", "A terrain search for %s is already running. Use '/ftf locate cancel' to stop it first.");
+			this.add("freeterraforged.commands.locate.terrain.searching", "Searching for terrain %s for up to %s seconds...");
+			this.add("freeterraforged.commands.locate.terrain.failed", "Could not search for terrain %s because of an unexpected error. Check the server log for details.");
+			this.add("freeterraforged.commands.locate.terrain.timed_out", "Could not find terrain %s within %s seconds.");
+			this.add("freeterraforged.commands.locate.terrain.not_found", "Could not find terrain %s before reaching Minecraft's world limits.");
+			this.add("freeterraforged.commands.locate.terrain.success", "Found %s terrain at %s (%s blocks away).");
+			this.add("freeterraforged.commands.locate.biome.invalid", "Invalid biome ID or tag: %s.");
+			this.add("freeterraforged.commands.locate.biome.not_ftf", "No FreeTerraForged world is available.");
+			this.add("freeterraforged.commands.locate.biome.already_running", "A biome search for %s is already running. Use '/ftf locate cancel' to stop it first.");
+			this.add("freeterraforged.commands.locate.biome.searching", "Searching for biome %s for up to %s seconds...");
+			this.add("freeterraforged.commands.locate.biome.failed", "Could not search for biome %s because of an unexpected error. Check the server log for details.");
+			this.add("freeterraforged.commands.locate.biome.impossible", "This FreeTerraForged world does not generate %s.");
+			this.add("freeterraforged.commands.locate.biome.timed_out", "Could not find biome %s within %s seconds.");
+			this.add("freeterraforged.commands.locate.biome.not_found", "Could not find biome %s before reaching Minecraft's world limits.");
+			this.add("freeterraforged.commands.locate.biome.success", "Found biome %s at %s (%s blocks away).");
 
 			this.add(FTFTranslationKeys.GUI_SELECT_PRESET_MISSING_LEGACY_PRESETS, "Couldn't find any legacy presets");
 			this.add(FTFTranslationKeys.GUI_SELECT_PRESET_TITLE, "Presets & Defaults");
@@ -49,6 +78,9 @@ public final class FTFLanguageProvider {
 			this.add(FTFTranslationKeys.GUI_BUTTON_OPEN_EXPORT_FOLDER, "Open Export Folder");
 			this.add(FTFTranslationKeys.GUI_BUTTON_EXPORT_AS_DATAPACK, "Export As Datapack");
 			this.add(FTFTranslationKeys.GUI_BUTTON_EXPORT_SUCCESS, "Exported Preset");
+			this.add(FTFTranslationKeys.GUI_BUTTON_SET_AS_DEFAULT_PRESET, "Set as Default");
+			this.add(FTFTranslationKeys.GUI_DEFAULT_PRESET_SAVED, "Default Preset Saved");
+			this.add(FTFTranslationKeys.GUI_DEFAULT_PRESET_INDICATOR_TOOLTIP, "This is the preset used by default for new FTF worlds.");
 			this.add(FTFTranslationKeys.GUI_BUTTON_SEED, "Seed");
 			this.add(FTFTranslationKeys.GUI_BUTTON_CONTINENT_TYPE, "Continent Type");
 			this.add(FTFTranslationKeys.GUI_BUTTON_CONTINENT_SHAPE, "Continent Shape");
@@ -83,6 +115,11 @@ public final class FTFLanguageProvider {
 			this.add(FTFTranslationKeys.GUI_SLIDER_CONTINENT_NOISE_OCTAVES , "Continent Noise Octaves");
 			this.add(FTFTranslationKeys.GUI_SLIDER_CONTINENT_NOISE_GAIN, "Continent Noise Gain");
 			this.add(FTFTranslationKeys.GUI_SLIDER_CONTINENT_NOISE_LACUNARITY, "Continent Noise Lacunarity");
+			this.add(FTFTranslationKeys.GUI_SLIDER_BRIDGE_CHANCE, "Bridge Chance");
+			this.add(FTFTranslationKeys.GUI_SLIDER_TECTONIC_PLATE_UPLIFT, "Tectonic Plate Uplift");
+			this.add(FTFTranslationKeys.GUI_SLIDER_TECTONIC_ROUNDING, "Tectonic Rounding");
+			this.add(FTFTranslationKeys.GUI_SLIDER_MACRO_WARP_STRENGTH, "Macro Warp Strength");
+			this.add(FTFTranslationKeys.GUI_SLIDER_COASTAL_COMPLEXITY, "Coastal Complexity");
 			this.add(FTFTranslationKeys.GUI_SLIDER_ISLAND_INLAND, "Island Inland");
 			this.add(FTFTranslationKeys.GUI_SLIDER_ISLAND_COAST, "Island Coast");
 			this.add(FTFTranslationKeys.GUI_SLIDER_DEEP_OCEAN, "Deep Ocean");
@@ -211,6 +248,7 @@ public final class FTFLanguageProvider {
 			this.add(Tooltips.failTranslationKey(FTFTranslationKeys.GUI_BUTTON_COPY), "Failed to copy preset");
 			this.add(Tooltips.failTranslationKey(FTFTranslationKeys.GUI_BUTTON_DELETE), "Failed to delete preset");
 			this.add(Tooltips.failTranslationKey(FTFTranslationKeys.GUI_BUTTON_EXPORT_AS_DATAPACK), "Failed to export preset");
+			this.add(Tooltips.failTranslationKey(FTFTranslationKeys.GUI_BUTTON_SET_AS_DEFAULT_PRESET), "Failed to set the default preset");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_BUTTON_SEED), "Controls the world seed");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_BUTTON_CONTINENT_TYPE), "Controls the continent generator type");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_BUTTON_CONTINENT_SHAPE), "Controls how continent shapes are calculated. You may also need to adjust the transition points to ensure beaches etc still form.");
@@ -245,6 +283,11 @@ public final class FTFLanguageProvider {
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_CONTINENT_NOISE_OCTAVES), "The number of octaves of noise used to distort the continent.");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_CONTINENT_NOISE_GAIN), "The contribution strength of each noise octave.");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_CONTINENT_NOISE_LACUNARITY), "The frequency multiplier for each noise octave.");
+			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_BRIDGE_CHANCE), "Controls the probability that adjacent eligible continents bridge together into merged landmasses.");
+			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_TECTONIC_PLATE_UPLIFT), "Controls the probability that adjacent bridged continents connect their tectonic uplift peaks into continuous ridges.");
+			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_TECTONIC_ROUNDING), "Controls the bias from a straight line pathway to an organic, smooth arc for connecting uplift peaks.");
+			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_MACRO_WARP_STRENGTH), "Controls the strength of large-scale domain warping, creating sweeping continental arcs and tectonic curvature.");
+			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_COASTAL_COMPLEXITY), "Controls the fractal irregularity and indentation of coastlines, creating natural bays, capes, and inlets.");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_ISLAND_INLAND), "Controls the point below which island coasts transition into island. The greater the gap to the island coasts slider, the more gradual the transition.");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_ISLAND_COAST), "Controls the point below which deep oceans transition into island coasts. The greater the gap to the deep ocean slider, the more gradual the transition.");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_DEEP_OCEAN), "Controls the point above which deep oceans transition into shallow oceans. The greater the gap to the shallow ocean slider, the more gradual the transition.");

@@ -2,11 +2,13 @@ package etcodehome.freeterraforged.world.worldgen.runtime;
 
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
+import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
+import etcodehome.freeterraforged.registries.FTFRegistries;
 import net.minecraft.core.Holder;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.biome.Biome;
@@ -17,8 +19,8 @@ public final class WorldgenRuntimeBinding {
 	private final AtomicReference<RejectedPublication> rejection = new AtomicReference<>();
 	private final WorldgenQueryCaches queryCaches = new WorldgenQueryCaches();
 
-	private WorldgenRuntimeBinding(State state) {
-		this.state = new AtomicReference<>(Objects.requireNonNull(state, "state"));
+	private WorldgenRuntimeBinding() {
+		this.state = new AtomicReference<>();
 	}
 
 	static WorldgenRuntimeBinding create(
@@ -26,7 +28,18 @@ public final class WorldgenRuntimeBinding {
 		WorldgenPlan plan,
 		Map<ResourceKey<Biome>, BiomeGenerationSettings> generationSettings
 	) {
-		return new WorldgenRuntimeBinding(materializeState(epoch, plan, generationSettings));
+		return create(epoch, plan, generationSettings, null);
+	}
+
+	static WorldgenRuntimeBinding create(
+		WorldgenEpoch epoch,
+		WorldgenPlan plan,
+		Map<ResourceKey<Biome>, BiomeGenerationSettings> generationSettings,
+		@org.jetbrains.annotations.Nullable etcodehome.freeterraforged.world.worldgen.biome.ClimateQuerySemantics fallbackSemantics
+	) {
+		WorldgenRuntimeBinding binding = new WorldgenRuntimeBinding();
+		binding.state.set(materializeState(epoch, plan, generationSettings, fallbackSemantics, binding));
+		return binding;
 	}
 
 	public WorldgenEpoch epoch() {
@@ -35,6 +48,17 @@ public final class WorldgenRuntimeBinding {
 
 	public WorldgenPlan plan() {
 		return this.current().plan();
+	}
+
+	public WorldgenBiomeSelection.Executable biomeSelection() {
+		return this.current().biomeSelection();
+	}
+
+	public BiomeRuntime biomeRuntime() {
+		State current = this.current();
+		return new BiomeRuntime(
+			current.plan(), current.biomeSelection(), current.biomePlacement()
+		);
 	}
 
 	public WorldgenQueryCaches queryCaches() {
@@ -55,7 +79,17 @@ public final class WorldgenRuntimeBinding {
 		WorldgenPlan plan,
 		Map<ResourceKey<Biome>, BiomeGenerationSettings> generationSettings
 	) {
-		State replacement = materializeState(epoch, plan, generationSettings);
+		return this.replace(expected, epoch, plan, generationSettings, null);
+	}
+
+	State replace(
+		State expected,
+		WorldgenEpoch epoch,
+		WorldgenPlan plan,
+		Map<ResourceKey<Biome>, BiomeGenerationSettings> generationSettings,
+		@org.jetbrains.annotations.Nullable etcodehome.freeterraforged.world.worldgen.biome.ClimateQuerySemantics fallbackSemantics
+	) {
+		State replacement = materializeState(epoch, plan, generationSettings, fallbackSemantics, this);
 		if (!this.state.compareAndSet(expected, replacement)) {
 			throw new IllegalStateException("Worldgen runtime changed while a replacement plan was prepared");
 		}
@@ -67,7 +101,7 @@ public final class WorldgenRuntimeBinding {
 	void reject(WorldgenEpoch attempted, Throwable failure) {
 		this.reject(
 			attempted.id(), attempted.resourceRevision(), attempted.resourceLayerFingerprint(), attempted.tagEpoch(),
-			attempted.contributionRevision(), failure
+			attempted.biomeReplacementConfig(), attempted.contributionRevision(), failure
 		);
 	}
 
@@ -76,11 +110,12 @@ public final class WorldgenRuntimeBinding {
 		long resourceRevision,
 		String resourceLayerFingerprint,
 		TagEpoch tags,
+		BiomeReplacementConfigSnapshot biomeReplacementConfig,
 		WorldgenContributionRevision.Snapshot contributions,
 		Throwable failure
 	) {
 		this.rejection.set(new RejectedPublication(
-			owner, resourceRevision, resourceLayerFingerprint, tags, contributions,
+			owner, resourceRevision, resourceLayerFingerprint, tags, biomeReplacementConfig, contributions,
 			CapabilityFailure.of("plan_replacement_rejected", failure)
 		));
 	}
@@ -103,6 +138,7 @@ public final class WorldgenRuntimeBinding {
 		WorldgenPlan plan,
 		Map<ResourceKey<Biome>, BiomeGenerationSettings> generationSettings,
 		Set<Holder<Biome>> possibleBiomes,
+		BiomePlacementPlan biomePlacement,
 		WorldgenBiomeSelection.Executable biomeSelection,
 		BiomeDecorationPlan biomeDecorationPlan,
 		SurfaceColumnPlan surfaceColumns
@@ -112,6 +148,7 @@ public final class WorldgenRuntimeBinding {
 			plan = Objects.requireNonNull(plan, "plan");
 			generationSettings = Map.copyOf(generationSettings);
 			possibleBiomes = Set.copyOf(possibleBiomes);
+			biomePlacement = Objects.requireNonNull(biomePlacement, "biomePlacement");
 			biomeSelection = Objects.requireNonNull(biomeSelection, "biomeSelection");
 			biomeDecorationPlan = Objects.requireNonNull(biomeDecorationPlan, "biomeDecorationPlan");
 			surfaceColumns = Objects.requireNonNull(surfaceColumns, "surfaceColumns");
@@ -120,6 +157,9 @@ public final class WorldgenRuntimeBinding {
 			}
 			if (biomeSelection.plan() != plan) {
 				throw new IllegalArgumentException("Biome query executor belongs to a different plan");
+			}
+			if (biomePlacement.plan() != plan) {
+				throw new IllegalArgumentException("Biome placement metadata belongs to a different plan");
 			}
 			for (Holder<Biome> biome : possibleBiomes) {
 				if (biome.unwrapKey().isPresent() && !generationSettings.containsKey(biome.unwrapKey().orElseThrow())) {
@@ -133,19 +173,52 @@ public final class WorldgenRuntimeBinding {
 
 	}
 
+	public record BiomeRuntime(
+		WorldgenPlan plan,
+		WorldgenBiomeSelection.Executable selection,
+		BiomePlacementPlan placement
+	) {
+		public BiomeRuntime {
+			plan = Objects.requireNonNull(plan, "plan");
+			selection = Objects.requireNonNull(selection, "selection");
+			placement = Objects.requireNonNull(placement, "placement");
+			if (selection.plan() != plan || placement.plan() != plan) {
+				throw new IllegalArgumentException("Biome runtime components belong to different plans");
+			}
+		}
+	}
+
+	synchronized State refreshPossibleBiomes(
+		Map<ResourceKey<Biome>, BiomeGenerationSettings> generationSettings,
+		@org.jetbrains.annotations.Nullable etcodehome.freeterraforged.world.worldgen.biome.ClimateQuerySemantics fallbackSemantics
+	) {
+		State current = this.current();
+		State updated = materializeState(current.epoch(), current.plan(), generationSettings, fallbackSemantics, this);
+		this.state.set(updated);
+		return updated;
+	}
+
 	private static State materializeState(
 		WorldgenEpoch epoch,
 		WorldgenPlan plan,
-		Map<ResourceKey<Biome>, BiomeGenerationSettings> generationSettings
+		Map<ResourceKey<Biome>, BiomeGenerationSettings> generationSettings,
+		@org.jetbrains.annotations.Nullable etcodehome.freeterraforged.world.worldgen.biome.ClimateQuerySemantics fallbackSemantics,
+		@org.jetbrains.annotations.Nullable WorldgenRuntimeBinding ownerBinding
 	) {
 		Set<Holder<Biome>> possibleBiomes = WorldgenBiomeSelection.possibleBiomes(plan);
 		SurfaceColumnPlan surfaceColumns = SurfaceColumnPlan.compile(plan.placedFeatures().steps(), generationSettings);
+		Preset preset = plan.owner().lookups()
+			.lookupOrThrow(FTFRegistries.PRESET)
+			.get(Preset.KEY)
+			.orElseThrow(() -> new IllegalStateException("Worldgen runtime plan has no selected preset"))
+			.value();
 		return new State(
 			epoch,
 			plan,
 			generationSettings,
 			possibleBiomes,
-			WorldgenBiomeSelection.prepare(plan, possibleBiomes),
+			BiomePlacementPlan.compile(plan, preset, possibleBiomes),
+			WorldgenBiomeSelection.prepare(plan, possibleBiomes, fallbackSemantics, ownerBinding),
 			new BiomeDecorationPlan(
 				plan.structures().structures(), plan.placedFeatures().steps(), surfaceColumns.decorationSettings(),
 				possibleBiomes
@@ -159,6 +232,7 @@ public final class WorldgenRuntimeBinding {
 		long resourceRevision,
 		String resourceLayerFingerprint,
 		TagEpoch tags,
+		BiomeReplacementConfigSnapshot biomeReplacementConfig,
 		WorldgenContributionRevision.Snapshot contributions,
 		CapabilityFailure failure
 	) {
@@ -171,6 +245,9 @@ public final class WorldgenRuntimeBinding {
 				resourceLayerFingerprint, "resourceLayerFingerprint"
 			);
 			tags = Objects.requireNonNull(tags, "tags");
+			biomeReplacementConfig = Objects.requireNonNull(
+				biomeReplacementConfig, "biomeReplacementConfig"
+			);
 			contributions = Objects.requireNonNull(contributions, "contributions");
 			failure = Objects.requireNonNull(failure, "failure");
 		}

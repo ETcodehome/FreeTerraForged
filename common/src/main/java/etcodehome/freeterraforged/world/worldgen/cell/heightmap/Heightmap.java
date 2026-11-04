@@ -1,7 +1,8 @@
 package etcodehome.freeterraforged.world.worldgen.cell.heightmap;
 
-import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.ControlPoints;
+import org.jetbrains.annotations.Nullable;
 
+import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.ControlPoints;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetNoiseData;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetTerrainTypeNoise;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
@@ -38,16 +39,46 @@ import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
 import etcodehome.freeterraforged.world.worldgen.util.Seed;
 import net.minecraft.core.HolderGetter;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
+import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 
-public record Heightmap(CellPopulator terrain, CellPopulator region, Continent continent, Climate climate, Levels levels, ControlPoints controlPoints, float terrainFrequency, Noise beachNoise) implements AutoCloseable {
+public record Heightmap(
+    CellPopulator terrain,
+    CellPopulator region,
+    Continent continent,
+    Climate climate,
+    Levels levels,
+    ControlPoints controlPoints,
+    float terrainFrequency,
+    Noise beachNoise,
+    @Nullable TerrainCeiling terrainCeiling
+) implements AutoCloseable {
 	
 	public void apply(Cell cell, float x, float z, boolean applyClimate) {
+		if (!WorldgenPerfTracker.ACTIVE) {
+			this.applyTerrain(cell, x, z);
+			if (cell.terrain == TerrainType.ISLAND_BEACH) {
+				cell.terrain = TerrainType.BEACH;
+			}
+			this.applyRivers(cell, x, z, this.continent.getRivermap(cell));
+			this.applyClimate(cell, x, z, applyClimate);
+			return;
+		}
+		WorldgenPerfTracker.ThreadStats ts = WorldgenPerfTracker.stats();
+		long t0 = System.nanoTime();
 		this.applyTerrain(cell, x, z);
 		if (cell.terrain == TerrainType.ISLAND_BEACH) {
 			cell.terrain = TerrainType.BEACH;
 		}
+		long t1 = System.nanoTime();
 		this.applyRivers(cell, x, z, this.continent.getRivermap(cell));
+		long t2 = System.nanoTime();
 		this.applyClimate(cell, x, z, applyClimate);
+		long t3 = System.nanoTime();
+		ts.heightmapApplyCount++;
+		ts.heightmapApplyNanos += (t3 - t0);
+		ts.cellTerrainNanos += (t1 - t0);
+		ts.cellRiverNanos += (t2 - t1);
+		ts.cellClimateNanos += (t3 - t2);
 	}
 	
 	public void applyTerrain(Cell cell, float x, float z) {
@@ -56,6 +87,9 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
         this.continent.apply(cell, x, z);
         this.region.apply(cell, x, z);
         this.terrain.apply(cell, x * this.terrainFrequency, z * this.terrainFrequency);
+        if (this.terrainCeiling != null) {
+            cell.height = this.terrainCeiling.apply(cell.height);
+        }
 	}
 	
 	public void applyRivers(Cell cell, float x, float z, Rivermap rivermap) {
@@ -192,7 +226,10 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
 
         Noise beachNoise = Noises.perlin2(ctx.seed.next(), 20, 1);
         beachNoise = Noises.mul(beachNoise, ctx.levels.scale(5));
-        return new Heightmap(terrain, region, continent, climate, levels, controlPoints, terrainFrequency, beachNoise);
+        TerrainCeiling terrainCeiling = TerrainCeiling.isEnabled(preset)
+            ? TerrainCeiling.make(world.properties)
+            : null;
+        return new Heightmap(terrain, region, continent, climate, levels, controlPoints, terrainFrequency, beachNoise, terrainCeiling);
 	}
 
 	@Override

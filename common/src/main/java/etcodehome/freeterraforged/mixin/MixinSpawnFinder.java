@@ -2,7 +2,6 @@ package etcodehome.freeterraforged.mixin;
 
 import java.util.List;
 
-import etcodehome.freeterraforged.world.worldgen.cell.biome.spawn.SpawnFinderFix;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
