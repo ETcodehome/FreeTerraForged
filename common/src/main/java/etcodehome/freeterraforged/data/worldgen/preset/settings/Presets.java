@@ -31,6 +31,7 @@ public class Presets {
 			new ClimateSettings(
 				new RangeValue(0, 6, 2, 0.0F, 0.98F, 0.0F, 0.05F),
 				new RangeValue(0, 6, 1, 0.0F, 1.0F, 0.0F, 0.0F),
+				new RangeValue(0, 8, 1, 0.0F, 1.0F, 0.0F, 0.0F),
 				new BiomeShape(225, 8, 150, 80),
 				new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.SIMPLEX, 24, 2, 0.5F, 2.65F, 14),
 				ClimateSettings.makeDefault().altitudeCoolingStrength,
@@ -76,6 +77,7 @@ public class Presets {
 			new ClimateSettings(
 				new RangeValue(0, 4, 1, 0.0F, 0.98F, 0.05F, 0.0F),
 				new RangeValue(0, 5, 1, 0.0F, 1.0F, 0.0F, 0.0F),
+				new RangeValue(0, 6, 1, 0.0F, 1.0F, 0.0F, 0.0F),
 				new BiomeShape(176, 6, 150, 80),
 				new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.SIMPLEX, 24, 2, 0.5F, 2.65F, 14),
 				ClimateSettings.makeDefault().altitudeCoolingStrength,
@@ -121,6 +123,7 @@ public class Presets {
 			new ClimateSettings(
 				new RangeValue(0, 7, 1, 0.0F, 1.0F, -0.004F, 0.0F),
 				new RangeValue(0, 6, 1, 0.0F, 1.0F, 0.0F, 0.0F),
+				new RangeValue(0, 8, 1, 0.0F, 1.0F, 0.0F, 0.0F),
 				new BiomeShape(185, 8, 150, 80),
 				new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.SIMPLEX, 24, 2, 0.5F, 2.65F, 14),
 				ClimateSettings.makeDefault().altitudeCoolingStrength,
@@ -166,6 +169,7 @@ public class Presets {
 			new ClimateSettings(
 				new RangeValue(0, 4, 1, 0.0F, 0.98F, 0.05F, 0.0F),
 				new RangeValue(0, 5, 1, 0.0F, 1.0F, 0.0F, 0.0F),
+				new RangeValue(0, 6, 1, 0.0F, 1.0F, 0.0F, 0.0F),
 				new BiomeShape(176, 6, 150, 80),
 				new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.SIMPLEX, 24, 2, 0.5F, 2.65F, 14),
 				ClimateSettings.makeDefault().altitudeCoolingStrength,
@@ -211,6 +215,7 @@ public class Presets {
 			new ClimateSettings(
 				new RangeValue(0, 4, 2, 0.0F, 1.0F, 0.097F, 0.0F),
 				new RangeValue(0, 3, 1, 0.0F, 1.0F, 0.0F, 0.0F),
+				new RangeValue(0, 5, 1, 0.0F, 1.0F, 0.0F, 0.0F),
 				new BiomeShape(402, 5, 180, 110),
 				new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.PERLIN2, 24, 1, 0.5F, 2.65F, 60),
 				ClimateSettings.makeDefault().altitudeCoolingStrength,
@@ -314,6 +319,16 @@ public class Presets {
 								0.0F,
 								1.0F,
 								0.0103F,
+								0.0F
+						),
+
+						// erosion
+						new RangeValue(0,
+								4,
+								1,
+								0.0F,
+								1.0F,
+								0.0F,
 								0.0F
 						),
 

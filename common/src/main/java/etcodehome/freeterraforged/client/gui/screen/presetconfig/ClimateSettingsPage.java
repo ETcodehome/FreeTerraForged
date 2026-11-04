@@ -30,6 +30,14 @@ class ClimateSettingsPage extends PresetEditorPage {
 	private Slider moistureDistributionBias;
 	private Slider rainShadowStrength;
 	private Slider coastalMoistureBoost;
+
+	private ValueButton<Integer> erosionSeedOffset;
+	private Slider erosionScale;
+	private Slider erosionFalloff;
+	private Slider erosionMin;
+	private Slider erosionMax;
+	private Slider erosionOffsetBias;
+	private Slider erosionDistributionBias;
 	
 	private Slider biomeSize;
 	private Slider macroNoiseSize;
@@ -146,6 +154,42 @@ class ClimateSettingsPage extends PresetEditorPage {
 			return value;
 		});
 
+		ClimateSettings.RangeValue erosion = climate.erosion;
+		this.erosionSeedOffset = PresetWidgets.createRandomButton(FTFTranslationKeys.GUI_BUTTON_CLIMATE_SEED_OFFSET, erosion.seedOffset, (value) -> {
+			erosion.seedOffset = value;
+			this.regenerate();
+		});
+		this.erosionScale = PresetWidgets.createIntSlider(erosion.scale, 1, 20, FTFTranslationKeys.GUI_SLIDER_EROSION_SCALE, (slider, value) -> {
+			erosion.scale = (int) slider.scaleValue(value);
+			this.regenerate();
+			return value;
+		});
+		this.erosionFalloff = PresetWidgets.createIntSlider(erosion.falloff, 1, 10, FTFTranslationKeys.GUI_SLIDER_EROSION_FALLOFF, (slider, value) -> {
+			erosion.falloff = (int) slider.scaleValue(value);
+			this.regenerate();
+			return value;
+		});
+		this.erosionMin = PresetWidgets.createFloatSlider(erosion.min, 0.0F, 1.0F, FTFTranslationKeys.GUI_SLIDER_EROSION_MIN, (slider, value) -> {
+			erosion.min = (float) slider.scaleValue(value);
+			this.regenerate();
+			return value;
+		});
+		this.erosionMax = PresetWidgets.createFloatSlider(erosion.max, 0.0F, 1.0F, FTFTranslationKeys.GUI_SLIDER_EROSION_MAX, (slider, value) -> {
+			erosion.max = (float) slider.scaleValue(value);
+			this.regenerate();
+			return value;
+		});
+		this.erosionOffsetBias = PresetWidgets.createFloatSlider(erosion.offsetBias, -1.0F, 1.0F, FTFTranslationKeys.GUI_SLIDER_EROSION_OFFSET_BIAS, (slider, value) -> {
+			erosion.offsetBias = (float) slider.scaleValue(value);
+			this.regenerate();
+			return value;
+		});
+		this.erosionDistributionBias = PresetWidgets.createFloatSlider(erosion.distributionBias, -3.0F, 3.0F, FTFTranslationKeys.GUI_SLIDER_EROSION_DISTRIBUTION_BIAS, (slider, value) -> {
+			erosion.distributionBias = (float) slider.scaleValue(value);
+			this.regenerate();
+			return value;
+		});
+
 		ClimateSettings.BiomeShape biomeShape = climate.biomeShape;
 
 		this.biomeSize = PresetWidgets.createIntSlider(biomeShape.biomeSize, 50, 2000, FTFTranslationKeys.GUI_SLIDER_BIOME_SIZE, (slider, value) -> {
@@ -220,6 +264,15 @@ class ClimateSettingsPage extends PresetEditorPage {
 		this.left.addWidget(this.moistureOffsetBias);
 		this.left.addWidget(this.rainShadowStrength);
 		this.left.addWidget(this.coastalMoistureBoost);
+
+		this.left.addWidget(PresetWidgets.createLabel(FTFTranslationKeys.GUI_LABEL_EROSION));
+		this.left.addWidget(this.erosionSeedOffset);
+		this.left.addWidget(this.erosionScale);
+		this.left.addWidget(this.erosionFalloff);
+		this.left.addWidget(this.erosionMin);
+		this.left.addWidget(this.erosionMax);
+		this.left.addWidget(this.erosionDistributionBias);
+		this.left.addWidget(this.erosionOffsetBias);
 		
 		this.left.addWidget(PresetWidgets.createLabel(FTFTranslationKeys.GUI_LABEL_BIOME_SHAPE));
 		this.left.addWidget(this.biomeSize);

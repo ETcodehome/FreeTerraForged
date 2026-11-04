@@ -137,6 +137,12 @@ public final class FTFTranslationKeys {
 	public static final String GUI_SLIDER_MOISTURE_MAX = resolve("gui.slider.moistureMax");
 	public static final String GUI_SLIDER_MOISTURE_OFFSET_BIAS = resolve("gui.slider.moistureOffsetBias");
 	public static final String GUI_SLIDER_MOISTURE_DISTRIBUTION_BIAS = resolve("gui.slider.moistureDistributionBias");
+	public static final String GUI_SLIDER_EROSION_SCALE = resolve("gui.slider.erosionScale");
+	public static final String GUI_SLIDER_EROSION_FALLOFF = resolve("gui.slider.erosionFalloff");
+	public static final String GUI_SLIDER_EROSION_MIN = resolve("gui.slider.erosionMin");
+	public static final String GUI_SLIDER_EROSION_MAX = resolve("gui.slider.erosionMax");
+	public static final String GUI_SLIDER_EROSION_OFFSET_BIAS = resolve("gui.slider.erosionOffsetBias");
+	public static final String GUI_SLIDER_EROSION_DISTRIBUTION_BIAS = resolve("gui.slider.erosionDistributionBias");
 	public static final String GUI_SLIDER_BIOME_SIZE = resolve("gui.slider.biomeSize");
 	public static final String GUI_SLIDER_UNDERGROUND_BIOME_SIZE = resolve("gui.slider.undergroundBiomeSize");
 	public static final String GUI_SLIDER_UNDERGROUND_BIOME_VERTICAL_SIZE = resolve("gui.slider.undergroundBiomeVerticalSize");

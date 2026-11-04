@@ -158,6 +158,12 @@ public final class FTFLanguageProvider {
 			this.add(FTFTranslationKeys.GUI_SLIDER_MOISTURE_MAX, "Max");
 			this.add(FTFTranslationKeys.GUI_SLIDER_MOISTURE_OFFSET_BIAS, "Offset Bias");
 			this.add(FTFTranslationKeys.GUI_SLIDER_MOISTURE_DISTRIBUTION_BIAS, "Distribution Bias");
+			this.add(FTFTranslationKeys.GUI_SLIDER_EROSION_SCALE, "Scale");
+			this.add(FTFTranslationKeys.GUI_SLIDER_EROSION_FALLOFF, "Falloff");
+			this.add(FTFTranslationKeys.GUI_SLIDER_EROSION_MIN, "Min");
+			this.add(FTFTranslationKeys.GUI_SLIDER_EROSION_MAX, "Max");
+			this.add(FTFTranslationKeys.GUI_SLIDER_EROSION_OFFSET_BIAS, "Offset Bias");
+			this.add(FTFTranslationKeys.GUI_SLIDER_EROSION_DISTRIBUTION_BIAS, "Distribution Bias");
 			this.add(FTFTranslationKeys.GUI_SLIDER_BIOME_SIZE, "Surface Biome Size");
 			this.add(FTFTranslationKeys.GUI_SLIDER_UNDERGROUND_BIOME_SIZE, "Underground Biome Horizontal Size");
 			this.add(FTFTranslationKeys.GUI_SLIDER_UNDERGROUND_BIOME_VERTICAL_SIZE, "Underground Biome Vertical Size");
@@ -325,6 +331,12 @@ public final class FTFLanguageProvider {
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_MOISTURE_MIN), "The lower limit of the range");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_MOISTURE_MAX), "The upper limit of the range");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_MOISTURE_OFFSET_BIAS), "The bias towards either end of the range");
+			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_EROSION_SCALE), "The horizontal scale");
+			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_EROSION_FALLOFF), "How quickly values transition from an extremity");
+			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_EROSION_MIN), "The lower limit of the range");
+			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_EROSION_MAX), "The upper limit of the range");
+			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_EROSION_OFFSET_BIAS), "The bias towards either end of the range");
+			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_EROSION_DISTRIBUTION_BIAS), "Shifts the erosion distribution of the world while ensuring all biomes still spawn.");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_BIOME_SIZE), "Controls the horizontal scale of surface biome climate regions.");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_UNDERGROUND_BIOME_SIZE), "Controls how wide underground biome regions are. This includes both cave biomes and ordinary surface biomes below the surface.");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_UNDERGROUND_BIOME_VERTICAL_SIZE), "Controls how tall cave-biome and surface-biome areas are underground. With Vertical Cave Biome Banding off, it still controls the height of those areas but does not move cave biomes away from their normal depths. You can set it as high as 512 blocks, or the world's full height when the world is shorter.");

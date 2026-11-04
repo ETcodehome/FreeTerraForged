@@ -15,6 +15,10 @@ public class ClimateSettings {
 	public static final Codec<ClimateSettings> CODEC = RecordCodecBuilder.create(instance -> instance.group(
 			RangeValue.CODEC.fieldOf("temperature").forGetter((o) -> o.temperature),
 			RangeValue.CODEC.fieldOf("moisture").forGetter((o) -> o.moisture),
+			RangeValue.CODEC.optionalFieldOf("erosion").xmap(
+				opt -> opt.map(RangeValue::copy).orElseGet(() -> makeDefault().erosion),
+				Optional::of
+			).forGetter((o) -> o.erosion),
 			BiomeShape.CODEC.fieldOf("biomeShape").forGetter((o) -> o.biomeShape),
 			BiomeNoise.CODEC.fieldOf("biomeEdgeShape").forGetter((o) -> o.biomeEdgeShape),
 			Codec.FLOAT.optionalFieldOf("altitudeCoolingStrength", makeDefault().altitudeCoolingStrength).forGetter((o) -> o.altitudeCoolingStrength),
@@ -24,11 +28,32 @@ public class ClimateSettings {
 
 	public RangeValue temperature;
 	public RangeValue moisture;
+	public RangeValue erosion;
 	public BiomeShape biomeShape;
 	public BiomeNoise biomeEdgeShape;
 	public float altitudeCoolingStrength;
 	public float rainShadowStrength;
 	public float coastalMoistureBoost;
+
+	public ClimateSettings(
+			RangeValue temperature,
+			RangeValue moisture,
+			RangeValue erosion,
+			BiomeShape biomeShape,
+			BiomeNoise biomeEdgeShape,
+			float altitudeCoolingStrength,
+			float rainShadowStrength,
+			float coastalMoistureBoost
+	) {
+		this.temperature = temperature;
+		this.moisture = moisture;
+		this.erosion = erosion;
+		this.biomeShape = biomeShape;
+		this.biomeEdgeShape = biomeEdgeShape;
+		this.altitudeCoolingStrength = altitudeCoolingStrength;
+		this.rainShadowStrength = rainShadowStrength;
+		this.coastalMoistureBoost = coastalMoistureBoost;
+	}
 
 	public ClimateSettings(
 			RangeValue temperature,
@@ -39,19 +64,23 @@ public class ClimateSettings {
 			float rainShadowStrength,
 			float coastalMoistureBoost
 	) {
-		this.temperature = temperature;
-		this.moisture = moisture;
-		this.biomeShape = biomeShape;
-		this.biomeEdgeShape = biomeEdgeShape;
-		this.altitudeCoolingStrength = altitudeCoolingStrength;
-		this.rainShadowStrength = rainShadowStrength;
-		this.coastalMoistureBoost = coastalMoistureBoost;
+		this(
+			temperature,
+			moisture,
+			makeDefault().erosion,
+			biomeShape,
+			biomeEdgeShape,
+			altitudeCoolingStrength,
+			rainShadowStrength,
+			coastalMoistureBoost
+		);
 	}
 
 	public ClimateSettings copy() {
 		return new ClimateSettings(
 				this.temperature.copy(),
 				this.moisture.copy(),
+				this.erosion.copy(),
 				this.biomeShape.copy(),
 				this.biomeEdgeShape.copy(),
 				this.altitudeCoolingStrength,
@@ -345,6 +374,17 @@ public class ClimateSettings {
 						0.0F,
 						1.0F,
 						0.006F,
+						0.0F
+				),
+
+				// erosion
+				new RangeValue(
+						0,
+						4,
+						1,
+						0.0F,
+						1.0F,
+						0.0F,
 						0.0F
 				),
 

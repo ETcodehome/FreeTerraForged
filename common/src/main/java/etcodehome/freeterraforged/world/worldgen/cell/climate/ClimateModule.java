@@ -37,12 +37,15 @@ public class ClimateModule {
 		
 		float tempScaler = (float) climateSettings.temperature.scale;
 		float moistScaler = climateSettings.moisture.scale * 2.5F;
+		float erosionScaler = (float) climateSettings.erosion.scale;
 		float biomeFreq = 1.0F / biomeSize;
 		float moistureSize = moistScaler * biomeSize;
 		float temperatureSize = tempScaler * biomeSize;
+		float erosionSize = erosionScaler * biomeSize;
 		
 		int moistScale = NoiseUtil.round(moistureSize * biomeFreq);
 		int tempScale = NoiseUtil.round(temperatureSize * biomeFreq);
+		int erosionScale = Math.max(1, NoiseUtil.round(erosionSize * biomeFreq));
 		int warpScale = climateSettings.biomeShape.biomeWarpScale;
 		
 		this.continent = continent;
@@ -83,8 +86,11 @@ public class ClimateModule {
 		Noise macroBiomeNoise = Noises.worley(seed.next(), climateSettings.biomeShape.macroNoiseSize);
 		this.macroBiomeNoise = macroBiomeNoise;
 
-		Noise erosionNoise = Noises.simplex(seed.next(), climateSettings.biomeShape.macroNoiseSize, 3);
-		this.erosion = erosionNoise;
+		Seed erosionSeed = seed.offset(climateSettings.erosion.seedOffset);
+		Noise erosionSource = Noises.simplex(erosionSeed.next(), erosionScale, 3);
+		Noise erosion = new LegacyMoisture(erosionSource, climateSettings.erosion.falloff);
+		erosion = climateSettings.erosion.apply(erosion);
+		this.erosion = erosion;
 	}
 
 	public void apply(Cell cell, float x, float z, float originalX, float originalZ) {
