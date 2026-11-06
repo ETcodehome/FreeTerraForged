@@ -10,12 +10,13 @@ import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
 import net.minecraft.util.StringRepresentable;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
+import etcodehome.freeterraforged.world.worldgen.noise.module.LegacyTemperature;
 
 public class ClimateSettings {
 	public static final Codec<ClimateSettings> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-			RangeValue.CODEC.fieldOf("temperature").forGetter((o) -> o.temperature),
-			RangeValue.CODEC.fieldOf("moisture").forGetter((o) -> o.moisture),
-			RangeValue.CODEC.optionalFieldOf("erosion").xmap(
+			RangeValue.codec(RangeValue.NoiseType.SIN).fieldOf("temperature").forGetter((o) -> o.temperature),
+			RangeValue.codec(RangeValue.NoiseType.SIMPLEX).fieldOf("moisture").forGetter((o) -> o.moisture),
+			RangeValue.codec(RangeValue.NoiseType.SIMPLEX).optionalFieldOf("erosion").xmap(
 				opt -> opt.map(RangeValue::copy).orElseGet(() -> makeDefault().erosion),
 				Optional::of
 			).forGetter((o) -> o.erosion),
@@ -90,16 +91,67 @@ public class ClimateSettings {
 	}
 
 	public static class RangeValue {
-		public static final Codec<RangeValue> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-				Codec.INT.fieldOf("seedOffset").forGetter((o) -> o.seedOffset),
-				Codec.INT.fieldOf("scale").forGetter((o) -> o.scale),
-				Codec.INT.fieldOf("falloff").forGetter((o) -> o.falloff),
-				Codec.FLOAT.fieldOf("min").forGetter((o) -> o.min),
-				Codec.FLOAT.fieldOf("max").forGetter((o) -> o.max),
-				Codec.FLOAT.fieldOf("bias").forGetter((o) -> o.offsetBias),
-				Codec.FLOAT.optionalFieldOf("distributionBias", 0.0F).forGetter((o) -> o.distributionBias)
-		).apply(instance, RangeValue::new));
+		public enum NoiseType implements StringRepresentable {
+			BILLOW("BILLOW"),
+			VORONOI("CELL"),
+			VORONOI_EDGE("CELL_EDGE"),
+			CONSTANT("CONST"),
+			CUBIC("CUBIC"),
+			PERLIN("PERLIN"),
+			PERLIN2("PERLIN2"),
+			PERLIN_RIDGE("RIDGE"),
+			SIMPLEX("SIMPLEX"),
+			SIMPLEX2("SIMPLEX2"),
+			SIN("SIN"),
+			WHITE("RAND");
 
+			public static final Codec<NoiseType> CODEC = StringRepresentable.fromEnum(NoiseType::values);
+
+			private final String name;
+
+			NoiseType(String name) {
+				this.name = name;
+			}
+
+			@Override
+			public String getSerializedName() {
+				return this.name;
+			}
+
+			public Noise buildSource(int seed, int scale, int octaves) {
+				return switch (this) {
+					case BILLOW -> Noises.billow(seed, scale, octaves);
+					case VORONOI -> Noises.worley(seed, scale);
+					case VORONOI_EDGE -> Noises.worleyEdge(seed, scale);
+					case CONSTANT -> Noises.constant(0.5F);
+					case CUBIC -> Noises.cubic(seed, scale, octaves);
+					case PERLIN -> Noises.perlin(seed, scale, octaves);
+					case PERLIN2 -> Noises.perlin2(seed, scale, octaves);
+					case PERLIN_RIDGE -> Noises.perlinRidge(seed, scale, octaves);
+					case SIMPLEX -> Noises.simplex(seed, scale, octaves);
+					case SIMPLEX2 -> Noises.simplex2(seed, scale, octaves);
+					case SIN -> new LegacyTemperature(1.0F / scale, 1);
+					case WHITE -> Noises.white(seed, scale);
+				};
+			}
+		}
+
+		public static Codec<RangeValue> codec(NoiseType defaultType) {
+			return RecordCodecBuilder.create(instance -> instance.group(
+					NoiseType.CODEC.optionalFieldOf("type", defaultType).forGetter((o) -> o.type),
+					Codec.INT.fieldOf("seedOffset").forGetter((o) -> o.seedOffset),
+					Codec.INT.fieldOf("scale").forGetter((o) -> o.scale),
+					Codec.INT.fieldOf("falloff").forGetter((o) -> o.falloff),
+					Codec.FLOAT.fieldOf("min").forGetter((o) -> o.min),
+					Codec.FLOAT.fieldOf("max").forGetter((o) -> o.max),
+					Codec.FLOAT.fieldOf("bias").forGetter((o) -> o.offsetBias),
+					Codec.FLOAT.optionalFieldOf("distributionBias", 0.0F).forGetter((o) -> o.distributionBias)
+			).apply(instance, RangeValue::new));
+		}
+
+		public static final Codec<RangeValue> CODEC = codec(NoiseType.SIMPLEX);
+
+		public NoiseType type;
 		public int seedOffset;
 		public int scale;
 		public int falloff;
@@ -108,7 +160,8 @@ public class ClimateSettings {
 		public float offsetBias;
 		public float distributionBias;
 
-		public RangeValue(int seedOffset, int scale, int falloff, float min, float max, float offsetBias, float distributionBias) {
+		public RangeValue(NoiseType type, int seedOffset, int scale, int falloff, float min, float max, float offsetBias, float distributionBias) {
+			this.type = type != null ? type : NoiseType.SIMPLEX;
 			this.seedOffset = seedOffset;
 			this.min = min;
 			this.max = max;
@@ -116,6 +169,10 @@ public class ClimateSettings {
 			this.distributionBias = distributionBias;
 			this.scale = scale;
 			this.falloff = falloff;
+		}
+
+		public RangeValue(int seedOffset, int scale, int falloff, float min, float max, float offsetBias, float distributionBias) {
+			this(NoiseType.SIMPLEX, seedOffset, scale, falloff, min, max, offsetBias, distributionBias);
 		}
 
 		public float getMin() {
@@ -154,7 +211,7 @@ public class ClimateSettings {
 		}
 
 		public RangeValue copy() {
-			return new RangeValue(this.seedOffset, this.scale, this.falloff, this.min, this.max, this.offsetBias, this.distributionBias);
+			return new RangeValue(this.type, this.seedOffset, this.scale, this.falloff, this.min, this.max, this.offsetBias, this.distributionBias);
 		}
 	}
 
@@ -357,6 +414,7 @@ public class ClimateSettings {
 
 				// temperature
 				new RangeValue(
+						RangeValue.NoiseType.SIN,
 						0,
 						2,
 						5,
@@ -368,6 +426,7 @@ public class ClimateSettings {
 
 				// moisture
 				new RangeValue(
+						RangeValue.NoiseType.SIMPLEX,
 						0,
 						4,
 						1,
@@ -379,6 +438,7 @@ public class ClimateSettings {
 
 				// erosion
 				new RangeValue(
+						RangeValue.NoiseType.SIMPLEX,
 						0,
 						4,
 						1,

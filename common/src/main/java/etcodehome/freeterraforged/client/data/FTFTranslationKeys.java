@@ -65,6 +65,7 @@ public final class FTFTranslationKeys {
 	public static final String GUI_BUTTON_LARGE_ORE_VEINS = resolve("gui.button.largeOreVeins");
 	public static final String GUI_BUTTON_LEGACY_CARVER_DISTRIBUTION = resolve("gui.button.legacyCarverDistribution");
 	public static final String GUI_BUTTON_CLIMATE_SEED_OFFSET = resolve("gui.button.climateSeedOffset");
+	public static final String GUI_BUTTON_CLIMATE_NOISE_TYPE = resolve("gui.button.climateNoiseType");
 	public static final String GUI_BUTTON_BIOME_EDGE_TYPE = resolve("gui.button.biomeEdgeType");
 	public static final String GUI_BUTTON_UNDERGROUND_BIOME_BANDING = resolve("gui.button.undergroundBiomeBanding");
 	public static final String GUI_BUTTON_RENDER_MODE = resolve("gui.button.renderMode");

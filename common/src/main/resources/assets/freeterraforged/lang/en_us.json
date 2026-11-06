@@ -461,5 +461,7 @@
   "freeterraforged.gui.slider.erosionOffsetBias": "Offset Bias",
   "freeterraforged.gui.slider.erosionOffsetBias.tooltip": "The bias towards either end of the range",
   "freeterraforged.gui.slider.erosionDistributionBias": "Distribution Bias",
-  "freeterraforged.gui.slider.erosionDistributionBias.tooltip": "Shifts the erosion distribution of the world while ensuring all biomes still spawn."
+  "freeterraforged.gui.slider.erosionDistributionBias.tooltip": "Shifts the erosion distribution of the world while ensuring all biomes still spawn.",
+  "freeterraforged.gui.button.climateNoiseType": "Noise Type",
+  "freeterraforged.gui.button.climateNoiseType.tooltip": "Controls the underlying noise pattern used for climate sampling"
 }

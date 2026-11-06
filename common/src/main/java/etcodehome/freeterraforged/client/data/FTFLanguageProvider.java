@@ -88,6 +88,7 @@ public final class FTFLanguageProvider {
 			this.add(FTFTranslationKeys.GUI_BUTTON_LARGE_ORE_VEINS, "Large Ore Veins");
 			this.add(FTFTranslationKeys.GUI_BUTTON_LEGACY_CARVER_DISTRIBUTION, "Legacy Carver Distribution");
 			this.add(FTFTranslationKeys.GUI_BUTTON_CLIMATE_SEED_OFFSET, "Seed Offset");
+			this.add(FTFTranslationKeys.GUI_BUTTON_CLIMATE_NOISE_TYPE, "Noise Type");
 			this.add(FTFTranslationKeys.GUI_BUTTON_BIOME_EDGE_TYPE, "Type");
 			this.add(FTFTranslationKeys.GUI_BUTTON_UNDERGROUND_BIOME_BANDING, "Vertical Cave Biome Banding");
 			this.add(FTFTranslationKeys.GUI_BUTTON_TERRAIN_SEED_OFFSET, "Terrain Seed Offset");
@@ -262,6 +263,7 @@ public final class FTFLanguageProvider {
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_BUTTON_LARGE_ORE_VEINS), "Set whether large ore veins spawn");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_BUTTON_LEGACY_CARVER_DISTRIBUTION), "Set whether carvers use 1.16 distribution");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_BUTTON_CLIMATE_SEED_OFFSET), "A seed offset used to randomise climate distribution");
+			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_BUTTON_CLIMATE_NOISE_TYPE), "Controls the underlying noise pattern used for climate sampling");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_BUTTON_BIOME_EDGE_TYPE), "The noise type");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_BUTTON_UNDERGROUND_BIOME_BANDING), "Allows different cave biomes to appear above and below each other. Turn this off to keep cave biomes at their normal depths. In very deep worlds, the Deep Dark may then cover much of the lower world. Surface biomes can still appear between cave-biome areas when Cave Biome Coverage is below 100%.");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_BUTTON_TERRAIN_SEED_OFFSET), "A seed offset used to randomise terrain distribution");

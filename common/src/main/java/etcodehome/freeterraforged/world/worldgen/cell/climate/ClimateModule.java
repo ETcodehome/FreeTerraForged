@@ -65,10 +65,17 @@ public class ClimateModule {
 		
 		Seed moistureSeed = seed.offset(climateSettings.moisture.seedOffset);
 		
-		Noise moistureSource = Noises.simplex(moistureSeed.next(), moistScale, 1);
-		moistureSource = Noises.clamp(moistureSource, 0.125F, 0.875F);
-		moistureSource = Noises.map(moistureSource, 0.0F, 1.0F);
-		moistureSource = Noises.frequency(moistureSource, 0.5F, 1.0F);
+		Noise moistureSource;
+		if (climateSettings.moisture.type == ClimateSettings.RangeValue.NoiseType.SIMPLEX) {
+			moistureSource = Noises.simplex(moistureSeed.next(), moistScale, 1);
+			moistureSource = Noises.clamp(moistureSource, 0.125F, 0.875F);
+			moistureSource = Noises.map(moistureSource, 0.0F, 1.0F);
+			moistureSource = Noises.frequency(moistureSource, 0.5F, 1.0F);
+		} else if (climateSettings.moisture.type == ClimateSettings.RangeValue.NoiseType.SIN) {
+			moistureSource = new LegacyTemperature(1.0F / moistScale, 1);
+		} else {
+			moistureSource = climateSettings.moisture.type.buildSource(moistureSeed.next(), moistScale, 1);
+		}
 		
 		Noise moisture = new LegacyMoisture(moistureSource, climateSettings.moisture.falloff);
 		moisture = climateSettings.moisture.apply(moisture);
@@ -77,7 +84,13 @@ public class ClimateModule {
 		this.moisture = moisture;
 		
 		Seed tempSeed = seed.offset(climateSettings.temperature.seedOffset);
-		Noise temperature = new LegacyTemperature(1.0F / tempScale, climateSettings.temperature.falloff);
+		Noise temperature;
+		if (climateSettings.temperature.type == ClimateSettings.RangeValue.NoiseType.SIN) {
+			temperature = new LegacyTemperature(1.0F / tempScale, climateSettings.temperature.falloff);
+		} else {
+			Noise tempSource = climateSettings.temperature.type.buildSource(tempSeed.next(), tempScale, 2);
+			temperature = new LegacyMoisture(tempSource, climateSettings.temperature.falloff);
+		}
 		temperature = climateSettings.temperature.apply(temperature);
 		temperature = Noises.warpPerlin(temperature, tempSeed.next(), tempScale * 4, 2, tempScale * 4);
 		temperature = Noises.warpPerlin(temperature, tempSeed.next(), tempScale, 1, tempScale);
@@ -87,7 +100,14 @@ public class ClimateModule {
 		this.macroBiomeNoise = macroBiomeNoise;
 
 		Seed erosionSeed = seed.offset(climateSettings.erosion.seedOffset);
-		Noise erosionSource = Noises.simplex(erosionSeed.next(), erosionScale, 3);
+		Noise erosionSource;
+		if (climateSettings.erosion.type == ClimateSettings.RangeValue.NoiseType.SIMPLEX) {
+			erosionSource = Noises.simplex(erosionSeed.next(), erosionScale, 3);
+		} else if (climateSettings.erosion.type == ClimateSettings.RangeValue.NoiseType.SIN) {
+			erosionSource = new LegacyTemperature(1.0F / erosionScale, 1);
+		} else {
+			erosionSource = climateSettings.erosion.type.buildSource(erosionSeed.next(), erosionScale, 3);
+		}
 		Noise erosion = new LegacyMoisture(erosionSource, climateSettings.erosion.falloff);
 		erosion = climateSettings.erosion.apply(erosion);
 		this.erosion = erosion;
