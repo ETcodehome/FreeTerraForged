@@ -12,7 +12,6 @@ import etcodehome.freeterraforged.data.worldgen.preset.settings.ClimateSettings;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 
 class ClimateSettingsPage extends PresetEditorPage {
-	private CycleButton<ClimateSettings.RangeValue.NoiseType> temperatureNoiseType;
 	private ValueButton<Integer> temperatureSeedOffset;
 	private Slider temperatureScale;
 	private Slider temperatureFalloff;
@@ -22,7 +21,6 @@ class ClimateSettingsPage extends PresetEditorPage {
 	private Slider temperatureDistributionBias;
 	private Slider altitudeCoolingStrength;
 
-	private CycleButton<ClimateSettings.RangeValue.NoiseType> moistureNoiseType;
 	private ValueButton<Integer>  moistureSeedOffset;
 	private Slider moistureScale;
 	private Slider moistureFalloff;
@@ -70,10 +68,6 @@ class ClimateSettingsPage extends PresetEditorPage {
 		Preset preset = this.preset.getPreset();
 		ClimateSettings climate = preset.climate();
 		ClimateSettings.RangeValue temperature = climate.temperature;
-		this.temperatureNoiseType = PresetWidgets.createCycle(ClimateSettings.RangeValue.NoiseType.values(), temperature.type, FTFTranslationKeys.GUI_BUTTON_CLIMATE_NOISE_TYPE, (button, value) -> {
-			temperature.type = value;
-			this.regenerate();
-		});
 		this.temperatureSeedOffset = PresetWidgets.createRandomButton(FTFTranslationKeys.GUI_BUTTON_CLIMATE_SEED_OFFSET, temperature.seedOffset, (value) -> {
 			temperature.seedOffset = value;
 			this.regenerate();
@@ -115,10 +109,6 @@ class ClimateSettingsPage extends PresetEditorPage {
 		});
 
 		ClimateSettings.RangeValue moisture = climate.moisture;
-		this.moistureNoiseType = PresetWidgets.createCycle(ClimateSettings.RangeValue.NoiseType.values(), moisture.type, FTFTranslationKeys.GUI_BUTTON_CLIMATE_NOISE_TYPE, (button, value) -> {
-			moisture.type = value;
-			this.regenerate();
-		});
 		this.moistureSeedOffset = PresetWidgets.createRandomButton(FTFTranslationKeys.GUI_BUTTON_CLIMATE_SEED_OFFSET, moisture.seedOffset, (value) -> {
 			moisture.seedOffset = value;
 			this.regenerate();
@@ -259,7 +249,6 @@ class ClimateSettingsPage extends PresetEditorPage {
 		});
 		
 		this.left.addWidget(PresetWidgets.createLabel(FTFTranslationKeys.GUI_LABEL_TEMPERATURE));
-		this.left.addWidget(this.temperatureNoiseType);
 		this.left.addWidget(this.temperatureSeedOffset);
 		this.left.addWidget(this.temperatureScale);
 		this.left.addWidget(this.temperatureFalloff);
@@ -270,7 +259,6 @@ class ClimateSettingsPage extends PresetEditorPage {
 		this.left.addWidget(this.altitudeCoolingStrength);
 
 		this.left.addWidget(PresetWidgets.createLabel(FTFTranslationKeys.GUI_LABEL_MOISTURE));
-		this.left.addWidget(this.moistureNoiseType);
 		this.left.addWidget(this.moistureSeedOffset);
 		this.left.addWidget(this.moistureScale);
 		this.left.addWidget(this.moistureFalloff);
