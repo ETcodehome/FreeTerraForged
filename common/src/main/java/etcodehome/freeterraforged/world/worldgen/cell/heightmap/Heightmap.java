@@ -100,6 +100,7 @@ public record Heightmap(
 	
 	public void applyClimate(Cell cell, float x, float z, boolean applyClimate) {
         this.climate.apply(cell, x, z, applyClimate);
+        cell.terrainErosion = cell.erosion;
 	}
 
 	public void applyBiomeRegion(Cell cell, float x, float z) {

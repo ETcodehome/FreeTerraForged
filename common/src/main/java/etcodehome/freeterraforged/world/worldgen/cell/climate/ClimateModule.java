@@ -110,6 +110,8 @@ public class ClimateModule {
 		}
 		Noise erosion = new LegacyMoisture(erosionSource, climateSettings.erosion.falloff);
 		erosion = climateSettings.erosion.apply(erosion);
+		erosion = Noises.warpPerlin(erosion, erosionSeed.next(), Math.max(1, erosionScale / 2), 1, erosionScale / 4.0F);
+		erosion = Noises.warpPerlin(erosion, erosionSeed.next(), Math.max(1, erosionScale / 6), 2, erosionScale / 12.0F);
 		this.erosion = erosion;
 	}
 
