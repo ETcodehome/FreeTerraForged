@@ -119,7 +119,7 @@ public class ArchipelagoPopulator implements CellPopulator {
         // Angular and modulation noises for broken coastal/subsea falloff
         this.angularCoastalNoise = Noises.simplex(8821 + salt, Math.max(1, Math.round(size * 0.25F * hScale)), 2);
         this.coastalModulationNoise = Noises.simplex(4109 + salt, Math.max(1, Math.round(size * 1.5F)), 2);
-        this.shelfDetailNoise = Noises.simplex(6317 + salt, Math.max(1, Math.round(size * 0.12F * hScale)), 3);
+        this.shelfDetailNoise = Noises.simplex(6317 + salt, Math.max(1, Math.round(size * 0.12F * hScale)), 2);
 
         // Below-waterline surface detail
         this.oceanFloorRidge = Noises.perlinRidge(2718 + salt, Math.max(1, Math.round(size * 0.10F * hScale)), 3, 2.0F, 0.85F);
@@ -173,13 +173,15 @@ public class ArchipelagoPopulator implements CellPopulator {
     public void apply(Cell cell, float x, float z) {
         float originalContinentEdge = cell.continentEdge;
         float originalHeight = cell.height;
+        float originalWeirdness = cell.weirdness;
+        float originalErosion = cell.erosion;
 
         float shape = this.rawShape(x, z);
 
         float continentFade = 1.0F - smoothStep(
-            this.controlPoints.islandCoast,
-            this.controlPoints.deepOcean,
-            originalContinentEdge
+                this.controlPoints.islandCoast,
+                this.controlPoints.deepOcean,
+                originalContinentEdge
         );
 
         float islandAlpha = shape * continentFade;
@@ -225,7 +227,7 @@ public class ArchipelagoPopulator implements CellPopulator {
         float coastEnd = NoiseUtil.clamp(shelfEnd + (activeBeachWidth * 0.5F), shelfEnd + 0.01F, 0.85F);
         float baseBeachEnd = coastEnd + (activeBeachWidth * beachCoverage * 1.5F);
         float bVariance = rawVariance * 0.15F * (1.0F - cliffFactor) - 0.05F * (1.0F - cliffFactor);
-        float dynamicBeachEnd = NoiseUtil.clamp(baseBeachEnd + bVariance, coastEnd + 0.01F, 0.90F);
+        float dynamicBeachEnd = NoiseUtil.clamp(baseBeachEnd + bVariance, shelfEnd + 0.02F, 0.90F);
 
         // Macro region mask at this cell
         float regionMask = this.macroDensityMask(x, z);
@@ -262,31 +264,29 @@ public class ArchipelagoPopulator implements CellPopulator {
         float detailFade = onsetFade * shoreFade;
 
         float detailAmplitudeBlocks = NoiseUtil.lerp(
-            MIN_OCEAN_FLOOR_DETAIL_BLOCKS,
-            MAX_OCEAN_FLOOR_DETAIL_BLOCKS,
-            regionVarianceValue
+                MIN_OCEAN_FLOOR_DETAIL_BLOCKS,
+                MAX_OCEAN_FLOOR_DETAIL_BLOCKS,
+                regionVarianceValue
         );
         float oceanFloorDetailBlocks = ridgeValue * detailAmplitudeBlocks * detailFade;
 
         shelfHeight = addSubmergedDetail(shelfHeight, oceanFloorDetailBlocks, this.levels);
 
-        float coastAlpha = smoothStep(shelfEnd, coastEnd, perturbedAlpha);
+        float coastAlpha = smoothStep(shelfEnd, dynamicBeachEnd, perturbedAlpha);
         float beachHeight = NoiseUtil.lerp(shelfHeight, this.levels.ground, coastAlpha);
 
-        float landTransitionEnd = NoiseUtil.clamp(NoiseUtil.lerp(1.0F, dynamicBeachEnd + 0.32F, cliffFactor), dynamicBeachEnd + 0.05F, 1.0F);
-        float landAlpha = smoothStep(dynamicBeachEnd, landTransitionEnd, perturbedAlpha);
+        float inlandAlpha = smoothStep(dynamicBeachEnd, 1.0F, perturbedAlpha);
 
-        float inlandBase = landAlpha * this.settings.height * (0.035F + this.settings.baseScale * 0.10F);
+        float inlandBase = inlandAlpha * this.settings.height * (0.035F + this.settings.baseScale * 0.10F);
 
-        float macroDome = shape;
-        float linearDome = macroDome;
-        float exponentialDome = (float) Math.pow(macroDome, this.domeExponent);
-        float domeShape = NoiseUtil.lerp(linearDome * 0.40F, exponentialDome, macroDome);
+        float linearDome = inlandAlpha;
+        float exponentialDome = (float) Math.pow(inlandAlpha, this.domeExponent);
+        float domeShape = NoiseUtil.lerp(linearDome * 0.30F, exponentialDome, inlandAlpha);
         float domeContribution = domeShape * this.settings.height * this.settings.verticalScale * DOME_HEIGHT_SCALE;
 
-        float summitInfluence = smoothStep(0.6F, 0.95F, macroDome);
+        float summitInfluence = smoothStep(0.5F, 0.95F, inlandAlpha);
         float summitPerturbValue = this.summitPerturb.compute(x, z, 0) * summitInfluence * this.summitPerturbStrength;
-        domeContribution += summitPerturbValue * this.settings.height * this.settings.verticalScale;
+        domeContribution += summitPerturbValue * inlandAlpha * this.settings.height * this.settings.verticalScale;
 
         // Volcanism System: Sharp volcanic spire subnoise across interior terrain
         float vScale = NoiseUtil.clamp(this.settings.volcanismScale, 0.0F, 1.0F);
@@ -297,19 +297,16 @@ public class ArchipelagoPopulator implements CellPopulator {
 
         float spireMaskNoise = 0.5F + 0.5F * this.volcanicMaskNoise.compute(x, z, 0);
         float spirePresence = smoothStep(1.0F - vChance, 1.0F, spireMaskNoise);
-        float spireLocationMask = smoothStep(0.25F, 0.80F, macroDome) * landAlpha;
+        float spireLocationMask = smoothStep(0.20F, 0.80F, inlandAlpha);
 
         float volcanicSpireRelief = spireSharpened * spirePresence * spireLocationMask * vScale * this.settings.height * this.settings.verticalScale * 0.50F;
 
-        float reliefHeight = Math.max(0.0F, domeContribution) + volcanicSpireRelief;
+        float inlandRelief = inlandBase + Math.max(0.0F, domeContribution) + volcanicSpireRelief;
 
-        float targetHeight = this.levels.ground + inlandBase + reliefHeight;
+        cell.height = beachHeight + inlandRelief;
 
-        cell.height = NoiseUtil.lerp(beachHeight, targetHeight, landAlpha);
-        cell.continentEdge = Math.max(
-            originalContinentEdge,
-            continentEdge(perturbedAlpha, shelfEnd, originalContinentEdge, this.controlPoints.islandCoast)
-        );
+        // Direct assignment without Math.max so negative continentalness values take effect
+        cell.continentEdge = continentEdge(perturbedAlpha, shelfEnd, originalContinentEdge);
 
         if (cell.height <= this.levels.water) {
             if (perturbedAlpha >= 0.01F) {
@@ -317,33 +314,69 @@ public class ArchipelagoPopulator implements CellPopulator {
             }
         } else if (perturbedAlpha < dynamicBeachEnd) {
             cell.terrain = TerrainType.ISLAND_BEACH;
-        } else if (macroDome > 0.5F && landAlpha > 0.5F && (this.settings.mountainChance > 0.05F || vScale > 0.2F)) {
+        } else if (inlandAlpha > 0.4F && (this.settings.mountainChance > 0.05F || vScale > 0.2F)) {
             cell.terrain = TerrainType.ISLAND_MOUNTAINS;
         } else {
             cell.terrain = TerrainType.ISLAND;
         }
 
+        // --- WEIRDNESS & EROSION COMPUTATION ---
         if (cell.height > this.levels.water) {
-            if (cell.terrain == TerrainType.ISLAND_BEACH) {
-                cell.erosion = this.beachErosion.compute(x, z, 0);
-                cell.weirdness = this.beachWeirdness.compute(x, z, 0);
+            // Target beach values
+            float targetBeachWeirdness = this.beachWeirdness.compute(x, z, 0);
+
+            // 1. Calculate normalized relief ratio for island weirdness mapping
+            float maxPotentialRelief = Math.max(1.0F, this.settings.height * this.settings.verticalScale);
+            float reliefRatio = NoiseUtil.clamp(inlandRelief / maxPotentialRelief, 0.0F, 1.0F);
+
+            // 2. Map reliefRatio to the 4 Vanilla weirdness/ridges tiers:
+            //    - Valley Floor (< -0.2)
+            //    - Low Ridge / Slope (-0.2 to 0.2)
+            //    - Mid Ridge (0.2 to 0.7)
+            //    - High Ridge / Peak (> 0.7)
+            float baseWeirdness;
+            if (reliefRatio < 0.25F) {
+                float t = reliefRatio / 0.25F;
+                baseWeirdness = NoiseUtil.lerp(-0.45F, 0.00F, t);
+            } else if (reliefRatio < 0.60F) {
+                float t = (reliefRatio - 0.25F) / 0.35F;
+                baseWeirdness = NoiseUtil.lerp(0.00F, 0.45F, t);
             } else {
-                cell.erosion = this.islandErosion.compute(x, z, 0);
-                cell.weirdness = this.islandWeirdness.compute(x, z, 0);
+                float t = NoiseUtil.clamp((reliefRatio - 0.60F) / 0.40F, 0.0F, 1.0F);
+                baseWeirdness = NoiseUtil.lerp(0.45F, 0.85F, t);
+            }
+
+            // 3. Add local 2D noise variation to derive final target island weirdness
+            float weirdnessNoiseVal = this.islandWeirdness.compute(x, z, 0);
+            float islandWeirdnessValue = NoiseUtil.clamp(baseWeirdness + weirdnessNoiseVal * 0.15F, -1.0F, 1.0F);
+
+            // 4. Smoothly interpolate weirdness and erosion to surrounding terrain weirdness (originalWeirdness)
+            float beachBlend = smoothStep(shelfEnd, dynamicBeachEnd, perturbedAlpha);
+            if (cell.terrain == TerrainType.ISLAND_BEACH) {
+                cell.weirdness = NoiseUtil.lerp(originalWeirdness, targetBeachWeirdness, beachBlend);
+            } else {
+                float targetWeirdness = NoiseUtil.lerp(targetBeachWeirdness, islandWeirdnessValue, inlandAlpha);
+
+                float islandBlend = NoiseUtil.lerp(beachBlend, 1.0F, inlandAlpha);
+                cell.weirdness = NoiseUtil.lerp(originalWeirdness, targetWeirdness, islandBlend);
             }
         }
     }
 
-    private static float continentEdge(float islandAlpha, float shelfEnd, float originalContinentEdge, float islandCoast) {
-        if (islandAlpha < shelfEnd) {
-            float alpha = smoothStep(0.0F, shelfEnd, islandAlpha);
-            // Lerps from ambient deep ocean (0.0 / originalContinentEdge) up to islandCoast at the waterline
-            return NoiseUtil.lerp(originalContinentEdge, islandCoast, alpha);
-        }
+    private float continentEdge(float islandAlpha, float shelfEnd, float originalContinentEdge) {
+        // islandAlpha ranges from 0.0 (outer ocean edge) to 1.0 (island peak core).
+        // We map this into clean 0.0 to 1.0 control-point units so Field.CONTINENT
+        // and heightmap consumers can evaluate it correctly.
 
-        float alpha = smoothStep(shelfEnd, 1.0F, islandAlpha);
-        // Lerps from islandCoast at the shore up to 1.0 deep inland
-        return NoiseUtil.lerp(islandCoast, 1.0F, alpha);
+        if (islandAlpha < shelfEnd) {
+            // Subsea shelf / ocean approach: blend from the underlying ocean edge up to the beach control point
+            float alpha = smoothStep(0.0F, shelfEnd, islandAlpha);
+            return NoiseUtil.lerp(originalContinentEdge, this.controlPoints.beach, alpha);
+        } else {
+            // Island landmass: scale from the beach control point up to 1.0 (Far-Inland core)
+            float alpha = smoothStep(shelfEnd, 1.0F, islandAlpha);
+            return NoiseUtil.lerp(this.controlPoints.beach, 1.0F, alpha);
+        }
     }
 
     private static float beachWidth(float value) {

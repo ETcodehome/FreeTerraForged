@@ -4,6 +4,7 @@ import etcodehome.freeterraforged.world.worldgen.noise.function.DistanceFunction
 import etcodehome.freeterraforged.data.worldgen.preset.settings.ClimateSettings.BiomeNoise;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.ClimateSettings.BiomeShape;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.ClimateSettings.RangeValue;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.ClimateSettings.RangeValue.NoiseType;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.RiverSettings.Lake;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.RiverSettings.River;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.RiverSettings.Wetland;
@@ -29,8 +30,9 @@ public class Presets {
 			new SurfaceSettings(new SurfaceSettings.Scree(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
 			new CaveSettings(0.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, true, false),
 			new ClimateSettings(
-				new RangeValue(0, 6, 2, 0.0F, 0.98F, 0.0F, 0.05F),
-				new RangeValue(0, 6, 1, 0.0F, 1.0F, 0.0F, 0.0F),
+				new RangeValue(NoiseType.SIN, 0, 6, 2, 0.0F, 0.98F, 0.0F, 0.05F),
+				new RangeValue(NoiseType.SIMPLEX, 0, 6, 1, 0.0F, 1.0F, 0.0F, 0.0F),
+				new RangeValue(NoiseType.SIMPLEX, 0, 8, 1, 0.0F, 1.0F, 0.0F, 0.0F),
 				new BiomeShape(225, 8, 150, 80),
 				new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.SIMPLEX, 24, 2, 0.5F, 2.65F, 14),
 				ClimateSettings.makeDefault().altitudeCoolingStrength,
@@ -74,8 +76,9 @@ public class Presets {
 			new SurfaceSettings(new SurfaceSettings.Scree(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
 			new CaveSettings(1.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.15F, 0.07F, 0.021F, true, false),
 			new ClimateSettings(
-				new RangeValue(0, 4, 1, 0.0F, 0.98F, 0.05F, 0.0F),
-				new RangeValue(0, 5, 1, 0.0F, 1.0F, 0.0F, 0.0F),
+				new RangeValue(NoiseType.SIN, 0, 4, 1, 0.0F, 0.98F, 0.05F, 0.0F),
+				new RangeValue(NoiseType.SIMPLEX, 0, 5, 1, 0.0F, 1.0F, 0.0F, 0.0F),
+				new RangeValue(NoiseType.SIMPLEX, 0, 6, 1, 0.0F, 1.0F, 0.0F, 0.0F),
 				new BiomeShape(176, 6, 150, 80),
 				new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.SIMPLEX, 24, 2, 0.5F, 2.65F, 14),
 				ClimateSettings.makeDefault().altitudeCoolingStrength,
@@ -119,8 +122,9 @@ public class Presets {
 			new SurfaceSettings(new SurfaceSettings.Scree(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
 			new CaveSettings(0.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, true, false),
 			new ClimateSettings(
-				new RangeValue(0, 7, 1, 0.0F, 1.0F, -0.004F, 0.0F),
-				new RangeValue(0, 6, 1, 0.0F, 1.0F, 0.0F, 0.0F),
+				new RangeValue(NoiseType.SIN, 0, 7, 1, 0.0F, 1.0F, -0.004F, 0.0F),
+				new RangeValue(NoiseType.SIMPLEX, 0, 6, 1, 0.0F, 1.0F, 0.0F, 0.0F),
+				new RangeValue(NoiseType.SIMPLEX, 0, 8, 1, 0.0F, 1.0F, 0.0F, 0.0F),
 				new BiomeShape(185, 8, 150, 80),
 				new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.SIMPLEX, 24, 2, 0.5F, 2.65F, 14),
 				ClimateSettings.makeDefault().altitudeCoolingStrength,
@@ -164,8 +168,9 @@ public class Presets {
 			new SurfaceSettings(new SurfaceSettings.Scree(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
 			new CaveSettings(0.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, false, false),
 			new ClimateSettings(
-				new RangeValue(0, 4, 1, 0.0F, 0.98F, 0.05F, 0.0F),
-				new RangeValue(0, 5, 1, 0.0F, 1.0F, 0.0F, 0.0F),
+				new RangeValue(NoiseType.SIN, 0, 4, 1, 0.0F, 0.98F, 0.05F, 0.0F),
+				new RangeValue(NoiseType.SIMPLEX, 0, 5, 1, 0.0F, 1.0F, 0.0F, 0.0F),
+				new RangeValue(NoiseType.SIMPLEX, 0, 6, 1, 0.0F, 1.0F, 0.0F, 0.0F),
 				new BiomeShape(176, 6, 150, 80),
 				new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.SIMPLEX, 24, 2, 0.5F, 2.65F, 14),
 				ClimateSettings.makeDefault().altitudeCoolingStrength,
@@ -209,8 +214,9 @@ public class Presets {
 			new SurfaceSettings(new SurfaceSettings.Scree(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
 			new CaveSettings(0.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, true, false),
 			new ClimateSettings(
-				new RangeValue(0, 4, 2, 0.0F, 1.0F, 0.097F, 0.0F),
-				new RangeValue(0, 3, 1, 0.0F, 1.0F, 0.0F, 0.0F),
+				new RangeValue(NoiseType.SIN, 0, 4, 2, 0.0F, 1.0F, 0.097F, 0.0F),
+				new RangeValue(NoiseType.SIMPLEX, 0, 3, 1, 0.0F, 1.0F, 0.0F, 0.0F),
+				new RangeValue(NoiseType.SIMPLEX, 0, 5, 1, 0.0F, 1.0F, 0.0F, 0.0F),
 				new BiomeShape(402, 5, 180, 110),
 				new BiomeNoise(ClimateSettings.BiomeNoise.EdgeType.PERLIN2, 24, 1, 0.5F, 2.65F, 60),
 				ClimateSettings.makeDefault().altitudeCoolingStrength,
@@ -298,7 +304,8 @@ public class Presets {
 				new ClimateSettings(
 
 						// temperature
-						new RangeValue(0,
+						new RangeValue(NoiseType.SIN,
+								0,
 								2,
 								7,
 								0.1124F,
@@ -308,12 +315,24 @@ public class Presets {
 						),
 
 						// moisture
-						new RangeValue(0,
+						new RangeValue(NoiseType.SIMPLEX,
+								0,
 								3,
 								2,
 								0.0F,
 								1.0F,
 								0.0103F,
+								0.0F
+						),
+
+						// erosion
+						new RangeValue(NoiseType.SIMPLEX,
+								0,
+								4,
+								1,
+								0.0F,
+								1.0F,
+								0.0F,
 								0.0F
 						),
 
