@@ -9,8 +9,7 @@ import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.TerrainSettings;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
-import etcodehome.freeterraforged.world.worldgen.biome.Erosion;
-import etcodehome.freeterraforged.world.worldgen.biome.Weirdness;
+import etcodehome.freeterraforged.world.worldgen.biome.ReferenceWeirdness;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.CellPopulator;
 import etcodehome.freeterraforged.world.worldgen.cell.climate.Climate;
@@ -101,6 +100,9 @@ public record Heightmap(
 	public void applyClimate(Cell cell, float x, float z, boolean applyClimate) {
         this.climate.apply(cell, x, z, applyClimate);
         cell.terrainErosion = cell.erosion;
+        if (cell.weirdness == 0.0F && cell.height > this.levels.ground && !cell.erosionMask) {
+            cell.weirdness = ReferenceWeirdness.fromSediment(cell.sediment, cell.macroBiomeId);
+        }
 	}
 
 	public void applyBiomeRegion(Cell cell, float x, float z) {

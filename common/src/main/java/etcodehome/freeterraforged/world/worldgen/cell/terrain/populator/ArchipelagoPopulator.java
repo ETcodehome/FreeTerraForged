@@ -1,7 +1,7 @@
 package etcodehome.freeterraforged.world.worldgen.cell.terrain.populator;
 
 import etcodehome.freeterraforged.world.worldgen.biome.Erosion;
-import etcodehome.freeterraforged.world.worldgen.biome.Weirdness;
+import etcodehome.freeterraforged.world.worldgen.biome.ReferenceWeirdness;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
@@ -126,9 +126,9 @@ public class ArchipelagoPopulator implements CellPopulator {
         this.oceanFloorVariance = Noises.simplex(3141 + salt, Math.max(1, Math.round(size * 2.2F)), 2);
 
         this.islandErosion = Erosion.LEVEL_4.source();
-        this.islandWeirdness = Weirdness.MID_SLICE_NORMAL_DESCENDING.source();
+        this.islandWeirdness = ReferenceWeirdness.MID_SLICE_NORMAL_DESCENDING.source();
         this.beachErosion = Erosion.LEVEL_4.source();
-        this.beachWeirdness = Weirdness.MID_SLICE_NORMAL_DESCENDING.source();
+        this.beachWeirdness = ReferenceWeirdness.MID_SLICE_NORMAL_DESCENDING.source();
 
         float mScale = NoiseUtil.clamp(this.settings.mountainScale, 0.0F, 1.0F);
         float mChance = NoiseUtil.clamp(this.settings.mountainChance, 0.0F, 1.0F);

@@ -1,6 +1,8 @@
 package etcodehome.freeterraforged.world.worldgen.biome;
 
-public enum Weirdness implements BiomeParameter {
+import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
+
+public enum ReferenceWeirdness implements BiomeParameter {
     MID_SLICE_NORMAL_ASCENDING(-1.0F, -0.93333334F),
     HIGH_SLICE_NORMAL_ASCENDING(-0.93333334F, -0.7666667F),
     PEAK_NORMAL(-0.7666667F, -0.56666666F),
@@ -18,7 +20,7 @@ public enum Weirdness implements BiomeParameter {
     private float min;
     private float max;
 
-    private Weirdness(float min, float max) {
+    private ReferenceWeirdness(float min, float max) {
     	this.min = min;
     	this.max = max;
     }
@@ -32,4 +34,15 @@ public enum Weirdness implements BiomeParameter {
     public float max() {
     	return this.max;
     }
+
+	public static float fromSediment(float sediment) {
+		float clamped = NoiseUtil.clamp(sediment, -1.0F, 1.0F);
+		return (clamped - 1.0F) / 3.0F;
+	}
+
+	public static float fromSediment(float sediment, float macroBiomeId) {
+		float clamped = NoiseUtil.clamp(sediment, -1.0F, 1.0F);
+		float magnitude = (1.0F - clamped) / 3.0F;
+		return macroBiomeId > 0.5F ? magnitude : -magnitude;
+	}
 }
