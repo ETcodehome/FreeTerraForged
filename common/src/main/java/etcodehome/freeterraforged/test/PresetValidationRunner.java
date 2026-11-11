@@ -67,10 +67,13 @@ import etcodehome.freeterraforged.data.worldgen.preset.FTFWorldPresets;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.ContinentType;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Presets;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
 import etcodehome.freeterraforged.platform.ConfigUtil;
 import etcodehome.freeterraforged.registries.FTFRegistries;
 import etcodehome.freeterraforged.world.worldgen.biome.BiomeCandidateRoles;
+import etcodehome.freeterraforged.world.worldgen.biome.Continentalness;
 import etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeBanding;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
 import etcodehome.freeterraforged.world.worldgen.perf.WorldgenBenchmarkRunner;
 import etcodehome.freeterraforged.world.worldgen.runtime.BiomePlacementPlan;
 import etcodehome.freeterraforged.world.worldgen.search.BiomeSearchResolution;
@@ -386,6 +389,113 @@ public final class PresetValidationRunner {
 		}
 		return topology
 			+ "; quart-aligned biome/terrain scale derivation, semantic filler roles, preset-scaled unknowns, and depth stages";
+	}
+
+	private static String validateContinentalnessAndControlPoints(GeneratorContext genCtx) {
+		etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap heightmap = genCtx.getHeightmap();
+		etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels levels = heightmap.levels();
+		WorldSettings.ControlPoints cp = heightmap.controlPoints();
+
+		Cell cell = new Cell();
+
+		// 1. Mushroom Fields range [-1.20F, -1.05F]
+		cell.terrain = TerrainType.MUSHROOM_FIELDS;
+		cell.height = levels.water + 0.1F;
+		cell.continentEdge = cp.islandCoast;
+		float cMushroomShore = CellSampler.Field.CONTINENT.read(cell, heightmap);
+		if (Math.abs(cMushroomShore - (-1.05F)) > 1e-3F) {
+			throw new AssertionError("Mushroom island shore must meet -1.05F, was " + cMushroomShore);
+		}
+		cell.continentEdge = cp.islandInland;
+		float cMushroomCenter = CellSampler.Field.CONTINENT.read(cell, heightmap);
+		if (Math.abs(cMushroomCenter - (-1.20F)) > 1e-3F) {
+			throw new AssertionError("Mushroom island center must meet -1.20F, was " + cMushroomCenter);
+		}
+
+		// 2. Boundary points and C0 continuity
+		cell.terrain = TerrainType.NONE;
+		cell.height = levels.water - 0.2F;
+		cell.continentEdge = cp.deepOcean;
+		float cDeep = CellSampler.Field.CONTINENT.read(cell, heightmap);
+		if (Math.abs(cDeep - (-0.455F)) > 1e-3F) {
+			throw new AssertionError("Deep ocean boundary must meet -0.455F, was " + cDeep);
+		}
+
+		cell.height = levels.water - 0.01F;
+		cell.continentEdge = cp.beach;
+		float cSubmergedBeach = CellSampler.Field.CONTINENT.read(cell, heightmap);
+		if (Math.abs(cSubmergedBeach - (-0.195F)) > 1e-3F) {
+			throw new AssertionError("Submerged beach boundary must meet -0.195F, was " + cSubmergedBeach);
+		}
+		if (cSubmergedBeach >= -0.19F) {
+			throw new AssertionError("Submerged beach must be strictly < -0.19F to prevent beach misbioming, was " + cSubmergedBeach);
+		}
+
+		// Verify abyssal deep ocean at continentEdge=0.0 is -1.00F (strictly > -1.05F so deep ocean is never mushroom fields)
+		cell.height = levels.water - 0.2F;
+		cell.continentEdge = 0.0F;
+		float cAbyssal = CellSampler.Field.CONTINENT.read(cell, heightmap);
+		if (Math.abs(cAbyssal - (-1.00F)) > 1e-3F) {
+			throw new AssertionError("Abyssal deep ocean must be mapped to -1.00F, was " + cAbyssal);
+		}
+
+		cell.height = levels.water + 0.1F;
+		cell.continentEdge = cp.beach;
+		float cOnshoreBeach = CellSampler.Field.CONTINENT.read(cell, heightmap);
+		if (Math.abs(cOnshoreBeach - (-0.19F)) > 1e-3F) {
+			throw new AssertionError("Onshore beach boundary must meet -0.19F, was " + cOnshoreBeach);
+		}
+
+		cell.continentEdge = cp.coast;
+		float cCoast = CellSampler.Field.CONTINENT.read(cell, heightmap);
+		if (Math.abs(cCoast - (-0.11F)) > 1e-3F) {
+			throw new AssertionError("Coast boundary must meet -0.11F, was " + cCoast);
+		}
+
+		cell.continentEdge = cp.inland;
+		float cInland = CellSampler.Field.CONTINENT.read(cell, heightmap);
+		if (Math.abs(cInland - 0.03F) > 1e-3F) {
+			throw new AssertionError("Inland boundary must meet 0.03F, was " + cInland);
+		}
+
+		float midSplitEdge = cp.inland + 0.35F * (1.0F - cp.inland);
+		cell.continentEdge = midSplitEdge;
+		float cMidSplit = CellSampler.Field.CONTINENT.read(cell, heightmap);
+		if (Math.abs(cMidSplit - 0.30F) > 1e-3F) {
+			throw new AssertionError("Mid-interior split boundary must meet 0.30F, was " + cMidSplit);
+		}
+
+		cell.continentEdge = 1.0F;
+		float cPeak = CellSampler.Field.CONTINENT.read(cell, heightmap);
+		if (Math.abs(cPeak - 1.00F) > 1e-3F) {
+			throw new AssertionError("Continental peak must reach 1.00F, was " + cPeak);
+		}
+
+		// 3. Oceanic Island Bounding (never exceed NEAR_INLAND max 0.03F)
+		cell.terrain = TerrainType.ISLAND;
+		for (float edge = 0.0F; edge <= 1.0F; edge += 0.05F) {
+			cell.continentEdge = edge;
+			float c = CellSampler.Field.CONTINENT.read(cell, heightmap);
+			if (c > Continentalness.NEAR_INLAND.max() + 1e-5F) {
+				throw new AssertionError("Oceanic island exceeded NEAR_INLAND.max (0.03F) at edge " + edge + ": " + c);
+			}
+		}
+
+		// 4. Slider Proportionality Verification
+		WorldSettings.ControlPoints narrowInland = new WorldSettings.ControlPoints(0.0F, 0.074F, 0.102F, 0.13144F, 0.2210F, 0.3576F, 0.40F);
+		WorldSettings.ControlPoints wideInland = new WorldSettings.ControlPoints(0.0F, 0.074F, 0.102F, 0.13144F, 0.2210F, 0.3576F, 0.70F);
+		etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap hmNarrow = new etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap(null, null, null, null, levels, narrowInland, 1.0F, null, null);
+		etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap hmWide = new etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap(null, null, null, null, levels, wideInland, 1.0F, null, null);
+
+		cell.terrain = TerrainType.NONE;
+		cell.continentEdge = 0.55F;
+		float cNarrow = CellSampler.Field.CONTINENT.read(cell, hmNarrow);
+		float cWide = CellSampler.Field.CONTINENT.read(cell, hmWide);
+		if (cNarrow <= Continentalness.MID_INLAND.min() || cWide >= Continentalness.NEAR_INLAND.max()) {
+			throw new AssertionError("Control point slider adjustment failed to alter terrain band classification at edge 0.55");
+		}
+
+		return "All 7 vanilla continentalness bands continuous (delta < 1e-3), islands strictly bounded <= 0.03F, control point proportionality verified";
 	}
 
 	public static void runAllTests(MinecraftServer server) {
@@ -905,6 +1015,16 @@ public final class PresetValidationRunner {
 			rmFile.delete();
 			FTFCommon.LOGGER.info("[FTF-Test] PASSED: In-game commands /ftf heightmap and /ftf reliefmap executed, generated valid non-black non-flat images, and verified 100% bit-for-bit parity against core generator.");
 			testRecords.add(new TestRecord(currentTestName, String.format("Radius: %d blocks | 100%% bit-for-bit core parity verified", testRadius), true, null));
+
+			// -----------------------------------------------------------------------------------------
+			// Continentalness Distribution, Range Mapping & Control Point Proportionality
+			// -----------------------------------------------------------------------------------------
+			currentTestName = "presetValidation.continentalnessDistributionAndControlPoints." + loader;
+			watchdog.setStep(currentTestName);
+			FTFCommon.LOGGER.info("[FTF-Test] Verifying Continentalness Distribution, Range Mapping & Control Point Proportionality...");
+			String continentalnessNotes = validateContinentalnessAndControlPoints(genCtx);
+			FTFCommon.LOGGER.info("[FTF-Test] PASSED: Continentalness distribution & control point proportionality ({})", continentalnessNotes);
+			testRecords.add(new TestRecord(currentTestName, continentalnessNotes, true, null));
 
 			// -----------------------------------------------------------------------------------------
 			// Two-Stage Datapack Reload & User Spawn Persistence

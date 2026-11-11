@@ -305,13 +305,18 @@ public class ArchipelagoPopulator implements CellPopulator {
 
         cell.height = beachHeight + inlandRelief;
 
+        float mushroomRegion = this.regionNoise.compute(x + 31415.0F, z - 27182.0F, 0);
+        boolean isMushroom = originalContinentEdge <= this.controlPoints.islandCoast && mushroomRegion > 0.88F;
+
         // Direct assignment without Math.max so negative continentalness values take effect
-        cell.continentEdge = continentEdge(perturbedAlpha, shelfEnd, originalContinentEdge);
+        cell.continentEdge = continentEdge(perturbedAlpha, shelfEnd, originalContinentEdge, isMushroom);
 
         if (cell.height <= this.levels.water) {
             if (perturbedAlpha >= 0.01F) {
                 cell.terrain = TerrainType.SHALLOW_OCEAN;
             }
+        } else if (isMushroom) {
+            cell.terrain = TerrainType.MUSHROOM_FIELDS;
         } else if (perturbedAlpha < dynamicBeachEnd) {
             cell.terrain = TerrainType.ISLAND_BEACH;
         } else if (inlandAlpha > 0.4F && (this.settings.mountainChance > 0.05F || vScale > 0.2F)) {
@@ -363,19 +368,35 @@ public class ArchipelagoPopulator implements CellPopulator {
         }
     }
 
-    private float continentEdge(float islandAlpha, float shelfEnd, float originalContinentEdge) {
+    private float continentEdge(float islandAlpha, float shelfEnd, float originalContinentEdge, boolean isMushroom) {
         // islandAlpha ranges from 0.0 (outer ocean edge) to 1.0 (island peak core).
-        // We map this into clean 0.0 to 1.0 control-point units so Field.CONTINENT
+        // We map this into clean control-point coordinates so Field.CONTINENT
         // and heightmap consumers can evaluate it correctly.
 
-        if (islandAlpha < shelfEnd) {
-            // Subsea shelf / ocean approach: blend from the underlying ocean edge up to the beach control point
-            float alpha = smoothStep(0.0F, shelfEnd, islandAlpha);
-            return NoiseUtil.lerp(originalContinentEdge, this.controlPoints.beach, alpha);
+        if (isMushroom) {
+            float islandCoast = this.controlPoints.islandCoast;
+            float islandInland = this.controlPoints.islandInland;
+            if (islandAlpha < shelfEnd) {
+                // Subsea shelf / apron approach: blend from underlying ocean edge up to islandCoast
+                float alpha = smoothStep(0.0F, shelfEnd, islandAlpha);
+                return NoiseUtil.lerp(originalContinentEdge, islandCoast, alpha);
+            } else {
+                // Mushroom island landmass: scale from islandCoast down to islandInland (deep-ocean parameter range)
+                float alpha = smoothStep(shelfEnd, 1.0F, islandAlpha);
+                return NoiseUtil.lerp(islandCoast, islandInland, alpha);
+            }
         } else {
-            // Island landmass: scale from the beach control point up to 1.0 (Far-Inland core)
-            float alpha = smoothStep(shelfEnd, 1.0F, islandAlpha);
-            return NoiseUtil.lerp(this.controlPoints.beach, 1.0F, alpha);
+            float beach = this.controlPoints.beach;
+            float inland = this.controlPoints.inland;
+            if (islandAlpha < shelfEnd) {
+                // Subsea shelf / ocean approach: blend from underlying ocean edge up to beach control point
+                float alpha = smoothStep(0.0F, shelfEnd, islandAlpha);
+                return NoiseUtil.lerp(originalContinentEdge, beach, alpha);
+            } else {
+                // Oceanic island landmass: scale from beach to inland (bounded to Coast & Near-Inland, never Far-Inland)
+                float alpha = smoothStep(shelfEnd, 1.0F, islandAlpha);
+                return NoiseUtil.lerp(beach, inland, alpha);
+            }
         }
     }
 

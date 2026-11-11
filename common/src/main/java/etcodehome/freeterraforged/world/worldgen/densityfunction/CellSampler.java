@@ -40,8 +40,6 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, Den
 	public CellSampler(Supplier<WorldLookup> deferredLookup, Field field) {
 		this(deferredLookup, field, DensityFunctions.zero());
 	}
-	private static final float DEEP_OCEAN_MAX = Climate.unquantizeCoord(Climate.quantizeCoord(Continentalness.DEEP_OCEAN.max()) - 1);
-	private static final float SHALLOW_OCEAN_MIN = Climate.unquantizeCoord(Climate.quantizeCoord(Continentalness.OCEAN.min()) + 1);
 	private static final ThreadLocal<Cache2d> CELL = ThreadLocal.withInitial(Cache2d::new);
 	private static final ThreadLocal<LookupFrame> LOOKUP_OVERRIDE = new ThreadLocal<>();
 
@@ -381,67 +379,96 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, Den
 		},
 		CONTINENT("continent") {
 			
-			//TODO move this somewhere else
 			@Override
 			public float read(Cell cell, Heightmap heightmap) {
 				Levels levels = heightmap.levels();
 				ControlPoints controlPoints = heightmap.controlPoints();
 				
+				float islandInland = controlPoints.islandInland;
+				float islandCoast = controlPoints.islandCoast;
 				float deepOcean = controlPoints.deepOcean;
 				float shallowOcean = controlPoints.shallowOcean;
 				float beach = controlPoints.beach;
+				float coast = controlPoints.coast;
 				float inland = controlPoints.inland;
 				
-				if(cell.terrain == TerrainType.MUSHROOM_FIELDS) {
-					return Continentalness.MUSHROOM_FIELDS.mid();
-				}
-				boolean submergedOffshore = cell.height <= levels.water && cell.continentEdge < beach
-					&& !cell.terrain.isRiver() && !cell.terrain.isLake() && !cell.terrain.isWetland();
-
-				if(cell.terrain.isDeepOcean() || submergedOffshore && cell.continentEdge <= deepOcean) {
-					if(deepOcean <= 0.0F) {
-						return Continentalness.DEEP_OCEAN.mid();
+				// 1. Mushroom Fields: strictly mapped to [-1.20F, -1.05F] for exposed mushroom island landmass
+				if (cell.terrain == TerrainType.MUSHROOM_FIELDS && cell.height > levels.water) {
+					if (islandCoast <= islandInland) {
+						return Continentalness.MUSHROOM_FIELDS.mid();
 					}
-					float alpha = NoiseUtil.clamp(cell.continentEdge, 0.0F, deepOcean);
-					alpha = NoiseUtil.lerp(alpha, 0.0F, deepOcean, 0.0F, 1.0F);
-					return Math.min(DEEP_OCEAN_MAX, NoiseUtil.lerp(Continentalness.DEEP_OCEAN.min() + 0.05F, Continentalness.DEEP_OCEAN.max(), alpha));
+					float t = NoiseUtil.clamp((islandCoast - cell.continentEdge) / (islandCoast - islandInland), 0.0F, 1.0F);
+					return NoiseUtil.lerp(Continentalness.MUSHROOM_FIELDS.max(), Continentalness.MUSHROOM_FIELDS.min(), t);
 				}
-				
-				if(cell.terrain.isShallowOcean()) {
-					if(shallowOcean <= deepOcean) {
-						return Continentalness.OCEAN.mid();
+
+				// 2. Submerged offshore ocean: strictly mapped to [-1.00F, -0.195F] (< -0.19F to prevent beach misbioming)
+				boolean isHydrology = cell.terrain.isRiver() || cell.terrain.isLake() || cell.terrain.isWetland();
+				boolean isSubmergedOcean = (cell.height <= levels.water && !isHydrology)
+					|| cell.terrain.isDeepOcean() || cell.terrain.isShallowOcean();
+
+				if (isSubmergedOcean) {
+					// 2a. Deep Ocean: [-1.00F, -0.455F]
+					// Strictly bounded to >= -1.00F (> -1.05F) so deep ocean is never matched to Mushroom Fields
+					if (cell.terrain.isDeepOcean() || cell.continentEdge <= deepOcean) {
+						if (deepOcean <= 0.0F) {
+							return Continentalness.DEEP_OCEAN.mid();
+						}
+						float t = NoiseUtil.clamp(cell.continentEdge / deepOcean, 0.0F, 1.0F);
+						return NoiseUtil.lerp(-1.00F, Continentalness.DEEP_OCEAN.max(), t);
 					}
-					float alpha = NoiseUtil.clamp(cell.continentEdge, deepOcean, shallowOcean);
-					alpha = NoiseUtil.lerp(alpha, deepOcean, shallowOcean, 0.0F, 0.98F);
-					return Math.max(SHALLOW_OCEAN_MIN, NoiseUtil.lerp(Continentalness.OCEAN.min(), Continentalness.OCEAN.max(), alpha));
-				}
 
-				if (submergedOffshore) {
-					if (beach <= deepOcean) {
-						return Continentalness.OCEAN.mid();
+					// 2b. Shallow Ocean: [-0.455F, -0.195F]
+					// oceanMax is capped at -0.195F (< -0.19F) so submerged shelves never evaluate to Coast/Beach
+					float oceanMax = Continentalness.OCEAN.max() - 0.005F; // -0.195F
+					if (cell.continentEdge <= shallowOcean) {
+						if (shallowOcean <= deepOcean) {
+							return Continentalness.OCEAN.mid();
+						}
+						float t = NoiseUtil.clamp((cell.continentEdge - deepOcean) / (shallowOcean - deepOcean), 0.0F, 1.0F);
+						return NoiseUtil.lerp(Continentalness.OCEAN.min(), Continentalness.OCEAN.mid(), t);
+					} else {
+						float oceanEnd = Math.max(shallowOcean + 0.001F, beach);
+						float t = NoiseUtil.clamp((cell.continentEdge - shallowOcean) / (oceanEnd - shallowOcean), 0.0F, 1.0F);
+						return NoiseUtil.lerp(Continentalness.OCEAN.mid(), oceanMax, t);
 					}
-					float alpha = NoiseUtil.lerp(
-						NoiseUtil.clamp(cell.continentEdge, deepOcean, beach),
-						deepOcean, beach, 0.0F, 0.98F
-					);
-					return Math.max(SHALLOW_OCEAN_MIN,
-						NoiseUtil.lerp(Continentalness.OCEAN.min(), Continentalness.OCEAN.max(), alpha));
-				}
-				
-				if(cell.terrain.getDelegate() == TerrainCategory.BEACH && cell.height + cell.beachNoise < levels.water(5)) {
-					float alpha = NoiseUtil.clamp(cell.continentEdge, shallowOcean, beach);
-					alpha = NoiseUtil.lerp(alpha, shallowOcean, beach, 0.0F, 1.0F);
-					return NoiseUtil.lerp(Continentalness.COAST.min(), Continentalness.COAST.max(), alpha);
 				}
 
-				if(cell.terrain == TerrainType.ISLAND_BEACH) {
-					return Continentalness.COAST.mid();
+				// 3. Exposed Beach & Coast: [-0.19F, -0.11F]
+				if (cell.continentEdge <= coast || cell.terrain.isCoast()) {
+					if (coast <= beach) {
+						return Continentalness.COAST.mid();
+					}
+					float t = NoiseUtil.clamp((cell.continentEdge - beach) / (coast - beach), 0.0F, 1.0F);
+					return NoiseUtil.lerp(Continentalness.COAST.min(), Continentalness.COAST.max(), t);
 				}
 
-				float alpha = NoiseUtil.clamp(cell.continentEdge, beach, inland);
-				alpha = NoiseUtil.lerp(alpha, beach, inland, 0.0F, 1.0F);
-				return NoiseUtil.lerp(Continentalness.NEAR_INLAND.mid(), Continentalness.FAR_INLAND.max(), alpha);
+				// 4. Near-Inland: [-0.11F, 0.03F]
+				if (cell.continentEdge <= inland) {
+					if (inland <= coast) {
+						return Continentalness.NEAR_INLAND.mid();
+					}
+					float t = NoiseUtil.clamp((cell.continentEdge - coast) / (inland - coast), 0.0F, 1.0F);
+					return NoiseUtil.lerp(Continentalness.NEAR_INLAND.min(), Continentalness.NEAR_INLAND.max(), t);
+				}
 
+				// 5. Continental Interior: Mid-Inland [0.03F, 0.30F] and Far-Inland [0.30F, 1.00F]
+				// Oceanic islands are strictly bounded to Near-Inland max
+				if (cell.terrain.getCategory() == TerrainCategory.ISLAND) {
+					return Continentalness.NEAR_INLAND.max();
+				}
+
+				if (inland >= 1.0F) {
+					return Continentalness.MID_INLAND.min();
+				}
+				float t = NoiseUtil.clamp((cell.continentEdge - inland) / (1.0F - inland), 0.0F, 1.0F);
+				float midSplit = 0.35F;
+				if (t <= midSplit) {
+					float subT = t / midSplit;
+					return NoiseUtil.lerp(Continentalness.MID_INLAND.min(), Continentalness.MID_INLAND.max(), subT);
+				} else {
+					float subT = (t - midSplit) / (1.0F - midSplit);
+					return NoiseUtil.lerp(Continentalness.FAR_INLAND.min(), Continentalness.FAR_INLAND.max(), subT);
+				}
 			}
 		},
 		CONTINENT_EDGE("continent_edge") {

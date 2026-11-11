@@ -3,6 +3,7 @@ package etcodehome.freeterraforged.world.worldgen.cell.climate;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
 import etcodehome.freeterraforged.world.worldgen.cell.continent.Continent;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
+import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainCategory;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil.Vec2f;
@@ -253,7 +254,7 @@ public class ClimateModule {
 
 	private void modifyTerrain(Cell cell, float continentEdge) {
 		if (cell.terrain.isOverground() && !cell.terrain.overridesCoast() && continentEdge <= this.controlPoints.coastMarker()
-			&& cell.terrain != TerrainType.ISLAND && cell.terrain != TerrainType.ISLAND_BEACH && cell.terrain != TerrainType.ISLAND_MOUNTAINS) {
+			&& cell.terrain.getCategory() != TerrainCategory.ISLAND) {
 			cell.terrain = TerrainType.COAST;
 		}
 	}
