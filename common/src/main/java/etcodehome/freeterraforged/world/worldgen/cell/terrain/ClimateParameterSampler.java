@@ -1,7 +1,7 @@
 package etcodehome.freeterraforged.world.worldgen.cell.terrain;
 
 import etcodehome.freeterraforged.world.worldgen.biome.BiomeParameter;
-import etcodehome.freeterraforged.world.worldgen.biome.Weirdness;
+import etcodehome.freeterraforged.world.worldgen.biome.ReferenceWeirdness;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
 import etcodehome.freeterraforged.world.worldgen.util.Seed;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
@@ -40,8 +40,8 @@ public record ClimateParameterSampler(Noise erosionSource, Noise weirdnessSource
 	public Noise ordinaryWeirdness() {
 		return Noises.map(
 			this.weirdnessSource,
-			Weirdness.MID_SLICE_NORMAL_DESCENDING.min(),
-			Weirdness.LOW_SLICE_NORMAL_DESCENDING.max() - 0.01F
+			ReferenceWeirdness.MID_SLICE_NORMAL_DESCENDING.min(),
+			ReferenceWeirdness.LOW_SLICE_NORMAL_DESCENDING.max() - 0.01F
 		);
 	}
 

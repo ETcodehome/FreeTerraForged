@@ -21,6 +21,7 @@ import java.util.function.IntFunction;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.ErosionFilterSettings;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
+import etcodehome.freeterraforged.world.worldgen.biome.ReferenceWeirdness;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
@@ -343,6 +344,7 @@ public class Erosion implements Filter {
                     // the mask at its initial value, so the same update is written directly.
                     cell.sediment = NoiseUtil.clamp(
                             cell.sediment + heightFade * (1.0f - ridgeMapCombiMask), -1.0f, 1.0f);
+                    cell.weirdness = ReferenceWeirdness.fromSediment(cell.sediment, cell.macroBiomeId);
                     continue;
                 }
 
@@ -448,6 +450,7 @@ public class Erosion implements Filter {
                 }
 
                 cell.sediment = NoiseUtil.clamp(cell.sediment + ridgeMapFadeTarget * (1.0f - ridgeMapCombiMask), -1.0f, 1.0f);
+                cell.weirdness = ReferenceWeirdness.fromSediment(cell.sediment, cell.macroBiomeId);
 
                 // The smoothed gate can be closed while the raw gate is open. Sediment is already recorded
                 // above, so there is nothing left to do for this cell.
@@ -491,6 +494,12 @@ public class Erosion implements Filter {
             if (wasLand && afterIsWater) {
                 cell.heightErosion += this.levels.ground - cell.height;
                 cell.height = this.levels.ground;
+            }
+            if (cell.erosionMask || cell.height <= this.levels.ground) {
+                cell.sediment = -0.5f;
+                cell.weirdness = 0.0f;
+            } else {
+                cell.weirdness = ReferenceWeirdness.fromSediment(cell.sediment, cell.macroBiomeId);
             }
         }
     }

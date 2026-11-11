@@ -2,6 +2,8 @@ package etcodehome.freeterraforged.client.gui.screen.presetconfig;
 
 import java.util.Locale;
 
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.ControlPoints;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import net.minecraft.network.chat.Component;
@@ -14,8 +16,8 @@ final class PreviewDetails {
     static Detail forCell(RenderMode mode, Cell cell, Levels levels, String biomeId) {
         return switch (mode) {
             case BIOME -> new Detail(
-                Component.translatable(FTFTranslationKeys.GUI_LABEL_PREVIEW_BIOME),
-                biomeId == null ? "" : biomeId
+                    Component.translatable(FTFTranslationKeys.GUI_LABEL_PREVIEW_BIOME),
+                    biomeId == null ? "" : biomeId
             );
             case TRANSITION_POINTS -> new Detail(Component.literal("Category"), cell.terrain.getCategory().name());
             case TEMPERATURE -> value("Temperature", cell.temperature);
@@ -29,13 +31,39 @@ final class PreviewDetails {
             case MACRO_NOISE -> value("Macro Noise", cell.macroBiomeId);
             case TERRAIN_REGION -> new Detail(Component.literal("Terrain Type"), cell.terrain.getName());
             case HYPSOMETRIC, TOPOGRAPHY -> new Detail(
-                Component.literal("Elevation"),
-                "Y=" + levels.scale(cell.height) + " H=" + cell.height
+                    Component.literal("Elevation"),
+                    "Y=" + levels.scale(cell.height) + " H=" + cell.height
             );
             case CONTINENT_UPLIFT -> value("Uplift", cell.waterTable);
-            case CONTINENT_EDGE -> value("Continent Edge", cell.continentEdge);
+            case CONTINENT_EDGE -> new Detail(Component.literal("Continent Edge"), formatContinentEdge(cell.continentEdge));
             case RIVER_ZONE -> new Detail(Component.literal("River Zone"), cell.riverZone.name());
         };
+    }
+
+    private static String formatContinentEdge(float edge) {
+        ControlPoints cp = PresetManager.PM.worldSettings.controlPoints;
+        String bandName;
+
+        // Compare against live user-tuned ControlPoints thresholds
+        if (edge <= cp.islandInland) {
+            bandName = "Island Inland (C0)";
+        } else if (edge <= cp.islandCoast) {
+            bandName = "Island Coast (C1)";
+        } else if (edge <= cp.deepOcean) {
+            bandName = "Deep Ocean (C2)";
+        } else if (edge <= cp.shallowOcean) {
+            bandName = "Shallow Ocean (C3)";
+        } else if (edge <= cp.beach) {
+            bandName = "Beach (C4)";
+        } else if (edge <= cp.coast) {
+            bandName = "Coast (C5)";
+        } else if (edge <= cp.inland) {
+            bandName = "Near-Inland (C6)";
+        } else {
+            bandName = "Far-Inland (C7)";
+        }
+
+        return String.format(Locale.ROOT, "%.4f (%s)", edge, bandName);
     }
 
     private static Detail value(String label, float value) {

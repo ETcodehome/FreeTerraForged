@@ -88,6 +88,7 @@ public final class FTFLanguageProvider {
 			this.add(FTFTranslationKeys.GUI_BUTTON_LARGE_ORE_VEINS, "Large Ore Veins");
 			this.add(FTFTranslationKeys.GUI_BUTTON_LEGACY_CARVER_DISTRIBUTION, "Legacy Carver Distribution");
 			this.add(FTFTranslationKeys.GUI_BUTTON_CLIMATE_SEED_OFFSET, "Seed Offset");
+			this.add(FTFTranslationKeys.GUI_BUTTON_CLIMATE_NOISE_TYPE, "Noise Type");
 			this.add(FTFTranslationKeys.GUI_BUTTON_BIOME_EDGE_TYPE, "Type");
 			this.add(FTFTranslationKeys.GUI_BUTTON_UNDERGROUND_BIOME_BANDING, "Vertical Cave Biome Banding");
 			this.add(FTFTranslationKeys.GUI_BUTTON_TERRAIN_SEED_OFFSET, "Terrain Seed Offset");
@@ -158,6 +159,12 @@ public final class FTFLanguageProvider {
 			this.add(FTFTranslationKeys.GUI_SLIDER_MOISTURE_MAX, "Max");
 			this.add(FTFTranslationKeys.GUI_SLIDER_MOISTURE_OFFSET_BIAS, "Offset Bias");
 			this.add(FTFTranslationKeys.GUI_SLIDER_MOISTURE_DISTRIBUTION_BIAS, "Distribution Bias");
+			this.add(FTFTranslationKeys.GUI_SLIDER_EROSION_SCALE, "Scale");
+			this.add(FTFTranslationKeys.GUI_SLIDER_EROSION_FALLOFF, "Falloff");
+			this.add(FTFTranslationKeys.GUI_SLIDER_EROSION_MIN, "Min");
+			this.add(FTFTranslationKeys.GUI_SLIDER_EROSION_MAX, "Max");
+			this.add(FTFTranslationKeys.GUI_SLIDER_EROSION_OFFSET_BIAS, "Offset Bias");
+			this.add(FTFTranslationKeys.GUI_SLIDER_EROSION_DISTRIBUTION_BIAS, "Distribution Bias");
 			this.add(FTFTranslationKeys.GUI_SLIDER_BIOME_SIZE, "Surface Biome Size");
 			this.add(FTFTranslationKeys.GUI_SLIDER_UNDERGROUND_BIOME_SIZE, "Underground Biome Horizontal Size");
 			this.add(FTFTranslationKeys.GUI_SLIDER_UNDERGROUND_BIOME_VERTICAL_SIZE, "Underground Biome Vertical Size");
@@ -256,6 +263,7 @@ public final class FTFLanguageProvider {
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_BUTTON_LARGE_ORE_VEINS), "Set whether large ore veins spawn");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_BUTTON_LEGACY_CARVER_DISTRIBUTION), "Set whether carvers use 1.16 distribution");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_BUTTON_CLIMATE_SEED_OFFSET), "A seed offset used to randomise climate distribution");
+			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_BUTTON_CLIMATE_NOISE_TYPE), "Controls the underlying noise pattern used for climate sampling");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_BUTTON_BIOME_EDGE_TYPE), "The noise type");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_BUTTON_UNDERGROUND_BIOME_BANDING), "Allows different cave biomes to appear above and below each other. Turn this off to keep cave biomes at their normal depths. In very deep worlds, the Deep Dark may then cover much of the lower world. Surface biomes can still appear between cave-biome areas when Cave Biome Coverage is below 100%.");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_BUTTON_TERRAIN_SEED_OFFSET), "A seed offset used to randomise terrain distribution");
@@ -325,6 +333,12 @@ public final class FTFLanguageProvider {
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_MOISTURE_MIN), "The lower limit of the range");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_MOISTURE_MAX), "The upper limit of the range");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_MOISTURE_OFFSET_BIAS), "The bias towards either end of the range");
+			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_EROSION_SCALE), "The horizontal scale");
+			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_EROSION_FALLOFF), "How quickly values transition from an extremity");
+			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_EROSION_MIN), "The lower limit of the range");
+			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_EROSION_MAX), "The upper limit of the range");
+			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_EROSION_OFFSET_BIAS), "The bias towards either end of the range");
+			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_EROSION_DISTRIBUTION_BIAS), "Shifts the erosion distribution of the world while ensuring all biomes still spawn.");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_BIOME_SIZE), "Controls the horizontal scale of surface biome climate regions.");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_UNDERGROUND_BIOME_SIZE), "Controls how wide underground biome regions are. This includes both cave biomes and ordinary surface biomes below the surface.");
 			this.add(Tooltips.translationKey(FTFTranslationKeys.GUI_SLIDER_UNDERGROUND_BIOME_VERTICAL_SIZE), "Controls how tall cave-biome and surface-biome areas are underground. With Vertical Cave Biome Banding off, it still controls the height of those areas but does not move cave biomes away from their normal depths. You can set it as high as 512 blocks, or the world's full height when the world is shorter.");
