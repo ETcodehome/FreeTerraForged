@@ -496,7 +496,7 @@ public class Erosion implements Filter {
                 cell.height = this.levels.ground;
             }
             if (cell.erosionMask || cell.height <= this.levels.ground) {
-                cell.sediment = 1.0f;
+                cell.sediment = -0.5f;
                 cell.weirdness = 0.0f;
             } else {
                 cell.weirdness = ReferenceWeirdness.fromSediment(cell.sediment, cell.macroBiomeId);
