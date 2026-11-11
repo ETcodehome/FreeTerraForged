@@ -23,6 +23,14 @@ public class WorldLookup implements CellLookup {
 		this.levels = context.levels;
 	}
 
+	public WorldLookup(Heightmap heightmap, Levels levels) {
+		this.context = null;
+		this.heightmap = heightmap;
+		this.levels = levels;
+		this.waterLevel = levels != null ? levels.water : 0.0F;
+		this.beachLevel = levels != null ? levels.water(5) : 0.0F;
+	}
+
 	public GeneratorContext getContext() {
 		return this.context;
 	}

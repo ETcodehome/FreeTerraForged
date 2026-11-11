@@ -373,26 +373,17 @@ public final class BiomePreviewResolver implements AutoCloseable {
 			ThreadPools.previewParallelism(),
 			() -> {
 				TileBiomeRequest request = this.tileRequest(tile, centerX, centerZ, zoom);
-				PreviewQuartCache<BiomeReplacementPlan.PreviewSelection> quartCache =
-					zoom < QuartPos.SIZE ? new PreviewQuartCache<>() : null;
 				return (x, z) -> {
 					int quartX = quartXs[x];
 					int quartZ = quartZs[z];
-					Cell cell = request.tileLookup.lookupBlock(
-						QuartPos.toBlock(quartX), QuartPos.toBlock(quartZ)
-					);
+					Cell cell = tile.getCell(x, z);
 					int quartY = QuartPos.fromBlock(surfaceY(cell, levels));
-					if (quartCache == null) {
+					request.tileLookup.setActiveCell(cell);
+					try {
 						return request.resolveDetailedQuartInCell(quartX, quartY, quartZ, cell);
+					} finally {
+						request.tileLookup.setActiveCell(null);
 					}
-					BiomeReplacementPlan.PreviewSelection selection = quartCache.get(
-						quartX, quartY, quartZ
-					);
-					if (selection == null) {
-						selection = request.resolveDetailedQuartInCell(quartX, quartY, quartZ, cell);
-						quartCache.put(quartX, quartY, quartZ, selection);
-					}
-					return selection;
 				};
 			},
 			cancelled,

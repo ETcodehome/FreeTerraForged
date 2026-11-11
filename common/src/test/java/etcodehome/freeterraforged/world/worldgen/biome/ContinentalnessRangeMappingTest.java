@@ -1,8 +1,12 @@
 package etcodehome.freeterraforged.world.worldgen.biome;
 
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
 
 import etcodehome.freeterraforged.data.worldgen.preset.settings.IslandSettings;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.SpawnType;
@@ -15,14 +19,24 @@ import etcodehome.freeterraforged.world.worldgen.cell.terrain.Terrain;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainCategory;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.populator.ArchipelagoPopulator;
+import etcodehome.freeterraforged.world.worldgen.cell.heightmap.PreviewGrid;
+import etcodehome.freeterraforged.world.worldgen.cell.heightmap.WorldLookup;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
 import etcodehome.freeterraforged.world.worldgen.util.Seed;
+import net.minecraft.core.QuartPos;
+import net.minecraft.world.level.levelgen.DensityFunction;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ContinentalnessRangeMappingTest {
+
+    @BeforeAll
+    static void setUpRegistries() {
+        SharedConstants.tryDetectVersion();
+        Bootstrap.bootStrap();
+    }
 
     private Levels levels;
     private ControlPoints defaultControlPoints;
@@ -56,34 +70,34 @@ public class ContinentalnessRangeMappingTest {
 
         Cell cell = new Cell();
 
-        // 1. Mushroom Fields
+        // 1. Mushroom Fields / Islands (C1 and C0)
         cell.terrain = TerrainType.MUSHROOM_FIELDS;
         cell.height = this.levels.water + 0.1F;
-        cell.continentEdge = 0.03F;
+        cell.continentEdge = this.defaultControlPoints.islandInland;
         float cMushroom = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
         if (cMushroom >= Continentalness.MUSHROOM_FIELDS.min() && cMushroom <= Continentalness.MUSHROOM_FIELDS.max()) {
             hitMushroom = true;
         }
 
-        // 2. Deep Ocean
-        cell.terrain = TerrainType.DEEP_OCEAN;
-        cell.height = this.levels.water - 0.2F;
-        cell.continentEdge = 0.088F;
+        // 2. Deep Ocean (C2) - near ocean floor
+        float floorHeight = this.levels.water(-this.levels.oceanDepth);
+        cell.terrain = TerrainType.NONE;
+        cell.height = floorHeight + 2.0F / this.levels.terrainScaleFactor;
+        cell.continentEdge = 0.05F;
         float cDeepOcean = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
         if (cDeepOcean >= Continentalness.DEEP_OCEAN.min() && cDeepOcean <= Continentalness.DEEP_OCEAN.max()) {
             hitDeepOcean = true;
         }
 
-        // 3. Shallow Ocean
-        cell.terrain = TerrainType.SHALLOW_OCEAN;
-        cell.height = this.levels.water - 0.1F;
+        // 3. Shallow Ocean (C3) - near water surface
+        cell.height = this.levels.water - 2.0F / this.levels.terrainScaleFactor;
         cell.continentEdge = 0.12F;
         float cOcean = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
         if (cOcean >= Continentalness.OCEAN.min() && cOcean <= Continentalness.OCEAN.max()) {
             hitOcean = true;
         }
 
-        // 4. Coast
+        // 4. Coast / Beach (C4) - continent above water
         cell.terrain = TerrainType.COAST;
         cell.height = this.levels.water + 0.05F;
         cell.continentEdge = 0.28F;
@@ -92,7 +106,7 @@ public class ContinentalnessRangeMappingTest {
             hitCoast = true;
         }
 
-        // 5. Near-Inland
+        // 5. Near-Inland (C5)
         cell.terrain = TerrainType.NONE;
         cell.height = this.levels.water + 0.15F;
         cell.continentEdge = 0.40F;
@@ -101,14 +115,14 @@ public class ContinentalnessRangeMappingTest {
             hitNearInland = true;
         }
 
-        // 6. Mid-Inland
+        // 6. Mid-Inland (C6)
         cell.continentEdge = 0.52F;
         float cMidInland = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
         if (cMidInland >= Continentalness.MID_INLAND.min() && cMidInland <= Continentalness.MID_INLAND.max()) {
             hitMidInland = true;
         }
 
-        // 7. Far-Inland
+        // 7. Far-Inland (C7)
         cell.continentEdge = 0.85F;
         float cFarInland = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
         if (cFarInland >= Continentalness.FAR_INLAND.min() && cFarInland <= Continentalness.FAR_INLAND.max()) {
@@ -125,47 +139,45 @@ public class ContinentalnessRangeMappingTest {
     }
 
     @Test
-    @DisplayName("Verify C0 continuity across all control point boundaries without step jumps")
+    @DisplayName("Verify C0 continuity across boundaries and height transitions")
     void testBoundaryContinuity() {
         float eps = 1e-5F;
         float tol = 2e-3F;
         Cell cell = new Cell();
 
-        // 1. Deep Ocean -> Shallow Ocean at controlPoints.deepOcean (0.102F)
-        cell.height = this.levels.water - 0.2F;
-        cell.terrain = TerrainType.NONE;
+        // 1. Deep Ocean (C2) -> Shallow Ocean (C3) at ocean depth split height
+        float floorHeight = this.levels.water(-this.levels.oceanDepth);
+        float shallowBlocks = Math.min(22.0F, this.levels.oceanDepth * 0.40F);
+        float hSplit = 1.0F - (shallowBlocks / this.levels.oceanDepth);
+        float splitHeight = floorHeight + hSplit * (this.levels.water - floorHeight);
 
-        cell.continentEdge = this.defaultControlPoints.deepOcean - eps;
+        cell.terrain = TerrainType.NONE;
+        cell.height = splitHeight - eps;
         float cDeep = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
 
-        cell.continentEdge = this.defaultControlPoints.deepOcean;
-        float cDeepExact = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
+        cell.height = splitHeight;
+        float cSplitExact = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
 
-        cell.continentEdge = this.defaultControlPoints.deepOcean + eps;
+        cell.height = splitHeight + eps;
         float cShallow = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
 
-        assertEquals(-0.455F, cDeepExact, 1e-4F, "Exact deep ocean boundary must meet -0.455F");
-        assertEquals(-0.455F, cDeep, tol, "Deep ocean boundary approaching deepOcean must meet -0.455F");
-        assertEquals(-0.455F, cShallow, tol, "Shallow ocean boundary leaving deepOcean must meet -0.455F");
-        assertEquals(cDeep, cShallow, tol, "Deep -> Shallow boundary must be continuous");
+        assertEquals(-0.455F, cSplitExact, 1e-4F, "Exact ocean depth split must meet -0.455F");
+        assertEquals(-0.455F, cDeep, tol, "Ocean depth approaching split must meet -0.455F");
+        assertEquals(-0.455F, cShallow, tol, "Ocean depth leaving split must meet -0.455F");
+        assertEquals(cDeep, cShallow, tol, "Deep -> Shallow ocean boundary must be continuous");
 
-        // 2. Shallow Ocean (submerged) -> Coast (onshore) at controlPoints.beach (0.2210F)
-        cell.height = this.levels.water - 0.01F;
-        cell.continentEdge = this.defaultControlPoints.beach - eps;
-        float cSubmergedBeach = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
-
-        cell.continentEdge = this.defaultControlPoints.beach;
-        float cSubmergedBeachExact = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
+        // 2. Waterline transition: Submerged ocean surface (C3) -> Continent onshore (C4)
+        cell.height = this.levels.water;
+        float cSubmergedWaterline = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
 
         cell.height = this.levels.water + 0.01F;
-        cell.continentEdge = this.defaultControlPoints.beach + eps;
+        cell.continentEdge = this.defaultControlPoints.beach;
         float cOnshoreBeach = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
 
-        assertEquals(-0.195F, cSubmergedBeachExact, 1e-4F, "Submerged beach boundary must meet -0.195F");
-        assertEquals(-0.195F, cSubmergedBeach, tol, "Submerged beach approaching beach must meet -0.195F");
-        assertEquals(-0.190F, cOnshoreBeach, tol, "Onshore coast start leaving beach must meet -0.190F");
-        assertTrue(cSubmergedBeachExact < -0.19F, "Submerged beach must be strictly < -0.19F to prevent beach misbioming");
-        assertTrue(cOnshoreBeach >= -0.19F, "Onshore coast must be >= -0.19F");
+        assertEquals(-0.191F, cSubmergedWaterline, 1e-3F, "Submerged waterline must meet -0.191F (C3)");
+        assertEquals(-0.185F, cOnshoreBeach, 1e-3F, "Onshore beach start must meet -0.185F (C4)");
+        assertTrue(cSubmergedWaterline < -0.19F, "Submerged ocean must be strictly < -0.19F to prevent beach misbioming");
+        assertTrue(cOnshoreBeach >= -0.19F, "Onshore continent must be >= -0.19F");
 
         // 3. Coast -> Near-Inland at controlPoints.coast (0.3576F)
         cell.height = this.levels.water + 0.1F;
@@ -219,54 +231,68 @@ public class ContinentalnessRangeMappingTest {
         float cPeak = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
         assertEquals(1.00F, cPeak, 1e-4F, "Continental interior peak must reach 1.00F");
 
-        // 7. Mushroom island shore meeting deep ocean at islandCoast (0.074F)
+        // 7. Mushroom Island waterline at islandCoast meets C1 start (-1.05F)
         cell.terrain = TerrainType.MUSHROOM_FIELDS;
         cell.height = this.levels.water + 0.1F;
         cell.continentEdge = this.defaultControlPoints.islandCoast;
-        float cMushroomShore = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
+        float cIslandShore = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
+        assertEquals(-1.05F, cIslandShore, 1e-4F, "Mushroom Island shoreline must meet -1.05F (C1)");
 
-        cell.terrain = TerrainType.DEEP_OCEAN;
-        cell.height = this.levels.water - 0.2F;
-        cell.continentEdge = this.defaultControlPoints.islandCoast;
-        float cDeepOceanAtCoast = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
-
-        assertEquals(-1.05F, cMushroomShore, 1e-4F, "Mushroom shore must meet -1.05F");
-        assertTrue(cDeepOceanAtCoast > -1.05F, "Deep ocean water must strictly be > -1.05F to prevent mushroom fields");
-        float expectedDeepOceanAtCoast = -1.00F + ((-0.455F - (-1.00F)) * (this.defaultControlPoints.islandCoast / this.defaultControlPoints.deepOcean));
-        assertEquals(expectedDeepOceanAtCoast, cDeepOceanAtCoast, 1e-4F, "Deep ocean continentalness at islandCoast matches deep ocean curve");
+        cell.continentEdge = this.defaultControlPoints.islandInland;
+        float cIslandPeak = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
+        assertEquals(-1.20F, cIslandPeak, 1e-4F, "Mushroom Island peak must meet -1.20F (C0)");
     }
 
     @Test
-    @DisplayName("Verify oceanic islands (TerrainCategory.ISLAND) never exceed Near-Inland max (0.03F)")
-    void testOceanicIslandsNeverExceedNearInlandMax() {
+    @DisplayName("Fix 2: Only Mushroom Fields islands are C1/C0 ranged [-1.20F, -1.05F]; other islands are C4/C5")
+    void testFix2IslandBuiltTerrainClassification() {
         Cell cell = new Cell();
         cell.height = this.levels.water + 0.2F;
 
-        Terrain[] islandTypes = {
+        // 1. Mushroom fields islands: strictly C1 / C0 [-1.20F, -1.05F]
+        cell.terrain = TerrainType.MUSHROOM_FIELDS;
+        for (float edge = 0.0F; edge <= this.defaultControlPoints.islandCoast; edge += 0.005F) {
+            cell.continentEdge = edge;
+            float c = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
+            assertTrue(c <= -1.05F + 1e-5F,
+                String.format("Mushroom fields island at edge %.3f had c=%.4f, exceeding C1 max (-1.05)", edge, c));
+            assertTrue(c >= -1.20F - 1e-5F,
+                String.format("Mushroom fields island at edge %.3f had c=%.4f below C0 min (-1.20)", edge, c));
+        }
+
+        // 2. Standard oceanic islands (non-mushroom): must be C4 or C5, NEVER mushroom [-1.20F, -1.05F]
+        Terrain[] nonMushroomIslandTypes = {
             TerrainType.ISLAND,
             TerrainType.ISLAND_BEACH,
             TerrainType.ISLAND_MOUNTAINS
         };
 
-        for (Terrain[] arr = islandTypes; ; ) {
-            for (Terrain type : islandTypes) {
-                cell.terrain = type;
-                assertEquals(TerrainCategory.ISLAND, cell.terrain.getCategory(), "Must be categorized as ISLAND");
+        for (Terrain type : nonMushroomIslandTypes) {
+            cell.terrain = type;
+            assertEquals(TerrainCategory.ISLAND, cell.terrain.getCategory(), "Must be categorized as ISLAND");
 
-                // Sweep continentEdge across full [0.0, 1.0] range
-                for (float edge = 0.0F; edge <= 1.0F; edge += 0.02F) {
-                    cell.continentEdge = edge;
-                    float c = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
-                    assertTrue(c <= Continentalness.NEAR_INLAND.max() + 1e-5F,
-                        String.format("Island type %s at edge %.3f had continentalness %.4f, exceeding NEAR_INLAND.max (0.03)",
-                            type.getName(), edge, c));
-                    assertTrue(c >= Continentalness.COAST.min() - 1e-5F,
-                        String.format("Exposed island type %s at edge %.3f had continentalness %.4f below COAST.min (-0.19)",
-                            type.getName(), edge, c));
-                }
+            for (float edge = 0.0F; edge <= this.defaultControlPoints.islandCoast; edge += 0.005F) {
+                cell.continentEdge = edge;
+                float c = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
+
+                // Never mushroom range
+                assertTrue(c > Continentalness.MUSHROOM_FIELDS.max(),
+                    String.format("Standard island %s at edge %.3f had c=%.4f in mushroom range!", type.getName(), edge, c));
+
+                // Above water: must be >= C4 start (-0.185F) and <= C5 max (0.03F)
+                assertTrue(c >= -0.185F - 1e-5F,
+                    String.format("Standard island %s at edge %.3f had c=%.4f below C4 start (-0.185)", type.getName(), edge, c));
+                assertTrue(c <= Continentalness.NEAR_INLAND.max() + 1e-5F,
+                    String.format("Standard island %s at edge %.3f had c=%.4f exceeding C5 max (0.03)", type.getName(), edge, c));
             }
-            break;
         }
+
+        // 3. Island mountains: must be at least C5 Near-Inland min (-0.11F)
+        cell.terrain = TerrainType.ISLAND_MOUNTAINS;
+        cell.continentEdge = 0.02F;
+        float cMtn = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
+        assertEquals(Continentalness.NEAR_INLAND.min(), cMtn, 1e-4F,
+            "Island mountains must evaluate to Near-Inland min (-0.11F)");
     }
 
     @Test
@@ -368,72 +394,89 @@ public class ContinentalnessRangeMappingTest {
     }
 
     @Test
-    @DisplayName("Defect 1: Underwater areas never misbiomed as beach (continentalness strictly < -0.19F)")
-    void testSubmergedCellsNeverMisbiomedAsBeach() {
+    @DisplayName("Fix 1: Continent terrain above water level never has continentalness less than beach (C4 >= -0.19F)")
+    void testFix1ContinentTerrainAboveWaterNeverLessThanBeach() {
         Cell cell = new Cell();
-        cell.height = this.levels.water - 0.05F; // Submerged cell
+        cell.height = this.levels.water + 0.05F; // Above water level
+        cell.terrain = TerrainType.NONE;
 
-        // Test across shelf, beach control point, and inland transition zone while submerged
-        float[] edges = {
-            this.defaultControlPoints.deepOcean,
-            this.defaultControlPoints.shallowOcean,
-            this.defaultControlPoints.beach - 0.02F,
-            this.defaultControlPoints.beach,
-            this.defaultControlPoints.beach + 0.02F,
-            this.defaultControlPoints.coast,
-            this.defaultControlPoints.inland
-        };
-
-        for (float edge : edges) {
+        // Sweep continentEdge across full [0.0, 1.0] range
+        for (float edge = 0.0F; edge <= 1.0F; edge += 0.01F) {
             cell.continentEdge = edge;
-            cell.terrain = TerrainType.NONE;
-            float cNone = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
-            assertTrue(cNone < -0.19F,
-                String.format("Submerged cell (NONE) at edge %.4f had c=%.4f; must be < -0.19F to prevent beach biome", edge, cNone));
-            assertTrue(cNone <= -0.195F + 1e-5F,
-                String.format("Submerged cell (NONE) at edge %.4f had c=%.4f; must be <= -0.195F", edge, cNone));
-
-            cell.terrain = TerrainType.SHALLOW_OCEAN;
-            float cOcean = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
-            assertTrue(cOcean < -0.19F,
-                String.format("Submerged cell (SHALLOW_OCEAN) at edge %.4f had c=%.4f; must be < -0.19F to prevent beach biome", edge, cOcean));
-            assertTrue(cOcean <= -0.195F + 1e-5F,
-                String.format("Submerged cell (SHALLOW_OCEAN) at edge %.4f had c=%.4f; must be <= -0.195F", edge, cOcean));
+            float c = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
+            assertTrue(c >= Continentalness.COAST.min() - 1e-5F,
+                String.format("Continent cell above water at edge %.3f had c=%.4f < C4.min (-0.19F)", edge, c));
+            if (edge <= this.defaultControlPoints.beach) {
+                assertEquals(-0.185F, c, 1e-4F,
+                    String.format("Continent cell at edge %.3f <= beach must be C4 (-0.185F), was %.4f", edge, c));
+            }
         }
     }
 
     @Test
-    @DisplayName("Defect 3: Deep ocean is never flagged as mushroom fields (continentalness strictly > -1.05F)")
-    void testDeepOceanNeverFlaggedAsMushroomFields() {
+    @DisplayName("Coastal mountains never drop into C4 beach or ocean, maintaining at least C5 Near-Inland")
+    void testCoastalMountainsPreserveNearInlandContinentalness() {
         Cell cell = new Cell();
-        cell.height = this.levels.water - 0.20F; // Deep ocean floor
-        cell.terrain = TerrainType.DEEP_OCEAN;
+        cell.height = this.levels.water + 0.5F; // Mountain peak above water
+        cell.terrain = TerrainType.MOUNTAINS_1;
 
-        // Sweep entire deep ocean range from abyssal floor (0.0F) up to deepOcean boundary (0.102F)
-        for (float edge = 0.0F; edge <= this.defaultControlPoints.deepOcean; edge += 0.005F) {
+        // Sweep continentEdge from ocean basin up to coast
+        for (float edge = 0.0F; edge <= this.defaultControlPoints.coast; edge += 0.01F) {
             cell.continentEdge = edge;
             float c = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
-
-            assertTrue(c > Continentalness.MUSHROOM_FIELDS.max(),
-                String.format("Deep ocean cell at edge %.4f had continentalness %.4f <= -1.05F, matching Mushroom Fields!", edge, c));
-            assertTrue(c >= -1.00F - 1e-5F,
-                String.format("Deep ocean cell at edge %.4f had continentalness %.4f < -1.00F", edge, c));
-            assertTrue(c <= Continentalness.DEEP_OCEAN.max() + 1e-5F,
-                String.format("Deep ocean cell at edge %.4f had continentalness %.4f > DEEP_OCEAN.max", edge, c));
+            assertTrue(c >= Continentalness.NEAR_INLAND.min() - 1e-5F,
+                String.format("Mountain at edge %.3f must be >= Near-Inland min (-0.11F) to prevent turning into Ocean, was %.4f", edge, c));
         }
+    }
 
-        // Verify that only exposed mushroom fields terrain (height > levels.water) can produce continentalness <= -1.05F
-        cell.terrain = TerrainType.MUSHROOM_FIELDS;
-        cell.height = this.levels.water - 0.10F; // Submerged near mushroom island
-        cell.continentEdge = this.defaultControlPoints.islandCoast;
-        float cSubmergedMushroom = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
-        assertTrue(cSubmergedMushroom > Continentalness.MUSHROOM_FIELDS.max(),
-            "Submerged water surrounding mushroom island must be ocean (> -1.05F), was " + cSubmergedMushroom);
+    @Test
+    @DisplayName("Hydrology (rivers, lakes, wetlands) below water level do not drop into ocean C2/C3")
+    void testHydrologyPreservesContinentalRangesBelowWaterLevel() {
+        Cell cell = new Cell();
+        cell.height = this.levels.water - 5.0F / this.levels.terrainScaleFactor; // River bed below water level
+        cell.terrain = TerrainType.RIVER;
+        cell.continentEdge = 0.50F; // Inland river
 
-        cell.height = this.levels.water + 0.10F; // Dry exposed land
-        float cExposedMushroom = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
-        assertEquals(-1.05F, cExposedMushroom, 1e-4F,
-            "Exposed mushroom land at islandCoast must meet -1.05F");
+        float cRiver = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
+        assertTrue(cRiver >= Continentalness.NEAR_INLAND.min(),
+            String.format("Inland river at continentEdge 0.50 must preserve continent continentalness, not ocean! Was %.4f", cRiver));
+
+        cell.terrain = TerrainType.WETLAND;
+        float cWetland = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
+        assertTrue(cWetland >= Continentalness.NEAR_INLAND.min(),
+            String.format("Inland wetland must preserve continent continentalness, not ocean! Was %.4f", cWetland));
+    }
+
+    @Test
+    @DisplayName("Fix 3: Ocean areas below water level are strictly C2/C3, height-interpolated, never beach or mushroom")
+    void testFix3OceanBelowWaterHeightDriven() {
+        Cell cell = new Cell();
+        cell.terrain = TerrainType.NONE;
+        float floorHeight = this.levels.water(-this.levels.oceanDepth);
+
+        // Sweep height from deepest ocean floor to water level
+        float prevC = -2.0F;
+        for (float h = floorHeight; h <= this.levels.water; h += (this.levels.water - floorHeight) / 20.0F) {
+            cell.height = h;
+            float c = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
+
+            // Never misbiomed as beach: strictly < -0.19F
+            assertTrue(c < -0.19F,
+                String.format("Underwater cell at h=%.4f had c=%.4f >= -0.19F, misbioming as beach!", h, c));
+            assertTrue(c <= -0.191F + 1e-5F,
+                String.format("Underwater cell at h=%.4f had c=%.4f > -0.191F", h, c));
+
+            // Never flagged as mushroom fields on ocean floor: strictly > -1.05F
+            assertTrue(c > Continentalness.MUSHROOM_FIELDS.max(),
+                String.format("Underwater cell at h=%.4f had c=%.4f <= -1.05F, matching Mushroom Fields!", h, c));
+            assertTrue(c >= -1.045F - 1e-5F,
+                String.format("Underwater cell at h=%.4f had c=%.4f < -1.045F", h, c));
+
+            // Strictly monotonically increasing with height
+            assertTrue(c >= prevC - 1e-5F,
+                String.format("Continentalness must monotonically increase with height: at h=%.4f got c=%.4f vs prev %.4f", h, c, prevC));
+            prevC = c;
+        }
     }
 
     @Test
@@ -487,5 +530,152 @@ public class ContinentalnessRangeMappingTest {
             assertTrue(nonMushroomCount > 0,
                 String.format("Expected non-mushroom islands to exist, but all %d sampled islands were mushroom fields!", sampleCount));
         }
+    }
+
+    private static class TrackingWorldLookup extends WorldLookup {
+        int fallbackCount = 0;
+
+        TrackingWorldLookup(Heightmap heightmap, Levels levels) {
+            super(heightmap, levels);
+        }
+
+        @Override
+        public boolean applyCell(Cell cell, int x, int z, boolean load, boolean applyClimate) {
+            this.fallbackCount++;
+            cell.height = -999.0F;
+            return false;
+        }
+    }
+
+    @Test
+    @DisplayName("Verify GridLookup eliminates checkerboard/repeating grid artifact across non-quart zooms")
+    void testGridLookupNoCheckerboardArtifactAtOddZooms() {
+        int size = 64;
+        PreviewGrid grid = new PreviewGrid(size);
+        for (int z = 0; z < size; z++) {
+            for (int x = 0; x < size; x++) {
+                Cell cell = grid.getCell(x, z);
+                cell.height = 0.50F + (x + z * size) * 0.0001F;
+                cell.continentEdge = 0.30F;
+            }
+        }
+
+        // Test non-multiples of 4 zooms (e.g. 5, 6 (Zoom 95), 7, 9, 10, 15, 50)
+        int[] oddZooms = {3, 5, 6, 7, 9, 10, 11, 15, 23, 50};
+        for (int zoom : oddZooms) {
+            TrackingWorldLookup tracker = new TrackingWorldLookup(this.defaultHeightmap, this.levels);
+            PreviewTileClimateSampler.GridLookup lookup = new PreviewTileClimateSampler.GridLookup(
+                grid, tracker, 0.0F, 0.0F, zoom
+            );
+
+            // Simulate biome resolution loop sampling quart-aligned block coordinates
+            for (int z = 0; z < size; z++) {
+                int worldZ = z * zoom;
+                int quartZ = QuartPos.fromBlock(worldZ);
+                int blockZ = QuartPos.toBlock(quartZ);
+                for (int x = 0; x < size; x++) {
+                    int worldX = x * zoom;
+                    int quartX = QuartPos.fromBlock(worldX);
+                    int blockX = QuartPos.toBlock(quartX);
+
+                    Cell result = lookup.lookupBlock(blockX, blockZ);
+                    // The lookup must resolve from grid, NOT fall back to worldLookup!
+                    assertFalse(result.height <= -900.0F,
+                        String.format("Zoom %d at pixel (%d, %d) fell back to worldLookup creating grid artifact!", zoom, x, z));
+                }
+            }
+
+            assertEquals(0, tracker.fallbackCount,
+                String.format("Zoom %d must have 0 fallbacks inside grid bounds, but had %d", zoom, tracker.fallbackCount));
+        }
+    }
+
+    @Test
+    @DisplayName("Verify activeCell overrides lookup for pixel-exact climate sampling without aliasing")
+    void testActiveCellOverridesLookupForExactPixelClimateSampling() {
+        int size = 16;
+        PreviewGrid grid = new PreviewGrid(size);
+        TrackingWorldLookup tracker = new TrackingWorldLookup(this.defaultHeightmap, this.levels);
+        PreviewTileClimateSampler.GridLookup lookup = new PreviewTileClimateSampler.GridLookup(
+            grid, tracker, 0.0F, 0.0F, 6
+        );
+
+        Cell customCell = new Cell();
+        customCell.height = 0.777F;
+        customCell.continentEdge = 0.654F;
+
+        // When activeCell is set, lookup returns activeCell regardless of context coordinates
+        lookup.setActiveCell(customCell);
+        Cell fromBlock = lookup.lookupBlock(100, 200);
+        assertEquals(0.777F, fromBlock.height, 1e-5F);
+        assertEquals(0.654F, fromBlock.continentEdge, 1e-5F);
+
+        DensityFunction.SinglePointContext ctx = new DensityFunction.SinglePointContext(500, 64, 500);
+        Cell fromContext = lookup.lookup(ctx);
+        assertEquals(0.777F, fromContext.height, 1e-5F);
+
+        // When activeCell is cleared, lookup returns to grid
+        lookup.setActiveCell(null);
+        Cell normal = lookup.lookupBlock(0, 0);
+        assertFalse(Float.compare(0.777F, normal.height) == 0,
+            "After clearing activeCell, lookup must return grid cell rather than activeCell");
+    }
+
+    @Test
+    @DisplayName("Verify preview continentalness consistency between Zoom 95 (zoom=6) and Zoom 100 (zoom=1)")
+    void testPreviewContinentalnessConsistencyZoom95VsZoom100() {
+        // Beach cell just above waterline
+        Cell beachCell = new Cell();
+        beachCell.height = this.levels.water + 0.01F;
+        beachCell.continentEdge = this.defaultControlPoints.beach;
+        beachCell.terrain = TerrainType.BEACH;
+
+        // Ocean cell below waterline
+        Cell oceanCell = new Cell();
+        oceanCell.height = this.levels.water - 0.05F;
+        oceanCell.continentEdge = this.defaultControlPoints.shallowOcean;
+        oceanCell.terrain = TerrainType.SHALLOW_OCEAN;
+
+        // Preview grids at zoom 1 (Zoom 100) and zoom 6 (Zoom 95)
+        PreviewGrid grid1 = new PreviewGrid(16);
+        PreviewGrid grid6 = new PreviewGrid(16);
+        grid1.getCell(4, 4).copyFrom(beachCell);
+        grid6.getCell(4, 4).copyFrom(beachCell);
+        grid1.getCell(2, 2).copyFrom(oceanCell);
+        grid6.getCell(2, 2).copyFrom(oceanCell);
+
+        TrackingWorldLookup tracker = new TrackingWorldLookup(this.defaultHeightmap, this.levels);
+        PreviewTileClimateSampler.GridLookup lookup1 = new PreviewTileClimateSampler.GridLookup(grid1, tracker, 0, 0, 1);
+        PreviewTileClimateSampler.GridLookup lookup6 = new PreviewTileClimateSampler.GridLookup(grid6, tracker, 0, 0, 6);
+
+        PreviewTileClimateSampler sampler1 = new PreviewTileClimateSampler(lookup1, this.defaultHeightmap, CellSampler.Field.CONTINENT);
+        PreviewTileClimateSampler sampler6 = new PreviewTileClimateSampler(lookup6, this.defaultHeightmap, CellSampler.Field.CONTINENT);
+
+        // 1. With activeCell set (as done in resolveSurfaceTile for each pixel)
+        lookup1.setActiveCell(beachCell);
+        double cBeach1 = sampler1.compute(new DensityFunction.SinglePointContext(4, 64, 4));
+        lookup1.setActiveCell(null);
+
+        lookup6.setActiveCell(beachCell);
+        double cBeach6 = sampler6.compute(new DensityFunction.SinglePointContext(24, 64, 24));
+        lookup6.setActiveCell(null);
+
+        // Continentalness must match and be >= C4.min (-0.19F)
+        assertEquals(cBeach6, cBeach1, 1e-5F, "Beach cell must evaluate to the same continentalness at Zoom 95 and Zoom 100");
+        assertTrue(cBeach1 >= Continentalness.COAST.min() - 1e-5F,
+            String.format("Beach cell continentalness %.4f must be >= -0.19F, not ocean!", cBeach1));
+
+        // 2. Ocean cell
+        lookup1.setActiveCell(oceanCell);
+        double cOcean1 = sampler1.compute(new DensityFunction.SinglePointContext(2, 60, 2));
+        lookup1.setActiveCell(null);
+
+        lookup6.setActiveCell(oceanCell);
+        double cOcean6 = sampler6.compute(new DensityFunction.SinglePointContext(12, 60, 12));
+        lookup6.setActiveCell(null);
+
+        assertEquals(cOcean6, cOcean1, 1e-5F, "Ocean cell must evaluate to the same continentalness at Zoom 95 and Zoom 100");
+        assertTrue(cOcean1 < Continentalness.COAST.min(),
+            String.format("Ocean cell continentalness %.4f must be < -0.19F", cOcean1));
     }
 }

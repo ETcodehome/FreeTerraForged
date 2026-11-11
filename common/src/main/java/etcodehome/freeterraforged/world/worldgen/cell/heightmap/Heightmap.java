@@ -55,9 +55,6 @@ public record Heightmap(
 	public void apply(Cell cell, float x, float z, boolean applyClimate) {
 		if (!WorldgenPerfTracker.ACTIVE) {
 			this.applyTerrain(cell, x, z);
-			if (cell.terrain == TerrainType.ISLAND_BEACH) {
-				cell.terrain = TerrainType.BEACH;
-			}
 			this.applyRivers(cell, x, z, this.continent.getRivermap(cell));
 			this.applyClimate(cell, x, z, applyClimate);
 			return;
@@ -65,9 +62,6 @@ public record Heightmap(
 		WorldgenPerfTracker.ThreadStats ts = WorldgenPerfTracker.stats();
 		long t0 = System.nanoTime();
 		this.applyTerrain(cell, x, z);
-		if (cell.terrain == TerrainType.ISLAND_BEACH) {
-			cell.terrain = TerrainType.BEACH;
-		}
 		long t1 = System.nanoTime();
 		this.applyRivers(cell, x, z, this.continent.getRivermap(cell));
 		long t2 = System.nanoTime();

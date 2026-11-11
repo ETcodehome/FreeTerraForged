@@ -398,71 +398,83 @@ public final class PresetValidationRunner {
 
 		Cell cell = new Cell();
 
-		// 1. Mushroom Fields range [-1.20F, -1.05F]
-		cell.terrain = TerrainType.MUSHROOM_FIELDS;
+		// 1. Fix 2: All island built terrain strictly C1 or C0 ranged [-1.20F, -1.05F]
+		cell.terrain = TerrainType.ISLAND;
 		cell.height = levels.water + 0.1F;
 		cell.continentEdge = cp.islandCoast;
-		float cMushroomShore = CellSampler.Field.CONTINENT.read(cell, heightmap);
-		if (Math.abs(cMushroomShore - (-1.05F)) > 1e-3F) {
-			throw new AssertionError("Mushroom island shore must meet -1.05F, was " + cMushroomShore);
+		float cIslandCoast = CellSampler.Field.CONTINENT.read(cell, heightmap);
+		if (Math.abs(cIslandCoast - (-1.05F)) > 1e-3F) {
+			throw new AssertionError("Island shoreline at islandCoast must meet -1.05F (C1), was " + cIslandCoast);
 		}
 		cell.continentEdge = cp.islandInland;
-		float cMushroomCenter = CellSampler.Field.CONTINENT.read(cell, heightmap);
-		if (Math.abs(cMushroomCenter - (-1.20F)) > 1e-3F) {
-			throw new AssertionError("Mushroom island center must meet -1.20F, was " + cMushroomCenter);
+		float cIslandInland = CellSampler.Field.CONTINENT.read(cell, heightmap);
+		if (Math.abs(cIslandInland - (-1.20F)) > 1e-3F) {
+			throw new AssertionError("Island peak at islandInland must meet -1.20F (C0), was " + cIslandInland);
 		}
 
-		// 2. Boundary points and C0 continuity
+		// 2. Fix 3: All areas below ocean water level strictly C2 or C3 ranged based on height
+		float floorHeight = levels.water(-levels.oceanDepth);
+		float shallowBlocks = Math.min(22.0F, levels.oceanDepth * 0.40F);
+		float hSplit = 1.0F - (shallowBlocks / levels.oceanDepth);
+		float splitHeight = floorHeight + hSplit * (levels.water - floorHeight);
+
 		cell.terrain = TerrainType.NONE;
-		cell.height = levels.water - 0.2F;
-		cell.continentEdge = cp.deepOcean;
-		float cDeep = CellSampler.Field.CONTINENT.read(cell, heightmap);
-		if (Math.abs(cDeep - (-0.455F)) > 1e-3F) {
-			throw new AssertionError("Deep ocean boundary must meet -0.455F, was " + cDeep);
+		// Ocean floor (C2 deep ocean)
+		cell.height = floorHeight;
+		float cOceanFloor = CellSampler.Field.CONTINENT.read(cell, heightmap);
+		if (Math.abs(cOceanFloor - (-1.045F)) > 1e-3F) {
+			throw new AssertionError("Ocean floor at max depth must meet -1.045F (C2), was " + cOceanFloor);
 		}
 
-		cell.height = levels.water - 0.01F;
-		cell.continentEdge = cp.beach;
-		float cSubmergedBeach = CellSampler.Field.CONTINENT.read(cell, heightmap);
-		if (Math.abs(cSubmergedBeach - (-0.195F)) > 1e-3F) {
-			throw new AssertionError("Submerged beach boundary must meet -0.195F, was " + cSubmergedBeach);
-		}
-		if (cSubmergedBeach >= -0.19F) {
-			throw new AssertionError("Submerged beach must be strictly < -0.19F to prevent beach misbioming, was " + cSubmergedBeach);
+		// Split point (C2 -> C3 boundary)
+		cell.height = splitHeight;
+		float cOceanSplit = CellSampler.Field.CONTINENT.read(cell, heightmap);
+		if (Math.abs(cOceanSplit - (-0.455F)) > 1e-3F) {
+			throw new AssertionError("Ocean depth split boundary must meet -0.455F, was " + cOceanSplit);
 		}
 
-		// Verify abyssal deep ocean at continentEdge=0.0 is -1.00F (strictly > -1.05F so deep ocean is never mushroom fields)
-		cell.height = levels.water - 0.2F;
-		cell.continentEdge = 0.0F;
-		float cAbyssal = CellSampler.Field.CONTINENT.read(cell, heightmap);
-		if (Math.abs(cAbyssal - (-1.00F)) > 1e-3F) {
-			throw new AssertionError("Abyssal deep ocean must be mapped to -1.00F, was " + cAbyssal);
+		// Waterline just below surface (C3 shallow ocean)
+		cell.height = levels.water;
+		float cSubmergedWaterline = CellSampler.Field.CONTINENT.read(cell, heightmap);
+		if (Math.abs(cSubmergedWaterline - (-0.191F)) > 1e-3F) {
+			throw new AssertionError("Submerged waterline must meet -0.191F (C3), was " + cSubmergedWaterline);
+		}
+		if (cSubmergedWaterline >= -0.19F) {
+			throw new AssertionError("Submerged waterline must be strictly < -0.19F to prevent beach misbioming, was " + cSubmergedWaterline);
 		}
 
+		// 3. Fix 1: Continent built terrain above water level starts at C4 (-0.19F) and transitions to C5 / C6 / C7
 		cell.height = levels.water + 0.1F;
 		cell.continentEdge = cp.beach;
 		float cOnshoreBeach = CellSampler.Field.CONTINENT.read(cell, heightmap);
 		if (Math.abs(cOnshoreBeach - (-0.19F)) > 1e-3F) {
-			throw new AssertionError("Onshore beach boundary must meet -0.19F, was " + cOnshoreBeach);
+			throw new AssertionError("Onshore beach boundary must meet -0.19F (C4), was " + cOnshoreBeach);
+		}
+
+		// Below beach, continent terrain above water must never drop below C4 (-0.19F)
+		cell.continentEdge = cp.beach - 0.05F;
+		float cBelowBeach = CellSampler.Field.CONTINENT.read(cell, heightmap);
+		if (cBelowBeach < -0.19F - 1e-4F) {
+			throw new AssertionError("Continent above water must never have continentalness < C4 (-0.19F), was " + cBelowBeach);
 		}
 
 		cell.continentEdge = cp.coast;
 		float cCoast = CellSampler.Field.CONTINENT.read(cell, heightmap);
 		if (Math.abs(cCoast - (-0.11F)) > 1e-3F) {
-			throw new AssertionError("Coast boundary must meet -0.11F, was " + cCoast);
+			throw new AssertionError("Coast boundary must meet -0.11F (C5), was " + cCoast);
 		}
 
 		cell.continentEdge = cp.inland;
 		float cInland = CellSampler.Field.CONTINENT.read(cell, heightmap);
 		if (Math.abs(cInland - 0.03F) > 1e-3F) {
-			throw new AssertionError("Inland boundary must meet 0.03F, was " + cInland);
+			throw new AssertionError("Inland boundary must meet 0.03F (C6), was " + cInland);
 		}
 
 		float midSplitEdge = cp.inland + 0.35F * (1.0F - cp.inland);
 		cell.continentEdge = midSplitEdge;
 		float cMidSplit = CellSampler.Field.CONTINENT.read(cell, heightmap);
 		if (Math.abs(cMidSplit - 0.30F) > 1e-3F) {
-			throw new AssertionError("Mid-interior split boundary must meet 0.30F, was " + cMidSplit);
+			throw new AssertionError("Mid-interior split boundary must meet 0.30F (C7), was " + cMidSplit);
 		}
 
 		cell.continentEdge = 1.0F;
@@ -471,13 +483,13 @@ public final class PresetValidationRunner {
 			throw new AssertionError("Continental peak must reach 1.00F, was " + cPeak);
 		}
 
-		// 3. Oceanic Island Bounding (never exceed NEAR_INLAND max 0.03F)
+		// 4. All island built terrain strictly in C1 / C0 range [-1.20F, -1.05F]
 		cell.terrain = TerrainType.ISLAND;
-		for (float edge = 0.0F; edge <= 1.0F; edge += 0.05F) {
+		for (float edge = 0.0F; edge <= cp.islandCoast; edge += 0.01F) {
 			cell.continentEdge = edge;
 			float c = CellSampler.Field.CONTINENT.read(cell, heightmap);
-			if (c > Continentalness.NEAR_INLAND.max() + 1e-5F) {
-				throw new AssertionError("Oceanic island exceeded NEAR_INLAND.max (0.03F) at edge " + edge + ": " + c);
+			if (c < -1.20F - 1e-4F || c > -1.05F + 1e-4F) {
+				throw new AssertionError("Island terrain at edge " + edge + " had c=" + c + ", outside C1/C0 range [-1.20, -1.05]");
 			}
 		}
 
