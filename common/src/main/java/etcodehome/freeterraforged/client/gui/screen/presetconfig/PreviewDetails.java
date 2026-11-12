@@ -35,35 +35,35 @@ final class PreviewDetails {
                     "Y=" + levels.scale(cell.height) + " H=" + cell.height
             );
             case CONTINENT_UPLIFT -> value("Uplift", cell.waterTable);
-            case CONTINENT_EDGE -> new Detail(Component.literal("Continent Edge"), formatContinentEdge(cell.continentEdge));
+            case CONTROL_POINT -> new Detail(Component.literal("Control Point"), formatControlPoint(cell.controlPoint));
             case RIVER_ZONE -> new Detail(Component.literal("River Zone"), cell.riverZone.name());
         };
     }
 
-    private static String formatContinentEdge(float edge) {
+    private static String formatControlPoint(float value) {
         ControlPoints cp = PresetManager.PM.worldSettings.controlPoints;
         String bandName;
 
         // Compare against live user-tuned ControlPoints thresholds
-        if (edge <= cp.islandInland) {
+        if (value <= cp.islandInland) {
             bandName = "Island Inland (C0)";
-        } else if (edge <= cp.islandCoast) {
+        } else if (value <= cp.islandCoast) {
             bandName = "Island Coast (C1)";
-        } else if (edge <= cp.deepOcean) {
+        } else if (value <= cp.deepOcean) {
             bandName = "Deep Ocean (C2)";
-        } else if (edge <= cp.shallowOcean) {
+        } else if (value <= cp.shallowOcean) {
             bandName = "Shallow Ocean (C3)";
-        } else if (edge <= cp.beach) {
+        } else if (value <= cp.beach) {
             bandName = "Beach (C4)";
-        } else if (edge <= cp.coast) {
+        } else if (value <= cp.coast) {
             bandName = "Coast (C5)";
-        } else if (edge <= cp.inland) {
+        } else if (value <= cp.inland) {
             bandName = "Near-Inland (C6)";
         } else {
             bandName = "Far-Inland (C7)";
         }
 
-        return String.format(Locale.ROOT, "%.4f (%s)", edge, bandName);
+        return String.format(Locale.ROOT, "%.4f (%s)", value, bandName);
     }
 
     private static Detail value(String label, float value) {

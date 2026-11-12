@@ -401,12 +401,12 @@ public final class PresetValidationRunner {
 		// 1. Fix 2: All island built terrain strictly C1 or C0 ranged [-1.20F, -1.05F]
 		cell.terrain = TerrainType.ISLAND;
 		cell.height = levels.water + 0.1F;
-		cell.continentEdge = cp.islandCoast;
+		cell.controlPoint = cp.islandCoast;
 		float cIslandCoast = CellSampler.Field.CONTINENT.read(cell, heightmap);
 		if (Math.abs(cIslandCoast - (-1.05F)) > 1e-3F) {
 			throw new AssertionError("Island shoreline at islandCoast must meet -1.05F (C1), was " + cIslandCoast);
 		}
-		cell.continentEdge = cp.islandInland;
+		cell.controlPoint = cp.islandInland;
 		float cIslandInland = CellSampler.Field.CONTINENT.read(cell, heightmap);
 		if (Math.abs(cIslandInland - (-1.20F)) > 1e-3F) {
 			throw new AssertionError("Island peak at islandInland must meet -1.20F (C0), was " + cIslandInland);
@@ -445,39 +445,39 @@ public final class PresetValidationRunner {
 
 		// 3. Fix 1: Continent built terrain above water level starts at C4 (-0.19F) and transitions to C5 / C6 / C7
 		cell.height = levels.water + 0.1F;
-		cell.continentEdge = cp.beach;
+		cell.controlPoint = cp.beach;
 		float cOnshoreBeach = CellSampler.Field.CONTINENT.read(cell, heightmap);
 		if (Math.abs(cOnshoreBeach - (-0.19F)) > 1e-3F) {
 			throw new AssertionError("Onshore beach boundary must meet -0.19F (C4), was " + cOnshoreBeach);
 		}
 
 		// Below beach, continent terrain above water must never drop below C4 (-0.19F)
-		cell.continentEdge = cp.beach - 0.05F;
+		cell.controlPoint = cp.beach - 0.05F;
 		float cBelowBeach = CellSampler.Field.CONTINENT.read(cell, heightmap);
 		if (cBelowBeach < -0.19F - 1e-4F) {
 			throw new AssertionError("Continent above water must never have continentalness < C4 (-0.19F), was " + cBelowBeach);
 		}
 
-		cell.continentEdge = cp.coast;
+		cell.controlPoint = cp.coast;
 		float cCoast = CellSampler.Field.CONTINENT.read(cell, heightmap);
 		if (Math.abs(cCoast - (-0.11F)) > 1e-3F) {
 			throw new AssertionError("Coast boundary must meet -0.11F (C5), was " + cCoast);
 		}
 
-		cell.continentEdge = cp.inland;
+		cell.controlPoint = cp.inland;
 		float cInland = CellSampler.Field.CONTINENT.read(cell, heightmap);
 		if (Math.abs(cInland - 0.03F) > 1e-3F) {
 			throw new AssertionError("Inland boundary must meet 0.03F (C6), was " + cInland);
 		}
 
 		float midSplitEdge = cp.inland + 0.35F * (1.0F - cp.inland);
-		cell.continentEdge = midSplitEdge;
+		cell.controlPoint = midSplitEdge;
 		float cMidSplit = CellSampler.Field.CONTINENT.read(cell, heightmap);
 		if (Math.abs(cMidSplit - 0.30F) > 1e-3F) {
 			throw new AssertionError("Mid-interior split boundary must meet 0.30F (C7), was " + cMidSplit);
 		}
 
-		cell.continentEdge = 1.0F;
+		cell.controlPoint = 1.0F;
 		float cPeak = CellSampler.Field.CONTINENT.read(cell, heightmap);
 		if (Math.abs(cPeak - 1.00F) > 1e-3F) {
 			throw new AssertionError("Continental peak must reach 1.00F, was " + cPeak);
@@ -486,7 +486,7 @@ public final class PresetValidationRunner {
 		// 4. All island built terrain strictly in C1 / C0 range [-1.20F, -1.05F]
 		cell.terrain = TerrainType.ISLAND;
 		for (float edge = 0.0F; edge <= cp.islandCoast; edge += 0.01F) {
-			cell.continentEdge = edge;
+			cell.controlPoint = edge;
 			float c = CellSampler.Field.CONTINENT.read(cell, heightmap);
 			if (c < -1.20F - 1e-4F || c > -1.05F + 1e-4F) {
 				throw new AssertionError("Island terrain at edge " + edge + " had c=" + c + ", outside C1/C0 range [-1.20, -1.05]");
@@ -500,7 +500,7 @@ public final class PresetValidationRunner {
 		etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap hmWide = new etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap(null, null, null, null, levels, wideInland, 1.0F, null, null);
 
 		cell.terrain = TerrainType.NONE;
-		cell.continentEdge = 0.55F;
+		cell.controlPoint = 0.55F;
 		float cNarrow = CellSampler.Field.CONTINENT.read(cell, hmNarrow);
 		float cWide = CellSampler.Field.CONTINENT.read(cell, hmWide);
 		if (cNarrow <= Continentalness.MID_INLAND.min() || cWide >= Continentalness.NEAR_INLAND.max()) {
@@ -1207,7 +1207,7 @@ public final class PresetValidationRunner {
 								worldX, worldZ, previewCell.height, previewY, worldCell.height, worldY
 							));
 						}
-						if (Float.compare(previewCell.continentEdge, worldCell.continentEdge) != 0
+						if (Float.compare(previewCell.controlPoint, worldCell.controlPoint) != 0
 							|| Float.compare(previewCell.riverMask, worldCell.riverMask) != 0) {
 							throw new AssertionError(String.format(
 								"2D Preview vs Reloaded World continent/river mismatch at (%d, %d)", worldX, worldZ

@@ -149,7 +149,7 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
 
         // process regular continent masks
         cell.continentDistance = NoiseUtil.sqrt(nearest);
-        cell.continentEdge = this.getDistanceValue(x, y, cellX, cellY, nearest);
+        cell.controlPoint = this.getDistanceValue(x, y, cellX, cellY, nearest);
         cell.continentId = AbstractContinent.getCellValue(this.seed, cellX, cellY);
 
         // this updates continent centers to the voronoi centroid.
@@ -167,7 +167,7 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
 
         // use the continent edge values to guarantee we fall to the ocean near the ocean.
         // sometimes this can look a little rough but havent found a more reliable way yet.
-        float customPeak = shiftAndRemap(cell.continentEdge, levels.water);
+        float customPeak = shiftAndRemap(cell.controlPoint, levels.water);
         if (customPeak < 0.05F && customPeak < upliftGradient) {
             upliftGradient = customPeak;
         }

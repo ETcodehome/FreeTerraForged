@@ -101,7 +101,7 @@ public class AdvancedContinentGenerator extends AbstractContinent implements Sim
             return;
         }
         cell.continentId = AbstractContinent.getCellValue(this.seed, cellX, cellY);
-        cell.continentEdge = this.getDistanceValue(x, y, cellX, cellY, nearest);
+        cell.controlPoint = this.getDistanceValue(x, y, cellX, cellY, nearest);
     }
     
     @Override
@@ -109,7 +109,7 @@ public class AdvancedContinentGenerator extends AbstractContinent implements Sim
         try (Resource<Cell> resource = Cell.getResource()) {
             Cell cell = resource.get();
             this.apply(cell, x, z);
-            return cell.continentEdge;
+            return cell.controlPoint;
         }
     }
     

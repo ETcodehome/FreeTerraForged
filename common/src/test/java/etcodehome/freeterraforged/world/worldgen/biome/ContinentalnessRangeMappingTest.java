@@ -76,7 +76,7 @@ public class ContinentalnessRangeMappingTest {
         // 1. Mushroom Fields / Islands (C1 and C0)
         cell.terrain = TerrainType.MUSHROOM_FIELDS;
         cell.height = this.levels.water + 0.1F;
-        cell.continentEdge = this.defaultControlPoints.islandInland;
+        cell.controlPoint = this.defaultControlPoints.islandInland;
         float cMushroom = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
         if (cMushroom >= Continentalness.MUSHROOM_FIELDS.min() && cMushroom <= Continentalness.MUSHROOM_FIELDS.max()) {
             hitMushroom = true;
@@ -86,7 +86,7 @@ public class ContinentalnessRangeMappingTest {
         float floorHeight = this.levels.water(-this.levels.oceanDepth);
         cell.terrain = TerrainType.NONE;
         cell.height = floorHeight + 2.0F / this.levels.terrainScaleFactor;
-        cell.continentEdge = 0.05F;
+        cell.controlPoint = 0.05F;
         float cDeepOcean = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
         if (cDeepOcean >= Continentalness.DEEP_OCEAN.min() && cDeepOcean <= Continentalness.DEEP_OCEAN.max()) {
             hitDeepOcean = true;
@@ -94,7 +94,7 @@ public class ContinentalnessRangeMappingTest {
 
         // 3. Shallow Ocean (C3) - near water surface
         cell.height = this.levels.water - 2.0F / this.levels.terrainScaleFactor;
-        cell.continentEdge = 0.12F;
+        cell.controlPoint = 0.12F;
         float cOcean = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
         if (cOcean >= Continentalness.OCEAN.min() && cOcean <= Continentalness.OCEAN.max()) {
             hitOcean = true;
@@ -103,7 +103,7 @@ public class ContinentalnessRangeMappingTest {
         // 4. Coast / Beach (C4) - continent above water
         cell.terrain = TerrainType.COAST;
         cell.height = this.levels.water + 0.05F;
-        cell.continentEdge = 0.28F;
+        cell.controlPoint = 0.28F;
         float cCoast = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
         if (cCoast >= Continentalness.COAST.min() && cCoast <= Continentalness.COAST.max()) {
             hitCoast = true;
@@ -112,21 +112,21 @@ public class ContinentalnessRangeMappingTest {
         // 5. Near-Inland (C5)
         cell.terrain = TerrainType.NONE;
         cell.height = this.levels.water + 0.15F;
-        cell.continentEdge = 0.40F;
+        cell.controlPoint = 0.40F;
         float cNearInland = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
         if (cNearInland >= Continentalness.NEAR_INLAND.min() && cNearInland <= Continentalness.NEAR_INLAND.max()) {
             hitNearInland = true;
         }
 
         // 6. Mid-Inland (C6)
-        cell.continentEdge = 0.52F;
+        cell.controlPoint = 0.52F;
         float cMidInland = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
         if (cMidInland >= Continentalness.MID_INLAND.min() && cMidInland <= Continentalness.MID_INLAND.max()) {
             hitMidInland = true;
         }
 
         // 7. Far-Inland (C7)
-        cell.continentEdge = 0.85F;
+        cell.controlPoint = 0.85F;
         float cFarInland = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
         if (cFarInland >= Continentalness.FAR_INLAND.min() && cFarInland <= Continentalness.FAR_INLAND.max()) {
             hitFarInland = true;
@@ -174,7 +174,7 @@ public class ContinentalnessRangeMappingTest {
         float cSubmergedWaterline = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
 
         cell.height = this.levels.water + 0.01F;
-        cell.continentEdge = this.defaultControlPoints.beach;
+        cell.controlPoint = this.defaultControlPoints.beach;
         float cOnshoreBeach = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
 
         assertEquals(-0.191F, cSubmergedWaterline, 1e-3F, "Submerged waterline must meet -0.191F (C3)");
@@ -184,13 +184,13 @@ public class ContinentalnessRangeMappingTest {
 
         // 3. Coast -> Near-Inland at controlPoints.coast (0.3576F)
         cell.height = this.levels.water + 0.1F;
-        cell.continentEdge = this.defaultControlPoints.coast - eps;
+        cell.controlPoint = this.defaultControlPoints.coast - eps;
         float cCoastEnd = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
 
-        cell.continentEdge = this.defaultControlPoints.coast;
+        cell.controlPoint = this.defaultControlPoints.coast;
         float cCoastExact = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
 
-        cell.continentEdge = this.defaultControlPoints.coast + eps;
+        cell.controlPoint = this.defaultControlPoints.coast + eps;
         float cNearStart = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
 
         assertEquals(-0.11F, cCoastExact, 1e-4F, "Coast boundary must meet -0.11F");
@@ -199,13 +199,13 @@ public class ContinentalnessRangeMappingTest {
         assertEquals(cCoastEnd, cNearStart, tol, "Coast -> Near-Inland boundary must be continuous");
 
         // 4. Near-Inland -> Mid-Inland at controlPoints.inland (0.4717F)
-        cell.continentEdge = this.defaultControlPoints.inland - eps;
+        cell.controlPoint = this.defaultControlPoints.inland - eps;
         float cNearEnd = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
 
-        cell.continentEdge = this.defaultControlPoints.inland;
+        cell.controlPoint = this.defaultControlPoints.inland;
         float cInlandExact = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
 
-        cell.continentEdge = this.defaultControlPoints.inland + eps;
+        cell.controlPoint = this.defaultControlPoints.inland + eps;
         float cInteriorStart = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
 
         assertEquals(0.03F, cInlandExact, 1e-4F, "Inland boundary must meet 0.03F");
@@ -215,13 +215,13 @@ public class ContinentalnessRangeMappingTest {
 
         // 5. Mid-Inland -> Far-Inland at interior mid-split (inland + 0.35 * (1.0 - inland))
         float midSplitEdge = this.defaultControlPoints.inland + 0.35F * (1.0F - this.defaultControlPoints.inland);
-        cell.continentEdge = midSplitEdge - eps;
+        cell.controlPoint = midSplitEdge - eps;
         float cMidEnd = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
 
-        cell.continentEdge = midSplitEdge;
+        cell.controlPoint = midSplitEdge;
         float cMidSplitExact = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
 
-        cell.continentEdge = midSplitEdge + eps;
+        cell.controlPoint = midSplitEdge + eps;
         float cFarStart = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
 
         assertEquals(0.30F, cMidSplitExact, 1e-4F, "Mid-split boundary must meet 0.30F");
@@ -229,19 +229,19 @@ public class ContinentalnessRangeMappingTest {
         assertEquals(0.30F, cFarStart, tol, "Far-Inland start must meet 0.30F");
         assertEquals(cMidEnd, cFarStart, tol, "Mid -> Far boundary must be continuous");
 
-        // 6. Far-Inland peak at continentEdge = 1.0F
-        cell.continentEdge = 1.0F;
+        // 6. Far-Inland peak at controlPoint = 1.0F
+        cell.controlPoint = 1.0F;
         float cPeak = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
         assertEquals(1.00F, cPeak, 1e-4F, "Continental interior peak must reach 1.00F");
 
         // 7. Mushroom Island waterline at islandCoast meets C1 start (-1.05F)
         cell.terrain = TerrainType.MUSHROOM_FIELDS;
         cell.height = this.levels.water + 0.1F;
-        cell.continentEdge = this.defaultControlPoints.islandCoast;
+        cell.controlPoint = this.defaultControlPoints.islandCoast;
         float cIslandShore = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
         assertEquals(-1.05F, cIslandShore, 1e-4F, "Mushroom Island shoreline must meet -1.05F (C1)");
 
-        cell.continentEdge = this.defaultControlPoints.islandInland;
+        cell.controlPoint = this.defaultControlPoints.islandInland;
         float cIslandPeak = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
         assertEquals(-1.20F, cIslandPeak, 1e-4F, "Mushroom Island peak must meet -1.20F (C0)");
     }
@@ -255,7 +255,7 @@ public class ContinentalnessRangeMappingTest {
         // 1. Mushroom fields islands: strictly C1 / C0 [-1.20F, -1.05F]
         cell.terrain = TerrainType.MUSHROOM_FIELDS;
         for (float edge = 0.0F; edge <= this.defaultControlPoints.islandCoast; edge += 0.005F) {
-            cell.continentEdge = edge;
+            cell.controlPoint = edge;
             float c = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
             assertTrue(c <= -1.05F + 1e-5F,
                 String.format("Mushroom fields island at edge %.3f had c=%.4f, exceeding C1 max (-1.05)", edge, c));
@@ -275,7 +275,7 @@ public class ContinentalnessRangeMappingTest {
             assertEquals(TerrainCategory.ISLAND, cell.terrain.getCategory(), "Must be categorized as ISLAND");
 
             for (float edge = 0.0F; edge <= this.defaultControlPoints.islandCoast; edge += 0.005F) {
-                cell.continentEdge = edge;
+                cell.controlPoint = edge;
                 float c = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
 
                 // Never mushroom range
@@ -292,7 +292,7 @@ public class ContinentalnessRangeMappingTest {
 
         // 3. Island mountains: must be at least C5 Near-Inland min (-0.11F)
         cell.terrain = TerrainType.ISLAND_MOUNTAINS;
-        cell.continentEdge = 0.02F;
+        cell.controlPoint = 0.02F;
         float cMtn = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
         assertEquals(Continentalness.NEAR_INLAND.min(), cMtn, 1e-4F,
             "Island mountains must evaluate to Near-Inland min (-0.11F)");
@@ -306,18 +306,18 @@ public class ContinentalnessRangeMappingTest {
         cell.height = this.levels.water + 0.15F;
 
         // At islandCoast: must be -1.05F
-        cell.continentEdge = this.defaultControlPoints.islandCoast;
+        cell.controlPoint = this.defaultControlPoints.islandCoast;
         float cShore = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
         assertEquals(-1.05F, cShore, 1e-4F);
 
         // At islandInland: must be -1.20F
-        cell.continentEdge = this.defaultControlPoints.islandInland;
+        cell.controlPoint = this.defaultControlPoints.islandInland;
         float cCenter = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
         assertEquals(-1.20F, cCenter, 1e-4F);
 
-        // Sweep continentEdge across [islandInland, islandCoast]
+        // Sweep controlPoint across [islandInland, islandCoast]
         for (float edge = 0.0F; edge <= this.defaultControlPoints.islandCoast; edge += 0.005F) {
-            cell.continentEdge = edge;
+            cell.controlPoint = edge;
             float c = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
             assertTrue(c >= Continentalness.MUSHROOM_FIELDS.min() - 1e-5F,
                 "Mushroom island continentalness must not drop below -1.20F");
@@ -340,7 +340,7 @@ public class ContinentalnessRangeMappingTest {
         Cell cell = new Cell();
         cell.height = this.levels.water + 0.15F;
         cell.terrain = TerrainType.NONE;
-        cell.continentEdge = 0.55F;
+        cell.controlPoint = 0.55F;
 
         // In Preset A, 0.55F is continental interior (Mid/Far-Inland, c > 0.03F)
         float cA = CellSampler.Field.CONTINENT.read(cell, hmA);
@@ -359,7 +359,7 @@ public class ContinentalnessRangeMappingTest {
         ControlPoints cpCoastHigh = new ControlPoints(0.0F, 0.074F, 0.102F, 0.13144F, 0.2210F, 0.45F, 0.60F);
         Heightmap hmD = makeHeightmap(cpCoastHigh);
 
-        cell.continentEdge = 0.38F;
+        cell.controlPoint = 0.38F;
         float cC = CellSampler.Field.CONTINENT.read(cell, hmC);
         float cD = CellSampler.Field.CONTINENT.read(cell, hmD);
 
@@ -368,10 +368,10 @@ public class ContinentalnessRangeMappingTest {
         assertTrue(cD < Continentalness.NEAR_INLAND.min(),
             "With coast=0.45, edge 0.38 must be Coast (c < -0.11), was " + cD);
 
-        // Mainland monotonicity test: as continentEdge increases from beach to 1.0, continentalness strictly increases
+        // Mainland monotonicity test: as controlPoint increases from beach to 1.0, continentalness strictly increases
         float prevC = -1.0F;
         for (float edge = this.defaultControlPoints.beach; edge <= 1.0F; edge += 0.01F) {
-            cell.continentEdge = edge;
+            cell.controlPoint = edge;
             float currentC = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
             assertTrue(currentC >= prevC - 1e-6F,
                 String.format("Continentalness must be monotonically non-decreasing: at %.2f got %.4f vs previous %.4f",
@@ -385,7 +385,7 @@ public class ContinentalnessRangeMappingTest {
     void testHeightmapIndependence() {
         Cell cell = new Cell();
         cell.height = 0.654321F;
-        cell.continentEdge = 0.45F;
+        cell.controlPoint = 0.45F;
         cell.terrain = TerrainType.NONE;
 
         float hBefore = cell.height;
@@ -403,9 +403,9 @@ public class ContinentalnessRangeMappingTest {
         cell.height = this.levels.water + 0.05F; // Above water level
         cell.terrain = TerrainType.NONE;
 
-        // Sweep continentEdge across full [0.0, 1.0] range
+        // Sweep controlPoint across full [0.0, 1.0] range
         for (float edge = 0.0F; edge <= 1.0F; edge += 0.01F) {
-            cell.continentEdge = edge;
+            cell.controlPoint = edge;
             float c = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
             assertTrue(c >= Continentalness.COAST.min() - 1e-5F,
                 String.format("Continent cell above water at edge %.3f had c=%.4f < C4.min (-0.19F)", edge, c));
@@ -423,9 +423,9 @@ public class ContinentalnessRangeMappingTest {
         cell.height = this.levels.water + 0.5F; // Mountain peak above water
         cell.terrain = TerrainType.MOUNTAINS_1;
 
-        // Sweep continentEdge from ocean basin up to coast
+        // Sweep controlPoint from ocean basin up to coast
         for (float edge = 0.0F; edge <= this.defaultControlPoints.coast; edge += 0.01F) {
-            cell.continentEdge = edge;
+            cell.controlPoint = edge;
             float c = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
             assertTrue(c >= Continentalness.NEAR_INLAND.min() - 1e-5F,
                 String.format("Mountain at edge %.3f must be >= Near-Inland min (-0.11F) to prevent turning into Ocean, was %.4f", edge, c));
@@ -438,11 +438,11 @@ public class ContinentalnessRangeMappingTest {
         Cell cell = new Cell();
         cell.height = this.levels.water - 5.0F / this.levels.terrainScaleFactor; // River bed below water level
         cell.terrain = TerrainType.RIVER;
-        cell.continentEdge = 0.50F; // Inland river
+        cell.controlPoint = 0.50F; // Inland river
 
         float cRiver = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
         assertTrue(cRiver >= Continentalness.NEAR_INLAND.min(),
-            String.format("Inland river at continentEdge 0.50 must preserve continent continentalness, not ocean! Was %.4f", cRiver));
+            String.format("Inland river at controlPoint 0.50 must preserve continent continentalness, not ocean! Was %.4f", cRiver));
 
         cell.terrain = TerrainType.WETLAND;
         float cWetland = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
@@ -503,12 +503,12 @@ public class ContinentalnessRangeMappingTest {
             for (int z = -10000; z <= 10000; z += 1000) {
                 Cell cellA = new Cell();
                 cellA.height = this.levels.water - 0.3F;
-                cellA.continentEdge = 0.03F; // Deep ocean basin
+                cellA.controlPoint = 0.03F; // Deep ocean basin
                 cellA.terrain = TerrainType.DEEP_OCEAN;
 
                 Cell cellB = new Cell();
                 cellB.height = this.levels.water - 0.3F;
-                cellB.continentEdge = 0.03F;
+                cellB.controlPoint = 0.03F;
                 cellB.terrain = TerrainType.DEEP_OCEAN;
 
                 popDefault.apply(cellA, x, z);
@@ -559,7 +559,7 @@ public class ContinentalnessRangeMappingTest {
             for (int x = 0; x < size; x++) {
                 Cell cell = grid.getCell(x, z);
                 cell.height = 0.50F + (x + z * size) * 0.0001F;
-                cell.continentEdge = 0.30F;
+                cell.controlPoint = 0.30F;
             }
         }
 
@@ -605,13 +605,13 @@ public class ContinentalnessRangeMappingTest {
 
         Cell customCell = new Cell();
         customCell.height = 0.777F;
-        customCell.continentEdge = 0.654F;
+        customCell.controlPoint = 0.654F;
 
         // When activeCell is set, lookup returns activeCell regardless of context coordinates
         lookup.setActiveCell(customCell);
         Cell fromBlock = lookup.lookupBlock(100, 200);
         assertEquals(0.777F, fromBlock.height, 1e-5F);
-        assertEquals(0.654F, fromBlock.continentEdge, 1e-5F);
+        assertEquals(0.654F, fromBlock.controlPoint, 1e-5F);
 
         DensityFunction.SinglePointContext ctx = new DensityFunction.SinglePointContext(500, 64, 500);
         Cell fromContext = lookup.lookup(ctx);
@@ -630,13 +630,13 @@ public class ContinentalnessRangeMappingTest {
         // Beach cell just above waterline
         Cell beachCell = new Cell();
         beachCell.height = this.levels.water + 0.01F;
-        beachCell.continentEdge = this.defaultControlPoints.beach;
+        beachCell.controlPoint = this.defaultControlPoints.beach;
         beachCell.terrain = TerrainType.BEACH;
 
         // Ocean cell below waterline
         Cell oceanCell = new Cell();
         oceanCell.height = this.levels.water - 0.05F;
-        oceanCell.continentEdge = this.defaultControlPoints.shallowOcean;
+        oceanCell.controlPoint = this.defaultControlPoints.shallowOcean;
         oceanCell.terrain = TerrainType.SHALLOW_OCEAN;
 
         // Preview grids at zoom 1 (Zoom 100) and zoom 6 (Zoom 95)
@@ -688,7 +688,7 @@ public class ContinentalnessRangeMappingTest {
         // 1. Dry coastal land cell right at shoreline/transition threshold (y = 63, just above waterline 62)
         Cell beachCell = new Cell();
         beachCell.height = this.levels.water + (1.0F / this.levels.terrainScaleFactor);
-        beachCell.continentEdge = this.defaultControlPoints.beach;
+        beachCell.controlPoint = this.defaultControlPoints.beach;
         beachCell.terrain = TerrainType.BEACH;
         beachCell.erosionMask = false;
         beachCell.weirdness = 0.0F; // unassigned or zeroed weirdness
@@ -706,7 +706,7 @@ public class ContinentalnessRangeMappingTest {
         // 2. An actual river carver cell must retain 0.0F weirdness for river multi-noise resolution
         Cell riverCell = new Cell();
         riverCell.height = this.levels.water + (1.0F / this.levels.terrainScaleFactor);
-        riverCell.continentEdge = this.defaultControlPoints.beach;
+        riverCell.controlPoint = this.defaultControlPoints.beach;
         riverCell.terrain = TerrainType.RIVER;
         riverCell.erosionMask = true;
         riverCell.weirdness = 0.0F;
@@ -717,7 +717,7 @@ public class ContinentalnessRangeMappingTest {
         // 3. Inland cell must retain its natural weirdness without modification
         Cell inlandCell = new Cell();
         inlandCell.height = this.levels.water + 0.2F;
-        inlandCell.continentEdge = this.defaultControlPoints.inland + 0.1F;
+        inlandCell.controlPoint = this.defaultControlPoints.inland + 0.1F;
         inlandCell.terrain = TerrainType.FLATS;
         inlandCell.erosionMask = false;
         inlandCell.weirdness = 0.33F;

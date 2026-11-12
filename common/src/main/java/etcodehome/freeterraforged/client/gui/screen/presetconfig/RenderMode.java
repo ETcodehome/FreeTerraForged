@@ -363,7 +363,7 @@ public enum RenderMode {
             return rgba(hue, saturation, brightness);
         }
     },
-    CONTINENT_EDGE {
+    CONTROL_POINT {
         @Override
         public boolean handlesWater() {
             return true;
@@ -371,7 +371,7 @@ public enum RenderMode {
 
         @Override
         public int getColor(Cell cell, Levels levels, float scale, float bias) {
-            float edge = cell.continentEdge;
+            float edge = cell.controlPoint;
             WorldSettings.ControlPoints cp = PresetManager.PM.worldSettings.controlPoints;
 
             float hue;

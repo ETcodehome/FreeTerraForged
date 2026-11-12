@@ -129,7 +129,7 @@ public class TerrainFilters {
 						return false;
 					}
 				}
-				case HEIGHT, CONTINENT_EDGE, EROSION, TERRAIN_EROSION, WEIRDNESS,
+				case HEIGHT, CONTROL_POINT, EROSION, TERRAIN_EROSION, WEIRDNESS,
 					BIOME_REGION, TEMPERATURE, MOISTURE -> {
 				}
 			}

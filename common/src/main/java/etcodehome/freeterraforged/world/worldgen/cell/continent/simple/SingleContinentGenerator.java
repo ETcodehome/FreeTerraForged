@@ -22,7 +22,7 @@ public class SingleContinentGenerator extends ContinentGenerator {
         super.apply(cell, x, y);
         if (cell.continentX != this.center.x() || cell.continentZ != this.center.y()) {
             cell.continentId = 0.0F;
-            cell.continentEdge = 0.0F;
+            cell.controlPoint = 0.0F;
             cell.continentX = 0;
             cell.continentZ = 0;
         }

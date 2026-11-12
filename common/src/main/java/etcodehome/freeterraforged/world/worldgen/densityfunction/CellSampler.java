@@ -437,7 +437,7 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, Den
 					}
 
 					// t = 0.0 at islandCoast (waterline transition point), t = 1.0 at islandInland (inland core)
-					float t = NoiseUtil.clamp((islandCoast - cell.continentEdge) / (islandCoast - islandInland), 0.0F, 1.0F);
+					float t = NoiseUtil.clamp((islandCoast - cell.controlPoint) / (islandCoast - islandInland), 0.0F, 1.0F);
 
 					// Ratio balance derived from relative control points (islandInland / islandCoast)
 					float ratioInland = (islandCoast > 0.0F)
@@ -479,46 +479,46 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, Den
 					if (isMountain) {
 						return Continentalness.NEAR_INLAND.min();
 					}
-					if (cell.terrain.isCoast() || cell.terrain == TerrainType.ISLAND_BEACH || cell.continentEdge <= coast) {
+					if (cell.terrain.isCoast() || cell.terrain == TerrainType.ISLAND_BEACH || cell.controlPoint <= coast) {
 						if (coast <= beach) {
 							return Continentalness.COAST.mid();
 						}
-						float t = NoiseUtil.clamp((cell.continentEdge - beach) / (coast - beach), 0.0F, 1.0F);
+						float t = NoiseUtil.clamp((cell.controlPoint - beach) / (coast - beach), 0.0F, 1.0F);
 						return NoiseUtil.lerp(coastStart, Continentalness.COAST.max(), t);
 					}
 					// Island inland: C5 Near-Inland
 					if (inland <= coast) {
 						return Continentalness.NEAR_INLAND.mid();
 					}
-					float t = NoiseUtil.clamp((cell.continentEdge - coast) / (inland - coast), 0.0F, 1.0F);
+					float t = NoiseUtil.clamp((cell.controlPoint - coast) / (inland - coast), 0.0F, 1.0F);
 					return NoiseUtil.lerp(Continentalness.NEAR_INLAND.min(), Continentalness.NEAR_INLAND.max(), t);
 				}
 
 				// Continental mountains near coast: start at C5 (Near-Inland)
-				if (isMountain && cell.continentEdge <= coast) {
+				if (isMountain && cell.controlPoint <= coast) {
 					return Continentalness.NEAR_INLAND.min();
 				}
 
 				// As soon as continent terrain is above ocean level, start at C4 (Beach)
-				if (cell.continentEdge <= beach) {
+				if (cell.controlPoint <= beach) {
 					return coastStart;
 				}
 
 				// C4: Beach [-0.185F, -0.11F]
-				if (cell.continentEdge <= coast) {
+				if (cell.controlPoint <= coast) {
 					if (coast <= beach) {
 						return Continentalness.COAST.mid();
 					}
-					float t = NoiseUtil.clamp((cell.continentEdge - beach) / (coast - beach), 0.0F, 1.0F);
+					float t = NoiseUtil.clamp((cell.controlPoint - beach) / (coast - beach), 0.0F, 1.0F);
 					return NoiseUtil.lerp(coastStart, Continentalness.COAST.max(), t);
 				}
 
 				// C5: Coast (Near-Inland in vanilla) [-0.11F, 0.03F]
-				if (cell.continentEdge <= inland) {
+				if (cell.controlPoint <= inland) {
 					if (inland <= coast) {
 						return Continentalness.NEAR_INLAND.mid();
 					}
-					float t = NoiseUtil.clamp((cell.continentEdge - coast) / (inland - coast), 0.0F, 1.0F);
+					float t = NoiseUtil.clamp((cell.controlPoint - coast) / (inland - coast), 0.0F, 1.0F);
 					return NoiseUtil.lerp(Continentalness.NEAR_INLAND.min(), Continentalness.NEAR_INLAND.max(), t);
 				}
 
@@ -526,7 +526,7 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, Den
 				if (inland >= 1.0F) {
 					return Continentalness.MID_INLAND.min();
 				}
-				float t = NoiseUtil.clamp((cell.continentEdge - inland) / (1.0F - inland), 0.0F, 1.0F);
+				float t = NoiseUtil.clamp((cell.controlPoint - inland) / (1.0F - inland), 0.0F, 1.0F);
 				float midSplit = 0.35F;
 				if (t <= midSplit) {
 					// C6: Near/Mid-Inland [0.03F, 0.30F]
@@ -539,11 +539,11 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, Den
 				}
 			}
 		},
-		CONTINENT_EDGE("continent_edge") {
+		CONTROL_POINT("control_point") {
 
 			@Override
 			public float read(Cell cell, Heightmap heightmap) {
-				return cell.continentEdge;
+				return cell.controlPoint;
 			}
 		},
 		EROSION("erosion") {
@@ -578,7 +578,7 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, Den
 						cell.terrain.isCoast()
 						|| cell.terrain == TerrainType.BEACH
 						|| cell.terrain == TerrainType.ISLAND_BEACH
-						|| cell.continentEdge <= heightmap.controlPoints().coast
+						|| cell.controlPoint <= heightmap.controlPoints().coast
 					);
 					if (isCoast) {
 						return -0.15F;

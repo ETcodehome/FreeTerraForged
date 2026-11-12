@@ -252,8 +252,8 @@ public class ClimateModule {
 		}
 	}
 
-	private void modifyTerrain(Cell cell, float continentEdge) {
-		if (cell.terrain.isOverground() && !cell.terrain.overridesCoast() && continentEdge <= this.controlPoints.coastMarker()
+	private void modifyTerrain(Cell cell, float controlPoint) {
+		if (cell.terrain.isOverground() && !cell.terrain.overridesCoast() && controlPoint <= this.controlPoints.coastMarker()
 			&& cell.terrain.getCategory() != TerrainCategory.ISLAND) {
 			cell.terrain = TerrainType.COAST;
 		}

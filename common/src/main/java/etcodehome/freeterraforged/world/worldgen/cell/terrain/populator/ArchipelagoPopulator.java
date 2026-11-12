@@ -171,7 +171,7 @@ public class ArchipelagoPopulator implements CellPopulator {
 
     @Override
     public void apply(Cell cell, float x, float z) {
-        float originalContinentEdge = cell.continentEdge;
+        float originalControlPoint = cell.controlPoint;
         float originalHeight = cell.height;
         float originalWeirdness = cell.weirdness;
         float originalErosion = cell.erosion;
@@ -181,7 +181,7 @@ public class ArchipelagoPopulator implements CellPopulator {
         float continentFade = 1.0F - smoothStep(
                 this.controlPoints.islandCoast,
                 this.controlPoints.deepOcean,
-                originalContinentEdge
+                originalControlPoint
         );
 
         float islandAlpha = shape * continentFade;
@@ -306,10 +306,10 @@ public class ArchipelagoPopulator implements CellPopulator {
         cell.height = beachHeight + inlandRelief;
 
         float mushroomRegion = this.regionNoise.compute(x + 31415.0F, z - 27182.0F, 0);
-        boolean isMushroom = originalContinentEdge <= this.controlPoints.islandCoast && mushroomRegion > 0.88F;
+        boolean isMushroom = originalControlPoint <= this.controlPoints.islandCoast && mushroomRegion > 0.88F;
 
         // Direct assignment without Math.max so negative continentalness values take effect
-        cell.continentEdge = continentEdge(perturbedAlpha, shelfEnd, originalContinentEdge);
+        cell.controlPoint = controlPoint(perturbedAlpha, shelfEnd, originalControlPoint);
 
         if (cell.height <= this.levels.water) {
             if (perturbedAlpha >= 0.01F) {
@@ -368,14 +368,14 @@ public class ArchipelagoPopulator implements CellPopulator {
         }
     }
 
-    private float continentEdge(float islandAlpha, float shelfEnd, float originalContinentEdge) {
+    private float controlPoint(float islandAlpha, float shelfEnd, float originalControlPoint) {
         // islandAlpha ranges from 0.0 (outer ocean edge) to 1.0 (island peak core).
         // shelfEnd represents the ocean water level transition point.
         // All island built terrain maps to C1 (Island Coast) down to C0 (Island Inland).
         if (islandAlpha < shelfEnd) {
             // Subsea shelf / apron approach: blend from underlying ocean edge up to islandCoast
             float alpha = smoothStep(0.0F, shelfEnd, islandAlpha);
-            return NoiseUtil.lerp(originalContinentEdge, this.controlPoints.islandCoast, alpha);
+            return NoiseUtil.lerp(originalControlPoint, this.controlPoints.islandCoast, alpha);
         } else {
             // Island landmass: scale from islandCoast (C1) down to islandInland (C0)
             float alpha = smoothStep(shelfEnd, 1.0F, islandAlpha);
