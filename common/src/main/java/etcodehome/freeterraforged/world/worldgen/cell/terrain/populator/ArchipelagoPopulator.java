@@ -128,7 +128,7 @@ public class ArchipelagoPopulator implements CellPopulator {
         this.islandErosion = Erosion.LEVEL_4.source();
         this.islandWeirdness = ReferenceWeirdness.MID_SLICE_NORMAL_DESCENDING.source();
         this.beachErosion = Erosion.LEVEL_4.source();
-        this.beachWeirdness = ReferenceWeirdness.MID_SLICE_NORMAL_DESCENDING.source();
+        this.beachWeirdness = ReferenceWeirdness.LOW_SLICE_NORMAL_DESCENDING.source();
 
         float mScale = NoiseUtil.clamp(this.settings.mountainScale, 0.0F, 1.0F);
         float mChance = NoiseUtil.clamp(this.settings.mountainChance, 0.0F, 1.0F);

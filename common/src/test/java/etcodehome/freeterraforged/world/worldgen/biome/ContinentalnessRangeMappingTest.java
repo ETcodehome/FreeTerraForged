@@ -13,8 +13,11 @@ import etcodehome.freeterraforged.data.worldgen.preset.settings.SpawnType;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.ControlPoints;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.Properties;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
+import etcodehome.freeterraforged.world.worldgen.cell.CellPopulator;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
+import etcodehome.freeterraforged.world.worldgen.cell.terrain.ClimateParameterSampler;
+import etcodehome.freeterraforged.world.worldgen.cell.terrain.Populators;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.Terrain;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainCategory;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
@@ -677,5 +680,82 @@ public class ContinentalnessRangeMappingTest {
         assertEquals(cOcean6, cOcean1, 1e-5F, "Ocean cell must evaluate to the same continentalness at Zoom 95 and Zoom 100");
         assertTrue(cOcean1 < Continentalness.COAST.min(),
             String.format("Ocean cell continentalness %.4f must be < -0.19F", cOcean1));
+    }
+
+    @Test
+    @DisplayName("Verify coastal transition threshold weirdness never falls into river valley window")
+    void testCoastalTransitionThresholdWeirdnessNotValley() {
+        // 1. Dry coastal land cell right at shoreline/transition threshold (y = 63, just above waterline 62)
+        Cell beachCell = new Cell();
+        beachCell.height = this.levels.water + (1.0F / this.levels.terrainScaleFactor);
+        beachCell.continentEdge = this.defaultControlPoints.beach;
+        beachCell.terrain = TerrainType.BEACH;
+        beachCell.erosionMask = false;
+        beachCell.weirdness = 0.0F; // unassigned or zeroed weirdness
+
+        // Continentalness must be in C4 (Coast)
+        float cBeach = CellSampler.Field.CONTINENT.read(beachCell, this.defaultHeightmap);
+        assertTrue(cBeach >= Continentalness.COAST.min() && cBeach <= Continentalness.COAST.max(),
+            String.format("Coastal transition cell must have C4 continentalness, got %.4f", cBeach));
+
+        // Weirdness must evaluate to the vanilla beach slice center (-0.15F)
+        float wBeach = CellSampler.Field.WEIRDNESS.read(beachCell, this.defaultHeightmap);
+        assertEquals(-0.15F, wBeach, 1e-5F,
+            String.format("Coastal transition cell weirdness must evaluate to -0.15F for beach resolution, got %.4f", wBeach));
+
+        // 2. An actual river carver cell must retain 0.0F weirdness for river multi-noise resolution
+        Cell riverCell = new Cell();
+        riverCell.height = this.levels.water + (1.0F / this.levels.terrainScaleFactor);
+        riverCell.continentEdge = this.defaultControlPoints.beach;
+        riverCell.terrain = TerrainType.RIVER;
+        riverCell.erosionMask = true;
+        riverCell.weirdness = 0.0F;
+
+        float wRiver = CellSampler.Field.WEIRDNESS.read(riverCell, this.defaultHeightmap);
+        assertEquals(0.0F, wRiver, 1e-5F, "Actual river carver cell must evaluate to 0.0F weirdness for river resolution");
+
+        // 3. Inland cell must retain its natural weirdness without modification
+        Cell inlandCell = new Cell();
+        inlandCell.height = this.levels.water + 0.2F;
+        inlandCell.continentEdge = this.defaultControlPoints.inland + 0.1F;
+        inlandCell.terrain = TerrainType.FLATS;
+        inlandCell.erosionMask = false;
+        inlandCell.weirdness = 0.33F;
+
+        float wInland = CellSampler.Field.WEIRDNESS.read(inlandCell, this.defaultHeightmap);
+        assertEquals(0.33F, wInland, 1e-5F, "Inland cell weirdness must remain untouched");
+    }
+
+    @Test
+    @DisplayName("Verify vanilla OverworldBiomeBuilder resolves beach biomes for C4 Coast and w = -0.15F")
+    void testVanillaCoastBiomeResolution() throws Exception {
+        net.minecraft.world.level.biome.OverworldBiomeBuilder builder = new net.minecraft.world.level.biome.OverworldBiomeBuilder();
+        java.util.List<com.mojang.datafixers.util.Pair<net.minecraft.world.level.biome.Climate.ParameterPoint, net.minecraft.resources.ResourceKey<net.minecraft.world.level.biome.Biome>>> biomes = new java.util.ArrayList<>();
+        java.lang.reflect.Method addBiomes = net.minecraft.world.level.biome.OverworldBiomeBuilder.class.getDeclaredMethod("addBiomes", java.util.function.Consumer.class);
+        addBiomes.setAccessible(true);
+        addBiomes.invoke(builder, (java.util.function.Consumer<com.mojang.datafixers.util.Pair<net.minecraft.world.level.biome.Climate.ParameterPoint, net.minecraft.resources.ResourceKey<net.minecraft.world.level.biome.Biome>>>) biomes::add);
+        net.minecraft.world.level.biome.Climate.ParameterList<net.minecraft.resources.ResourceKey<net.minecraft.world.level.biome.Biome>> list = new net.minecraft.world.level.biome.Climate.ParameterList<>(biomes);
+
+        // Verify across temperature (-0.6 cold to +0.6 hot) and erosion (-0.6 steep to +0.6 flat)
+        float[] temps = {-0.6F, 0.0F, 0.6F};
+        float[] erosions = {-0.6F, 0.0F, 0.6F};
+        for (float t : temps) {
+            for (float e : erosions) {
+                net.minecraft.world.level.biome.Climate.TargetPoint target = new net.minecraft.world.level.biome.Climate.TargetPoint(
+                    net.minecraft.world.level.biome.Climate.quantizeCoord(t),
+                    net.minecraft.world.level.biome.Climate.quantizeCoord(0.0F),
+                    net.minecraft.world.level.biome.Climate.quantizeCoord(-0.185F), // Coast C4
+                    net.minecraft.world.level.biome.Climate.quantizeCoord(e),
+                    net.minecraft.world.level.biome.Climate.quantizeCoord(0.0F),
+                    net.minecraft.world.level.biome.Climate.quantizeCoord(-0.15F) // Beach weirdness
+                );
+                net.minecraft.resources.ResourceKey<net.minecraft.world.level.biome.Biome> found = list.findValue(target);
+                String name = found.location().getPath();
+                assertTrue(
+                    name.contains("beach") || name.contains("shore") || name.equals("desert"),
+                    String.format("Expected coastal biome for T=%.2f, E=%.2f, got %s", t, e, found.location())
+                );
+            }
+        }
     }
 }

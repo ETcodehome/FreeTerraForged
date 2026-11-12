@@ -20,6 +20,7 @@ import net.minecraft.util.KeyDispatchDataCodec;
 import net.minecraft.util.StringRepresentable;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.ControlPoints;
 import etcodehome.freeterraforged.world.worldgen.biome.Continentalness;
+import etcodehome.freeterraforged.world.worldgen.biome.ReferenceWeirdness;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
@@ -563,7 +564,27 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, Den
 			
 			@Override
 			public float read(Cell cell, Heightmap heightmap) {
-				return cell.weirdness;
+				float w = cell.weirdness;
+				// In vanilla Minecraft, the C4 Coast range ([-0.19F, -0.11F]) only resolves as beach
+				// (minecraft:beach, snowy_beach, stony_shore, desert) when weirdness is in the low slice
+				// [-0.20F, -0.05F] (center: -0.15F).
+				// If weirdness is in the valley range [-0.05F, 0.05F], vanilla multi-noise classifies it as a river.
+				// If weirdness is outside [-0.20F, 0.20F] (e.g. mid-slice +/-0.33F or +/-0.50F), vanilla falls back to inland plains/forest/sunflower_plains.
+				// Therefore, coastal/beach land above water that is not a carved river channel must evaluate to -0.15F.
+				boolean isHydrology = cell.erosionMask || cell.terrain.isRiver();
+				if (cell.height > heightmap.levels().water && !isHydrology) {
+					boolean isMountain = cell.terrain.isMountain() || cell.terrain == TerrainType.ISLAND_MOUNTAINS;
+					boolean isCoast = !isMountain && cell.terrain != TerrainType.MUSHROOM_FIELDS && (
+						cell.terrain.isCoast()
+						|| cell.terrain == TerrainType.BEACH
+						|| cell.terrain == TerrainType.ISLAND_BEACH
+						|| cell.continentEdge <= heightmap.controlPoints().coast
+					);
+					if (isCoast) {
+						return -0.15F;
+					}
+				}
+				return w;
 			}
 		},
 		BIOME_REGION("biome_region") {
