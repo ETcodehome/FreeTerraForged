@@ -3,6 +3,7 @@ package etcodehome.freeterraforged.world.worldgen.cell.heightmap;
 import org.jetbrains.annotations.Nullable;
 
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.ControlPoints;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetNoiseData;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetTerrainTypeNoise;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
@@ -97,6 +98,7 @@ public record Heightmap(
         if (cell.weirdness == 0.0F && cell.height > this.levels.ground && !cell.erosionMask) {
             cell.weirdness = ReferenceWeirdness.fromSediment(cell.sediment, cell.macroBiomeId);
         }
+        cell.continentalness = CellSampler.computeContinentalness(cell, this.levels, this.controlPoints);
 	}
 
 	public void applyBiomeRegion(Cell cell, float x, float z) {

@@ -64,6 +64,9 @@ public class Cell {
     public Terrain terrain;
     public float erosion;
     public float weirdness;
+    /// Vanilla continentalness parameter assigned by the remap.
+    /// Range: -1.20F (C0 Island Inland) to +1.00F (C7 Continental Interior Peak)
+    public float continentalness;
     // Terrain-selected erosion before rivers and climate apply biome-specific overrides.
     public float terrainErosion;
     public float temperature;
@@ -109,6 +112,7 @@ public class Cell {
         this.terrain = other.terrain;
         this.erosion = other.erosion;
         this.weirdness = other.weirdness;
+        this.continentalness = other.continentalness;
         this.terrainErosion = other.terrainErosion;
         this.temperature = other.temperature;
         this.moisture = other.moisture;

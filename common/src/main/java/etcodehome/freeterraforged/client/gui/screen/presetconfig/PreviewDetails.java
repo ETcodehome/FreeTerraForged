@@ -9,11 +9,11 @@ import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import net.minecraft.network.chat.Component;
 import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
 
-final class PreviewDetails {
+public final class PreviewDetails {
     private PreviewDetails() {
     }
 
-    static Detail forCell(RenderMode mode, Cell cell, Levels levels, String biomeId) {
+    public static Detail forCell(RenderMode mode, Cell cell, Levels levels, String biomeId) {
         return switch (mode) {
             case BIOME -> new Detail(
                     Component.translatable(FTFTranslationKeys.GUI_LABEL_PREVIEW_BIOME),
@@ -26,6 +26,7 @@ final class PreviewDetails {
             case GRADIENT -> value("Gradient", cell.gradient);
             case SEDIMENT -> value("Sediment", cell.sediment);
             case WEIRDNESS -> value("Weirdness", cell.weirdness);
+            case CONTINENTALNESS -> value("Continentalness", cell.continentalness);
             case BIOME_REGION_EDGE -> value("Mask", cell.biomeRegionEdge);
             case BIOME_CELLS -> value("Biome Cell", cell.biomeRegionId);
             case MACRO_NOISE -> value("Macro Noise", cell.macroBiomeId);
@@ -70,6 +71,6 @@ final class PreviewDetails {
         return new Detail(Component.literal(label), String.format(Locale.ROOT, "%.4f", value));
     }
 
-    record Detail(Component label, String value) {
+    public record Detail(Component label, String value) {
     }
 }

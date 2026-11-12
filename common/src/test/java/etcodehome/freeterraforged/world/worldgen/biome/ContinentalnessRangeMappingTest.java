@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Test;
 import net.minecraft.SharedConstants;
 import net.minecraft.server.Bootstrap;
 
+import etcodehome.freeterraforged.client.gui.screen.presetconfig.PreviewDetails;
+import etcodehome.freeterraforged.client.gui.screen.presetconfig.RenderMode;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.IslandSettings;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.SpawnType;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.ControlPoints;
@@ -757,5 +759,86 @@ public class ContinentalnessRangeMappingTest {
                 );
             }
         }
+    }
+
+    @Test
+    @DisplayName("Verify cell.continentalness field is populated with the final remap value and copied correctly")
+    void testCellContinentalnessFieldPopulatedAndCopied() {
+        Cell cell = new Cell();
+        cell.terrain = TerrainType.MUSHROOM_FIELDS;
+        cell.height = this.levels.water + 0.1F;
+        cell.controlPoint = this.defaultControlPoints.islandInland;
+
+        float cRead = CellSampler.Field.CONTINENT.read(cell, this.defaultHeightmap);
+        assertEquals(cRead, cell.continentalness, 1e-5F, "Field.CONTINENT.read must assign cell.continentalness");
+
+        // Verify copyFrom preserves continentalness
+        Cell copy = new Cell();
+        copy.copyFrom(cell);
+        assertEquals(cell.continentalness, copy.continentalness, 1e-5F, "copyFrom must copy continentalness");
+
+        // Verify reset resets continentalness to 0.0F
+        copy.reset();
+        assertEquals(0.0F, copy.continentalness, 1e-5F, "reset must clear continentalness to 0.0F");
+    }
+
+    @Test
+    @DisplayName("Verify RenderMode.CONTINENTALNESS is ordered immediately after WEIRDNESS in cycle")
+    void testRenderModeContinentalnessOrderAndGradient() {
+        RenderMode[] modes = RenderMode.values();
+        int weirdnessIdx = -1;
+        int continentalnessIdx = -1;
+        for (int i = 0; i < modes.length; i++) {
+            if (modes[i] == RenderMode.WEIRDNESS) {
+                weirdnessIdx = i;
+            } else if (modes[i] == RenderMode.CONTINENTALNESS) {
+                continentalnessIdx = i;
+            }
+        }
+        assertTrue(weirdnessIdx >= 0, "WEIRDNESS must exist in RenderMode");
+        assertTrue(continentalnessIdx >= 0, "CONTINENTALNESS must exist in RenderMode");
+        assertEquals(weirdnessIdx + 1, continentalnessIdx, "CONTINENTALNESS must be immediately after WEIRDNESS in RenderMode cycle");
+
+        // Test black-to-white gradient across the range [-1.20, 1.00]
+        Cell minCell = new Cell();
+        minCell.continentalness = -1.20F;
+        int minColor = RenderMode.CONTINENTALNESS.getColor(minCell, this.levels, 1.0F, 0.0F);
+        // Min should be pure black (RGB 0, 0, 0)
+        assertEquals(0, minColor & 0xFF, "Red channel at -1.20F must be 0");
+        assertEquals(0, (minColor >> 8) & 0xFF, "Green channel at -1.20F must be 0");
+        assertEquals(0, (minColor >> 16) & 0xFF, "Blue channel at -1.20F must be 0");
+
+        Cell maxCell = new Cell();
+        maxCell.continentalness = 1.00F;
+        int maxColor = RenderMode.CONTINENTALNESS.getColor(maxCell, this.levels, 1.0F, 0.0F);
+        // Max should be pure white (RGB 255, 255, 255)
+        assertEquals(255, maxColor & 0xFF, "Red channel at 1.00F must be 255");
+        assertEquals(255, (maxColor >> 8) & 0xFF, "Green channel at 1.00F must be 255");
+        assertEquals(255, (maxColor >> 16) & 0xFF, "Blue channel at 1.00F must be 255");
+
+        // Monotonic gradient check across range
+        int prevBrightness = -1;
+        for (float c = -1.20F; c <= 1.00F; c += 0.05F) {
+            Cell sample = new Cell();
+            sample.continentalness = c;
+            int color = RenderMode.CONTINENTALNESS.getColor(sample, this.levels, 1.0F, 0.0F);
+            int r = color & 0xFF;
+            int g = (color >> 8) & 0xFF;
+            int b = (color >> 16) & 0xFF;
+            assertEquals(r, g, "Gradient must be grayscale (r == g)");
+            assertEquals(g, b, "Gradient must be grayscale (g == b)");
+            assertTrue(r >= prevBrightness, String.format("Gradient brightness must be non-decreasing: at c=%.2f got %d vs prev %d", c, r, prevBrightness));
+            prevBrightness = r;
+        }
+    }
+
+    @Test
+    @DisplayName("Verify PreviewDetails displays cell.continentalness")
+    void testPreviewDetailsDisplaysContinentalness() {
+        Cell cell = new Cell();
+        cell.continentalness = -0.185F;
+        PreviewDetails.Detail detail = PreviewDetails.forCell(RenderMode.CONTINENTALNESS, cell, this.levels, "minecraft:beach");
+        assertEquals("Continentalness", detail.label().getString());
+        assertTrue(detail.value().contains("-0.1850"), "Detail value must format continentalness, got " + detail.value());
     }
 }

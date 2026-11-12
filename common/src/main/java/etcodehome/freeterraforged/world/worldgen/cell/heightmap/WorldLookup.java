@@ -4,6 +4,7 @@ import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.CellLookup;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
 import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 
 public class WorldLookup implements CellLookup {
@@ -128,6 +129,7 @@ public class WorldLookup implements CellLookup {
 		this.heightmap.apply(cell, x, z, applyClimate);
 		if (cell.terrain == TerrainType.COAST && cell.height > this.waterLevel && cell.height <= this.beachLevel) {
 			cell.terrain = TerrainType.BEACH;
+			cell.continentalness = CellSampler.computeContinentalness(cell, this.heightmap.levels(), this.heightmap.controlPoints());
 		}
 		return false;
 	}
