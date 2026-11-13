@@ -4,8 +4,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
+import etcodehome.freeterraforged.world.worldgen.cell.heightmap.WorldLookup;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
+import net.minecraft.core.QuartPos;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -68,5 +72,50 @@ class TerrainBiomeRoleSelectionTest {
 		// Height 0.28F with default seaLevel 0.24F
 		cell.height = 0.28F;
 		assertFalse(TerrainBiomeRoleSelection.isSubmerged(cell, 0.24F), "Should not be submerged when above default water level");
+	}
+
+	@Test
+	@DisplayName("Lookup override ensures river submerged check uses authoritative pixel cell rather than floored quart corner")
+	void testLookupOverridePreventsQuartCornerSteppingOnRiverBanks() {
+		WorldLookup lookup = new WorldLookup(null, null) {
+			@Override
+			public boolean applyCell(Cell cell, int x, int z, boolean load, boolean applyClimate) {
+				// Simulates a submerged river cell at the quart NW corner (x, z)
+				cell.terrain = TerrainType.RIVER;
+				cell.height = 0.20F;
+				cell.riverWaterLevel = 0.30F;
+				return true;
+			}
+		};
+
+		int quartX = 10;
+		int quartZ = 20;
+
+		// 1. Without lookup override, querying the quart block coordinate resolves the submerged corner
+		Cell unoverridden = CellSampler.getCachedOrLookup(lookup, QuartPos.toBlock(quartX), QuartPos.toBlock(quartZ), false);
+		assertTrue(TerrainBiomeRoleSelection.isSubmerged(unoverridden, 0.25F),
+			"Without override, quart NW corner cell is submerged");
+
+		// 2. With lookup override installed (as done during BiomePreviewResolver surface tile resolution),
+		// the dry bank cell for the current pixel is returned instead of the submerged corner
+		Cell dryBankCell = new Cell();
+		dryBankCell.terrain = TerrainType.RIVER;
+		dryBankCell.height = 0.35F; // Above water level 0.30F
+		dryBankCell.riverWaterLevel = 0.30F;
+
+		try (CellSampler.LookupScope scope = CellSampler.pushLookupOverride(
+			lookup,
+			(bx, bz, sampleClimate) -> dryBankCell
+		)) {
+			Cell overridden = CellSampler.getCachedOrLookup(lookup, QuartPos.toBlock(quartX), QuartPos.toBlock(quartZ), false);
+			assertEquals(dryBankCell, overridden, "Lookup override must supply authoritative pixel cell");
+			assertFalse(TerrainBiomeRoleSelection.isSubmerged(overridden, 0.25F),
+				"Override prevents dry bank pixel from falsely evaluating as submerged river");
+		}
+
+		// 3. After closing override scope, normal lookup resumes
+		Cell restored = CellSampler.getCachedOrLookup(lookup, QuartPos.toBlock(quartX), QuartPos.toBlock(quartZ), false);
+		assertTrue(TerrainBiomeRoleSelection.isSubmerged(restored, 0.25F),
+			"Normal lookup resumes once override scope closes");
 	}
 }
