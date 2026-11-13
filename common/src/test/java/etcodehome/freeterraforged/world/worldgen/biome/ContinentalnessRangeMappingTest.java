@@ -11,9 +11,12 @@ import net.minecraft.server.Bootstrap;
 import etcodehome.freeterraforged.client.gui.screen.presetconfig.PreviewDetails;
 import etcodehome.freeterraforged.client.gui.screen.presetconfig.RenderMode;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.IslandSettings;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.Presets;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.SpawnType;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.ControlPoints;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.Properties;
+import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.CellPopulator;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap;
@@ -757,6 +760,96 @@ public class ContinentalnessRangeMappingTest {
                     name.contains("beach") || name.contains("shore") || name.equals("desert"),
                     String.format("Expected coastal biome for T=%.2f, E=%.2f, got %s", t, e, found.location())
                 );
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("Verify no cell past beach (controlPoint > beach) or above sea level resolves to ocean biomes across presets")
+    void testNoOceanBiomesPastBeachAcrossPresets() throws Exception {
+        net.minecraft.world.level.biome.OverworldBiomeBuilder builder = new net.minecraft.world.level.biome.OverworldBiomeBuilder();
+        java.util.List<com.mojang.datafixers.util.Pair<net.minecraft.world.level.biome.Climate.ParameterPoint, net.minecraft.resources.ResourceKey<net.minecraft.world.level.biome.Biome>>> biomes = new java.util.ArrayList<>();
+        java.lang.reflect.Method addBiomes = net.minecraft.world.level.biome.OverworldBiomeBuilder.class.getDeclaredMethod("addBiomes", java.util.function.Consumer.class);
+        addBiomes.setAccessible(true);
+        addBiomes.invoke(builder, (java.util.function.Consumer<com.mojang.datafixers.util.Pair<net.minecraft.world.level.biome.Climate.ParameterPoint, net.minecraft.resources.ResourceKey<net.minecraft.world.level.biome.Biome>>>) biomes::add);
+        net.minecraft.world.level.biome.Climate.ParameterList<net.minecraft.resources.ResourceKey<net.minecraft.world.level.biome.Biome>> list = new net.minecraft.world.level.biome.Climate.ParameterList<>(biomes);
+
+        Preset[] presetsToTest = {
+            Presets.makeFTFDefault(),
+            Presets.modernDefaultWithRivers(),
+            Presets.makeCommunityPreset1(),
+            Presets.makeLegacyDefault(),
+            Presets.makeLegacyVanillaish(),
+            Presets.makeLegacyBeautiful()
+        };
+        String[] presetNames = {
+            "makeFTFDefault",
+            "modernDefaultWithRivers",
+            "makeCommunityPreset1",
+            "makeLegacyDefault",
+            "makeLegacyVanillaish",
+            "makeLegacyBeautiful"
+        };
+
+        net.minecraft.core.RegistryAccess registries = net.minecraft.core.RegistryAccess.fromRegistryOfRegistries(net.minecraft.core.registries.BuiltInRegistries.REGISTRY).freeze();
+
+        for (int pIdx = 0; pIdx < presetsToTest.length; pIdx++) {
+            Preset preset = presetsToTest[pIdx];
+            net.minecraft.core.HolderGetter<etcodehome.freeterraforged.world.worldgen.noise.module.Noise> noiseLookup = preset.buildPreviewLookups(registries).lookupOrThrow(etcodehome.freeterraforged.registries.FTFRegistries.NOISE);
+            try (GeneratorContext ctx = new GeneratorContext(preset, noiseLookup, 42L)) {
+                Heightmap hm = ctx.getHeightmap();
+                Levels lvl = ctx.levels;
+                ControlPoints cp = hm.controlPoints();
+
+                int oceanCountPastBeach = 0;
+                int oceanCountAboveWater = 0;
+                int oceanCountInland = 0;
+
+                int[] zooms = {1, 2, 4, 8, 10, 16, 20};
+                int[][] centers = {
+                    {0, 0}, {1000, 1000}, {-2000, 3000}, {5000, -5000},
+                    {-10000, 10000}, {25000, -30000}, {100, -200}, {4000, 4000}
+                };
+
+                for (int zoom : zooms) {
+                    for (int[] center : centers) {
+                        PreviewGrid grid = PreviewGrid.generateZoomed(hm, ctx.filters, center[0], center[1], zoom, 64, () -> false).join();
+                        for (int z = 0; z < 64; z++) {
+                            for (int x = 0; x < 64; x++) {
+                                Cell cell = grid.getCell(x, z);
+                                int blockY = lvl.scale(cell.height);
+                                float c = CellSampler.Field.CONTINENT.read(cell, hm);
+
+                                net.minecraft.world.level.biome.Climate.TargetPoint target = new net.minecraft.world.level.biome.Climate.TargetPoint(
+                                    net.minecraft.world.level.biome.Climate.quantizeCoord(cell.temperature),
+                                    net.minecraft.world.level.biome.Climate.quantizeCoord(cell.moisture),
+                                    net.minecraft.world.level.biome.Climate.quantizeCoord(c),
+                                    net.minecraft.world.level.biome.Climate.quantizeCoord(cell.erosion),
+                                    net.minecraft.world.level.biome.Climate.quantizeCoord(0.0F),
+                                    net.minecraft.world.level.biome.Climate.quantizeCoord(cell.weirdness)
+                                );
+                                net.minecraft.resources.ResourceKey<net.minecraft.world.level.biome.Biome> found = list.findValue(target);
+                                String biomeName = found.location().getPath();
+                                boolean isOcean = biomeName.contains("ocean");
+
+                                if (isOcean) {
+                                    if (cell.controlPoint > cp.beach) {
+                                        oceanCountPastBeach++;
+                                    }
+                                    if (cell.height > lvl.water || blockY >= lvl.waterLevel) {
+                                        oceanCountAboveWater++;
+                                    }
+                                    if (cell.controlPoint >= cp.inland) {
+                                        oceanCountInland++;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                assertEquals(0, oceanCountPastBeach, "No cell past beach (controlPoint > beach) should resolve to ocean in preset " + presetNames[pIdx]);
+                assertEquals(0, oceanCountAboveWater, "No cell above water level should resolve to ocean in preset " + presetNames[pIdx]);
+                assertEquals(0, oceanCountInland, "No inland cell (controlPoint >= inland) should resolve to ocean in preset " + presetNames[pIdx]);
             }
         }
     }

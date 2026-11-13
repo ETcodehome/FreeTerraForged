@@ -518,8 +518,9 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, Den
 		// Smoothly interpolated based on height from max ocean depth up to water level.
 		// Ratio balance between C2 and C3 derived from max ocean depth setting.
 		// Excludes inland hydrology (rivers, lakes, wetlands) which belong to the continent.
+		// Excludes inland terrain (controlPoint > beach) which belongs to the continent.
 		// ---------------------------------------------------------------------------------
-		if (cell.height <= levels.water && !isHydrology) {
+		if (cell.height <= levels.water && !isHydrology && cell.controlPoint <= beach) {
 			float floorHeight = levels.water(-levels.oceanDepth);
 			float waterHeight = levels.water;
 			float hNorm = (waterHeight > floorHeight)
