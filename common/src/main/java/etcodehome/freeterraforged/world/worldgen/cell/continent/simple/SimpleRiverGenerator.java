@@ -32,7 +32,8 @@ public class SimpleRiverGenerator extends BaseRiverGenerator<SimpleContinent> {
 			float x3 = x + dx * length;
 			float z3 = z + dz * length;
 			float valleyWidth = 275.0F * River.MAIN_VALLEY.next(random);
-			River river = new River((float) (int) x2, (float) (int) z2, (float) (int) x3, (float) (int) z3);
+			float boundingRadius = this.main.calculateBoundingRadius(this.levels);
+			River river = new River((float) (int) x2, (float) (int) z2, (float) (int) x3, (float) (int) z3, boundingRadius);
 			RiverCarverSettings settings = new RiverCarverSettings(random);
 			settings.fadeIn = this.main.fade;
 			settings.valleySize = valleyWidth;

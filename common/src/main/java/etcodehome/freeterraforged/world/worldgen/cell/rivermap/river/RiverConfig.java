@@ -14,6 +14,7 @@ public class RiverConfig {
     public int length;
     public int length2;
     public float fade;
+    public int worldHeight;
     
     private RiverConfig(Builder builder) {
         this.main = builder.main;
@@ -26,9 +27,14 @@ public class RiverConfig {
         this.length = builder.length;
         this.length2 = builder.length * builder.length;
         this.fade = builder.fade;
+        this.worldHeight = builder.levels.worldHeight;
     }
     
     public RiverConfig(boolean main, int order, int bedWidth, int bankWidth, float bedHeight, float minBankHeight, float maxBankHeight, int length, int length2, float fade) {
+        this(main, order, bedWidth, bankWidth, bedHeight, minBankHeight, maxBankHeight, length, length2, fade, 384);
+    }
+
+    public RiverConfig(boolean main, int order, int bedWidth, int bankWidth, float bedHeight, float minBankHeight, float maxBankHeight, int length, int length2, float fade, int worldHeight) {
         this.main = main;
         this.order = order;
         this.bedWidth = bedWidth;
@@ -39,6 +45,7 @@ public class RiverConfig {
         this.length = length;
         this.length2 = length2;
         this.fade = fade;
+        this.worldHeight = worldHeight;
     }
     
     public RiverConfig createFork(float connectWidth, Levels levels) {
@@ -52,9 +59,29 @@ public class RiverConfig {
     public RiverConfig createFork(int bedHeight, int bedWidth, int bankWidth, Levels levels) {
         int minBankHeight = Math.max(levels.groundLevel, levels.scale(this.minBankHeight) - 1);
         int maxBankHeight = Math.max(minBankHeight, levels.scale(this.maxBankHeight) - 1);
-        return new RiverConfig(false, this.order + 1, bedWidth, bankWidth, levels.scale(bedHeight), levels.scale(minBankHeight), levels.scale(maxBankHeight), this.length, this.length2, this.fade);
+        return new RiverConfig(false, this.order + 1, bedWidth, bankWidth, levels.scale(bedHeight), levels.scale(minBankHeight), levels.scale(maxBankHeight), this.length, this.length2, this.fade, levels.worldHeight);
     }
     
+    public float calculateBoundingRadius() {
+        return calculateBoundingRadius(this.worldHeight > 0 ? this.worldHeight : 384);
+    }
+
+    public float calculateBoundingRadius(Levels levels) {
+        int height = levels != null ? levels.worldHeight : (this.worldHeight > 0 ? this.worldHeight : 384);
+        return calculateBoundingRadius(height);
+    }
+
+    public float calculateBoundingRadius(int worldHeight) {
+        return calculateBoundingRadius(this.bankWidth, worldHeight);
+    }
+
+    public static float calculateBoundingRadius(int bankWidth, int worldHeight) {
+        float bankFade = bankWidth * 12.0F;
+        float mountainFade = worldHeight * 1.8F;
+        float maxCarverRadius = Math.max(bankFade + mountainFade + 70.0F, 1050.0F);
+        return Math.max(River.DEFAULT_BOUNDING_RADIUS, maxCarverRadius + 250.0F);
+    }
+
     public static Builder builder(Levels levels) {
         return new Builder(levels);
     }

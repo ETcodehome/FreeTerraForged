@@ -106,7 +106,8 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
                     float z2 = z1 - dz * length;
                     if (this.continent.getEdgeValue(x2, z2) >= this.minEdgeValue && !this.endsInNeighbourCell(x1, z1, x2, z2) && !this.isInBridgedSector(x2, z2)) {
                         RiverConfig forkConfig = parent.carver.createForkConfig(offset, this.levels);
-                        River river = new River(x2, z2, x1, z1);
+                        float boundingRadius = forkConfig.calculateBoundingRadius(this.levels);
+                        River river = new River(x2, z2, x1, z1, boundingRadius);
                         if (!this.riverOverlaps(river, parent, rivers)) {
                             float valleyWidth = 275.0f * River.FORK_VALLEY.next(random);
                             RiverCarverSettings settings = new RiverCarverSettings(random);

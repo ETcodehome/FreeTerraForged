@@ -112,7 +112,7 @@ class RiverSettingsPage extends PresetEditorPage {
 			this.regenerate();
 			return value;
 		});
-		this.mainRiverBankWidth = PresetWidgets.createIntSlider(mainRivers.bankWidth, 1, 50, FTFTranslationKeys.GUI_SLIDER_RIVER_BANK_WIDTH, (slider, value) -> {
+		this.mainRiverBankWidth = PresetWidgets.createIntSlider(mainRivers.bankWidth, 1, 200, FTFTranslationKeys.GUI_SLIDER_RIVER_BANK_WIDTH, (slider, value) -> {
 			mainRivers.bankWidth = (int) slider.scaleValue(value);
 			this.regenerate();
 			return value;
@@ -144,7 +144,7 @@ class RiverSettingsPage extends PresetEditorPage {
 			this.regenerate();
 			return value;
 		});
-		this.branchRiverBankWidth = PresetWidgets.createIntSlider(branchRivers.bankWidth, 1, 50, FTFTranslationKeys.GUI_SLIDER_RIVER_BANK_WIDTH, (slider, value) -> {
+		this.branchRiverBankWidth = PresetWidgets.createIntSlider(branchRivers.bankWidth, 1, 200, FTFTranslationKeys.GUI_SLIDER_RIVER_BANK_WIDTH, (slider, value) -> {
 			branchRivers.bankWidth = (int) slider.scaleValue(value);
 			this.regenerate();
 			return value;
