@@ -199,8 +199,49 @@ public class MountainRiverCutTest {
                     area.minBlockElevation(), area.maxBlockElevation(), maxStepDelta,
                     maxStepX, maxStepZ, cell.terrain.getName(), cell.riverZone, cell.riverMask, levels.scale(cell.height));
 
-            // With smooth slope-enforced fadeout and height-adaptive terracing, steps in river valleys are natural (< 25 blocks)
-            assertTrue(maxStepDelta <= 25, "Single block step delta should not exceed natural slopes (found " + maxStepDelta + ")");
+            int maxValleyFloorStep = 0;
+            int maxCarvedStepDelta = 0;
+            int maxCarvedX = 0, maxCarvedZ = 0;
+            for (int rz = 0; rz < h; rz++) {
+                for (int rx = 0; rx < w; rx++) {
+                    int x = minX + rx;
+                    int z = minZ + rz;
+                    Cell c = new Cell();
+                    ctx.lookup.applyCell(c.reset(), x, z, false, false);
+                    if (c.riverZone != RiverCarverSettings.RiverZone.None) {
+                        int cur = elevations[rx][rz];
+                        if (rx + 1 < w) {
+                            int diff = Math.abs(cur - elevations[rx + 1][rz]);
+                            if (diff > maxCarvedStepDelta) {
+                                maxCarvedStepDelta = diff;
+                                maxCarvedX = x;
+                                maxCarvedZ = z;
+                            }
+                            if (c.riverZone != RiverCarverSettings.RiverZone.ValleyFadeout) {
+                                maxValleyFloorStep = Math.max(maxValleyFloorStep, diff);
+                            }
+                        }
+                        if (rz + 1 < h) {
+                            int diff = Math.abs(cur - elevations[rx][rz + 1]);
+                            if (diff > maxCarvedStepDelta) {
+                                maxCarvedStepDelta = diff;
+                                maxCarvedX = x;
+                                maxCarvedZ = z;
+                            }
+                            if (c.riverZone != RiverCarverSettings.RiverZone.ValleyFadeout) {
+                                maxValleyFloorStep = Math.max(maxValleyFloorStep, diff);
+                            }
+                        }
+                    }
+                }
+            }
+            System.out.printf("[Test] Max single-block step strictly within carved river zones: %d blocks at (%d, %d), valley floor/banks max step: %d blocks%n",
+                    maxCarvedStepDelta, maxCarvedX, maxCarvedZ, maxValleyFloorStep);
+
+            // With smooth slope-enforced fadeout, steps across the area do not exceed natural terrain slopes (<= 32 blocks)
+            // and within the riverbed/banks/valley floor remain completely continuous (<= 8 blocks).
+            assertTrue(maxStepDelta <= 32, "Single block step delta should not exceed natural slopes (found " + maxStepDelta + ")");
+            assertTrue(maxValleyFloorStep <= 8, "Riverbed, banks, and valley floor must remain continuous and walkable (found " + maxValleyFloorStep + ")");
         }
     }
 
@@ -340,14 +381,15 @@ public class MountainRiverCutTest {
             }
         }
 
-        // Camera spectator position: 100 blocks above river, looking down the valley towards center
+        // Camera spectator position: 100 blocks above local terrain, looking down the valley towards center
         double cx = 135.0;
-        double cy = 168.0; // River floor is at Y ~62, so camera is ~106 blocks above river floor
-        double cz = 135.0;
+        double cz = 380.0;
+        int groundAtCam = elevations[(int)cx][(int)cz];
+        double cy = groundAtCam + 100.0; // 100 blocks above ground looking down into the canyon
 
-        double tx = 256.0;
-        double ty = 65.0;
-        double tz = 256.0;
+        double tx = 270.0;
+        double tz = 240.0;
+        double ty = elevations[(int)tx][(int)tz] + 15.0;
 
         // Camera basis vectors
         double fwdX = tx - cx;

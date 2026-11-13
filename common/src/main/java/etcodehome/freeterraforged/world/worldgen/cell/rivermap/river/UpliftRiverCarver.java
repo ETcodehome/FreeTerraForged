@@ -35,7 +35,6 @@ public class UpliftRiverCarver implements FTFRiverCarver {
     private Levels levels;
     private Noise widthNoise;
     private Noise depthNoise;
-    private Noise terraceNoise;
     private Noise asymmetryNoise;
     private Noise valleyPinchNoise;
     private Noise gullyNoise;
@@ -81,7 +80,6 @@ public class UpliftRiverCarver implements FTFRiverCarver {
         // Initialize seamless noise modules
         this.widthNoise = Noises.simplex(8241, 150, 2);
         this.depthNoise = Noises.simplex(3912, 100, 2);
-        this.terraceNoise = Noises.simplex(5510, 200, 1);
         this.asymmetryNoise = Noises.simplex(1193, 250, 1);
 
         // Broad spatial period (~360 blocks) so the valley floor gradually pinches
@@ -144,11 +142,6 @@ public class UpliftRiverCarver implements FTFRiverCarver {
 
         float zone2Width = this.zone2WidthFactor * biasedScale;
         float zone2Radius = zone1Radius + zone2Width;
-        float unshrunkZone3BaseWidth = config.bankWidth * dynamicWidthMult * valleyPinchMultiplier;
-        float shrinkFactor = NoiseUtil.clamp(currT * this.fadeInv, 0.0F, 1.0F);
-        float zone3BaseWidth = unshrunkZone3BaseWidth * shrinkFactor;
-        float zone3Width = zone3BaseWidth * shrinkFactor;
-        float zone3Radius = zone2Radius + zone3Width;
 
         float targetWaterLevel =
             (ContinentalHydrology.getComplexWaterHeight(
@@ -158,63 +151,47 @@ public class UpliftRiverCarver implements FTFRiverCarver {
             ) + levels.water;
         float targetValleyFloor = targetWaterLevel + this.bankHeightOffset;
 
-        // Approach A: Slope-Enforcing Mountain Fadeout
-        // Instead of tying mountain fadeout width strictly to bankWidth / 100 (which only yielded ~0.24 blocks
-        // horizontal run per 1 block rise, creating 75-85 degree walls), scale horizontal fadeout run directly
-        // with vertical elevation rise (heightDiffBlocks * 1.8F).
-        // This guarantees a natural mountain valley flank (~22-26 degrees) regardless of mountain height.
-        float heightDiff = Math.max(0.0F, cell.height - targetValleyFloor);
+        // Gusseted organic V-shape mountain fadeout:
+        // Use the height difference between the river water surface and the pre-carve original terrain surface
+        // to determine a natural incline (~24.4 degrees) up towards the existing terrain height.
+        float heightDiff = Math.max(0.0F, cell.height - targetWaterLevel);
         int heightDiffBlocks = this.levels.scale(heightDiff);
 
-        float baseFadeWidth = unshrunkZone3BaseWidth * 3.5F;
-        float mountainFadeExtension = heightDiffBlocks * 1.8F;
-        float zone4Width = baseFadeWidth + mountainFadeExtension;
+        // Natural incline slope ratio: ~2.2 horizontal blocks per 1 vertical block rise
+        float slopeRatio = 2.2F;
+        float heightBasedRun = heightDiffBlocks * slopeRatio;
 
-        // Approach B: Fail-safe bounding clamp
-        // Ensure zone4Radius never approaches the bounding box margin (cap at this.maxZone4Radius)
-        // so that fadeout is 100% complete and fully restores natural terrain height well before any spatial bounds.
-        float zone4Radius = Math.min(zone3Radius + zone4Width, this.maxZone4Radius);
+        // For flatter terrain (lowlands/plains), use bankWidth to provide an organic base valley width
+        float shrinkFactor = NoiseUtil.clamp(currT * this.fadeInv, 0.0F, 1.0F);
+        float baseBankRun = config.bankWidth * dynamicWidthMult * valleyPinchMultiplier * shrinkFactor;
+        float fadeWidth = Math.max(baseBankRun, heightBasedRun);
 
-        // Step 2: Early Exit Guard. If outside the maximum radius, skip the remaining expensive operations
-        if (currentLinearDist >= zone4Radius) return;
+        // Clamp to max zone radius to prevent spatial bounds cutoff
+        float fadeRadius = Math.min(zone2Radius + fadeWidth, this.maxZone4Radius);
 
-        // Step 3: Defer remaining heavy noise evaluations until we are guaranteed to modify the cell
-        float depthVar = this.depthNoise.compute(currX, currZ, 3912);
-        float terraceMask = this.terraceNoise.compute(currX, currZ, 5510);
-        float gullyRaw = this.gullyNoise.compute(currX, currZ, 9876);
-        float rivuletRaw = this.rivuletNoise.compute(currX, currZ, 5432);
+        // Step 2: Early Exit Guard. If outside the fade radius, skip remaining operations
+        if (currentLinearDist >= fadeRadius) return;
 
-        // Drainage calculation adjustments
-        float gullyShape = 1.0F - Math.abs(gullyRaw);
-        gullyShape *= gullyShape;
-        float rivuletShape = 1.0F - Math.abs(rivuletRaw);
-        rivuletShape = rivuletShape * rivuletShape * rivuletShape;
-        float drainageMask = (gullyShape * 0.7F) + (rivuletShape * 0.3F);
-
-        // Calculate dynamic depth multiplier and apply downstream depth progression logic
-        float dynamicDepthMult = 1.0F + (depthVar * 0.25F);
-        float depthProgress = NoiseUtil.clamp(currT, 0.0F, 1.0F);
-        float bedDepthOffset = this.baseBedDepthOffset * dynamicDepthMult * depthProgress;
-
-        float valleyFloorBumpiness = ((terraceMask * 0.4F) - (drainageMask * 0.6F)) * this.levels.unit;
-        float actualValleyFloorHeight = targetValleyFloor + valleyFloorBumpiness;
-
-        // calculate the final cell heights
+        // Step 3: Compute final cell heights
+        float actualValleyFloorHeight = targetValleyFloor;
         float finalHeight = cell.height;
+
         if (currentLinearDist < zone1Radius) {
+            float depthVar = this.depthNoise.compute(currX, currZ, 3912);
+            float dynamicDepthMult = 1.0F + (depthVar * 0.25F);
+            float depthProgress = NoiseUtil.clamp(currT, 0.0F, 1.0F);
+            float bedDepthOffset = this.baseBedDepthOffset * dynamicDepthMult * depthProgress;
             finalHeight = carveZone1Riverbed(cell, currT, distSqToCurr, bedDepthOffset, scaleFactor, targetWaterLevel, lakeMultiplier, flatnessFactor, depthVar);
         } else if (currentLinearDist < zone2Radius) {
-            finalHeight = carveZone2BankStep(currentLinearDist, zone1Radius, zone2Radius, targetWaterLevel, actualValleyFloorHeight, terraceMask, drainageMask);
-        } else if (currentLinearDist < zone3Radius) {
-            finalHeight = actualValleyFloorHeight;
+            finalHeight = carveZone2BankStep(currentLinearDist, zone1Radius, zone2Radius, targetWaterLevel, actualValleyFloorHeight);
         } else {
-            finalHeight = carveZone4Fadeout(cell.height, currentLinearDist, zone3Radius, zone4Radius, actualValleyFloorHeight, terraceMask, drainageMask);
+            finalHeight = carveValleySlopeFadeout(cell.height, currentLinearDist, zone2Radius, fadeRadius, actualValleyFloorHeight, targetWaterLevel, currX, currZ);
         }
 
         boolean carvedThisPass = finalHeight < cell.height;
         if (carvedThisPass) {
             cell.height = finalHeight;
-            cell.riverZone = getRiverZoneTag(cell, currentLinearDist, zone1Radius, zone2Radius, zone3Radius, finalHeight, targetWaterLevel);
+            cell.riverZone = getRiverZoneTag(cell, currentLinearDist, zone1Radius, zone2Radius, fadeRadius, finalHeight, targetWaterLevel);
         }
 
         // Only this river's own zone1 (riverbed), carved on this exact pass, may claim flow.
@@ -282,7 +259,7 @@ public class UpliftRiverCarver implements FTFRiverCarver {
         cell.hasFlow = cell.flowAngle != 0;
     }
 
-    private RiverCarverSettings.RiverZone getRiverZoneTag(Cell cell, float currentLinearDist, float zone1Radius, float zone2Radius, float zone3Radius, float finalHeight, float targetWaterLevel) {
+    private RiverCarverSettings.RiverZone getRiverZoneTag(Cell cell, float currentLinearDist, float zone1Radius, float zone2Radius, float fadeRadius, float finalHeight, float targetWaterLevel) {
         RiverCarverSettings.RiverZone prospectiveZone = cell.riverZone;
         boolean isSubmerged = finalHeight < (targetWaterLevel - 0.01F);
 
@@ -292,13 +269,16 @@ public class UpliftRiverCarver implements FTFRiverCarver {
             if (prospectiveZone != RiverCarverSettings.RiverZone.Riverbed) {
                 prospectiveZone = RiverCarverSettings.RiverZone.Banks;
             }
-        } else if (currentLinearDist < zone3Radius) {
-            if (prospectiveZone != RiverCarverSettings.RiverZone.Riverbed && prospectiveZone != RiverCarverSettings.RiverZone.Banks) {
-                prospectiveZone = RiverCarverSettings.RiverZone.ValleyFloor;
-            }
         } else {
-            if (prospectiveZone != RiverCarverSettings.RiverZone.Riverbed && prospectiveZone != RiverCarverSettings.RiverZone.Banks && prospectiveZone != RiverCarverSettings.RiverZone.ValleyFloor) {
-                prospectiveZone = RiverCarverSettings.RiverZone.ValleyFadeout;
+            float progress = (currentLinearDist - zone2Radius) / Math.max(1.0F, fadeRadius - zone2Radius);
+            if (progress < 0.20F) {
+                if (prospectiveZone != RiverCarverSettings.RiverZone.Riverbed && prospectiveZone != RiverCarverSettings.RiverZone.Banks) {
+                    prospectiveZone = RiverCarverSettings.RiverZone.ValleyFloor;
+                }
+            } else {
+                if (prospectiveZone != RiverCarverSettings.RiverZone.Riverbed && prospectiveZone != RiverCarverSettings.RiverZone.Banks && prospectiveZone != RiverCarverSettings.RiverZone.ValleyFloor) {
+                    prospectiveZone = RiverCarverSettings.RiverZone.ValleyFadeout;
+                }
             }
         }
 
@@ -377,90 +357,52 @@ public class UpliftRiverCarver implements FTFRiverCarver {
         return bedHeight;
     }
 
-    private float carveZone2BankStep(float distance, float zone1Radius, float zone2Radius, float targetWaterLevel, float targetValleyFloor, float terraceMask, float drainageMask) {
-        float progress = (distance - zone1Radius) / (zone2Radius - zone1Radius);
+    private float carveZone2BankStep(float distance, float zone1Radius, float zone2Radius, float targetWaterLevel, float targetValleyFloor) {
+        float progress = (distance - zone1Radius) / Math.max(0.001F, zone2Radius - zone1Radius);
         progress = NoiseUtil.clamp(progress, 0.0F, 1.0F);
-
-        progress = applyTerracing(progress, terraceMask, drainageMask, 3.0F);
-
-        float arc = progress * (1.0F - progress) * 4.0F;
-        progress = Math.max(0.0F, progress - (drainageMask * 0.3F * arc));
-
         float smoothProgress = progress * progress * (3.0F - 2.0F * progress);
         return NoiseUtil.lerp(targetWaterLevel, targetValleyFloor, smoothProgress);
     }
 
-    private float carveZone4Fadeout(float originalTerrainHeight, float distance, float zone3Radius, float zone4Radius, float targetValleyFloor, float terraceMask, float drainageMask) {
-        float progress = (distance - zone3Radius) / (zone4Radius - zone3Radius);
+    private float carveValleySlopeFadeout(float originalTerrainHeight, float distance, float zone2Radius, float fadeRadius, float actualValleyFloorHeight, float targetWaterLevel, float currX, float currZ) {
+        float progress = (distance - zone2Radius) / Math.max(1.0F, fadeRadius - zone2Radius);
         progress = NoiseUtil.clamp(progress, 0.0F, 1.0F);
 
-        float heightDeltaBlocks = this.levels.scale(Math.max(0.0F, originalTerrainHeight - targetValleyFloor));
-        float modifiedProgress = applyTerracing(progress, terraceMask, drainageMask, 5.0F, heightDeltaBlocks);
-
-        float slopeMask = progress * (1.0F - progress) * 4.0F;
-        modifiedProgress = Math.max(0.0F, modifiedProgress - (drainageMask * 0.25F * slopeMask));
-
-        float smoothProgress = modifiedProgress * modifiedProgress * (3.0F - 2.0F * modifiedProgress);
-        return NoiseUtil.lerp(targetValleyFloor, originalTerrainHeight, smoothProgress);
-    }
-
-    private float applyTerracing(float progress, float terraceMask, float drainageMask, float steps) {
-        return applyTerracing(progress, terraceMask, drainageMask, steps, 0.0F);
-    }
-
-    private float applyTerracing(float progress, float terraceMask, float drainageMask, float steps, float heightDeltaBlocks) {
-        float intactTerrace = Math.max(0.0F, terraceMask - (drainageMask * 1.5F));
-
-        // Balanced strength multiplier (1.75F) for a confident but natural terrace presence
-        float terraceStrength = NoiseUtil.clamp(intactTerrace * 1.75F, 0.0F, 1.0F);
-
-        // Approach C: Height-Adaptive Terracing
-        // When cutting through large mountains (> 30 blocks elevation rise),
-        // soften cliff bias and terrace strength to prevent 30-block sheer quarry walls.
-        float deepCutAlpha = NoiseUtil.clamp((heightDeltaBlocks - 30.0F) / 100.0F, 0.0F, 1.0F);
-        terraceStrength = terraceStrength * (1.0F - (deepCutAlpha * 0.45F));
-
-        if (terraceStrength <= 0.0F) {
-            return progress;
+        float maxCarveDepth = Math.max(0.0F, originalTerrainHeight - actualValleyFloorHeight);
+        if (maxCarveDepth <= 0.0F) {
+            return originalTerrainHeight;
         }
 
-        float scaledProgress = progress * steps;
-        float floor = (float) Math.floor(scaledProgress);
-        float fract = scaledProgress - floor;
+        // Gusseted organic V-shape base curve:
+        // u = 1 at river edge (p=0), u = 0 at mountain crest (p=1).
+        // Smoothstep provides zero-tangent seamless blending at both ends (no creases).
+        // Power curve (u^1.6) creates the concave gusset flare rising out of the river bank into the valley walls.
+        float u = 1.0F - progress;
+        float uSmooth = u * u * (3.0F - 2.0F * u);
+        float uGusset = (float) Math.pow(u, 1.6F);
+        float fBase = NoiseUtil.lerp(uSmooth, uGusset, 0.45F);
 
-        // 0.78F puts the cliff face in the upper 22% of the step, distinctly steep but scalable.
-        // In deep mountain cuts, soften towards 0.52F to distribute the slope naturally.
-        float baseCliffBias = NoiseUtil.lerp(0.78F, 0.52F, deepCutAlpha);
-        float cliffBias = NoiseUtil.clamp(baseCliffBias - (drainageMask * 0.14F), 0.45F, 0.88F);
+        // Organic ridges and gullies running from river edge up towards mountain slopes:
+        // Inverted absolute value creates sharp mountain ridge spurs (+1) separated by incised gullies/couloirs (-1).
+        float gullyRaw = this.gullyNoise.compute(currX, currZ, 9876);
+        float rivuletRaw = this.rivuletNoise.compute(currX, currZ, 5432);
 
-        float baseTalusHeight = 0.14F;
-        float talusHeight = NoiseUtil.clamp(baseTalusHeight + (drainageMask * 0.22F), 0.04F, 0.45F);
+        float ridgeSignal = 1.0F - 2.0F * Math.abs(gullyRaw);
+        float organicSignal = (ridgeSignal * 0.72F) + (rivuletRaw * 0.28F);
 
-        float steppedFract;
-        if (fract < cliffBias) {
-            float t = fract / cliffBias;
+        // Envelope ensures ridge/gully relief fades to 0 at the river bank (p=0) and at the mountain crest (p=1)
+        float slopeEnvelope = 4.0F * progress * (1.0F - progress);
 
-            // Split the difference between t^3 and t^4 using t^3.5
-            // This gives a flat-ish shelf that transitions smoothly into the debris heap
-            steppedFract = (float) Math.pow(t, 3.5F) * talusHeight;
-        } else {
-            float t = (fract - cliffBias) / (1.0F - cliffBias);
+        // Organic relief scales with carve depth, up to ~18 blocks in massive mountain cuts
+        float maxRelief = Math.min(18.0F * this.levels.unit, maxCarveDepth * 0.20F);
+        float organicDisplacement = organicSignal * slopeEnvelope * maxRelief;
 
-            // We blend a sharp quadratic curve (t^2) with a smooth S-curve (3t^2 - 2t^3).
-            // This yields a cliff face that breaks out of the talus cleanly, but wraps
-            // into the upper shelf with a slightly weathered, natural roll-over.
-            float sharpCurve = t * t;
-            float smoothCurve = t * t * (3.0F - 2.0F * t);
-            float hybridCliff = NoiseUtil.lerp(sharpCurve, smoothCurve, 0.5F);
+        // Subtractive carve: subtract carve depth from the original mountain terrain
+        float baseCarveAmount = maxCarveDepth * fBase;
+        float finalCarveAmount = NoiseUtil.clamp(baseCarveAmount - organicDisplacement, 0.0F, maxCarveDepth);
 
-            steppedFract = NoiseUtil.lerp(talusHeight, 1.0F, hybridCliff);
-        }
-
-        float steppedProgress = (floor + steppedFract) / steps;
-
-        // A 90% maximum blend weight ensures the steps stay well-defined
-        // while allowing the regional terrain shape to gently break up the monotony.
-        return NoiseUtil.lerp(progress, steppedProgress, terraceStrength * 0.90F);
+        float finalHeight = originalTerrainHeight - finalCarveAmount;
+        return Math.max(actualValleyFloorHeight, finalHeight);
     }
 
     private void updateValleyMask(float prevX, float prevZ, float prevT, float currT, float distSqToCurr, float sqScaleFactor, Cell cell) {
@@ -577,19 +519,16 @@ public class UpliftRiverCarver implements FTFRiverCarver {
         float zone2WidthFactor = (config.maxBankHeight - config.minBankHeight) / levels.unit;
         float maxZone2 = zone2WidthFactor * 1.89F;
 
-        // unshrunkZone3BaseWidth = config.bankWidth * dynamicWidthMult * valleyPinchMultiplier
-        // dynamicWidthMult <= 1.35F, valleyPinchMultiplier <= 1.95F
-        // maxUnshrunkZone3 = config.bankWidth * 1.35F * 1.95F = config.bankWidth * 2.6325F
-        // baseFadeWidth = maxUnshrunkZone3 * 3.5F
-        // maxZone3AndBaseFade = maxUnshrunkZone3 * (1.0F + 3.5F) = config.bankWidth * 11.84625F
-        float maxZone3AndBaseFade = config.bankWidth * 11.84625F;
+        // Base run from bankWidth (max multiplier = 1.35 * 1.95 = 2.6325)
+        float maxBaseBankRun = config.bankWidth * 2.6325F;
 
         // Mountain vertical elevation fade extension:
         // heightDiffBlocks <= levels.worldHeight
-        // mountainFadeExtension = heightDiffBlocks * 1.8F <= levels.worldHeight * 1.8F
-        float maxMountainFade = levels.worldHeight * 1.8F;
+        // heightBasedRun = heightDiffBlocks * slopeRatio (2.2F)
+        float maxHeightFade = levels.worldHeight * 2.2F;
 
-        float maxCarveRadius = maxZone1 + maxZone2 + maxZone3AndBaseFade + maxMountainFade;
+        float maxFadeWidth = Math.max(maxBaseBankRun, maxHeightFade);
+        float maxCarveRadius = maxZone1 + maxZone2 + maxFadeWidth;
         float maxValleyRadius = settings != null ? settings.valleySize * 3.5F : 275.0F * 3.5F;
 
         return Math.max(maxCarveRadius, maxValleyRadius) + 50.0F;

@@ -77,7 +77,7 @@ public class RiverConfig {
 
     public static float calculateBoundingRadius(int bankWidth, int worldHeight) {
         float bankFade = bankWidth * 12.0F;
-        float mountainFade = worldHeight * 1.8F;
+        float mountainFade = worldHeight * 2.2F;
         float maxCarverRadius = Math.max(bankFade + mountainFade + 70.0F, 1050.0F);
         return Math.max(River.DEFAULT_BOUNDING_RADIUS, maxCarverRadius + 250.0F);
     }
