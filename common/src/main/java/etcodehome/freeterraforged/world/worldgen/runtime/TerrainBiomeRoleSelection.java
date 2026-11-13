@@ -60,12 +60,24 @@ final class TerrainBiomeRoleSelection {
 			Cell cell = CellSampler.getCachedOrLookup(
 				context.lookup, QuartPos.toBlock(quartX), QuartPos.toBlock(quartZ), false
 			);
-			return cell.terrain.isRiver() ? riverCandidates.findValue(result.target()) : selected;
+			return isSubmerged(cell, context.levels.water) ? riverCandidates.findValue(result.target()) : selected;
 		} finally {
 			if (ts != null) {
 				ts.currentCaller = prevCaller;
 			}
 		}
+	}
+
+	static boolean isSubmerged(Cell cell, float defaultWaterLevel) {
+		if (!cell.terrain.isRiver()) {
+			return false;
+		}
+		float waterLevel = cell.riverWaterLevel > 0.0F ? cell.riverWaterLevel : defaultWaterLevel;
+		return cell.height <= waterLevel;
+	}
+
+	static boolean isSubmerged(Cell cell) {
+		return isSubmerged(cell, 0.0F);
 	}
 
 	private static void addRiverCandidates(
