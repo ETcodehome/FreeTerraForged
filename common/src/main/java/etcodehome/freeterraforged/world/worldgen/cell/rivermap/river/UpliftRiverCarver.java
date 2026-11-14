@@ -127,7 +127,7 @@ public class UpliftRiverCarver implements FTFRiverCarver {
         float valleyPinchVar = this.valleyPinchNoise.compute(currX, currZ, 6204) * 2.0F;
 
         // Always run mask logic to ensure clean falloffs
-        updateValleyMask(prevX, prevZ, prevT, currT, distSqToCurr, scaleFactor, cell);
+        updateValleyMask(currT, distSqToCurr, scaleFactor, cell);
 
         // Compute layout parameters
         float dynamicWidthMult = 1.0F + (widthVar * 0.35F);
@@ -353,7 +353,7 @@ public class UpliftRiverCarver implements FTFRiverCarver {
         float bedHeight = targetWaterLevel - (finalizedDepth * bedInfluence);
 
         cell.moisture = 1.0F;
-        this.tag(cell, targetWaterLevel);
+        this.tag(cell, targetWaterLevel, bedHeight);
         return bedHeight;
     }
 
@@ -405,9 +405,8 @@ public class UpliftRiverCarver implements FTFRiverCarver {
         return Math.max(actualValleyFloorHeight, finalHeight);
     }
 
-    private void updateValleyMask(float prevX, float prevZ, float prevT, float currT, float distSqToCurr, float sqScaleFactor, Cell cell) {
-        float distSqToPrev = this.getDistance2(prevX, prevZ, prevT);
-        float valleyInfluence = this.getDistanceAlpha(currT, Math.min(distSqToCurr, distSqToPrev), this.valleyWidth, sqScaleFactor);
+    private void updateValleyMask(float currT, float distSqToCurr, float sqScaleFactor, Cell cell) {
+        float valleyInfluence = this.getDistanceAlpha(currT, distSqToCurr, this.valleyWidth, sqScaleFactor);
         if (valleyInfluence > 0.0F) {
             valleyInfluence = this.valleyCurve.apply(valleyInfluence);
             cell.riverMask = Math.min(cell.riverMask, 1.0F - valleyInfluence);
@@ -492,13 +491,15 @@ public class UpliftRiverCarver implements FTFRiverCarver {
         return NoiseUtil.lerp(range.min(), range.max(), t * this.fadeInv);
     }
 
-    private void tag(Cell cell, float bedHeight) {
+    private void tag(Cell cell, float waterLevel, float bedHeight) {
         if (cell.terrain.isLake()) return;
-        float newMax = Math.max(this.waterLine, bedHeight);
+        float newMax = Math.max(this.waterLine, waterLevel);
         if (newMax > cell.riverWaterLevel) {
+            cell.riverWaterLevel = newMax;
+        }
+        if (bedHeight <= newMax) {
             cell.erosionMask = true;
             cell.terrain = TerrainType.RIVER;
-            cell.riverWaterLevel = Math.max(this.waterLine, bedHeight);
         }
     }
 

@@ -419,7 +419,7 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, Den
 				// If weirdness is in the valley range [-0.05F, 0.05F], vanilla multi-noise classifies it as a river.
 				// If weirdness is outside [-0.20F, 0.20F] (e.g. mid-slice +/-0.33F or +/-0.50F), vanilla falls back to inland plains/forest/sunflower_plains.
 				// Therefore, coastal/beach land above water that is not a carved river channel must evaluate to -0.15F.
-				boolean isHydrology = cell.erosionMask || cell.terrain.isRiver();
+				boolean isHydrology = cell.erosionMask || cell.terrain.isRiver() || cell.terrain.isLake() || cell.terrain.isWetland();
 				if (cell.height > heightmap.levels().water && !isHydrology) {
 					boolean isMountain = cell.terrain.isMountain() || cell.terrain == TerrainType.ISLAND_MOUNTAINS;
 					boolean isCoast = !isMountain && cell.terrain != TerrainType.MUSHROOM_FIELDS && (
@@ -430,6 +430,9 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, Den
 					);
 					if (isCoast) {
 						return -0.15F;
+					}
+					if (w >= -0.05F && w <= 0.05F) {
+						return w < 0.0F ? -0.055F : 0.055F;
 					}
 				}
 				return w;

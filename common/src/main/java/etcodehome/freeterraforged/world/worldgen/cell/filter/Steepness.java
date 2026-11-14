@@ -13,6 +13,7 @@ public record Steepness(int radius, float scaler, float waterLevel) implements F
     @Override
     public void visit(FilterGrid cellMap, Cell cell, int cx, int cz) {
         float totalHeightDif = 0.0F;
+        final float cellSpacing = cellMap.getCellSpacing() > 0.0F ? cellMap.getCellSpacing() : 1.0F;
         for (int dz = -1; dz <= 2; ++dz) {
             for (int dx = -1; dx <= 2; ++dx) {
                 if (dx != 0 || dz != 0) {
@@ -21,7 +22,7 @@ public record Steepness(int radius, float scaler, float waterLevel) implements F
                     Cell neighbour = cellMap.getCellRaw(x, z);
                     if (!neighbour.isAbsent()) {
                         float height = Math.max(neighbour.height, this.waterLevel);
-                        totalHeightDif += Math.abs(cell.height - height) / this.radius;
+                        totalHeightDif += Math.abs(cell.height - height) / (this.radius * cellSpacing);
                     }
                 }
             }

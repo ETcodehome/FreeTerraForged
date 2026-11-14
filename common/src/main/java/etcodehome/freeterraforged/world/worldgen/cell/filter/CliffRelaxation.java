@@ -98,8 +98,9 @@ public class CliffRelaxation implements Filter {
             heights[i] = cells[i].height;
         }
 
-        final float minRelief = MIN_CLIFF_BLOCKS / this.worldHeight;
-        final float maxRelief = MAX_CLIFF_BLOCKS / this.worldHeight;
+        final float cellSpacing = map.getCellSpacing() > 0.0F ? map.getCellSpacing() : 1.0F;
+        final float minRelief = (MIN_CLIFF_BLOCKS * cellSpacing) / this.worldHeight;
+        final float maxRelief = (MAX_CLIFF_BLOCKS * cellSpacing) / this.worldHeight;
         final float reliefSpan = Math.max(1e-5f, maxRelief - minRelief);
 
         // Modifier.modify depends only on per-cell state, and cell.height is not committed until after all
@@ -119,7 +120,7 @@ public class CliffRelaxation implements Filter {
         final float detailFreq = 1.0f / Math.max(1.0f, DETAIL_WAVELENGTH_BLOCKS);
         for (int z = 0; z < tileSize; ++z) {
             final int row = z * tileSize;
-            final float wz = (float) (worldBlockZ + z);
+            final float wz = (float) (worldBlockZ + z * cellSpacing);
             for (int x = 0; x < tileSize; ++x) {
                 final int idx = row + x;
                 if (mods[idx] == 0.0f) {
@@ -127,7 +128,7 @@ public class CliffRelaxation implements Filter {
                     reliefMul[idx] = 1.0f;
                     continue;
                 }
-                final float wx = (float) (worldBlockX + x);
+                final float wx = (float) (worldBlockX + x * cellSpacing);
                 final float strengthN = centeredNoise(wx, wz, broadFreq, detailFreq, this.seed);
                 final float thresholdN = centeredNoise(wx, wz, broadFreq, detailFreq, this.seed + 6007);
                 rateMul[idx] = 1.0f + STRENGTH_VARIATION * strengthN;
