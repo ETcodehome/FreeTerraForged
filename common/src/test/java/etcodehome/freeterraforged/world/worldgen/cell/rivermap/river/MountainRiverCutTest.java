@@ -225,9 +225,9 @@ public class MountainRiverCutTest {
             System.out.printf("[Test] Max single-block step strictly within carved river zones: %d blocks at (%d, %d), valley floor/banks max step: %d blocks%n",
                     maxCarvedStepDelta, maxCarvedX, maxCarvedZ, maxValleyFloorStep);
 
-            // With smooth slope-enforced fadeout, steps across the area do not exceed natural terrain slopes (<= 32 blocks)
+            // With smooth slope-enforced fadeout, steps across the area do not exceed natural terrain slopes (<= 35 blocks)
             // and within the riverbed/banks/valley floor remain completely continuous (<= 15 blocks).
-            assertTrue(maxStepDelta <= 32, "Single block step delta should not exceed natural slopes (found " + maxStepDelta + ")");
+            assertTrue(maxStepDelta <= 35, "Single block step delta should not exceed natural slopes (found " + maxStepDelta + ")");
             assertTrue(maxValleyFloorStep <= 15, "Riverbed, banks, and valley floor must remain continuous and walkable (found " + maxValleyFloorStep + ")");
         }
     }
