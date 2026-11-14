@@ -343,7 +343,7 @@ public class UpliftRiverCarver implements FTFRiverCarver {
         float bedHeight = targetWaterLevel - (finalizedDepth * bedInfluence);
 
         cell.moisture = 1.0F;
-        this.tag(cell, targetWaterLevel);
+        this.tag(cell, targetWaterLevel, bedHeight);
         return bedHeight;
     }
 
@@ -508,13 +508,15 @@ public class UpliftRiverCarver implements FTFRiverCarver {
         return NoiseUtil.lerp(range.min(), range.max(), t * this.fadeInv);
     }
 
-    private void tag(Cell cell, float bedHeight) {
+    private void tag(Cell cell, float waterLevel, float bedHeight) {
         if (cell.terrain.isLake()) return;
-        float newMax = Math.max(this.waterLine, bedHeight);
+        float newMax = Math.max(this.waterLine, waterLevel);
         if (newMax > cell.riverWaterLevel) {
+            cell.riverWaterLevel = newMax;
+        }
+        if (bedHeight <= newMax) {
             cell.erosionMask = true;
             cell.terrain = TerrainType.RIVER;
-            cell.riverWaterLevel = Math.max(this.waterLine, bedHeight);
         }
     }
 

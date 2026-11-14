@@ -20,15 +20,19 @@ import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 
 final class TerrainBiomeRoleSelection {
 	private final Map<Climate.ParameterList<Holder<Biome>>, Climate.ParameterList<Holder<Biome>>> rivers;
+	private final Map<Climate.ParameterList<Holder<Biome>>, Climate.ParameterList<Holder<Biome>>> nonRivers;
 
 	TerrainBiomeRoleSelection(WorldgenPlans.ProviderSelection providers) {
 		IdentityHashMap<Climate.ParameterList<Holder<Biome>>, Climate.ParameterList<Holder<Biome>>> rivers =
 			new IdentityHashMap<>();
+		IdentityHashMap<Climate.ParameterList<Holder<Biome>>, Climate.ParameterList<Holder<Biome>>> nonRivers =
+			new IdentityHashMap<>();
 		for (WorldgenPlans.ProviderDomain provider : providers.providers()) {
-			addRiverCandidates(rivers, provider.candidates());
+			addCandidates(rivers, nonRivers, provider.candidates());
 		}
-		providers.fallback().ifPresent(table -> addRiverCandidates(rivers, table));
+		providers.fallback().ifPresent(table -> addCandidates(rivers, nonRivers, table));
 		this.rivers = rivers;
+		this.nonRivers = nonRivers;
 	}
 
 	Holder<Biome> resolve(
@@ -43,7 +47,6 @@ final class TerrainBiomeRoleSelection {
 	) {
 		Climate.ParameterList<Holder<Biome>> riverCandidates = this.rivers.get(result.candidates());
 		if (riverCandidates == null || !result.biome().equals(result.baseBiome())
-			|| selected.is(BiomeTags.IS_RIVER)
 			|| UndergroundBiomeSurfaceProtection.coverageFactor(
 				sampler, target, quartX, quartY, quartZ
 			) > 0.0F) {
@@ -60,7 +63,14 @@ final class TerrainBiomeRoleSelection {
 			Cell cell = CellSampler.getCachedOrLookup(
 				context.lookup, QuartPos.toBlock(quartX), QuartPos.toBlock(quartZ), false
 			);
-			return isSubmerged(cell, context.levels.water) ? riverCandidates.findValue(result.target()) : selected;
+			boolean submerged = isSubmerged(cell, context.levels.water);
+			if (submerged) {
+				return selected.is(BiomeTags.IS_RIVER) ? selected : riverCandidates.findValue(result.target());
+			} else if (selected.is(BiomeTags.IS_RIVER)) {
+				Climate.ParameterList<Holder<Biome>> nonRiverCandidates = this.nonRivers.get(result.candidates());
+				return nonRiverCandidates != null ? nonRiverCandidates.findValue(result.target()) : selected;
+			}
+			return selected;
 		} finally {
 			if (ts != null) {
 				ts.currentCaller = prevCaller;
@@ -68,27 +78,38 @@ final class TerrainBiomeRoleSelection {
 		}
 	}
 
-	static boolean isSubmerged(Cell cell, float defaultWaterLevel) {
+	static boolean isSubmerged(Cell cell, float defaultWaterLevel, float tolerance) {
 		if (!cell.terrain.isRiver()) {
 			return false;
 		}
 		float waterLevel = cell.riverWaterLevel > 0.0F ? cell.riverWaterLevel : defaultWaterLevel;
-		return cell.height <= waterLevel;
+		return cell.height <= waterLevel + tolerance;
+	}
+
+	static boolean isSubmerged(Cell cell, float defaultWaterLevel) {
+		return isSubmerged(cell, defaultWaterLevel, 0.0F);
 	}
 
 	static boolean isSubmerged(Cell cell) {
-		return isSubmerged(cell, 0.0F);
+		return isSubmerged(cell, 0.0F, 0.0F);
 	}
 
-	private static void addRiverCandidates(
+	private static void addCandidates(
 		Map<Climate.ParameterList<Holder<Biome>>, Climate.ParameterList<Holder<Biome>>> rivers,
+		Map<Climate.ParameterList<Holder<Biome>>, Climate.ParameterList<Holder<Biome>>> nonRivers,
 		Climate.ParameterList<Holder<Biome>> source
 	) {
-		Climate.ParameterList<Holder<Biome>> candidates = taggedSurfaceCandidates(
+		Climate.ParameterList<Holder<Biome>> riverList = taggedSurfaceCandidates(
 			source, holder -> holder.is(BiomeTags.IS_RIVER)
 		);
-		if (candidates != null) {
-			rivers.put(source, candidates);
+		if (riverList != null) {
+			rivers.put(source, riverList);
+		}
+		Climate.ParameterList<Holder<Biome>> nonRiverList = taggedSurfaceCandidates(
+			source, holder -> !holder.is(BiomeTags.IS_RIVER)
+		);
+		if (nonRiverList != null) {
+			nonRivers.put(source, nonRiverList);
 		}
 	}
 

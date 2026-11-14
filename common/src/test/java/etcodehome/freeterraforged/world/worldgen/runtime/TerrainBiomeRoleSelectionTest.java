@@ -1,5 +1,10 @@
 package etcodehome.freeterraforged.world.worldgen.runtime;
 
+import java.util.List;
+
+import com.mojang.datafixers.util.Pair;
+import net.minecraft.core.QuartPos;
+import net.minecraft.world.level.biome.Climate;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -7,10 +12,10 @@ import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.WorldLookup;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
-import net.minecraft.core.QuartPos;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TerrainBiomeRoleSelectionTest {
@@ -117,5 +122,55 @@ class TerrainBiomeRoleSelectionTest {
 		Cell restored = CellSampler.getCachedOrLookup(lookup, QuartPos.toBlock(quartX), QuartPos.toBlock(quartZ), false);
 		assertTrue(TerrainBiomeRoleSelection.isSubmerged(restored, 0.25F),
 			"Normal lookup resumes once override scope closes");
+	}
+
+	@Test
+	@DisplayName("Submerged check respects tolerance parameter")
+	void testSubmergedCheckWithTolerance() {
+		Cell cell = new Cell();
+		cell.terrain = TerrainType.RIVER;
+		cell.riverWaterLevel = 0.30F;
+
+		// Exactly at water level + 0.01F
+		cell.height = 0.31F;
+		assertFalse(TerrainBiomeRoleSelection.isSubmerged(cell, 0.24F, 0.0F),
+			"Without tolerance, height above water level is not submerged");
+		assertTrue(TerrainBiomeRoleSelection.isSubmerged(cell, 0.24F, 0.02F),
+			"With tolerance >= 0.01F, height within tolerance is submerged");
+
+		// Above water level + tolerance
+		cell.height = 0.35F;
+		assertFalse(TerrainBiomeRoleSelection.isSubmerged(cell, 0.24F, 0.02F),
+			"Height exceeding water level + tolerance is not submerged");
+	}
+
+	@Test
+	@DisplayName("taggedSurfaceCandidates correctly separates river and non-river candidates")
+	void testTaggedSurfaceCandidatesSeparation() {
+		Climate.ParameterPoint surfacePoint = Climate.parameters(0, 0, 0, 0, 0, 0, 0);
+		Climate.ParameterPoint cavePoint = Climate.parameters(0, 0, 0, 0, 1.0F, 0, 0);
+
+		Climate.ParameterList<String> list = new Climate.ParameterList<>(List.of(
+			Pair.of(surfacePoint, "river"),
+			Pair.of(surfacePoint, "plains"),
+			Pair.of(surfacePoint, "forest"),
+			Pair.of(cavePoint, "lush_caves")
+		));
+
+		Climate.ParameterList<String> rivers = TerrainBiomeRoleSelection.taggedSurfaceCandidates(
+			list, "river"::equals
+		);
+		assertNotNull(rivers, "River list should not be null");
+		assertEquals(1, rivers.values().size(), "Only surface river candidate should be included");
+		assertEquals("river", rivers.values().get(0).getSecond());
+
+		Climate.ParameterList<String> nonRivers = TerrainBiomeRoleSelection.taggedSurfaceCandidates(
+			list, s -> !"river".equals(s)
+		);
+		assertNotNull(nonRivers, "Non-river list should not be null");
+		assertEquals(2, nonRivers.values().size(), "Plains and forest should be included; cave excluded");
+		assertTrue(nonRivers.values().stream().anyMatch(p -> "plains".equals(p.getSecond())));
+		assertTrue(nonRivers.values().stream().anyMatch(p -> "forest".equals(p.getSecond())));
+		assertFalse(nonRivers.values().stream().anyMatch(p -> "lush_caves".equals(p.getSecond())));
 	}
 }
