@@ -3,11 +3,21 @@ package etcodehome.freeterraforged.world.worldgen.runtime;
 import java.util.List;
 
 import com.mojang.datafixers.util.Pair;
+import net.minecraft.SharedConstants;
+import net.minecraft.core.Holder;
 import net.minecraft.core.QuartPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.Bootstrap;
+import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.biome.Climate;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import etcodehome.freeterraforged.world.worldgen.biome.WetlandBiomeTags;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.WorldLookup;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
@@ -19,6 +29,12 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TerrainBiomeRoleSelectionTest {
+
+	@BeforeAll
+	static void setUp() {
+		SharedConstants.tryDetectVersion();
+		Bootstrap.bootStrap();
+	}
 
 	@Test
 	@DisplayName("Submerged check returns false when terrain is not a river")
@@ -172,5 +188,60 @@ class TerrainBiomeRoleSelectionTest {
 		assertTrue(nonRivers.values().stream().anyMatch(p -> "plains".equals(p.getSecond())));
 		assertTrue(nonRivers.values().stream().anyMatch(p -> "forest".equals(p.getSecond())));
 		assertFalse(nonRivers.values().stream().anyMatch(p -> "lush_caves".equals(p.getSecond())));
+	}
+
+	@Test
+	@DisplayName("Submerged check recognizes wetland pools below water level and rejects dry mounds")
+	void testSubmergedCheckWetlandTerrain() {
+		Cell cell = new Cell();
+		cell.terrain = TerrainType.WETLAND;
+		cell.riverWaterLevel = 0.30F;
+
+		// Submerged pool in wetland
+		cell.height = 0.25F;
+		assertTrue(TerrainBiomeRoleSelection.isSubmerged(cell), "Wetland pool below water level must be submerged");
+
+		// Dry mound/hummock in wetland
+		cell.height = 0.35F;
+		assertFalse(TerrainBiomeRoleSelection.isSubmerged(cell), "Wetland mound above water level must not be submerged");
+
+		// Lake terrain below water level
+		cell.terrain = TerrainType.LAKE;
+		cell.height = 0.25F;
+		assertTrue(TerrainBiomeRoleSelection.isSubmerged(cell), "Lake below water level must be submerged");
+	}
+
+	@Test
+	@DisplayName("WetlandBiomeTags correctly identifies vanilla and modded swamp/wetland biomes")
+	void testWetlandBiomeTagsIdentification() {
+		ResourceKey<Biome> swampKey = Biomes.SWAMP;
+		ResourceKey<Biome> mangroveKey = Biomes.MANGROVE_SWAMP;
+		ResourceKey<Biome> plainsKey = Biomes.PLAINS;
+		ResourceKey<Biome> riverKey = Biomes.RIVER;
+
+		ResourceKey<Biome> moddedWetland = ResourceKey.create(Registries.BIOME, ResourceLocation.fromNamespaceAndPath("stilllife", "temperate_rainforest_wetlands"));
+		ResourceKey<Biome> moddedBayou = ResourceKey.create(Registries.BIOME, ResourceLocation.fromNamespaceAndPath("biomesoplenty", "bayou"));
+		ResourceKey<Biome> moddedMarsh = ResourceKey.create(Registries.BIOME, ResourceLocation.fromNamespaceAndPath("mod", "misty_marsh"));
+
+		Holder.Reference<Biome> refSwamp = Holder.Reference.createStandAlone(null, swampKey);
+		assertTrue(WetlandBiomeTags.isWetland(refSwamp), "minecraft:swamp must be identified as wetland");
+
+		Holder.Reference<Biome> refMangrove = Holder.Reference.createStandAlone(null, mangroveKey);
+		assertTrue(WetlandBiomeTags.isWetland(refMangrove), "minecraft:mangrove_swamp must be identified as wetland");
+
+		Holder.Reference<Biome> refPlains = Holder.Reference.createStandAlone(null, plainsKey);
+		assertFalse(WetlandBiomeTags.isWetland(refPlains), "minecraft:plains must not be identified as wetland");
+
+		Holder.Reference<Biome> refRiver = Holder.Reference.createStandAlone(null, riverKey);
+		assertFalse(WetlandBiomeTags.isWetland(refRiver), "minecraft:river must not be identified as wetland");
+
+		Holder.Reference<Biome> refWetland = Holder.Reference.createStandAlone(null, moddedWetland);
+		assertTrue(WetlandBiomeTags.isWetland(refWetland), "temperate_rainforest_wetlands must be identified as wetland");
+
+		Holder.Reference<Biome> refBayou = Holder.Reference.createStandAlone(null, moddedBayou);
+		assertTrue(WetlandBiomeTags.isWetland(refBayou), "bayou must be identified as wetland");
+
+		Holder.Reference<Biome> refMarsh = Holder.Reference.createStandAlone(null, moddedMarsh);
+		assertTrue(WetlandBiomeTags.isWetland(refMarsh), "misty_marsh must be identified as wetland");
 	}
 }

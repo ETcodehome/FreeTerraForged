@@ -32,9 +32,9 @@ public record Network(FTFRiverCarver riverCarver, Wetland[] wetlands, Network[] 
             wt = Line.distanceOnLine(wx, wz, river.x1, river.z1, river.x2, river.z2);
         }
         this.carveRiver(cell, px, pz, pt, wx, wz, wt);
-        this.carveWetlands(cell, x, z, nx, nz);
+        this.carveWetlands(cell, wx, wz, nx, nz);
         for (Network network : this.children) {
-            network.carve(cell, x, z, nx, nz);
+            network.carve(cell, wx, wz, nx, nz);
         }
     }
     

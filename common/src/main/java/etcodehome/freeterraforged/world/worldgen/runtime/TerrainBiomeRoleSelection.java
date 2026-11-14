@@ -14,24 +14,29 @@ import net.minecraft.world.level.biome.Climate;
 import etcodehome.freeterraforged.concurrent.Resource;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeSurfaceProtection;
+import etcodehome.freeterraforged.world.worldgen.biome.WetlandBiomeTags;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
 import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 
 final class TerrainBiomeRoleSelection {
 	private final Map<Climate.ParameterList<Holder<Biome>>, Climate.ParameterList<Holder<Biome>>> rivers;
+	private final Map<Climate.ParameterList<Holder<Biome>>, Climate.ParameterList<Holder<Biome>>> wetlands;
 	private final Map<Climate.ParameterList<Holder<Biome>>, Climate.ParameterList<Holder<Biome>>> nonRivers;
 
 	TerrainBiomeRoleSelection(WorldgenPlans.ProviderSelection providers) {
 		IdentityHashMap<Climate.ParameterList<Holder<Biome>>, Climate.ParameterList<Holder<Biome>>> rivers =
 			new IdentityHashMap<>();
+		IdentityHashMap<Climate.ParameterList<Holder<Biome>>, Climate.ParameterList<Holder<Biome>>> wetlands =
+			new IdentityHashMap<>();
 		IdentityHashMap<Climate.ParameterList<Holder<Biome>>, Climate.ParameterList<Holder<Biome>>> nonRivers =
 			new IdentityHashMap<>();
 		for (WorldgenPlans.ProviderDomain provider : providers.providers()) {
-			addCandidates(rivers, nonRivers, provider.candidates());
+			addCandidates(rivers, wetlands, nonRivers, provider.candidates());
 		}
-		providers.fallback().ifPresent(table -> addCandidates(rivers, nonRivers, table));
+		providers.fallback().ifPresent(table -> addCandidates(rivers, wetlands, nonRivers, table));
 		this.rivers = rivers;
+		this.wetlands = wetlands;
 		this.nonRivers = nonRivers;
 	}
 
@@ -65,8 +70,32 @@ final class TerrainBiomeRoleSelection {
 			);
 			boolean submerged = isSubmerged(cell, context.levels.water);
 			if (submerged) {
-				return selected.is(BiomeTags.IS_RIVER) ? selected : riverCandidates.findValue(result.target());
+				if (cell.terrain.isWetland()) {
+					// Submerged wetland water pool:
+					// 1. If already classified as a swamp or wetland biome, preserve it intact
+					if (WetlandBiomeTags.isWetland(selected)) {
+						return selected;
+					}
+					// 2. If classified as a river biome, allow it (e.g. river corridor through wetland)
+					if (selected.is(BiomeTags.IS_RIVER)) {
+						return selected;
+					}
+					// 3. If classified as a dry land biome (e.g. plains), prefer regional wetland candidates, else river
+					Climate.ParameterList<Holder<Biome>> wetlandCandidates = this.wetlands.get(result.candidates());
+					if (wetlandCandidates != null) {
+						Holder<Biome> wetland = wetlandCandidates.findValue(result.target());
+						if (wetland != null) {
+							return wetland;
+						}
+					}
+					return riverCandidates.findValue(result.target());
+				} else {
+					// Submerged river channel or lake:
+					return selected.is(BiomeTags.IS_RIVER) ? selected : riverCandidates.findValue(result.target());
+				}
 			} else if (selected.is(BiomeTags.IS_RIVER)) {
+				// Dry land (river banks, lake shores, wetland hummocks):
+				// Strict channel restriction: dry land must not receive river biomes
 				Climate.ParameterList<Holder<Biome>> nonRiverCandidates = this.nonRivers.get(result.candidates());
 				return nonRiverCandidates != null ? nonRiverCandidates.findValue(result.target()) : selected;
 			}
@@ -79,7 +108,7 @@ final class TerrainBiomeRoleSelection {
 	}
 
 	static boolean isSubmerged(Cell cell, float defaultWaterLevel, float tolerance) {
-		if (!cell.terrain.isRiver()) {
+		if (!cell.terrain.isRiver() && !cell.terrain.isWetland() && !cell.terrain.isLake()) {
 			return false;
 		}
 		float waterLevel = cell.riverWaterLevel > 0.0F ? cell.riverWaterLevel : defaultWaterLevel;
@@ -96,6 +125,7 @@ final class TerrainBiomeRoleSelection {
 
 	private static void addCandidates(
 		Map<Climate.ParameterList<Holder<Biome>>, Climate.ParameterList<Holder<Biome>>> rivers,
+		Map<Climate.ParameterList<Holder<Biome>>, Climate.ParameterList<Holder<Biome>>> wetlands,
 		Map<Climate.ParameterList<Holder<Biome>>, Climate.ParameterList<Holder<Biome>>> nonRivers,
 		Climate.ParameterList<Holder<Biome>> source
 	) {
@@ -104,6 +134,12 @@ final class TerrainBiomeRoleSelection {
 		);
 		if (riverList != null) {
 			rivers.put(source, riverList);
+		}
+		Climate.ParameterList<Holder<Biome>> wetlandList = taggedSurfaceCandidates(
+			source, WetlandBiomeTags::isWetland
+		);
+		if (wetlandList != null) {
+			wetlands.put(source, wetlandList);
 		}
 		Climate.ParameterList<Holder<Biome>> nonRiverList = taggedSurfaceCandidates(
 			source, holder -> !holder.is(BiomeTags.IS_RIVER)
