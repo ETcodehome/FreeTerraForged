@@ -1,33 +1,30 @@
 package etcodehome.freeterraforged.mixin;
 
-import java.util.concurrent.Executor;
 import java.util.Objects;
-import java.util.function.Supplier;
 
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import com.mojang.datafixers.DataFixer;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.level.progress.ChunkProgressListener;
-import net.minecraft.util.thread.BlockableEventLoop;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.ChunkGenerator;
+import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
 import net.minecraft.world.level.chunk.LevelChunk;
-import net.minecraft.world.level.chunk.LightChunkGetter;
-import net.minecraft.world.level.entity.ChunkStatusUpdateListener;
 import net.minecraft.world.level.levelgen.RandomState;
-import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
+import net.minecraft.world.level.levelgen.structure.StructureSet;
 import net.minecraft.world.level.dimension.LevelStem;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.world.level.storage.DimensionDataStorage;
-import net.minecraft.world.level.storage.LevelStorageSource;
 import org.apache.commons.lang3.mutable.MutableObject;
 import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.network.FlowFieldSync;
@@ -50,14 +47,30 @@ public class MixinChunkMap {
 	@Shadow
 	private RandomState randomState;
 
-	@Inject(
+	@Shadow
+	@Final
+	ServerLevel level;
+
+	@WrapOperation(
+		method = "<init>",
 		at = @At(
 			value = "INVOKE",
 			target = "Lnet/minecraft/world/level/chunk/ChunkGenerator;createState(Lnet/minecraft/core/HolderLookup;Lnet/minecraft/world/level/levelgen/RandomState;J)Lnet/minecraft/world/level/chunk/ChunkGeneratorStructureState;"
-		),
-		method = "<init>"
+		)
 	)
-	public void ChunkMap(ServerLevel serverLevel, LevelStorageSource.LevelStorageAccess storageAccess, DataFixer dataFixer, StructureTemplateManager templateLoader, Executor executor, BlockableEventLoop<Runnable> eventLoop, LightChunkGetter lightChunkGetter, ChunkGenerator chunkGenerator, ChunkProgressListener chunkProgressListener, ChunkStatusUpdateListener chunkStatusListener, Supplier<DimensionDataStorage> dimensionStorage, int viewDistance, boolean syncChunkWrites, CallbackInfo callback) {
+	private ChunkGeneratorStructureState freeterraforged$initializeWorldgenEpoch(
+		ChunkGenerator chunkGenerator,
+		HolderLookup<StructureSet> structureSets,
+		RandomState randomState,
+		long seed,
+		Operation<ChunkGeneratorStructureState> original
+	) {
+		freeterraforged$initializeWorldgenEpochForLevel(this.level, chunkGenerator);
+		return original.call(chunkGenerator, structureSets, randomState, seed);
+	}
+
+	@Unique
+	private void freeterraforged$initializeWorldgenEpochForLevel(ServerLevel serverLevel, ChunkGenerator chunkGenerator) {
 		if (isSyntheticOrDummyLevel(serverLevel)) {
 			return;
 		}

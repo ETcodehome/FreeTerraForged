@@ -2,14 +2,15 @@ package etcodehome.freeterraforged.mixin;
 
 import java.util.List;
 
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.llamalad7.mixinextras.sugar.Local;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
-import org.spongepowered.asm.mixin.injection.Redirect;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import net.minecraft.core.SectionPos;
@@ -24,7 +25,6 @@ import net.minecraft.world.level.levelgen.DensityFunctions;
 import net.minecraft.world.level.levelgen.NoiseChunk;
 import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 import net.minecraft.world.level.levelgen.NoiseRouter;
-import net.minecraft.world.level.levelgen.NoiseSettings;
 import net.minecraft.world.level.levelgen.RandomState;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
@@ -83,25 +83,22 @@ class MixinNoiseChunk implements IChunkCellsHolder {
 		freeterraforged$ACTIVE_CHUNK.remove();
 	}
 
-	@Inject(
+	@WrapOperation(
 		method = "<init>",
 		at = @At(
 			value = "INVOKE",
-			target = "Lnet/minecraft/world/level/levelgen/NoiseRouter;mapAll(Lnet/minecraft/world/level/levelgen/DensityFunction$Visitor;)Lnet/minecraft/world/level/levelgen/NoiseRouter;",
-			shift = At.Shift.BEFORE
+			target = "Lnet/minecraft/world/level/levelgen/NoiseRouter;mapAll(Lnet/minecraft/world/level/levelgen/DensityFunction$Visitor;)Lnet/minecraft/world/level/levelgen/NoiseRouter;"
 		)
 	)
-	private void freeterraforged$initializeNoiseChunkOwner(
-		int cellCountXZ,
-		RandomState randomState,
-		int minBlockX,
-		int minBlockZ,
-		NoiseSettings noiseSettings,
-		DensityFunctions.BeardifierOrMarker beardifierOrMarker,
-		NoiseGeneratorSettings generatorSettings,
-		Aquifer.FluidPicker fluidPicker,
-		Blender blender,
-		CallbackInfo callback
+	private NoiseRouter freeterraforged$initializeNoiseChunkOwner(
+		NoiseRouter instance,
+		DensityFunction.Visitor visitor,
+		Operation<NoiseRouter> original,
+		@Local(argsOnly = true, ordinal = 0) int cellCountXZ,
+		@Local(argsOnly = true) RandomState randomState,
+		@Local(argsOnly = true, ordinal = 1) int minBlockX,
+		@Local(argsOnly = true, ordinal = 2) int minBlockZ,
+		@Local(argsOnly = true) NoiseGeneratorSettings generatorSettings
 	) {
 		this.randomState = randomState;
 		this.chunkX = SectionPos.blockToSectionCoord(minBlockX);
@@ -127,6 +124,7 @@ class MixinNoiseChunk implements IChunkCellsHolder {
 				}
 			}
 		}
+		return original.call(instance, visitor);
 	}
 
 	@ModifyArg(
