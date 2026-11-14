@@ -16,4 +16,8 @@ public interface FilterGrid {
     Cell[] getBacking();
 
     Cell getCellRaw(int x, int z);
+
+    default float getCellSpacing() {
+        return 1.0F;
+    }
 }

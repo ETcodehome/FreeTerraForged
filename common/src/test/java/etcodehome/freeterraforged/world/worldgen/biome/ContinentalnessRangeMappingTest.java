@@ -855,6 +855,74 @@ public class ContinentalnessRangeMappingTest {
     }
 
     @Test
+    @DisplayName("Verify land cells in PreviewGrid maintain scale-invariant weirdness and never collapse to VALLEY water biomes across zoom levels")
+    void testPreviewWeirdnessAndHydrologyZoomInvariance() throws Exception {
+        net.minecraft.world.level.biome.OverworldBiomeBuilder builder = new net.minecraft.world.level.biome.OverworldBiomeBuilder();
+        java.util.List<com.mojang.datafixers.util.Pair<net.minecraft.world.level.biome.Climate.ParameterPoint, net.minecraft.resources.ResourceKey<net.minecraft.world.level.biome.Biome>>> biomes = new java.util.ArrayList<>();
+        java.lang.reflect.Method addBiomes = net.minecraft.world.level.biome.OverworldBiomeBuilder.class.getDeclaredMethod("addBiomes", java.util.function.Consumer.class);
+        addBiomes.setAccessible(true);
+        addBiomes.invoke(builder, (java.util.function.Consumer<com.mojang.datafixers.util.Pair<net.minecraft.world.level.biome.Climate.ParameterPoint, net.minecraft.resources.ResourceKey<net.minecraft.world.level.biome.Biome>>>) biomes::add);
+        net.minecraft.world.level.biome.Climate.ParameterList<net.minecraft.resources.ResourceKey<net.minecraft.world.level.biome.Biome>> list = new net.minecraft.world.level.biome.Climate.ParameterList<>(biomes);
+
+        Preset preset = Presets.makeFTFDefault();
+        net.minecraft.core.RegistryAccess registries = net.minecraft.core.RegistryAccess.fromRegistryOfRegistries(net.minecraft.core.registries.BuiltInRegistries.REGISTRY).freeze();
+        net.minecraft.core.HolderGetter<etcodehome.freeterraforged.world.worldgen.noise.module.Noise> noiseLookup = preset.buildPreviewLookups(registries).lookupOrThrow(etcodehome.freeterraforged.registries.FTFRegistries.NOISE);
+
+        try (GeneratorContext ctx = new GeneratorContext(preset, noiseLookup, 42L)) {
+            Heightmap hm = ctx.getHeightmap();
+            Levels lvl = ctx.levels;
+
+            int[] zooms = {1, 2, 4, 8, 16, 32, 58};
+            int[][] centers = {{0, 0}, {5000, -5000}, {3369423, -48426}};
+
+            for (int zoom : zooms) {
+                int phantomWaterCount = 0;
+                int landCellCount = 0;
+
+                for (int[] center : centers) {
+                    PreviewGrid grid = PreviewGrid.generateZoomed(hm, ctx.filters, center[0], center[1], zoom, 64, () -> false).join();
+                    for (int z = 0; z < 64; z++) {
+                        for (int x = 0; x < 64; x++) {
+                            Cell cell = grid.getCell(x, z);
+                            boolean isLand = cell.height > lvl.water && !cell.erosionMask && !cell.terrain.isRiver() && !cell.terrain.isLake() && !cell.terrain.isWetland();
+                            if (!isLand) {
+                                continue;
+                            }
+                            landCellCount++;
+
+                            float w = CellSampler.Field.WEIRDNESS.read(cell, hm);
+                            // On dry land, read weirdness must never be in the VALLEY band [-0.05F, 0.05F]
+                            assertFalse(w >= -0.05F && w <= 0.05F,
+                                String.format("Land cell weirdness at zoom %d was in VALLEY band: w=%.4f, height=%.4f", zoom, w, cell.height));
+
+                            float c = CellSampler.Field.CONTINENT.read(cell, hm);
+                            net.minecraft.world.level.biome.Climate.TargetPoint target = new net.minecraft.world.level.biome.Climate.TargetPoint(
+                                net.minecraft.world.level.biome.Climate.quantizeCoord(cell.temperature),
+                                net.minecraft.world.level.biome.Climate.quantizeCoord(cell.moisture),
+                                net.minecraft.world.level.biome.Climate.quantizeCoord(c),
+                                net.minecraft.world.level.biome.Climate.quantizeCoord(cell.erosion),
+                                net.minecraft.world.level.biome.Climate.quantizeCoord(0.0F),
+                                net.minecraft.world.level.biome.Climate.quantizeCoord(w)
+                            );
+                            net.minecraft.resources.ResourceKey<net.minecraft.world.level.biome.Biome> found = list.findValue(target);
+                            String biomeName = found.location().getPath();
+                            if (biomeName.contains("river") || biomeName.contains("ocean")) {
+                                phantomWaterCount++;
+                                System.out.printf("PHANTOM at zoom %d: biome=%s, T=%.3f, M=%.3f, C=%.3f, E=%.3f, W=%.3f, height=%.3f, terrain=%s%n",
+                                    zoom, biomeName, cell.temperature, cell.moisture, c, cell.erosion, w, cell.height, cell.terrain);
+                            }
+                        }
+                    }
+                }
+
+                assertTrue(landCellCount > 0, "Expected land cells to be evaluated at zoom " + zoom);
+                assertEquals(0, phantomWaterCount,
+                    String.format("Expected 0 phantom water biomes on dry land at zoom %d, but found %d out of %d land cells", zoom, phantomWaterCount, landCellCount));
+            }
+        }
+    }
+
+    @Test
     @DisplayName("Verify cell.continentalness field is populated with the final remap value and copied correctly")
     void testCellContinentalnessFieldPopulatedAndCopied() {
         Cell cell = new Cell();

@@ -22,13 +22,16 @@ public record Network(FTFRiverCarver riverCarver, Wetland[] wetlands, Network[] 
         float px = x;
         float pz = z;
         float pt = t;
+        float wx = x;
+        float wz = z;
+        float wt = t;
         if (warp.test(t)) {
             long offset = warp.getOffset(x, z, pt, river);
-            x += PosUtil.unpackLeftf(offset);
-            z += PosUtil.unpackRightf(offset);
-            t = Line.distanceOnLine(x, z, river.x1, river.z1, river.x2, river.z2);
+            wx += PosUtil.unpackLeftf(offset);
+            wz += PosUtil.unpackRightf(offset);
+            wt = Line.distanceOnLine(wx, wz, river.x1, river.z1, river.x2, river.z2);
         }
-        this.carveRiver(cell, px, pz, pt, x, z, t);
+        this.carveRiver(cell, px, pz, pt, wx, wz, wt);
         this.carveWetlands(cell, x, z, nx, nz);
         for (Network network : this.children) {
             network.carve(cell, x, z, nx, nz);

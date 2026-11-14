@@ -251,37 +251,38 @@ public class Erosion implements Filter {
         // Slopes use a minmod of the one-sided differences (not a central difference), so a plateau rim
         // cell whose far side is flat reads slope 0 instead of half the cliff drop. Border cases are
         // handled outside the hot loops so the interior loops are branch-light. Requires tileSize >= 2.
-        final float wh = this.worldHeight;
+        final float cellSpacing = map.getCellSpacing() > 0.0F ? map.getCellSpacing() : 1.0F;
+        final float slopeScale = this.worldHeight / cellSpacing;
         final int last = tileSize - 1;
         for (int z = 0; z < tileSize; ++z) {
             final int row = z * tileSize;
 
             // slopeX: border cells first, then the interior.
-            slopeX[row] = (heights[row + 1] - heights[row]) * wh;
+            slopeX[row] = (heights[row + 1] - heights[row]) * slopeScale;
             for (int x = 1; x < last; ++x) {
                 final int idx = row + x;
                 final float c = heights[idx];
-                slopeX[idx] = minmod(c - heights[idx - 1], heights[idx + 1] - c) * wh;
+                slopeX[idx] = minmod(c - heights[idx - 1], heights[idx + 1] - c) * slopeScale;
             }
-            slopeX[row + last] = (heights[row + last] - heights[row + last - 1]) * wh;
+            slopeX[row + last] = (heights[row + last] - heights[row + last - 1]) * slopeScale;
 
             // slopeZ: the z border test is loop-invariant, so pick the loop once per row.
             if (z == 0) {
                 final int nextRow = row + tileSize;
                 for (int x = 0; x < tileSize; ++x) {
-                    slopeZ[row + x] = (heights[nextRow + x] - heights[row + x]) * wh;
+                    slopeZ[row + x] = (heights[nextRow + x] - heights[row + x]) * slopeScale;
                 }
             } else if (z == last) {
                 final int prevRow = row - tileSize;
                 for (int x = 0; x < tileSize; ++x) {
-                    slopeZ[row + x] = (heights[row + x] - heights[prevRow + x]) * wh;
+                    slopeZ[row + x] = (heights[row + x] - heights[prevRow + x]) * slopeScale;
                 }
             } else {
                 final int prevRow = row - tileSize;
                 final int nextRow = row + tileSize;
                 for (int x = 0; x < tileSize; ++x) {
                     final float c = heights[row + x];
-                    slopeZ[row + x] = minmod(c - heights[prevRow + x], heights[nextRow + x] - c) * wh;
+                    slopeZ[row + x] = minmod(c - heights[prevRow + x], heights[nextRow + x] - c) * slopeScale;
                 }
             }
         }
@@ -308,13 +309,13 @@ public class Erosion implements Filter {
         // Step 3: Single procedural, ADDITIVE pass over all cells
         for (int z = 0; z < tileSize; ++z) {
             final int row = z * tileSize;
-            final float worldZ = (float) (worldBlockZ + z);
+            final float worldZ = (float) (worldBlockZ + z * cellSpacing);
 
             for (int x = 0; x < tileSize; ++x) {
                 final int idx = row + x;
                 final Cell cell = cells[idx];
 
-                if (cell.erosionMask) {
+                if (cell.erosionMask || cell.height <= this.levels.ground) {
                     continue;
                 }
 
@@ -356,15 +357,11 @@ public class Erosion implements Filter {
                 final float flatGate = ampT * ampT * (3.0f - 2.0f * ampT);
 
                 // Modifier is linear in its value argument and depends only on the cell (its height,
-                // terrain, river mask), so evaluate it once. A factor of exactly 0 (below ground, river
-                // centers) means the result is exactly 0, so skip all noise work. Note: those cells do not
-                // update cell.sediment.
+                // terrain, river mask), so evaluate it once. If erosionFactor <= 0 (e.g. river valley mask),
+                // the height delta carve is skipped below, but sediment is still updated for full continuity.
                 final float erosionFactor = this.modifier.modify(cell, 1.0F);
-                if (erosionFactor == 0.0F) {
-                    continue;
-                }
 
-                final float worldX = (float) (worldBlockX + x);
+                final float worldX = (float) (worldBlockX + x * cellSpacing);
 
                 // Depth in BLOCKS, wavelength in blocks: the ratio stays constant at any world height.
                 float currentStrength = this.strength * this.scaleBlocks;
@@ -452,9 +449,9 @@ public class Erosion implements Filter {
                 cell.sediment = NoiseUtil.clamp(cell.sediment + ridgeMapFadeTarget * (1.0f - ridgeMapCombiMask), -1.0f, 1.0f);
                 cell.weirdness = ReferenceWeirdness.fromSediment(cell.sediment, cell.macroBiomeId);
 
-                // The smoothed gate can be closed while the raw gate is open. Sediment is already recorded
-                // above, so there is nothing left to do for this cell.
-                if (flatGate <= 0.0f) {
+                // The smoothed gate can be closed while the raw gate is open, or erosionFactor can be 0.
+                // Sediment is already recorded above, so there is nothing left to carve for this cell.
+                if (flatGate <= 0.0f || erosionFactor <= 0.0f) {
                     continue;
                 }
 
@@ -474,7 +471,7 @@ public class Erosion implements Filter {
                 // original terrain nearby. headroom >= ENVELOPE_MARGIN_BLOCKS > 0, so the division is safe.
                 float limitedBlocks = gatedBlocks;
                 if (limitedBlocks > 0.0f) {
-                    final float headroom = (envHi[idx] - baseHeight) * wh + ENVELOPE_MARGIN_BLOCKS;
+                    final float headroom = (envHi[idx] - baseHeight) * this.worldHeight + ENVELOPE_MARGIN_BLOCKS;
                     limitedBlocks = limitedBlocks * headroom / (limitedBlocks + headroom);
                 }
 
@@ -495,7 +492,12 @@ public class Erosion implements Filter {
                 cell.heightErosion += this.levels.ground - cell.height;
                 cell.height = this.levels.ground;
             }
-            if (cell.erosionMask || cell.height <= this.levels.ground) {
+            float waterLevel = cell.riverWaterLevel > 0.0F ? cell.riverWaterLevel : this.levels.water;
+            boolean isWater = cell.erosionMask || cell.height <= this.levels.ground
+                    || (cell.terrain.isRiver() && cell.height <= waterLevel)
+                    || (cell.terrain.isLake() && cell.height <= waterLevel)
+                    || (cell.terrain.isWetland() && cell.height <= waterLevel);
+            if (isWater) {
                 cell.sediment = -0.5f;
                 cell.weirdness = 0.0f;
             } else {

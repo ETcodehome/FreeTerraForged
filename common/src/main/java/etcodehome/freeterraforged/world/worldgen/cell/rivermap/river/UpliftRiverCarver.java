@@ -113,7 +113,7 @@ public class UpliftRiverCarver implements FTFRiverCarver {
         float valleyPinchVar = this.valleyPinchNoise.compute(currX, currZ, 6204) * 2.0F;
 
         // Always run mask logic to ensure clean falloffs
-        updateValleyMask(prevX, prevZ, prevT, currT, distSqToCurr, scaleFactor, cell);
+        updateValleyMask(currT, distSqToCurr, scaleFactor, cell);
 
         // Compute layout parameters
         float dynamicWidthMult = 1.0F + (widthVar * 0.35F);
@@ -421,9 +421,8 @@ public class UpliftRiverCarver implements FTFRiverCarver {
         return NoiseUtil.lerp(progress, steppedProgress, terraceStrength * 0.90F);
     }
 
-    private void updateValleyMask(float prevX, float prevZ, float prevT, float currT, float distSqToCurr, float sqScaleFactor, Cell cell) {
-        float distSqToPrev = this.getDistance2(prevX, prevZ, prevT);
-        float valleyInfluence = this.getDistanceAlpha(currT, Math.min(distSqToCurr, distSqToPrev), this.valleyWidth, sqScaleFactor);
+    private void updateValleyMask(float currT, float distSqToCurr, float sqScaleFactor, Cell cell) {
+        float valleyInfluence = this.getDistanceAlpha(currT, distSqToCurr, this.valleyWidth, sqScaleFactor);
         if (valleyInfluence > 0.0F) {
             valleyInfluence = this.valleyCurve.apply(valleyInfluence);
             cell.riverMask = Math.min(cell.riverMask, 1.0F - valleyInfluence);

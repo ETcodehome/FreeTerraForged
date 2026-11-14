@@ -95,7 +95,7 @@ public record Heightmap(
 	public void applyClimate(Cell cell, float x, float z, boolean applyClimate) {
         this.climate.apply(cell, x, z, applyClimate);
         cell.terrainErosion = cell.erosion;
-        if (cell.weirdness == 0.0F && cell.height > this.levels.ground && !cell.erosionMask) {
+        if (Math.abs(cell.weirdness) <= 0.05F && cell.height > this.levels.ground && !cell.erosionMask) {
             cell.weirdness = ReferenceWeirdness.fromSediment(cell.sediment, cell.macroBiomeId);
         }
         cell.continentalness = CellSampler.computeContinentalness(cell, this.levels, this.controlPoints);
