@@ -44,4 +44,19 @@ public class CaveSettings {
 	public CaveSettings copy() {
 		return new CaveSettings(this.entranceCaveProbability, this.cheeseCaveDepthOffset, this.cheeseCaveProbability, this.spaghettiCaveProbability, this.noodleCaveProbability, this.caveCarverProbability, this.deepCaveCarverProbability, this.ravineCarverProbability, this.largeOreVeins, this.legacyCarverDistribution);
 	}
+
+	public static CaveSettings makeDefault(){
+		return new CaveSettings(
+			0.199F,
+			1.5625F,
+			1.0F,
+			1.0F,
+			1.0F,
+			0.4014F,
+			0.1997F,
+			0.0373F,
+			true,
+			false
+		);
+	}
 }

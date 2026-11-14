@@ -5,7 +5,7 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.util.valueproviders.FloatProvider;
 import net.minecraft.util.valueproviders.FloatProviderType;
 
-@Deprecated
+// Kept registered so older datapacks can still decode their legacy canyon provider.
 public class LegacyCanyonYScale extends FloatProvider {
 	public static final MapCodec<LegacyCanyonYScale> CODEC = MapCodec.unit(LegacyCanyonYScale::new);
 	

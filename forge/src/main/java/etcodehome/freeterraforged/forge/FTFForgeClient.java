@@ -1,6 +1,6 @@
 package etcodehome.freeterraforged.forge;
 
-import net.minecraft.world.level.levelgen.presets.WorldPresets;
+import etcodehome.freeterraforged.data.worldgen.preset.FTFWorldPresets;
 import net.minecraftforge.client.event.RegisterPresetEditorsEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import etcodehome.freeterraforged.client.gui.screen.presetconfig.PresetConfigScreen;
@@ -13,6 +13,6 @@ class FTFForgeClient {
 	}
 
 	public static void registerPresetEditors(RegisterPresetEditorsEvent event) {
-		event.register(WorldPresets.NORMAL, (screen, ctx) -> new PresetConfigScreen(screen));
+		event.register(FTFWorldPresets.FREETERRAFORGED, (screen, ctx) -> new PresetConfigScreen(screen));
 	}
 }

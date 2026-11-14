@@ -8,9 +8,7 @@
   	"MixinPresetEditor"
   ],
   "mixins": [
-    "MixinBiolithTerraBlenderCompat",
-    "MixinMinecraftServer",
-    "MixinBiomeModificationImpl"
+    "MixinMinecraftServer"
   ],
   "injectors": {
     "defaultRequire": 1

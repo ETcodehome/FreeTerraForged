@@ -13,11 +13,8 @@ import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
 import net.minecraft.core.WritableRegistry;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.RegistryDataLoader.RegistryData;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.world.level.GameRules;
 import net.minecraftforge.eventbus.api.IEventBus;
-import net.minecraftforge.registries.DataPackRegistriesHooks;
 import net.minecraftforge.registries.DataPackRegistryEvent;
 import net.minecraftforge.registries.DeferredRegister;
 import etcodehome.freeterraforged.FTFCommon;
@@ -51,14 +48,6 @@ public final class RegistryUtilImpl {
 
 	public static <T> void createDataRegistry(ResourceKey<Registry<T>> key, Codec<T> codec, boolean synced) {
 		DATA_REGISTRIES.add(new DataRegistry<>(key, codec, synced));
-	}
-
-	public static <T extends GameRules.Value<T>> GameRules.Key<T> registerGameRule(String name, GameRules.Category category, GameRules.Type<T> type) {
-		return GameRules.register(name, category, type);
-	}
-
-	public static List<RegistryData<?>> getDynamicRegistries() {
-		return DataPackRegistriesHooks.getDataPackRegistries();
 	}
 
 	@SuppressWarnings("unchecked")

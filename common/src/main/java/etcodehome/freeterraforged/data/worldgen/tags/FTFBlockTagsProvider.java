@@ -6,6 +6,7 @@ import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.tags.FTFBlockTags;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.HolderLookup.Provider;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.PackOutput;
 import net.minecraft.data.tags.IntrinsicHolderTagsProvider;
@@ -17,7 +18,7 @@ public class FTFBlockTagsProvider extends IntrinsicHolderTagsProvider<Block> {
 	private Preset preset;
 	
 	public FTFBlockTagsProvider(Preset preset, PackOutput packOutput, CompletableFuture<Provider> completableFuture) {
-		super(packOutput, Registries.BLOCK, completableFuture, (block) -> block.builtInRegistryHolder().key());
+		super(packOutput, Registries.BLOCK, completableFuture, (block) -> BuiltInRegistries.BLOCK.getResourceKey(block).orElseThrow());
 
 		this.preset = preset;
 	}

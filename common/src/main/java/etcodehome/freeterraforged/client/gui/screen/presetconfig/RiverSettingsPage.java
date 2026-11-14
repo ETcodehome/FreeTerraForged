@@ -50,8 +50,8 @@ class RiverSettingsPage extends PresetEditorPage {
 	private CycleButton<Boolean> toggleBoatFlowDynamics;
 	private CycleButton<Boolean> toggleNavigableWaterfalls;
 	
-	public RiverSettingsPage(PresetConfigScreen screen, PresetEntry preset) {
-		super(screen, preset);
+	public RiverSettingsPage(PresetConfigScreen screen) {
+		super(screen);
 	}
 	
 	@Override
@@ -256,12 +256,12 @@ class RiverSettingsPage extends PresetEditorPage {
 
 	@Override
 	public Optional<Page> previous() {
-		return Optional.of(new TerrainSettingsPage(this.screen, this.preset));
+		return Optional.of(new TerrainSettingsPage(this.screen));
 	}
 
 	@Override
 	public Optional<Page> next() {
-		return Optional.of(new IslandSettingsPage(this.screen, this.preset));
+		return Optional.of(new IslandSettingsPage(this.screen));
 	}
 
 }

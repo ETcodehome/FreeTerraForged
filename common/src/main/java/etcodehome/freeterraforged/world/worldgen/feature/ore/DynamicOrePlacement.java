@@ -7,15 +7,15 @@ import java.util.stream.Stream;
 
 import etcodehome.freeterraforged.server.FTFMinecraftServer;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.placement.HeightRangePlacement;
 import net.minecraft.world.level.levelgen.placement.PlacementModifier;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.minecraft.world.level.levelgen.placement.PlacementContext;
+import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
+import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPlan;
+import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPlans;
 import etcodehome.freeterraforged.world.worldgen.feature.ore.DynamicOrePlan.FanoutStage;
 import etcodehome.freeterraforged.world.worldgen.feature.ore.DynamicOrePlan.VerticalFrame;
 import etcodehome.freeterraforged.world.worldgen.feature.ore.DynamicOrePlan.VerticalTransform;
@@ -96,10 +96,20 @@ public final class DynamicOrePlacement {
 	}
 
 	public static boolean isStandardOrePlacement(HeightRangePlacement placement, PlacementContext context) {
-		return context.topFeature()
-			.filter(feature -> feature.placement().stream().anyMatch(modifier -> modifier == placement))
-			.filter(DynamicOrePlacement::isStandardOre)
-			.isPresent();
+		if (!(context.generator() instanceof TerraForgedChunkGenerator)) {
+			return false;
+		}
+		PlacedFeature topFeature = context.topFeature().orElse(null);
+		if (topFeature == null || !DynamicOrePlacement.isStandardOre(topFeature)) {
+			return false;
+		}
+		List<PlacementModifier> modifiers = topFeature.placement();
+		for (int i = 0; i < modifiers.size(); i++) {
+			if (modifiers.get(i) == placement) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private static boolean isStandardOre(PlacedFeature feature) {
@@ -108,35 +118,49 @@ public final class DynamicOrePlacement {
 	}
 
 	private static Optional<Activation> activation(PlacementModifier modifier, PlacementContext context) {
-		if (!Level.OVERWORLD.equals(context.getLevel().getLevel().dimension())) {
+		if (!(context.generator() instanceof TerraForgedChunkGenerator generator)) {
 			return Optional.empty();
 		}
-		Optional<PlacedFeature> topFeature = context.topFeature().filter(DynamicOrePlacement::isStandardOre);
-		if (topFeature.isEmpty()) {
+		PlacedFeature topFeature = context.topFeature().orElse(null);
+		if (topFeature == null || !DynamicOrePlacement.isStandardOre(topFeature)) {
 			return Optional.empty();
 		}
-		int modifierIndex = identityIndex(topFeature.orElseThrow().placement(), modifier);
+		WorldgenPlans.PlacedFeatures placedFeatures = generator.plan()
+			.map(WorldgenPlan::placedFeatures)
+			.orElse(null);
+		if (placedFeatures == null) {
+			return Optional.empty();
+		}
+		Optional<VerticalTransform> transformOpt = placedFeatures.oreTransform(topFeature);
+		if (transformOpt.isEmpty()) {
+			return Optional.empty();
+		}
+		VerticalTransform transform = transformOpt.get();
+		DynamicOrePlan plan = placedFeatures.ores();
+		Optional<VerticalFrame> vf = plan.verticalFrame();
+		if (vf.isEmpty()) {
+			return Optional.empty();
+		}
+		VerticalFrame currentFrame = vf.get();
+		if (currentFrame.minY() != context.getMinGenY()
+				|| currentFrame.maxY() != context.getMinGenY() + context.getGenDepth() - 1
+				|| currentFrame.seaLevel() != context.generator().getSeaLevel()) {
+			return Optional.empty();
+		}
+
+		List<PlacementModifier> modifiers = topFeature.placement();
+		int modifierIndex = -1;
+		if (transform.heightModifierIndex() < modifiers.size() && modifiers.get(transform.heightModifierIndex()) == modifier) {
+			modifierIndex = transform.heightModifierIndex();
+		} else if (transform.fanoutModifierIndex() < modifiers.size() && modifiers.get(transform.fanoutModifierIndex()) == modifier) {
+			modifierIndex = transform.fanoutModifierIndex();
+		} else {
+			modifierIndex = identityIndex(modifiers, modifier);
+		}
 		if (modifierIndex < 0) {
 			return Optional.empty();
 		}
-		ResourceLocation featureId = context.getLevel()
-			.registryAccess()
-			.registryOrThrow(Registries.PLACED_FEATURE)
-			.getKey(topFeature.orElseThrow());
-		if (featureId == null || !(context.getLevel().getServer() instanceof FTFMinecraftServer owner)) {
-			return Optional.empty();
-		}
-		DynamicOrePlan plan = owner.getDynamicOrePlan();
-		VerticalFrame currentFrame = new VerticalFrame(
-			context.getMinGenY(),
-			context.getMinGenY() + context.getGenDepth() - 1,
-			context.generator().getSeaLevel()
-		);
-		if (plan.verticalFrame().isEmpty() || !plan.verticalFrame().orElseThrow().equals(currentFrame)) {
-			return Optional.empty();
-		}
-		VerticalTransform transform = plan.verticalTransforms().get(featureId.toString());
-		return transform == null ? Optional.empty() : Optional.of(new Activation(transform, modifierIndex));
+		return Optional.of(new Activation(transform, modifierIndex));
 	}
 
 	private static int identityIndex(List<PlacementModifier> modifiers, PlacementModifier target) {

@@ -6,7 +6,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.ChunkPos;
 
 public record FlowFieldSyncPayload(ChunkPos pos, byte[] rawGrid) {
-
     public static final ResourceLocation ID = new ResourceLocation("freeterraforged", "flow_sync");
 
     public FriendlyByteBuf toBuffer() {
@@ -17,8 +16,6 @@ public record FlowFieldSyncPayload(ChunkPos pos, byte[] rawGrid) {
     }
 
     public static FlowFieldSyncPayload fromBuffer(FriendlyByteBuf buf) {
-        ChunkPos pos = new ChunkPos(buf.readLong());
-        byte[] rawGrid = buf.readByteArray(256);
-        return new FlowFieldSyncPayload(pos, rawGrid);
+        return new FlowFieldSyncPayload(new ChunkPos(buf.readLong()), buf.readByteArray(256));
     }
 }

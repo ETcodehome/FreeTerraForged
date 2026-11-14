@@ -16,6 +16,8 @@ public class FTFSurfaceRules {
 
 	public static void bootstrap() {
 		register("strata", StrataRule.KEY_CODEC);
+		register("inherited_surface", InheritedSurfaceRule.KEY_CODEC);
+		register("acquired_surface", AcquiredSurfaceRule.KEY_CODEC);
 	}
 	
 	public static StrataRule strata(ResourceLocation name, Holder<Noise> selector, List<Strata> strata, int iterations) {

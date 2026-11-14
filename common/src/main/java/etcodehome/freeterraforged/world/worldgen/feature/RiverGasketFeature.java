@@ -8,6 +8,7 @@ import net.minecraft.core.SectionPos;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.feature.Feature;
@@ -15,10 +16,12 @@ import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
 import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConfiguration;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
+import etcodehome.freeterraforged.world.worldgen.IChunkCellsHolder;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.river.RiverCarverSettings;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
 
 import java.util.Arrays;
 
@@ -74,10 +77,16 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
         }
 
         BlockPos origin = placeContext.origin();
-        int minBlockX = SectionPos.sectionToBlockCoord(SectionPos.blockToSectionCoord(origin.getX()));
-        int minBlockZ = SectionPos.sectionToBlockCoord(SectionPos.blockToSectionCoord(origin.getZ()));
+        int chunkX = SectionPos.blockToSectionCoord(origin.getX());
+        int chunkZ = SectionPos.blockToSectionCoord(origin.getZ());
+        int minBlockX = SectionPos.sectionToBlockCoord(chunkX);
+        int minBlockZ = SectionPos.sectionToBlockCoord(chunkZ);
 
-        Cell[] chunkCells = CHUNK_CELLS.get();
+        ChunkAccess chunk = level.getChunk(chunkX, chunkZ);
+        IChunkCellsHolder cellsHolder = chunk instanceof IChunkCellsHolder h ? h : null;
+        Cell[] holderCells = cellsHolder != null ? cellsHolder.freeterraforged$getOrCreateChunkCells(generatorContext) : null;
+
+        Cell[] chunkCells = holderCells != null ? holderCells : CHUNK_CELLS.get();
         int[] riverIndices = RIVER_INDICES.get();
         int riverCount = 0;
 
@@ -85,11 +94,15 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
         for (int z = 0; z < 16; z++) {
             for (int x = 0; x < 16; x++) {
                 int index = x + (z * 16);
-                int worldX = minBlockX + x;
-                int worldZ = minBlockZ + z;
-
-                Cell cell = chunkCells[index].reset();
-                generatorContext.lookup.applyCell(cell, worldX, worldZ, false, false);
+                Cell cell;
+                if (holderCells != null) {
+                    cell = holderCells[index];
+                } else {
+                    int worldX = minBlockX + x;
+                    int worldZ = minBlockZ + z;
+                    cell = chunkCells[index].reset();
+                    generatorContext.lookup.applyCell(cell, worldX, worldZ, false, false);
+                }
 
                 if (cell.riverZone != RiverCarverSettings.RiverZone.None
                         && cell.riverZone != RiverCarverSettings.RiverZone.ValleyFadeout) {
@@ -301,18 +314,17 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
             return cachedValue;
         }
 
-        generatorContext.lookup.applyCell(
-                neighborCell.reset(),
+        Cell cachedNeighbor = CellSampler.getCachedOrLookup(
+                generatorContext.lookup,
                 targetX,
                 targetZ,
-                false,
                 false
         );
 
         float water = ContinentalHydrology.getComplexWaterHeight(
-                neighborCell.waterTable,
-                neighborCell.globalContinentScale,
-                neighborCell.continentSizeModifier
+                cachedNeighbor.waterTable,
+                cachedNeighbor.globalContinentScale,
+                cachedNeighbor.continentSizeModifier
         ) + oceanHeightOffset;
 
         int computedY = levels.scale(water);

@@ -2,6 +2,9 @@ package etcodehome.freeterraforged.client.gui.screen.presetconfig;
 
 import java.awt.Color;
 
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
+import etcodehome.freeterraforged.world.worldgen.biome.Continentalness;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.river.RiverCarverSettings;
@@ -45,8 +48,8 @@ public enum RenderMode {
 			return rgba(hsb[0], hsb[1], NoiseUtil.clamp((hsb[2] * scale) + bias, 0.0F, 1.0F));
 		}
 	},
-    TRANSITION_POINTS {
-    	
+    TEMPERATURE {
+
         @Override
         public boolean handlesWater() {
             return true;
@@ -54,71 +57,68 @@ public enum RenderMode {
 
         @Override
         public int getColor(Cell cell, Levels levels, float scale, float bias) {
-            switch (cell.terrain.getCategory()) {
-                case DEEP_OCEAN:
-                    return rgba(0.63F, 0.65F, 0.8F);
-                case SHALLOW_OCEAN:
-                    return rgba(0.6F, 0.6F, 0.8F);
-                case BEACH:
-                    return rgba(0.2F, 0.4F, 0.75F);
-                case COAST:
-                    return rgba(0.35F, 0.75F, 0.65F);
-                default:
-                    if (cell.terrain.isRiver() || cell.terrain.isWetland()) {
-                        return rgba(0.6F, 0.6F, 0.8F);
-                    }
-                    return rgba(0.3F, 0.7F, 0.5F);
+
+            // Remap cell.temperature from [-1.0, 1.0] to [0.0, 1.0] (0 = cold, 1 = hot)
+            float temperature = NoiseUtil.clamp((cell.temperature + 1.0F) * 0.5F, 0.0F, 1.0F);
+
+            // #d6f0fa in HSB (land cold end)
+            final float iceHue = 0.546F;
+            final float iceSaturation = 0.14F;
+            final float iceBrightness = 0.98F;
+
+            if (cell.height < levels.water) {
+                // Ocean: vibrant rich blue ~#0f48b8 (cold) -> #26acc7 tropical cyan (warm)
+                // Squaring the ramp keeps the blue dominant until the water gets properly warm
+                float t = temperature * temperature;
+                float hue = NoiseUtil.lerp(0.61F, 0.528F, t);
+                float saturation = NoiseUtil.lerp(0.92F, 0.81F, t);
+                float brightness = NoiseUtil.lerp(0.72F, 0.78F, t);
+                return rgba(hue, saturation, brightness);
             }
-        }
-    },
-    TEMPERATURE {
-    	
-        @Override
-        public int getColor(Cell cell, Levels levels, float scale, float bias) {
-            float saturation = 0.7F;
-            float brightness = 0.8F;
-            return rgba(step(1 - cell.regionTemperature, 8) * 0.65F, saturation, brightness);
+
+            // Land: #d6f0fa icy (-1) -> green (0) -> red (+1)
+            final float greenHue = 1.0F / 3.0F;
+            final float landSaturation = 0.7F;
+            final float landBrightness = 0.8F;
+
+            if (temperature >= 0.5F) {
+                // green -> red
+                float alpha = (temperature - 0.5F) * 2.0F;
+                float hue = NoiseUtil.lerp(greenHue, 0.0F, alpha);
+                return rgba(hue, landSaturation, landBrightness);
+            }
+
+            // icy white -> green
+            float alpha = temperature * 2.0F;
+            float hue = NoiseUtil.lerp(iceHue, greenHue, alpha);
+            float saturation = NoiseUtil.lerp(iceSaturation, landSaturation, alpha);
+            float brightness = NoiseUtil.lerp(iceBrightness, landBrightness, alpha);
+            return rgba(hue, saturation, brightness);
         }
     },
     MOISTURE {
-    	
-        @Override
-        public int getColor(Cell cell, Levels levels, float scale, float bias) {
-            float saturation = 0.7F;
-            float brightness = 0.8F;
-            return rgba(step(cell.regionMoisture, 8) * 0.65F, saturation, brightness);
-        }
-    },
-    BIOME_CELLS {
 
-		@Override
-		public boolean handlesWater() {
-			return true;
-		}
-    	
+        @Override
+        public boolean handlesWater() { return true; }
+
         @Override
         public int getColor(Cell cell, Levels levels, float scale, float bias) {
-            float saturation = 0.7F;
-            float brightness = 0.8F;
-            return rgba(cell.biomeRegionId, saturation, brightness);
-        }
-    },
-    MACRO_NOISE {
-    	
-        @Override
-        public int getColor(Cell cell, Levels levels, float scale, float bias) {
-            float saturation = 0.7F;
-            float brightness = 0.8F;
-            return rgba(cell.macroBiomeId, saturation, brightness);
-        }
-    },
-    TERRAIN_REGION {
-    	
-        @Override
-        public int getColor(Cell cell, Levels levels, float scale, float bias) {
-            float saturation = 0.7F;
-            float brightness = 0.8F;
-            return rgba(cell.terrain.getRenderHue(), saturation, brightness);
+
+            // Remap cell.moisture from [-1.0, 1.0] to [0.0, 1.0]
+            float moisture = NoiseUtil.clamp((cell.moisture + 1.0F) * 0.5F, 0.0F, 1.0F);
+
+            if (cell.height < levels.water) {
+                float hue = 0.58F;
+                float saturation = NoiseUtil.lerp(0.45F, 0.85F, moisture);
+                float brightness = NoiseUtil.lerp(0.90F, 0.35F, moisture);
+
+                return rgba(hue, saturation, brightness);
+            }
+
+            float hue = NoiseUtil.lerp(0.15F, 0.60F, moisture);
+            float saturation = NoiseUtil.lerp(0.35F, 1.0F, moisture);
+            float brightness = 0.85F;
+            return rgba(hue, saturation, brightness);
         }
     },
     HYPSOMETRIC {
@@ -205,6 +205,148 @@ public enum RenderMode {
 
         }
     },
+    EROSION {
+        @Override
+        public int getColor(Cell cell, Levels levels, float scale, float bias) {
+
+            float erosion = NoiseUtil.clamp((cell.erosion + 1.0F) * 0.5F, 0.0F, 1.0F);
+
+            float hue = 0.0F;
+            float saturation = 0.0F;
+            float brightness = erosion;
+            return rgba(hue, saturation, brightness);
+        }
+    },
+    GRADIENT {
+        @Override
+        public int getColor(Cell cell, Levels levels, float scale, float bias) {
+
+            float normalized = Math.min(1.0F, cell.gradient / PresetManager.PM.worldSettings.properties.terrainScaleFactor());
+
+            float hue = 0.0F;
+            float saturation = 0.0F;
+            float brightness = normalized;
+            return rgba(hue, saturation, brightness);
+        }
+    },
+    SEDIMENT {
+
+        @Override
+        public boolean handlesWater() {
+            return true;
+        }
+
+        @Override
+        public int getColor(Cell cell, Levels levels, float scale, float bias) {
+
+            if (cell.erosionMask){
+                return rgba(255, 32, 32);
+            }
+
+            float val = cell.sediment; // Ranges from -1.0 to +1.0
+
+            // Map from [-1.0, +1.0] to [0.0, 1.0]:
+            // -1.0 = Black (0)
+            // +1.0 = White (255)
+            float normalized = (Math.max(-1.0f, Math.min(1.0f, val)) + 1.0f) * 0.5f;
+            int c = (int) (normalized * 255.0f);
+
+            return rgba(c, c, c);
+        }
+    },
+    WEIRDNESS{
+        @Override
+        public int getColor(Cell cell, Levels levels, float scale, float bias) {
+
+            float weirdness = NoiseUtil.clamp((cell.weirdness + 1.0F) * 0.5F, 0.0F, 1.0F);
+
+            float hue = 0.0F;
+            float saturation = 0.0F;
+            float brightness = weirdness;
+            return rgba(hue, saturation, brightness);
+        }
+    },
+    CONTINENTALNESS{
+        @Override
+        public int getColor(Cell cell, Levels levels, float scale, float bias) {
+
+            float brightness = NoiseUtil.clamp((cell.continentalness + 1.2F) / 2.2F, 0.0F, 1.0F);
+
+            float hue = 0.0F;
+            float saturation = 0.0F;
+            return rgba(hue, saturation, brightness);
+        }
+    },
+    BIOME_REGION_EDGE{
+        @Override
+        public int getColor(Cell cell, Levels levels, float scale, float bias) {
+
+            float edge = NoiseUtil.clamp((cell.biomeRegionEdge + 1.0F) * 0.5F, 0.0F, 1.0F);
+
+            float hue = 0.0F;
+            float saturation = 0.0F;
+            float brightness = edge;
+            return rgba(hue, saturation, brightness);
+        }
+    },
+    BIOME_CELLS {
+
+		@Override
+		public boolean handlesWater() {
+			return true;
+		}
+    	
+        @Override
+        public int getColor(Cell cell, Levels levels, float scale, float bias) {
+            float saturation = 0.7F;
+            float brightness = 0.8F;
+            return rgba(cell.biomeRegionId, saturation, brightness);
+        }
+    },
+    MACRO_NOISE {
+    	
+        @Override
+        public int getColor(Cell cell, Levels levels, float scale, float bias) {
+            float saturation = 0.7F;
+            float brightness = 0.8F;
+            return rgba(cell.macroBiomeId, saturation, brightness);
+        }
+    },
+    TERRAIN_REGION {
+    	
+        @Override
+        public int getColor(Cell cell, Levels levels, float scale, float bias) {
+            float saturation = 0.7F;
+            float brightness = 0.8F;
+            return rgba(cell.terrain.getRenderHue(), saturation, brightness);
+        }
+    },
+    TRANSITION_POINTS {
+
+        @Override
+        public boolean handlesWater() {
+            return true;
+        }
+
+        @Override
+        public int getColor(Cell cell, Levels levels, float scale, float bias) {
+            switch (cell.terrain.getCategory()) {
+                case DEEP_OCEAN:
+                    return rgba(0.63F, 0.65F, 0.8F);
+                case SHALLOW_OCEAN:
+                    return rgba(0.6F, 0.6F, 0.8F);
+                case BEACH:
+                    return rgba(0.2F, 0.4F, 0.75F);
+                case COAST:
+                    return rgba(0.35F, 0.75F, 0.65F);
+                default:
+                    if (cell.terrain.isRiver() || cell.terrain.isWetland()) {
+                        return rgba(0.6F, 0.6F, 0.8F);
+                    }
+                    return rgba(0.3F, 0.7F, 0.5F);
+            }
+        }
+    },
     CONTINENT_UPLIFT {
 
         @Override
@@ -232,8 +374,7 @@ public enum RenderMode {
             return rgba(hue, saturation, brightness);
         }
     },
-    CONTINENT_EDGE {
-
+    CONTROL_POINT {
         @Override
         public boolean handlesWater() {
             return true;
@@ -241,9 +382,78 @@ public enum RenderMode {
 
         @Override
         public int getColor(Cell cell, Levels levels, float scale, float bias) {
-            float hue = 0.0F;
-            float saturation = 0.0F;
-            float brightness = cell.continentEdge;
+            float edge = cell.controlPoint;
+            WorldSettings.ControlPoints cp = PresetManager.PM.worldSettings.controlPoints;
+
+            float hue;
+            float saturation;
+            float brightness;
+            float t;
+
+            if (edge <= cp.islandInland) {
+                // Island Inland -> Magenta / Purple
+                hue = 0.82F;
+                saturation = 0.80F;
+                t = cp.islandInland > 0.0F ? NoiseUtil.clamp(edge / cp.islandInland, 0.0F, 1.0F) : 0.0F;
+                brightness = NoiseUtil.lerp(0.50F, 0.90F, t);
+            } else if (edge <= cp.islandCoast) {
+                // Island Coast -> Deep Navy Blue
+                hue = 0.62F;
+                saturation = 0.90F;
+                float minVal = cp.islandInland;
+                float maxVal = cp.islandCoast;
+                t = maxVal > minVal ? NoiseUtil.clamp((edge - minVal) / (maxVal - minVal), 0.0F, 1.0F) : 0.0F;
+                brightness = NoiseUtil.lerp(0.20F, 0.50F, t);
+            } else if (edge <= cp.deepOcean) {
+                // Deep Ocean -> Ocean Blue
+                hue = 0.56F;
+                saturation = 0.75F;
+                float minVal = cp.islandCoast;
+                float maxVal = cp.deepOcean;
+                t = maxVal > minVal ? NoiseUtil.clamp((edge - minVal) / (maxVal - minVal), 0.0F, 1.0F) : 0.0F;
+                brightness = NoiseUtil.lerp(0.40F, 0.70F, t);
+            } else if (edge <= cp.shallowOcean) {
+                // Shallow Ocean -> Light Blue / Teal
+                hue = 0.48F;
+                saturation = 0.65F;
+                float minVal = cp.deepOcean;
+                float maxVal = cp.shallowOcean;
+                t = maxVal > minVal ? NoiseUtil.clamp((edge - minVal) / (maxVal - minVal), 0.0F, 1.0F) : 0.0F;
+                brightness = NoiseUtil.lerp(0.50F, 0.80F, t);
+            } else if (edge <= cp.beach) {
+                // Beach -> Vibrant Yellow
+                hue = 0.14F;
+                saturation = 0.80F;
+                float minVal = cp.shallowOcean;
+                float maxVal = cp.beach;
+                t = maxVal > minVal ? NoiseUtil.clamp((edge - minVal) / (maxVal - minVal), 0.0F, 1.0F) : 0.0F;
+                brightness = NoiseUtil.lerp(0.70F, 0.98F, t);
+            } else if (edge <= cp.coast) {
+                // Coast -> Light Green
+                hue = 0.26F;
+                saturation = 0.55F;
+                float minVal = cp.beach;
+                float maxVal = cp.coast;
+                t = maxVal > minVal ? NoiseUtil.clamp((edge - minVal) / (maxVal - minVal), 0.0F, 1.0F) : 0.0F;
+                brightness = NoiseUtil.lerp(0.60F, 0.85F, t);
+            } else if (edge <= cp.inland) {
+                // Mid-Inland -> Forest Green
+                hue = 0.32F;
+                saturation = 0.70F;
+                float minVal = cp.coast;
+                float maxVal = cp.inland;
+                t = maxVal > minVal ? NoiseUtil.clamp((edge - minVal) / (maxVal - minVal), 0.0F, 1.0F) : 0.0F;
+                brightness = NoiseUtil.lerp(0.50F, 0.75F, t);
+            } else {
+                // Far-Inland Core -> Dark Highland Green
+                hue = 0.37F;
+                saturation = 0.85F;
+                float minVal = cp.inland;
+                float maxVal = 1.0F;
+                t = maxVal > minVal ? NoiseUtil.clamp((edge - minVal) / (maxVal - minVal), 0.0F, 1.0F) : 0.0F;
+                brightness = NoiseUtil.lerp(0.35F, 0.70F, t);
+            }
+
             return rgba(hue, saturation, brightness);
         }
     },

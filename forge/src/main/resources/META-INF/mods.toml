@@ -11,7 +11,7 @@ credits="The wider TerraForged community, in all its past and present iterations
 logoFile="logo.png"
 displayURL="https://github.com/etcodehome/freeterraforged/"
 issueTrackerURL="https://github.com/etcodehome/freeterraforged/issues"
-description="Heavily customizable and feature rich overworld terrain generation options."
+description="FreeTerraForged is a community-driven fork of ReTerraForged for modern Minecraft, providing highly customizable Overworld terrain generation and continuing the TerraForged lineage."
 
 [[dependencies.freeterraforged]]
     modId="forge"

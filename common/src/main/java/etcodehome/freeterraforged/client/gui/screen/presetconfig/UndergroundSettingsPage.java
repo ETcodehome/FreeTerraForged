@@ -27,8 +27,8 @@ public class UndergroundSettingsPage extends PresetEditorPage {
 	private Slider undergroundBiomeClimateInfluence;
 	private CycleButton<Boolean> undergroundBiomeBanding;
 	
-	public UndergroundSettingsPage(PresetConfigScreen screen, PresetEntry preset) {
-		super(screen, preset);
+	public UndergroundSettingsPage(PresetConfigScreen screen) {
+		super(screen);
 	}
 
 	@Override
@@ -83,11 +83,11 @@ public class UndergroundSettingsPage extends PresetEditorPage {
 			caves.largeOreVeins = value;
 		});
 
-		this.undergroundBiomeSize = PresetWidgets.createIntSlider(biomeShape.undergroundBiomeSize, ClimateSettings.BiomeShape.MIN_BIOME_SIZE, ClimateSettings.BiomeShape.MAX_BIOME_SIZE, FTFTranslationKeys.GUI_SLIDER_UNDERGROUND_BIOME_SIZE, (slider, value) -> {
+		this.undergroundBiomeSize = PresetWidgets.createIntSlider(biomeShape.undergroundBiomeSize, 50, 2000, FTFTranslationKeys.GUI_SLIDER_UNDERGROUND_BIOME_SIZE, (slider, value) -> {
 			biomeShape.undergroundBiomeSize = (int) slider.scaleValue(value);
 			return value;
 		});
-		this.undergroundBiomeVerticalSize = PresetWidgets.createIntSlider(biomeShape.undergroundBiomeVerticalSize, ClimateSettings.BiomeShape.MIN_UNDERGROUND_VERTICAL_SIZE, maximumUndergroundVerticalSize, FTFTranslationKeys.GUI_SLIDER_UNDERGROUND_BIOME_VERTICAL_SIZE, (slider, value) -> {
+		this.undergroundBiomeVerticalSize = PresetWidgets.createIntSlider(biomeShape.undergroundBiomeVerticalSize, 16, maximumUndergroundVerticalSize, FTFTranslationKeys.GUI_SLIDER_UNDERGROUND_BIOME_VERTICAL_SIZE, (slider, value) -> {
 			biomeShape.undergroundBiomeVerticalSize = (int) slider.scaleValue(value);
 			return value;
 		});
@@ -124,11 +124,11 @@ public class UndergroundSettingsPage extends PresetEditorPage {
 	
 	@Override
 	public Optional<Page> previous() {
-		return Optional.of(new SurfaceSettingsPage(this.screen, this.preset));
+		return Optional.of(new SurfaceSettingsPage(this.screen));
 	}
 
 	@Override
 	public Optional<Page> next() {
-		return Optional.of(new ClimateSettingsPage(this.screen, this.preset));
+		return Optional.of(new ClimateSettingsPage(this.screen));
 	}
 }

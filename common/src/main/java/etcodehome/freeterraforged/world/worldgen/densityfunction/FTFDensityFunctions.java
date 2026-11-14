@@ -15,6 +15,7 @@ public class FTFDensityFunctions {
 		register("cell", CellSampler.Marker.KEY_CODEC);
 		register("clamp_to_nearest_unit", ClampToNearestUnit.KEY_CODEC);
 		register("linear_spline", LinearSplineFunction.KEY_CODEC);
+		register("climate_depth", ClimateDepthFunction.Marker.KEY_CODEC);
 	}
 	
 	public static NoiseFunction.Marker noise(Holder<Noise> noise) {
@@ -27,6 +28,10 @@ public class FTFDensityFunctions {
 	
 	public static ClampToNearestUnit clampToNearestUnit(DensityFunction function, int resolution) {
 		return new ClampToNearestUnit(function, resolution);
+	}
+
+	public static ClimateDepthFunction.Marker climateDepth(int worldDepth, int worldHeight) {
+		return new ClimateDepthFunction.Marker(worldDepth, worldHeight);
 	}
 	
 	private static void register(String name, KeyDispatchDataCodec<? extends DensityFunction> type) {

@@ -52,3 +52,9 @@ processResources {
         expand project.properties
     }
 }
+
+// Architectury Loom attaches Fabric run tasks to :common by default, which launch an empty
+// Fabric client without the mod and intercept unqualified `./gradlew runClient` invocations.
+tasks.matching { it.name in ["runClient", "runServer", "runGameTestServer"] }.configureEach {
+    enabled = false
+}

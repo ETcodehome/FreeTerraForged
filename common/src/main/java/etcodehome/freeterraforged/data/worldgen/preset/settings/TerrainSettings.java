@@ -103,4 +103,90 @@ public class TerrainSettings {
         	return new Terrain(this.weight, this.baseScale, this.verticalScale, this.horizontalScale);
         }
     }
+
+	public static TerrainSettings makeDefault(){
+		return new TerrainSettings(
+			new General(
+				0,
+				844,
+				0.6F,
+				1.0F,
+				true,
+				false,
+				0.0F
+			),
+
+			// steppe
+			new Terrain(
+				0.5734F,
+				2.0F,
+				4.4007F,
+				0.7538F
+			),
+
+			// plains
+			new Terrain(
+				10.0F,
+				2.0F,
+				6.7268F,
+				0.2513F
+			),
+
+			// hills
+			new Terrain(
+				2.5F,
+				1.5889F,
+				2.5F,
+				4.9291F
+			),
+
+			// dales
+			new Terrain(
+				1.184F,
+				1.3685F,
+				2.5F,
+				5.5347F
+			),
+
+			// plateau
+			new Terrain(
+				2.576F,
+				1.0309F,
+				2.5F,
+				3.1894F
+			),
+
+			// badlands
+			new Terrain(
+				5.3737F,
+				1.5940F,
+				2.5F,
+				1.9329F
+			),
+
+			// torridonian
+			new Terrain(
+				6.9716F,
+				1.0F,
+				2.0F,
+				3.78221F
+			),
+
+			// mountains
+			new Terrain(
+				5.5347F,
+				2.0F,
+				0.88917524F,
+				0.29639176F
+			),
+
+			// volcano
+			new Terrain(
+				8.1443F,
+				1.1559F,
+				7.8479F,
+				3.447F
+			)
+		);
+	}
 }

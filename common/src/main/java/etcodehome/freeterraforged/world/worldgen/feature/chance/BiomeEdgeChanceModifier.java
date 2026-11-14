@@ -1,17 +1,14 @@
 package etcodehome.freeterraforged.world.worldgen.feature.chance;
 
-import com.mojang.serialization.MapCodec;
-import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
-import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
-import etcodehome.freeterraforged.world.worldgen.densityfunction.tile.Tile;
-import org.jetbrains.annotations.Nullable;
-
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-
+import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
+import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
+import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.SectionPos;
 import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
+import org.jetbrains.annotations.Nullable;
 
 class BiomeEdgeChanceModifier extends RangeChanceModifier {
 	public static final MapCodec<BiomeEdgeChanceModifier> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
@@ -32,22 +29,16 @@ class BiomeEdgeChanceModifier extends RangeChanceModifier {
 	@Override
 	protected float getValue(ChanceContext chanceCtx, FeaturePlaceContext<?> placeCtx) {
 		BlockPos pos = placeCtx.origin();
-		if((Object) placeCtx.level().getLevel().getChunkSource().randomState() instanceof FTFRandomState ftfRandomState) {
-			GeneratorContext generatorContext = ftfRandomState.generatorContext();
-			if (generatorContext != null && generatorContext.cache != null) {
-				int x = pos.getX();
-				int z = pos.getZ();
-				int chunkX = SectionPos.blockToSectionCoord(x);
-				int chunkZ = SectionPos.blockToSectionCoord(z);
-				Tile tile = generatorContext.cache.provideAtChunk(chunkX, chunkZ);
-				if (tile != null) {
-					Tile.Chunk chunk = tile.getChunkReader(chunkX, chunkZ);
-					if (chunk != null) {
-						return chunk.getCell(x, z).biomeRegionEdge;
-					}
-				}
-			}
+		@Nullable
+        GeneratorContext generatorContext;
+		if((Object) placeCtx.level().getLevel().getChunkSource().randomState() instanceof FTFRandomState ftfRandomState && (generatorContext = ftfRandomState.generatorContext()) != null) {
+			int x = pos.getX();
+			int z = pos.getZ();
+			Cell cell = new Cell();
+			generatorContext.lookup.applyBiomeRegion(cell, x, z);
+			return cell.biomeRegionEdge;
+		} else {
+			throw new UnsupportedOperationException();
 		}
-		return 1.0F;
 	}
 }

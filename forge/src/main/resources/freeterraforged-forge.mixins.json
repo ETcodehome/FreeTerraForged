@@ -3,12 +3,8 @@
   "package": "etcodehome.freeterraforged.forge.mixin",
   "minVersion": "0.8",
   "compatibilityLevel": "JAVA_17",
-  "plugin": "etcodehome.freeterraforged.forge.mixin.ForgeOptionalMixinPlugin",
   "mixins": [
-    "MixinBiolithTerraBlenderCompat",
-    "MixinBiomeGenerationSettingsPlainsBuilder",
-    "MixinMinecraftServer",
-    "MixinServerLifecycleHooks"
+    "MixinMinecraftServer"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -7,7 +7,7 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import etcodehome.freeterraforged.world.worldgen.noise.function.Interpolation;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 
-public record Perlin2(@Deprecated int seed, float frequency, int octaves, float lacunarity, float gain, Interpolation interpolation, float min, float max) implements Noise {
+public record Perlin2(int seed, float frequency, int octaves, float lacunarity, float gain, Interpolation interpolation, float min, float max) implements Noise {
 	public static final MapCodec<Perlin2> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		Codec.INT.fieldOf("seed").forGetter(Perlin2::seed),
 		Codec.FLOAT.fieldOf("frequency").forGetter(Perlin2::frequency),

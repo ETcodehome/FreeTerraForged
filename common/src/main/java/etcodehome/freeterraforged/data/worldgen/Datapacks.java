@@ -3,15 +3,14 @@ package etcodehome.freeterraforged.data.worldgen;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 
+import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetConfiguredFeatures;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.data.worldgen.tags.FTFBlockTagsProvider;
 import etcodehome.freeterraforged.data.worldgen.tags.FTFDensityFunctionTagsProvider;
 import etcodehome.freeterraforged.platform.DataGenUtil;
-import etcodehome.freeterraforged.registries.FTFRegistries;
-import etcodehome.freeterraforged.world.worldgen.biome.modifier.BiomeModifier;
 import etcodehome.freeterraforged.world.worldgen.feature.FTFFeatures;
-import etcodehome.freeterraforged.world.worldgen.structure.rule.StructureRule;
+import etcodehome.freeterraforged.world.worldgen.feature.SwampSurfaceFeature;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.RegistryAccess;
@@ -25,10 +24,6 @@ import net.minecraft.data.metadata.PackMetadataGenerator;
 import net.minecraft.data.worldgen.features.FeatureUtils;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.resources.RegistryDataLoader;
-import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
-import etcodehome.freeterraforged.world.worldgen.feature.SwampSurfaceFeature;
-import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 
 public class Datapacks {
 
@@ -55,7 +50,7 @@ public class Datapacks {
 		DataGenerator dataGenerator = new DataGenerator(dataGenPath, SharedConstants.getCurrentVersion(), true);
 		PackGenerator packGenerator = dataGenerator.new PackGenerator(true, presetName, new PackOutput(dataGenOutputPath));
 		CompletableFuture<HolderLookup.Provider> lookup = CompletableFuture.supplyAsync(() -> preset.buildPatch(registries));
-		
+
 		packGenerator.addProvider((output) -> {
 			return DataGenUtil.createRegistryProvider(output, lookup);
 		});

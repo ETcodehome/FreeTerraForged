@@ -9,6 +9,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.minecraft.world.level.levelgen.placement.PlacementContext;
+import etcodehome.freeterraforged.world.worldgen.feature.placement.ChunkLocalFeaturePlacement;
+import etcodehome.freeterraforged.world.worldgen.feature.placement.SurfaceFeatureRescue;
 
 @Mixin(PlacedFeature.class)
 class MixinPlacedFeature {
@@ -20,13 +22,17 @@ class MixinPlacedFeature {
 		BlockPos origin,
 		Operation<Boolean> original
 	) {
-		boolean managed = SurfaceFeatureRescue.begin((PlacedFeature)(Object)this, context);
+		PlacedFeature feature = (PlacedFeature)(Object)this;
+		boolean chunkLocalScope = ChunkLocalFeaturePlacement.begin(feature, context, origin);
 		try {
-			return original.call(context, random, origin);
-		} finally {
-			if (managed) {
-				SurfaceFeatureRescue.finish();
+			boolean rescueScope = SurfaceFeatureRescue.begin(feature, context);
+			try {
+				return original.call(context, random, origin);
+			} finally {
+				SurfaceFeatureRescue.finish(rescueScope);
 			}
+		} finally {
+			ChunkLocalFeaturePlacement.finish(chunkLocalScope);
 		}
 	}
 }

@@ -1,5 +1,6 @@
 package etcodehome.freeterraforged.world.worldgen.cell.heightmap;
 
+import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 
 public class Levels {
@@ -13,14 +14,23 @@ public class Levels {
     private int groundY;
     public int groundLevel;
     public int waterLevel;
+    public int oceanDepth;
     public float ground;
     public float water;
     private float elevationRange;
 
-    public Levels(int terrainScaleFactor, int height, int depth, int seaLevel) {
+    // Precalculated reciprocal to eliminate division and branches in hot loops
+    private float invElevationSpan;
+
+    public Levels(WorldSettings.Properties properties) {
+        int terrainScaleFactor  = properties.terrainScaleFactor();
+        int height              = properties.worldHeight;
+        int depth               = properties.worldDepth;
+        int seaLevel            = properties.seaLevel;
         this.terrainScaleFactor = Math.max(1, terrainScaleFactor);
         this.worldHeight = Math.max(1, height);
         this.worldDepth = Math.max(0, depth);
+        this.oceanDepth = Math.max(10, properties.oceanDepth);
         this.unit = NoiseUtil.div(1, this.terrainScaleFactor);
         this.min = this.scale(-this.worldDepth);
         this.waterLevel = seaLevel;
@@ -30,39 +40,46 @@ public class Levels {
         this.ground = NoiseUtil.div(this.groundY, this.terrainScaleFactor);
         this.water = NoiseUtil.div(this.waterY, this.terrainScaleFactor);
         this.elevationRange = 1.0F - this.water;
+
+        // Precalculate once during world gen initialization
+        this.invElevationSpan = 1.0F / (this.worldHeight + this.worldDepth);
     }
-    
+
     public int scale(float value) {
         return (int) (value * this.terrainScaleFactor);
     }
-    
+
     public float elevation(float value) {
         if (value <= this.water) {
             return 0.0F;
         }
         return (value - this.water) / this.elevationRange;
     }
-    
+
     public float elevation(int y) {
         if (y <= this.waterY) {
             return 0.0F;
         }
         return this.scale(y - this.waterY) / this.elevationRange;
     }
-    
+
     public float scale(int level) {
         return NoiseUtil.div(level, this.terrainScaleFactor);
     }
-    
+
     public float water(int amount) {
         return NoiseUtil.div(this.waterY + amount, this.terrainScaleFactor);
     }
-    
+
     public float ground(int amount) {
         return NoiseUtil.div(this.groundY + amount, this.terrainScaleFactor);
     }
 
     public float getNormalizedInlandElevation(float rawCellHeight) {
         return (scale(rawCellHeight) - waterLevel) / (float) (worldHeight - waterLevel);
+    }
+
+    public float getNormalizedElevation(float rawCellHeight) {
+        return (scale(rawCellHeight) + worldDepth) * invElevationSpan;
     }
 }
