@@ -34,7 +34,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MountainRiverCutTest {
 
-    private static final String ARTIFACT_DIR = "C:/Users/Edward/.gemini/antigravity/brain/e4fadc74-fd9c-46da-8e59-353e78a5fc62";
+    private static Path resolveOutputDir() {
+        String prop = System.getProperty("freeterraforged.test.heightmap.dir");
+        if (prop != null && !prop.isBlank()) {
+            return Path.of(prop).toAbsolutePath().normalize();
+        }
+        String env = System.getenv("FTF_TEST_OUTPUT_DIR");
+        if (env != null && !env.isBlank()) {
+            return Path.of(env).toAbsolutePath().normalize();
+        }
+        return Path.of("build", "reports", "preset-test-heightmaps").toAbsolutePath().normalize();
+    }
 
     @BeforeAll
     static void setUpRegistries() {
@@ -136,12 +146,12 @@ public class MountainRiverCutTest {
             assertNotNull(relief);
             assertNotNull(raw);
 
-            // Save images to artifact directory
-            Path artifactPath = Paths.get(ARTIFACT_DIR);
-            Files.createDirectories(artifactPath);
+            // Save images to output directory
+            Path outputDir = resolveOutputDir();
+            Files.createDirectories(outputDir);
 
-            File reliefFile = artifactPath.resolve("mountain_river_cut_relief.png").toFile();
-            File rawFile = artifactPath.resolve("mountain_river_cut_raw.png").toFile();
+            File reliefFile = outputDir.resolve("mountain_river_cut_relief.png").toFile();
+            File rawFile = outputDir.resolve("mountain_river_cut_raw.png").toFile();
 
             ImageIO.write(relief, "png", reliefFile);
             ImageIO.write(raw, "png", rawFile);
@@ -280,8 +290,9 @@ public class MountainRiverCutTest {
 
             // Save relief image for bankWidth=45 as well
             BufferedImage relief = area.toReliefMap(levels.waterLevel);
-            Path artifactPath = Paths.get(ARTIFACT_DIR);
-            File largeBankFile = artifactPath.resolve("large_bank_width_45_relief.png").toFile();
+            Path outputDir = resolveOutputDir();
+            Files.createDirectories(outputDir);
+            File largeBankFile = outputDir.resolve("large_bank_width_45_relief.png").toFile();
             ImageIO.write(relief, "png", largeBankFile);
             System.out.printf("[Test] Saved large bankWidth=45 relief map to: %s%n", largeBankFile.getAbsolutePath());
         }
@@ -335,8 +346,9 @@ public class MountainRiverCutTest {
 
             // Save relief image for bankWidth=200 as well
             BufferedImage relief = area.toReliefMap(levels.waterLevel);
-            Path artifactPath = Paths.get(ARTIFACT_DIR);
-            File bank200File = artifactPath.resolve("bank_width_200_relief.png").toFile();
+            Path outputDir = resolveOutputDir();
+            Files.createDirectories(outputDir);
+            File bank200File = outputDir.resolve("bank_width_200_relief.png").toFile();
             ImageIO.write(relief, "png", bank200File);
             System.out.printf("[Test] Saved bankWidth=200 relief map to: %s%n", bank200File.getAbsolutePath());
         }
