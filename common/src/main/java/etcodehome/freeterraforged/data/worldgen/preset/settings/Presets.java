@@ -28,7 +28,7 @@ public class Presets {
 				new Properties(SpawnType.CONTINENT_CENTER, 320, 64, 63, -54, 63, 0, 0)
 			),
 			new SurfaceSettings(new SurfaceSettings.Scree(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
-			new CaveSettings(0.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, true, false),
+			new CaveSettings(0.0F, 0.15F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, true, false),
 			new ClimateSettings(
 				new RangeValue(NoiseType.SIN, 0, 6, 2, 0.0F, 0.98F, 0.0F, 0.05F),
 				new RangeValue(NoiseType.SIMPLEX, 0, 6, 1, 0.0F, 1.0F, 0.0F, 0.0F),
@@ -74,7 +74,7 @@ public class Presets {
 				new Properties(SpawnType.WORLD_ORIGIN, 320, 64, 63, -54, 63, 0, 0)
 			), 
 			new SurfaceSettings(new SurfaceSettings.Scree(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
-			new CaveSettings(1.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.15F, 0.07F, 0.021F, true, false),
+			new CaveSettings(1.0F, 0.15F, 1.0F, 1.0F, 1.0F, 0.15F, 0.07F, 0.021F, true, false),
 			new ClimateSettings(
 				new RangeValue(NoiseType.SIN, 0, 4, 1, 0.0F, 0.98F, 0.05F, 0.0F),
 				new RangeValue(NoiseType.SIMPLEX, 0, 5, 1, 0.0F, 1.0F, 0.0F, 0.0F),
@@ -120,7 +120,7 @@ public class Presets {
 				new Properties(SpawnType.CONTINENT_CENTER, 320, 64, 63, -54, 63, 0, 0)
 			),
 			new SurfaceSettings(new SurfaceSettings.Scree(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
-			new CaveSettings(0.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, true, false),
+			new CaveSettings(0.0F, 0.15F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, true, false),
 			new ClimateSettings(
 				new RangeValue(NoiseType.SIN, 0, 7, 1, 0.0F, 1.0F, -0.004F, 0.0F),
 				new RangeValue(NoiseType.SIMPLEX, 0, 6, 1, 0.0F, 1.0F, 0.0F, 0.0F),
@@ -166,7 +166,7 @@ public class Presets {
 				new Properties(SpawnType.CONTINENT_CENTER, 320, 64, 63, -54, 63, 0, 0)
 			),
 			new SurfaceSettings(new SurfaceSettings.Scree(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
-			new CaveSettings(0.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, false, false),
+			new CaveSettings(0.0F, 0.15F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, false, false),
 			new ClimateSettings(
 				new RangeValue(NoiseType.SIN, 0, 4, 1, 0.0F, 0.98F, 0.05F, 0.0F),
 				new RangeValue(NoiseType.SIMPLEX, 0, 5, 1, 0.0F, 1.0F, 0.0F, 0.0F),
@@ -212,7 +212,7 @@ public class Presets {
 				new Properties(SpawnType.CONTINENT_CENTER, 320, 64, 63, -54, 63, 0, 0)
 			), 
 			new SurfaceSettings(new SurfaceSettings.Scree(30, 140, 40, 95, 0.65F, 0.475F, 0.4F)),
-			new CaveSettings(0.0F, 1.5625F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, true, false),
+			new CaveSettings(0.0F, 0.15F, 1.0F, 1.0F, 1.0F, 0.14285715F, 0.07F, 0.02F, true, false),
 			new ClimateSettings(
 				new RangeValue(NoiseType.SIN, 0, 4, 2, 0.0F, 1.0F, 0.097F, 0.0F),
 				new RangeValue(NoiseType.SIMPLEX, 0, 3, 1, 0.0F, 1.0F, 0.0F, 0.0F),
@@ -291,7 +291,7 @@ public class Presets {
 						0.8F)),
 
 				new CaveSettings(0.05578F,
-						1.5625F,
+						0.15F,
 						1.0F,
 						0.4914F,
 						0.4902F,
