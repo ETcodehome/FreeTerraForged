@@ -65,7 +65,13 @@ public class Populators {
 	}
 
 	public static CellPopulator makeCoast(Levels levels, ClimateParameterSampler climate) {
-		return new OceanPopulator(TerrainType.COAST, Noises.constant(levels.water), 0.0F, climate);
+		return new OceanPopulator(
+			TerrainType.COAST,
+			Noises.constant(levels.water),
+			0.0F,
+			Noises.map(climate.erosionSource(), -1.0F, 1.0F),
+			Noises.constant(-0.15F)
+		);
 	}
 
     public static TerrainPopulator makeSteppe(Seed seed, Noise ground, TerrainSettings.Terrain settings) {

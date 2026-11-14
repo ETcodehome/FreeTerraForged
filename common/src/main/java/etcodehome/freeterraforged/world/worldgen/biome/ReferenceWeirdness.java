@@ -36,12 +36,12 @@ public enum ReferenceWeirdness implements BiomeParameter {
     }
 
 	public static float fromSediment(float sediment) {
-		float magnitude = NoiseUtil.clamp(sediment + 0.5F, 0.0F, 1.0F);
+		float magnitude = NoiseUtil.clamp(sediment + 0.5F, 0.055F, 1.0F);
 		return -magnitude;
 	}
 
 	public static float fromSediment(float sediment, float macroBiomeId) {
-		float magnitude = NoiseUtil.clamp(sediment + 0.5F, 0.0F, 1.0F);
+		float magnitude = NoiseUtil.clamp(sediment + 0.5F, 0.055F, 1.0F);
 		return macroBiomeId > 0.5F ? magnitude : -magnitude;
 	}
 }

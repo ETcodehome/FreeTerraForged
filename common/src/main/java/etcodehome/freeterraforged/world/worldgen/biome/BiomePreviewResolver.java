@@ -296,13 +296,22 @@ public final class BiomePreviewResolver implements AutoCloseable {
 		Climate.Sampler sampler,
 		Cell preparedCell
 	) {
-		Holder<Biome> selected = preparedCell == null
-			? this.biomeSelection.resolve(quartX, quartY, quartZ, sampler)
-			: this.biomeSelection.resolveInCell(
-				quartX, quartY, quartZ, sampler,
-				preparedCell.biomeRegionX, preparedCell.biomeRegionZ
-			)
-		;
+		if (preparedCell != null) {
+			try (CellSampler.LookupScope scope = CellSampler.pushLookupOverride(
+				this.generatorContext.lookup,
+				(bx, bz, sampleClimate) -> preparedCell
+			)) {
+				Holder<Biome> selected = this.biomeSelection.resolveInCell(
+					quartX, quartY, quartZ, sampler,
+					preparedCell.biomeRegionX, preparedCell.biomeRegionZ
+				);
+				if (selected == null) {
+					throw new IllegalStateException("Selected biome source returned null for request-owned preview plan");
+				}
+				return selected;
+			}
+		}
+		Holder<Biome> selected = this.biomeSelection.resolve(quartX, quartY, quartZ, sampler);
 		if (selected == null) {
 			throw new IllegalStateException("Selected biome source returned null for request-owned preview plan");
 		}
@@ -373,26 +382,12 @@ public final class BiomePreviewResolver implements AutoCloseable {
 			ThreadPools.previewParallelism(),
 			() -> {
 				TileBiomeRequest request = this.tileRequest(tile, centerX, centerZ, zoom);
-				PreviewQuartCache<BiomeReplacementPlan.PreviewSelection> quartCache =
-					zoom < QuartPos.SIZE ? new PreviewQuartCache<>() : null;
 				return (x, z) -> {
 					int quartX = quartXs[x];
 					int quartZ = quartZs[z];
-					Cell cell = request.tileLookup.lookupBlock(
-						QuartPos.toBlock(quartX), QuartPos.toBlock(quartZ)
-					);
+					Cell cell = tile.getCell(x, z);
 					int quartY = QuartPos.fromBlock(surfaceY(cell, levels));
-					if (quartCache == null) {
-						return request.resolveDetailedQuartInCell(quartX, quartY, quartZ, cell);
-					}
-					BiomeReplacementPlan.PreviewSelection selection = quartCache.get(
-						quartX, quartY, quartZ
-					);
-					if (selection == null) {
-						selection = request.resolveDetailedQuartInCell(quartX, quartY, quartZ, cell);
-						quartCache.put(quartX, quartY, quartZ, selection);
-					}
-					return selection;
+					return request.resolveDetailedQuartInCell(quartX, quartY, quartZ, cell);
 				};
 			},
 			cancelled,
@@ -441,9 +436,17 @@ public final class BiomePreviewResolver implements AutoCloseable {
 		}
 
 		private Holder<Biome> resolveQuartInCell(int quartX, int quartY, int quartZ, Cell cell) {
-			return BiomePreviewResolver.this.resolveQuartInCell(
-				quartX, quartY, quartZ, this.sampler, cell
-			);
+			this.tileLookup.setActiveCell(cell);
+			try (CellSampler.LookupScope scope = CellSampler.pushLookupOverride(
+				BiomePreviewResolver.this.generatorContext.lookup,
+				(bx, bz, sampleClimate) -> cell
+			)) {
+				return BiomePreviewResolver.this.resolveQuartInCell(
+					quartX, quartY, quartZ, this.sampler, cell
+				);
+			} finally {
+				this.tileLookup.setActiveCell(null);
+			}
 		}
 
 		private BiomeReplacementPlan.PreviewSelection resolveDetailedQuartInCell(
@@ -452,9 +455,17 @@ public final class BiomePreviewResolver implements AutoCloseable {
 			int quartZ,
 			Cell cell
 		) {
-			return BiomePreviewResolver.this.biomeSelection.resolveDetailedInCell(
-				quartX, quartY, quartZ, this.sampler, cell.biomeRegionX, cell.biomeRegionZ
-			);
+			this.tileLookup.setActiveCell(cell);
+			try (CellSampler.LookupScope scope = CellSampler.pushLookupOverride(
+				BiomePreviewResolver.this.generatorContext.lookup,
+				(bx, bz, sampleClimate) -> cell
+			)) {
+				return BiomePreviewResolver.this.biomeSelection.resolveDetailedInCell(
+					quartX, quartY, quartZ, this.sampler, cell.biomeRegionX, cell.biomeRegionZ
+				);
+			} finally {
+				this.tileLookup.setActiveCell(null);
+			}
 		}
 
 		public WorldgenPlans.ProviderResult inspectProviderSelection(
@@ -465,9 +476,17 @@ public final class BiomePreviewResolver implements AutoCloseable {
 			Cell cell = this.tileLookup.lookupBlock(
 				QuartPos.toBlock(quartX), QuartPos.toBlock(quartZ)
 			);
-			return BiomePreviewResolver.this.inspectProviderSelectionInCell(
-				quartX, quartY, quartZ, this.sampler, cell.biomeRegionX, cell.biomeRegionZ
-			);
+			this.tileLookup.setActiveCell(cell);
+			try (CellSampler.LookupScope scope = CellSampler.pushLookupOverride(
+				BiomePreviewResolver.this.generatorContext.lookup,
+				(bx, bz, sampleClimate) -> cell
+			)) {
+				return BiomePreviewResolver.this.inspectProviderSelectionInCell(
+					quartX, quartY, quartZ, this.sampler, cell.biomeRegionX, cell.biomeRegionZ
+				);
+			} finally {
+				this.tileLookup.setActiveCell(null);
+			}
 		}
 
 		public Climate.Sampler climateSampler() {

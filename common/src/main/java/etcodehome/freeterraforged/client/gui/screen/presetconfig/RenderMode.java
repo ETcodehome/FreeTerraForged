@@ -266,6 +266,17 @@ public enum RenderMode {
             return rgba(hue, saturation, brightness);
         }
     },
+    CONTINENTALNESS{
+        @Override
+        public int getColor(Cell cell, Levels levels, float scale, float bias) {
+
+            float brightness = NoiseUtil.clamp((cell.continentalness + 1.2F) / 2.2F, 0.0F, 1.0F);
+
+            float hue = 0.0F;
+            float saturation = 0.0F;
+            return rgba(hue, saturation, brightness);
+        }
+    },
     BIOME_REGION_EDGE{
         @Override
         public int getColor(Cell cell, Levels levels, float scale, float bias) {
@@ -363,7 +374,7 @@ public enum RenderMode {
             return rgba(hue, saturation, brightness);
         }
     },
-    CONTINENT_EDGE {
+    CONTROL_POINT {
         @Override
         public boolean handlesWater() {
             return true;
@@ -371,7 +382,7 @@ public enum RenderMode {
 
         @Override
         public int getColor(Cell cell, Levels levels, float scale, float bias) {
-            float edge = cell.continentEdge;
+            float edge = cell.controlPoint;
             WorldSettings.ControlPoints cp = PresetManager.PM.worldSettings.controlPoints;
 
             float hue;

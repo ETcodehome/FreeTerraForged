@@ -18,5 +18,7 @@ public record OceanPopulator(Terrain terrainType, Noise height, float minHeight,
 	public void apply(Cell cell, float x, float z) {
 		cell.terrain = this.terrainType;
 		cell.height = Math.max(this.height.compute(x, z, 0), this.minHeight);
+		cell.erosion = this.erosion.compute(x, z, 0);
+		cell.weirdness = this.weirdness.compute(x, z, 0);
 	}
 }

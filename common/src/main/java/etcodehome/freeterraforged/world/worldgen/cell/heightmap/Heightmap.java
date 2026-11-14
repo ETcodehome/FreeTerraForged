@@ -3,6 +3,7 @@ package etcodehome.freeterraforged.world.worldgen.cell.heightmap;
 import org.jetbrains.annotations.Nullable;
 
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.ControlPoints;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetNoiseData;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetTerrainTypeNoise;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
@@ -31,6 +32,7 @@ import etcodehome.freeterraforged.world.worldgen.cell.terrain.provider.TerrainPr
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.region.RegionLerper;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.region.RegionModule;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.region.RegionSelector;
+import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.noise.function.DistanceFunction;
 import etcodehome.freeterraforged.world.worldgen.noise.function.EdgeFunction;
 import etcodehome.freeterraforged.world.worldgen.noise.function.Interpolation;
@@ -55,9 +57,6 @@ public record Heightmap(
 	public void apply(Cell cell, float x, float z, boolean applyClimate) {
 		if (!WorldgenPerfTracker.ACTIVE) {
 			this.applyTerrain(cell, x, z);
-			if (cell.terrain == TerrainType.ISLAND_BEACH) {
-				cell.terrain = TerrainType.BEACH;
-			}
 			this.applyRivers(cell, x, z, this.continent.getRivermap(cell));
 			this.applyClimate(cell, x, z, applyClimate);
 			return;
@@ -65,9 +64,6 @@ public record Heightmap(
 		WorldgenPerfTracker.ThreadStats ts = WorldgenPerfTracker.stats();
 		long t0 = System.nanoTime();
 		this.applyTerrain(cell, x, z);
-		if (cell.terrain == TerrainType.ISLAND_BEACH) {
-			cell.terrain = TerrainType.BEACH;
-		}
 		long t1 = System.nanoTime();
 		this.applyRivers(cell, x, z, this.continent.getRivermap(cell));
 		long t2 = System.nanoTime();
@@ -99,11 +95,43 @@ public record Heightmap(
 	
 	public void applyClimate(Cell cell, float x, float z, boolean applyClimate) {
         this.climate.apply(cell, x, z, applyClimate);
+        if (applyClimate) {
+            this.applyRiparianErosion(cell);
+        }
         cell.terrainErosion = cell.erosion;
-        if (cell.weirdness == 0.0F && cell.height > this.levels.ground && !cell.erosionMask) {
+        if (Math.abs(cell.weirdness) <= 0.05F && cell.height > this.levels.ground && !cell.erosionMask) {
             cell.weirdness = ReferenceWeirdness.fromSediment(cell.sediment, cell.macroBiomeId);
         }
+        cell.continentalness = CellSampler.computeContinentalness(cell, this.levels, this.controlPoints);
 	}
+
+    private static final float MAX_RIPARIAN_EROSION_BOOST = 0.20F;
+
+    private void applyRiparianErosion(Cell cell) {
+        if (cell.riverMask >= 1.0F || cell.height < this.levels.water) {
+            return;
+        }
+
+        // River valley influence: 0.0 at outer valley boundary, smoothly rising to 1.0 at river channel center
+        float valleyAlpha = 1.0F - cell.riverMask;
+        if (valleyAlpha <= 0.0F) {
+            return;
+        }
+
+        // Smooth quadratic falloff: strongest along immediate riverbanks and floodplain,
+        // softly and continuously tapering off across the valley
+        float weight = valleyAlpha * valleyAlpha;
+
+        // Smooth fade at the sea level waterline to avoid any abrupt coast step
+        if (cell.height < this.levels.water + 2.0F * this.levels.unit) {
+            float waterFade = Math.max(0.0F, (cell.height - this.levels.water) / (2.0F * this.levels.unit));
+            weight *= waterFade;
+        }
+
+        // Purely additive gentle bias: never overwrites or blats existing macro noise variation
+        float boost = weight * MAX_RIPARIAN_EROSION_BOOST;
+        cell.erosion = NoiseUtil.clamp(cell.erosion - boost, -1.0F, 1.0F);
+    }
 
 	public void applyBiomeRegion(Cell cell, float x, float z) {
 		if (!this.climate.applyInitialRegion(cell, x, z)) {

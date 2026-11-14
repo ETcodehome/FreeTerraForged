@@ -2,8 +2,10 @@ package etcodehome.freeterraforged.world.worldgen.cell.filter;
 
 import java.util.Set;
 
+import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
+import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.TerrainCeiling;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.Terrain;
@@ -18,6 +20,8 @@ public class TerrainFilters {
     private final Steepness steepness;
     private final TerrainCeiling terrainCeiling;
     private final float ground;
+    private final Levels levels;
+    private final WorldSettings.ControlPoints controlPoints;
 
     public TerrainFilters(GeneratorContext context) {
         this.cliffRelaxation1 = CliffRelaxation.factory(context, 1).apply(0);
@@ -26,6 +30,8 @@ public class TerrainFilters {
         this.beachDetect = BeachDetect.make(context);
         this.steepness = Steepness.make(1, 10.0F, context.levels);
         this.ground = context.levels.ground;
+        this.levels = context.levels;
+        this.controlPoints = this.beachDetect.transition();
         if (context.preset != null && TerrainCeiling.isEnabled(context.preset)) {
             this.terrainCeiling = TerrainCeiling.make(context.preset.world().properties);
         } else {
@@ -59,6 +65,11 @@ public class TerrainFilters {
                     cell.height = this.terrainCeiling.apply(cell.height);
                 }
             }
+
+            // 7. Recompute continentalness after filters mutate height and beach terrain
+            for (Cell cell : grid.getBacking()) {
+                cell.continentalness = CellSampler.computeContinentalness(cell, this.levels, this.controlPoints);
+            }
             return;
         }
 
@@ -89,6 +100,11 @@ public class TerrainFilters {
                 cell.height = this.terrainCeiling.apply(cell.height);
             }
             ts.filterCeilingNanos += (System.nanoTime() - t5);
+        }
+
+        // 7. Recompute continentalness after filters mutate height and beach terrain
+        for (Cell cell : grid.getBacking()) {
+            cell.continentalness = CellSampler.computeContinentalness(cell, this.levels, this.controlPoints);
         }
     }
 
@@ -129,7 +145,7 @@ public class TerrainFilters {
 						return false;
 					}
 				}
-				case HEIGHT, CONTINENT_EDGE, EROSION, TERRAIN_EROSION, WEIRDNESS,
+				case HEIGHT, CONTROL_POINT, EROSION, TERRAIN_EROSION, WEIRDNESS,
 					BIOME_REGION, TEMPERATURE, MOISTURE -> {
 				}
 			}

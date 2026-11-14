@@ -20,6 +20,7 @@ import net.minecraft.util.KeyDispatchDataCodec;
 import net.minecraft.util.StringRepresentable;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.ControlPoints;
 import etcodehome.freeterraforged.world.worldgen.biome.Continentalness;
+import etcodehome.freeterraforged.world.worldgen.biome.ReferenceWeirdness;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
@@ -40,8 +41,6 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, Den
 	public CellSampler(Supplier<WorldLookup> deferredLookup, Field field) {
 		this(deferredLookup, field, DensityFunctions.zero());
 	}
-	private static final float DEEP_OCEAN_MAX = Climate.unquantizeCoord(Climate.quantizeCoord(Continentalness.DEEP_OCEAN.max()) - 1);
-	private static final float SHALLOW_OCEAN_MIN = Climate.unquantizeCoord(Climate.quantizeCoord(Continentalness.OCEAN.min()) + 1);
 	private static final ThreadLocal<Cache2d> CELL = ThreadLocal.withInitial(Cache2d::new);
 	private static final ThreadLocal<LookupFrame> LOOKUP_OVERRIDE = new ThreadLocal<>();
 
@@ -381,74 +380,18 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, Den
 		},
 		CONTINENT("continent") {
 			
-			//TODO move this somewhere else
 			@Override
 			public float read(Cell cell, Heightmap heightmap) {
-				Levels levels = heightmap.levels();
-				ControlPoints controlPoints = heightmap.controlPoints();
-				
-				float deepOcean = controlPoints.deepOcean;
-				float shallowOcean = controlPoints.shallowOcean;
-				float beach = controlPoints.beach;
-				float inland = controlPoints.inland;
-				
-				if(cell.terrain == TerrainType.MUSHROOM_FIELDS) {
-					return Continentalness.MUSHROOM_FIELDS.mid();
-				}
-				boolean submergedOffshore = cell.height <= levels.water && cell.continentEdge < beach
-					&& !cell.terrain.isRiver() && !cell.terrain.isLake() && !cell.terrain.isWetland();
-
-				if(cell.terrain.isDeepOcean() || submergedOffshore && cell.continentEdge <= deepOcean) {
-					if(deepOcean <= 0.0F) {
-						return Continentalness.DEEP_OCEAN.mid();
-					}
-					float alpha = NoiseUtil.clamp(cell.continentEdge, 0.0F, deepOcean);
-					alpha = NoiseUtil.lerp(alpha, 0.0F, deepOcean, 0.0F, 1.0F);
-					return Math.min(DEEP_OCEAN_MAX, NoiseUtil.lerp(Continentalness.DEEP_OCEAN.min() + 0.05F, Continentalness.DEEP_OCEAN.max(), alpha));
-				}
-				
-				if(cell.terrain.isShallowOcean()) {
-					if(shallowOcean <= deepOcean) {
-						return Continentalness.OCEAN.mid();
-					}
-					float alpha = NoiseUtil.clamp(cell.continentEdge, deepOcean, shallowOcean);
-					alpha = NoiseUtil.lerp(alpha, deepOcean, shallowOcean, 0.0F, 0.98F);
-					return Math.max(SHALLOW_OCEAN_MIN, NoiseUtil.lerp(Continentalness.OCEAN.min(), Continentalness.OCEAN.max(), alpha));
-				}
-
-				if (submergedOffshore) {
-					if (beach <= deepOcean) {
-						return Continentalness.OCEAN.mid();
-					}
-					float alpha = NoiseUtil.lerp(
-						NoiseUtil.clamp(cell.continentEdge, deepOcean, beach),
-						deepOcean, beach, 0.0F, 0.98F
-					);
-					return Math.max(SHALLOW_OCEAN_MIN,
-						NoiseUtil.lerp(Continentalness.OCEAN.min(), Continentalness.OCEAN.max(), alpha));
-				}
-				
-				if(cell.terrain.getDelegate() == TerrainCategory.BEACH && cell.height + cell.beachNoise < levels.water(5)) {
-					float alpha = NoiseUtil.clamp(cell.continentEdge, shallowOcean, beach);
-					alpha = NoiseUtil.lerp(alpha, shallowOcean, beach, 0.0F, 1.0F);
-					return NoiseUtil.lerp(Continentalness.COAST.min(), Continentalness.COAST.max(), alpha);
-				}
-
-				if(cell.terrain == TerrainType.ISLAND_BEACH) {
-					return Continentalness.COAST.mid();
-				}
-
-				float alpha = NoiseUtil.clamp(cell.continentEdge, beach, inland);
-				alpha = NoiseUtil.lerp(alpha, beach, inland, 0.0F, 1.0F);
-				return NoiseUtil.lerp(Continentalness.NEAR_INLAND.mid(), Continentalness.FAR_INLAND.max(), alpha);
-
+				float c = computeContinentalness(cell, heightmap.levels(), heightmap.controlPoints());
+				cell.continentalness = c;
+				return c;
 			}
 		},
-		CONTINENT_EDGE("continent_edge") {
+		CONTROL_POINT("control_point") {
 
 			@Override
 			public float read(Cell cell, Heightmap heightmap) {
-				return cell.continentEdge;
+				return cell.controlPoint;
 			}
 		},
 		EROSION("erosion") {
@@ -469,7 +412,30 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, Den
 			
 			@Override
 			public float read(Cell cell, Heightmap heightmap) {
-				return cell.weirdness;
+				float w = cell.weirdness;
+				// In vanilla Minecraft, the C4 Coast range ([-0.19F, -0.11F]) only resolves as beach
+				// (minecraft:beach, snowy_beach, stony_shore, desert) when weirdness is in the low slice
+				// [-0.20F, -0.05F] (center: -0.15F).
+				// If weirdness is in the valley range [-0.05F, 0.05F], vanilla multi-noise classifies it as a river.
+				// If weirdness is outside [-0.20F, 0.20F] (e.g. mid-slice +/-0.33F or +/-0.50F), vanilla falls back to inland plains/forest/sunflower_plains.
+				// Therefore, coastal/beach land above water that is not a carved river channel must evaluate to -0.15F.
+				boolean isHydrology = cell.erosionMask || cell.terrain.isRiver() || cell.terrain.isLake() || cell.terrain.isWetland();
+				if (cell.height > heightmap.levels().water && !isHydrology) {
+					boolean isMountain = cell.terrain.isMountain() || cell.terrain == TerrainType.ISLAND_MOUNTAINS;
+					boolean isCoast = !isMountain && cell.terrain != TerrainType.MUSHROOM_FIELDS && (
+						cell.terrain.isCoast()
+						|| cell.terrain == TerrainType.BEACH
+						|| cell.terrain == TerrainType.ISLAND_BEACH
+						|| cell.controlPoint <= heightmap.controlPoints().coast
+					);
+					if (isCoast) {
+						return -0.15F;
+					}
+					if (w >= -0.05F && w <= 0.05F) {
+						return w < 0.0F ? -0.055F : 0.055F;
+					}
+				}
+				return w;
 			}
 		},
 		BIOME_REGION("biome_region") {
@@ -536,6 +502,162 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, Den
 				throw new IllegalStateException("Non-finite FTF cell density field " + this.name + ": " + value);
 			}
 			return value;
+		}
+	}
+
+	public static float computeContinentalness(Cell cell, Levels levels, ControlPoints controlPoints) {
+		float islandInland = controlPoints.islandInland;
+		float islandCoast = controlPoints.islandCoast;
+		float deepOcean = controlPoints.deepOcean;
+		float shallowOcean = controlPoints.shallowOcean;
+		float beach = controlPoints.beach;
+		float coast = controlPoints.coast;
+		float inland = controlPoints.inland;
+
+		boolean isHydrology = cell.terrain.isRiver() || cell.terrain.isLake() || cell.terrain.isWetland();
+
+		// ---------------------------------------------------------------------------------
+		// FIX 3: All open water areas below ocean water level (C3 and C2)
+		// Smoothly interpolated based on height from max ocean depth up to water level.
+		// Ratio balance between C2 and C3 derived from max ocean depth setting.
+		// Excludes inland hydrology (rivers, lakes, wetlands) which belong to the continent.
+		// Excludes inland terrain (controlPoint > beach) which belongs to the continent.
+		// ---------------------------------------------------------------------------------
+		if (cell.height <= levels.water && !isHydrology && cell.controlPoint <= beach) {
+			float floorHeight = levels.water(-levels.oceanDepth);
+			float waterHeight = levels.water;
+			float hNorm = (waterHeight > floorHeight)
+				? NoiseUtil.clamp((cell.height - floorHeight) / (waterHeight - floorHeight), 0.0F, 1.0F)
+				: 1.0F;
+
+			// Shallow ocean spans the upper portion of the water column (~20-22 blocks near surface).
+			// Ratio balance hSplit derived from oceanDepth setting:
+			float shallowBlocks = Math.min(22.0F, levels.oceanDepth * 0.40F);
+			float hSplit = 1.0F - (shallowBlocks / levels.oceanDepth);
+
+			if (hNorm <= hSplit) {
+				// C2: Deep Ocean [-1.045F, -0.455F]
+				float t = hSplit > 0.0F ? hNorm / hSplit : 1.0F;
+				return NoiseUtil.lerp(-1.045F, Continentalness.DEEP_OCEAN.max(), t);
+			} else {
+				// C3: Shallow Ocean [-0.455F, -0.191F]
+				float t = (hSplit < 1.0F) ? (hNorm - hSplit) / (1.0F - hSplit) : 0.0F;
+				return NoiseUtil.lerp(Continentalness.OCEAN.min(), -0.191F, t);
+			}
+		}
+
+		// ---------------------------------------------------------------------------------
+		// FIX 2: Mushroom Island built terrain (C1 and C0)
+		// Only specific islands designated as mushroom fields by the generator get flagged
+		// in the C1 / C0 range [-1.20F, -1.05F].
+		// Ratio balance between C1 and C0 derived from ratio between relative control points.
+		// Smoothly interpolated cohesively at the ocean water level transition point.
+		// ---------------------------------------------------------------------------------
+		if (cell.terrain == TerrainType.MUSHROOM_FIELDS && cell.height > levels.water) {
+			if (islandCoast <= islandInland) {
+				return Continentalness.MUSHROOM_FIELDS.mid();
+			}
+
+			// t = 0.0 at islandCoast (waterline transition point), t = 1.0 at islandInland (inland core)
+			float t = NoiseUtil.clamp((islandCoast - cell.controlPoint) / (islandCoast - islandInland), 0.0F, 1.0F);
+
+			// Ratio balance derived from relative control points (islandInland / islandCoast)
+			float ratioInland = (islandCoast > 0.0F)
+				? NoiseUtil.clamp(islandInland / islandCoast, 0.05F, 0.95F)
+				: 0.50F;
+
+			// Split continentalness between C1 (Coast: [-1.05F, cSplit]) and C0 (Inland: [cSplit, -1.20F])
+			float cSplit = NoiseUtil.lerp(-1.05F, -1.20F, 1.0F - ratioInland);
+			float tBoundary = 1.0F - ratioInland;
+
+			if (t <= tBoundary) {
+				// C1: Island Coast [-1.05F, cSplit]
+				float subT = tBoundary > 0.0F ? t / tBoundary : 0.0F;
+				return NoiseUtil.lerp(-1.05F, cSplit, subT);
+			} else {
+				// C0: Island Inland [cSplit, -1.20F]
+				float subT = (1.0F - tBoundary) > 0.0F ? (t - tBoundary) / (1.0F - tBoundary) : 1.0F;
+				return NoiseUtil.lerp(cSplit, -1.20F, subT);
+			}
+		}
+
+		// ---------------------------------------------------------------------------------
+		// FIX 1: All continent and island built terrain above water level (C4, C5, C6, C7)
+		// Never less than beach range (C4, > -0.19F). Transitions C4 -> C5 -> C6 -> C7
+		// based on ratios between relative control points (beach, coast, inland).
+		// ---------------------------------------------------------------------------------
+		float coastStart = -0.185F; // Safely inside C4 (Beach/Coast) without touching Ocean boundary -0.19F
+
+		// Mountain terrain protection:
+		// In vanilla Minecraft, mountains DO NOT EXIST in C4 (Coast: [-0.19F, -0.11F]).
+		// If a coastal mountain is given C4 continentalness, vanilla falls back to Ocean!
+		// Therefore, mountains above water level must always be at least C5 (Near-Inland min: -0.11F).
+		boolean isMountain = cell.terrain.isMountain() || cell.terrain == TerrainType.ISLAND_MOUNTAINS;
+
+		// Standard oceanic islands (non-mushroom):
+		// Oceanic islands above water are beaches/shores (C4) and near-inland biomes (C5),
+		// capped at Near-Inland max (0.03F) so they never become deep continental interior.
+		if (cell.terrain.getCategory() == TerrainCategory.ISLAND) {
+			if (isMountain) {
+				return Continentalness.NEAR_INLAND.min();
+			}
+			if (cell.terrain.isCoast() || cell.terrain == TerrainType.ISLAND_BEACH || cell.controlPoint <= coast) {
+				if (coast <= beach) {
+					return Continentalness.COAST.mid();
+				}
+				float t = NoiseUtil.clamp((cell.controlPoint - beach) / (coast - beach), 0.0F, 1.0F);
+				return NoiseUtil.lerp(coastStart, Continentalness.COAST.max(), t);
+			}
+			// Island inland: C5 Near-Inland
+			if (inland <= coast) {
+				return Continentalness.NEAR_INLAND.mid();
+			}
+			float t = NoiseUtil.clamp((cell.controlPoint - coast) / (inland - coast), 0.0F, 1.0F);
+			return NoiseUtil.lerp(Continentalness.NEAR_INLAND.min(), Continentalness.NEAR_INLAND.max(), t);
+		}
+
+		// Continental mountains near coast: start at C5 (Near-Inland)
+		if (isMountain && cell.controlPoint <= coast) {
+			return Continentalness.NEAR_INLAND.min();
+		}
+
+		// As soon as continent terrain is above ocean level, start at C4 (Beach)
+		if (cell.controlPoint <= beach) {
+			return coastStart;
+		}
+
+		// C4: Beach [-0.185F, -0.11F]
+		if (cell.controlPoint <= coast) {
+			if (coast <= beach) {
+				return Continentalness.COAST.mid();
+			}
+			float t = NoiseUtil.clamp((cell.controlPoint - beach) / (coast - beach), 0.0F, 1.0F);
+			return NoiseUtil.lerp(coastStart, Continentalness.COAST.max(), t);
+		}
+
+		// C5: Coast (Near-Inland in vanilla) [-0.11F, 0.03F]
+		if (cell.controlPoint <= inland) {
+			if (inland <= coast) {
+				return Continentalness.NEAR_INLAND.mid();
+			}
+			float t = NoiseUtil.clamp((cell.controlPoint - coast) / (inland - coast), 0.0F, 1.0F);
+			return NoiseUtil.lerp(Continentalness.NEAR_INLAND.min(), Continentalness.NEAR_INLAND.max(), t);
+		}
+
+		// C6 and C7: Continental Interior (Mid-Inland [0.03F, 0.30F] and Far-Inland [0.30F, 1.00F])
+		if (inland >= 1.0F) {
+			return Continentalness.MID_INLAND.min();
+		}
+		float t = NoiseUtil.clamp((cell.controlPoint - inland) / (1.0F - inland), 0.0F, 1.0F);
+		float midSplit = 0.35F;
+		if (t <= midSplit) {
+			// C6: Near/Mid-Inland [0.03F, 0.30F]
+			float subT = t / midSplit;
+			return NoiseUtil.lerp(Continentalness.MID_INLAND.min(), Continentalness.MID_INLAND.max(), subT);
+		} else {
+			// C7: Far-Inland [0.30F, 1.00F]
+			float subT = (t - midSplit) / (1.0F - midSplit);
+			return NoiseUtil.lerp(Continentalness.FAR_INLAND.min(), Continentalness.FAR_INLAND.max(), subT);
 		}
 	}
 }

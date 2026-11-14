@@ -34,7 +34,7 @@ public class ContinentLerper3 implements CellPopulator {
     
     @Override
     public void apply(Cell cell, float x, float y) {
-        float select = cell.continentEdge;
+        float select = cell.controlPoint;
         if (select < this.blendLower) {
             this.lower.apply(cell, x, y);
             return;
