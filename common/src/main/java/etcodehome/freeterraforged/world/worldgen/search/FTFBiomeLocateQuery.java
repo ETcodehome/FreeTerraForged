@@ -289,14 +289,11 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 		// the FTF ownership/query metadata needed to evaluate those published functions.
 		FTFClimateSampler sourceState = (FTFClimateSampler) (Object) source;
 		FTFClimateSampler isolatedState = (FTFClimateSampler) (Object) isolated;
-		var semantics = sourceState.climateQuerySemantics();
-		isolatedState.setClimateQuerySemantics(
-			semantics.policy(),
-			semantics.preset(),
-			semantics.seed(),
-			semantics.surfaceContext()
-		);
-		isolatedState.setSpawnSearch(sourceState.getSpawnSearch());
+		isolatedState.adoptClimateQuerySemantics(sourceState.climateQuerySemantics());
+		FTFClimateSampler.SpawnSearch spawnSearch = sourceState.getSpawnSearch();
+		if (spawnSearch != null) {
+			isolatedState.setSpawnSearch(spawnSearch);
+		}
 		isolatedState.setWorldgenPlan(selection.plan());
 		return isolated;
 	}

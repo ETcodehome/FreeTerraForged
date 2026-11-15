@@ -1,5 +1,7 @@
 package etcodehome.freeterraforged.mixin;
 
+import org.jetbrains.annotations.Nullable;
+
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.biome.ClimatePointCache;
 import etcodehome.freeterraforged.world.worldgen.biome.FTFClimateSampler;
@@ -96,12 +98,13 @@ class MixinClimateSampler {
 		}
 	}
 
-	public void freeterraforged$FTFClimateSampler$setSpawnSearch(FTFClimateSampler.SpawnSearch spawnSearch) {
-		this.spawnSearch = java.util.Objects.requireNonNull(spawnSearch, "spawnSearch");
+	public void freeterraforged$FTFClimateSampler$setSpawnSearch(@Nullable FTFClimateSampler.SpawnSearch spawnSearch) {
+		this.spawnSearch = spawnSearch != null ? spawnSearch : freeterraforged$defaultSpawnSearch;
 	}
 
 	public FTFClimateSampler.SpawnSearch freeterraforged$FTFClimateSampler$getSpawnSearch() {
-		return this.spawnSearch;
+		FTFClimateSampler.SpawnSearch search = this.spawnSearch;
+		return search != null ? search : freeterraforged$defaultSpawnSearch;
 	}
 
 	public synchronized void freeterraforged$FTFClimateSampler$setClimateQuerySemantics(
