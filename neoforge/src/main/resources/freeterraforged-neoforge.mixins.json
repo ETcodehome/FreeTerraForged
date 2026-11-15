@@ -1,11 +1,18 @@
 {
   "required": true,
   "package": "etcodehome.freeterraforged.neoforge.mixin",
+  "plugin": "etcodehome.freeterraforged.mixin.CompatibilityMixinPlugin",
   "minVersion": "0.8",
   "compatibilityLevel": "JAVA_21",
 	"mixins": [
-		"MixinTagsProvider",
-  	"MixinMinecraftServer"
+    "MixinTagsProvider",
+    "MixinMinecraftServer",
+    "compat.nomansland.SimpleBlockFeatureMixin",
+    "compat.nomansland.FrostedGrassBlockMixin",
+    "compat.nomansland.FtfDecorateSnowFeatureMixin"
+  ],
+  "client": [
+    "compat.nomansland.client.FrostedGrassSnowRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1

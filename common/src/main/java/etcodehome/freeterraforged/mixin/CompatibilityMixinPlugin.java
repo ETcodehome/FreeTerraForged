@@ -8,6 +8,7 @@ import org.apache.logging.log4j.LogManager;
 import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
+import org.spongepowered.asm.util.VersionNumber;
 
 import etcodehome.freeterraforged.platform.ModLoaderUtil;
 
@@ -26,6 +27,11 @@ public final class CompatibilityMixinPlugin implements IMixinConfigPlugin {
 
 	@Override
 	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+		if (mixinClassName.startsWith("etcodehome.freeterraforged.neoforge.mixin.compat.nomansland.")) {
+			return ModLoaderUtil.version("nomansland")
+				.filter(version -> VersionNumber.parse(version).compareTo(VersionNumber.parse("1.6.3")) >= 0)
+				.isPresent();
+		}
 		if (mixinClassName.endsWith(".compat.MixinBiolithDimensionBiomePlacement")) {
 			return ModLoaderUtil.version("biolith").filter(BIOLITH_VERSIONS::contains).isPresent();
 		}
