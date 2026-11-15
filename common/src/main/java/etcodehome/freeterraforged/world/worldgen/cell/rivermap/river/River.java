@@ -13,6 +13,8 @@ public class River {
     public static final Variance MAIN_SPACING = Variance.of(0.1F, 0.25F);
     public static final Variance FORK_SPACING = Variance.of(0.25F, 0.25F);
 
+    public static final float DEFAULT_BOUNDING_RADIUS = 1200.0F;
+
     public float x1;
     public float z1;
     public float x2;
@@ -31,11 +33,11 @@ public class River {
     public float maxZ;
     
     public River(float x1, float z1, float x2, float z2) {
-        this(x1, z1, x2, z2, 275.0F);
+        this(x1, z1, x2, z2, DEFAULT_BOUNDING_RADIUS);
     }
     
     public River(float x1, float z1, float x2, float z2, float radius) {
-        radius *= 2.0F;
+        float effectiveRadius = Math.max(radius >= 600.0F ? radius : radius * 2.0F, DEFAULT_BOUNDING_RADIUS);
         this.x1 = x1;
         this.z1 = z1;
         this.x2 = x2;
@@ -48,10 +50,10 @@ public class River {
         this.ndz = this.dz / this.length;
         this.normX = this.ndz;
         this.normZ = -this.ndx;
-        this.minX = Math.min(x1, x2) - radius;
-        this.minZ = Math.min(z1, z2) - radius;
-        this.maxX = Math.max(x1, x2) + radius;
-        this.maxZ = Math.max(z1, z2) + radius;
+        this.minX = Math.min(x1, x2) - effectiveRadius;
+        this.minZ = Math.min(z1, z2) - effectiveRadius;
+        this.maxX = Math.max(x1, x2) + effectiveRadius;
+        this.maxZ = Math.max(z1, z2) + effectiveRadius;
     }
     
     public float length() {

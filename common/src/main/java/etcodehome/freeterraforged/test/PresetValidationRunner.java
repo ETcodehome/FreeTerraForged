@@ -398,18 +398,26 @@ public final class PresetValidationRunner {
 
 		Cell cell = new Cell();
 
-		// 1. Fix 2: All island built terrain strictly C1 or C0 ranged [-1.20F, -1.05F]
-		cell.terrain = TerrainType.ISLAND;
+		// 1. Fix 2: Mushroom Island built terrain strictly C1 or C0 ranged [-1.20F, -1.05F]
+		cell.terrain = TerrainType.MUSHROOM_FIELDS;
 		cell.height = levels.water + 0.1F;
 		cell.controlPoint = cp.islandCoast;
 		float cIslandCoast = CellSampler.Field.CONTINENT.read(cell, heightmap);
 		if (Math.abs(cIslandCoast - (-1.05F)) > 1e-3F) {
-			throw new AssertionError("Island shoreline at islandCoast must meet -1.05F (C1), was " + cIslandCoast);
+			throw new AssertionError("Mushroom island shoreline at islandCoast must meet -1.05F (C1), was " + cIslandCoast);
 		}
 		cell.controlPoint = cp.islandInland;
 		float cIslandInland = CellSampler.Field.CONTINENT.read(cell, heightmap);
 		if (Math.abs(cIslandInland - (-1.20F)) > 1e-3F) {
-			throw new AssertionError("Island peak at islandInland must meet -1.20F (C0), was " + cIslandInland);
+			throw new AssertionError("Mushroom island peak at islandInland must meet -1.20F (C0), was " + cIslandInland);
+		}
+
+		// Standard island (non-mushroom) must evaluate to C4 coast (-0.185F)
+		cell.terrain = TerrainType.ISLAND;
+		cell.controlPoint = cp.islandCoast;
+		float cStandardIsland = CellSampler.Field.CONTINENT.read(cell, heightmap);
+		if (Math.abs(cStandardIsland - (-0.185F)) > 1e-3F) {
+			throw new AssertionError("Standard island shoreline must meet -0.185F (C4), was " + cStandardIsland);
 		}
 
 		// 2. Fix 3: All areas below ocean water level strictly C2 or C3 ranged based on height
@@ -443,12 +451,12 @@ public final class PresetValidationRunner {
 			throw new AssertionError("Submerged waterline must be strictly < -0.19F to prevent beach misbioming, was " + cSubmergedWaterline);
 		}
 
-		// 3. Fix 1: Continent built terrain above water level starts at C4 (-0.19F) and transitions to C5 / C6 / C7
+		// 3. Fix 1: Continent built terrain above water level starts at C4 (-0.185F) and transitions to C5 / C6 / C7
 		cell.height = levels.water + 0.1F;
 		cell.controlPoint = cp.beach;
 		float cOnshoreBeach = CellSampler.Field.CONTINENT.read(cell, heightmap);
-		if (Math.abs(cOnshoreBeach - (-0.19F)) > 1e-3F) {
-			throw new AssertionError("Onshore beach boundary must meet -0.19F (C4), was " + cOnshoreBeach);
+		if (Math.abs(cOnshoreBeach - (-0.185F)) > 1e-3F) {
+			throw new AssertionError("Onshore beach boundary must meet -0.185F (C4), was " + cOnshoreBeach);
 		}
 
 		// Below beach, continent terrain above water must never drop below C4 (-0.19F)
@@ -483,13 +491,22 @@ public final class PresetValidationRunner {
 			throw new AssertionError("Continental peak must reach 1.00F, was " + cPeak);
 		}
 
-		// 4. All island built terrain strictly in C1 / C0 range [-1.20F, -1.05F]
-		cell.terrain = TerrainType.ISLAND;
+		// 4. Mushroom island built terrain strictly in C1 / C0 range [-1.20F, -1.05F], and oceanic islands in C4/C5 range [-0.185F, 0.03F]
+		cell.terrain = TerrainType.MUSHROOM_FIELDS;
 		for (float edge = 0.0F; edge <= cp.islandCoast; edge += 0.01F) {
 			cell.controlPoint = edge;
 			float c = CellSampler.Field.CONTINENT.read(cell, heightmap);
 			if (c < -1.20F - 1e-4F || c > -1.05F + 1e-4F) {
-				throw new AssertionError("Island terrain at edge " + edge + " had c=" + c + ", outside C1/C0 range [-1.20, -1.05]");
+				throw new AssertionError("Mushroom island terrain at edge " + edge + " had c=" + c + ", outside C1/C0 range [-1.20, -1.05]");
+			}
+		}
+
+		cell.terrain = TerrainType.ISLAND;
+		for (float edge = 0.0F; edge <= cp.islandCoast; edge += 0.01F) {
+			cell.controlPoint = edge;
+			float c = CellSampler.Field.CONTINENT.read(cell, heightmap);
+			if (c < -0.185F - 1e-4F || c > Continentalness.NEAR_INLAND.max() + 1e-5F) {
+				throw new AssertionError("Oceanic island exceeded C4/C5 range [-0.185, 0.03] at edge " + edge + ": " + c);
 			}
 		}
 

@@ -7,6 +7,7 @@ import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.filter.ChunkFilterGrid;
 import etcodehome.freeterraforged.world.worldgen.cell.filter.RegionFilterGrid;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
 import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 import etcodehome.freeterraforged.world.worldgen.util.PosUtil;
 
@@ -136,6 +137,16 @@ public class FilteredChunkCache {
             this.context.filters.apply(grid);
         }
 
+        CellSampler.seedThreadCacheFromGrid(
+            this.context.lookup,
+            grid.getBlockX(),
+            grid.getBlockZ(),
+            grid.getTotalSize(),
+            grid.getBorder(),
+            REGION_CHUNKS * 16,
+            grid.getBacking()
+        );
+
         for (int lz = 0; lz < REGION_CHUNKS; lz++) {
             for (int lx = 0; lx < REGION_CHUNKS; lx++) {
                 int cx = regionChunkX + lx;
@@ -192,6 +203,29 @@ public class FilteredChunkCache {
             int relX = blockX & 15;
             int relZ = blockZ & 15;
             return ChunkFilterGrid.getPaddedCell(chunkCells, relX, relZ);
+        }
+
+        // Fast border lookup: if chunkX/chunkZ is not yet cached, but the preceding neighbor
+        // is in cache, its 18x18 padded border already contains this cell at relIndex 16.
+        int relX = blockX & 15;
+        int relZ = blockZ & 15;
+        if (relX == 0) {
+            Cell[] prevX = this.cache.get(PosUtil.pack(chunkX - 1, chunkZ));
+            if (prevX != null) {
+                return ChunkFilterGrid.getPaddedCell(prevX, 16, relZ);
+            }
+        }
+        if (relZ == 0) {
+            Cell[] prevZ = this.cache.get(PosUtil.pack(chunkX, chunkZ - 1));
+            if (prevZ != null) {
+                return ChunkFilterGrid.getPaddedCell(prevZ, relX, 16);
+            }
+        }
+        if (relX == 0 && relZ == 0) {
+            Cell[] prevCorner = this.cache.get(PosUtil.pack(chunkX - 1, chunkZ - 1));
+            if (prevCorner != null) {
+                return ChunkFilterGrid.getPaddedCell(prevCorner, 16, 16);
+            }
         }
         return null;
     }
