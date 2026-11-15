@@ -254,11 +254,10 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, Den
 			if (genCtx != null && genCtx.filteredChunkCache != null) {
 				cachedCell = genCtx.filteredChunkCache.getExistingFilteredCell(blockX, blockZ);
 			}
-			boolean loadFiltered = genCtx != null && genCtx.filteredChunkCache != null;
 			if (cachedCell != null) {
 				slotCell.copyFrom(cachedCell);
 			} else if (!WorldgenPerfTracker.ACTIVE) {
-				lookup.applyCell(slotCell.reset(), blockX, blockZ, loadFiltered, sampleClimate);
+				lookup.applyCell(slotCell.reset(), blockX, blockZ, false, sampleClimate);
 			} else {
 				WorldgenPerfTracker.ThreadStats ts = WorldgenPerfTracker.stats();
 				ts.cellSamplerCache2dMisses++;
@@ -267,7 +266,7 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, Den
 					ts.currentCaller = WorldgenPerfTracker.ApplyCellCaller.CELL_SAMPLER_MISS;
 				}
 				try {
-					lookup.applyCell(slotCell.reset(), blockX, blockZ, loadFiltered, sampleClimate);
+					lookup.applyCell(slotCell.reset(), blockX, blockZ, false, sampleClimate);
 				} finally {
 					ts.currentCaller = prev;
 				}

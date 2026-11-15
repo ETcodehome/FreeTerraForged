@@ -99,7 +99,15 @@ public record Heightmap(
             this.applyRiparianErosion(cell);
         }
         cell.terrainErosion = cell.erosion;
-        if (Math.abs(cell.weirdness) <= 0.05F && cell.height > this.levels.ground && !cell.erosionMask) {
+        float waterLevel = cell.riverWaterLevel > 0.0F ? cell.riverWaterLevel : this.levels.water;
+        boolean isWater = cell.erosionMask || cell.height <= this.levels.ground
+                || (cell.terrain.isRiver() && cell.height <= waterLevel)
+                || (cell.terrain.isLake() && cell.height <= waterLevel)
+                || (cell.terrain.isWetland() && cell.height <= waterLevel);
+        if (isWater) {
+            cell.sediment = -0.5F;
+            cell.weirdness = 0.0F;
+        } else {
             cell.weirdness = ReferenceWeirdness.fromSediment(cell.sediment, cell.macroBiomeId);
         }
         cell.continentalness = CellSampler.computeContinentalness(cell, this.levels, this.controlPoints);
