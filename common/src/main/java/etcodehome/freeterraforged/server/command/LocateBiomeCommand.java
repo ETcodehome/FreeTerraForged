@@ -120,7 +120,18 @@ public final class LocateBiomeCommand {
         if (target == null) {
             throw ERROR_NOT_FTF.create();
         }
-        BiomeLocateSearch.Query query = locateQuery(target.level());
+        BiomeLocateSearch.Query query;
+        try {
+            query = locateQuery(target.level());
+        } catch (Exception ex) {
+            FTFCommon.LOGGER.error("Failed to prepare FTF biome locate query", ex);
+            source.sendFailure(Component.translatableWithFallback(
+                KEY + "failed",
+                "Could not search for biome %s because of an unexpected error. Check the server log for details.",
+                value
+            ));
+            return 0;
+        }
         if (query == null) {
             throw ERROR_NOT_FTF.create();
         }
@@ -170,7 +181,13 @@ public final class LocateBiomeCommand {
         String value
     ) {
         BiomeSearchTarget target = BiomeSearchTarget.parse(value);
-        BiomeLocateSearch.Query query = locateQuery(level);
+        BiomeLocateSearch.Query query;
+        try {
+            query = locateQuery(level);
+        } catch (Exception ex) {
+            FTFCommon.LOGGER.error("Failed to prepare FTF biome locate preview query", ex);
+            return CompletableFuture.completedFuture(LocatePreviewResult.of(LocatePreviewResult.Status.UNAVAILABLE));
+        }
         if (query == null) {
             return CompletableFuture.completedFuture(LocatePreviewResult.of(LocatePreviewResult.Status.UNAVAILABLE));
         }
