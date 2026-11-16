@@ -158,8 +158,9 @@ jobs:
             const failures = [];
             const parsedSuites = [];
 
-            // Base tokens representing the 12 core test suites in canonical execution order
+            // Base tokens representing the core test suites in canonical execution order
             const baseTestTokens = [
+              'presetValidation.allVanillaBiomesCoverage',
               'presetValidation.checkSynchronizedRegistry',
               'presetValidation.spawnChunkRegularity',
               'presetValidation.builtinRiversFallback',
