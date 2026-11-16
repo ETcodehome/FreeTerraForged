@@ -1,5 +1,6 @@
 package etcodehome.freeterraforged.server.command;
 
+import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -11,6 +12,7 @@ import java.util.stream.Stream;
 import org.jetbrains.annotations.Nullable;
 
 import com.mojang.brigadier.Command;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.ParsedCommandNode;
@@ -48,7 +50,9 @@ import net.minecraft.world.level.levelgen.RandomState;
 
 /** FTF-plan-aware, chunk-free biome locator. */
 public final class LocateBiomeCommand {
-    public static final int MIN_BIOME_AREA_BLOCKS = FTFBiomeLocateQuery.MIN_BIOME_AREA_BLOCKS;
+    public static final int DEFAULT_MIN_BIOME_AREA_BLOCKS = FTFBiomeLocateQuery.DEFAULT_MIN_BIOME_AREA_BLOCKS;
+    public static final int MAX_MIN_BIOME_AREA_BLOCKS = FTFBiomeLocateQuery.MAX_MIN_BIOME_AREA_BLOCKS;
+    public static final int MIN_BIOME_AREA_BLOCKS = DEFAULT_MIN_BIOME_AREA_BLOCKS;
     private static final String KEY = FTFCommon.MOD_ID + ".commands.locate.biome.";
     private static final AtomicReference<RunningSearch> ACTIVE_SEARCH = new AtomicReference<>();
     private static final AtomicReference<BiomeLocateSearch.Result> LAST_COMPLETED_RESULT = new AtomicReference<>();
@@ -73,8 +77,30 @@ public final class LocateBiomeCommand {
                     ), builder);
                 })
 				.executes(context -> locate(
-					context.getSource(), biomeTarget(context), LocateCommandOptions.defaults()
+					context.getSource(), biomeTarget(context), LocateCommandOptions.defaults(), null
 				))
+				.then(Commands.argument("min_size", IntegerArgumentType.integer())
+					.suggests((context, builder) -> SharedSuggestionProvider.suggest(
+						List.of(Integer.toString(DEFAULT_MIN_BIOME_AREA_BLOCKS)), builder
+					))
+					.executes(context -> locate(
+						context.getSource(),
+						biomeTarget(context),
+						LocateCommandOptions.defaults(),
+						IntegerArgumentType.getInteger(context, "min_size")
+					))
+					.then(Commands.argument(LocateCommandOptions.ARGUMENT, StringArgumentType.greedyString())
+						.suggests(LocateCommandOptions::suggest)
+						.executes(context -> locate(
+							context.getSource(),
+							biomeTarget(context),
+							LocateCommandOptions.parse(StringArgumentType.getString(
+								context, LocateCommandOptions.ARGUMENT
+							)),
+							IntegerArgumentType.getInteger(context, "min_size")
+						))
+					)
+				)
 				.then(Commands.argument(LocateCommandOptions.ARGUMENT, StringArgumentType.greedyString())
 					.suggests(LocateCommandOptions::suggest)
 					.executes(context -> locate(
@@ -82,7 +108,8 @@ public final class LocateBiomeCommand {
 						biomeTarget(context),
 						LocateCommandOptions.parse(StringArgumentType.getString(
 							context, LocateCommandOptions.ARGUMENT
-						))
+						)),
+						null
 					))
 				)
             );
@@ -117,8 +144,24 @@ public final class LocateBiomeCommand {
     private static int locate(
         CommandSourceStack source,
 		ResourceOrTagKeyArgument.Result<Biome> targetBiome,
-		LocateCommandOptions options
+		LocateCommandOptions options,
+		@Nullable Integer positionalMinSize
     ) throws CommandSyntaxException {
+		int minSize;
+		if (positionalMinSize != null) {
+			if (positionalMinSize > MAX_MIN_BIOME_AREA_BLOCKS) {
+				throw LocateCommandOptions.ERROR_SIZE_TOO_LARGE.create(
+					positionalMinSize, MAX_MIN_BIOME_AREA_BLOCKS
+				);
+			}
+			minSize = positionalMinSize <= 0
+				? (options.minSize() != null ? options.minSize() : DEFAULT_MIN_BIOME_AREA_BLOCKS)
+				: positionalMinSize;
+		} else if (options.minSize() != null) {
+			minSize = options.minSize();
+		} else {
+			minSize = DEFAULT_MIN_BIOME_AREA_BLOCKS;
+		}
 		LocateSearchSettings settings = options.searchSettings();
         String value = targetBiome.asPrintable();
         LocateTerrainCommand.TargetLevel target = LocateTerrainCommand.findTargetLevel(source);
@@ -127,7 +170,7 @@ public final class LocateBiomeCommand {
         }
         FTFBiomeLocateQuery query;
         try {
-            query = locateQuery(target.level());
+            query = locateQuery(target.level(), minSize);
         } catch (Exception ex) {
             FTFCommon.LOGGER.error("Failed to prepare FTF biome locate query", ex);
             source.sendFailure(Component.translatableWithFallback(
@@ -193,10 +236,19 @@ public final class LocateBiomeCommand {
         BlockPos origin,
         String value
     ) {
+        return findForPreview(level, origin, value, DEFAULT_MIN_BIOME_AREA_BLOCKS);
+    }
+
+    static CompletableFuture<LocatePreviewResult> findForPreview(
+        ServerLevel level,
+        BlockPos origin,
+        String value,
+        int minBiomeAreaBlocks
+    ) {
         BiomeSearchTarget target = BiomeSearchTarget.parse(value);
         FTFBiomeLocateQuery query;
         try {
-            query = locateQuery(level);
+            query = locateQuery(level, minBiomeAreaBlocks);
         } catch (Exception ex) {
             FTFCommon.LOGGER.error("Failed to prepare FTF biome locate preview query", ex);
             return CompletableFuture.completedFuture(LocatePreviewResult.of(LocatePreviewResult.Status.UNAVAILABLE));
@@ -261,7 +313,17 @@ public final class LocateBiomeCommand {
         BlockPos origin,
         LocateSearchSettings settings
     ) {
-        FTFBiomeLocateQuery query = locateQuery(level);
+        return locateBiome(level, target, origin, settings, DEFAULT_MIN_BIOME_AREA_BLOCKS);
+    }
+
+    public static CompletableFuture<BiomeLocateSearch.Result> locateBiome(
+        ServerLevel level,
+        Predicate<Holder<Biome>> target,
+        BlockPos origin,
+        LocateSearchSettings settings,
+        int minBiomeAreaBlocks
+    ) {
+        FTFBiomeLocateQuery query = locateQuery(level, minBiomeAreaBlocks);
         if (query == null) {
             return CompletableFuture.failedFuture(new IllegalStateException("No FreeTerraForged world is available."));
         }
@@ -270,6 +332,11 @@ public final class LocateBiomeCommand {
 
     @Nullable
     public static FTFBiomeLocateQuery locateQuery(ServerLevel level) {
+        return locateQuery(level, DEFAULT_MIN_BIOME_AREA_BLOCKS);
+    }
+
+    @Nullable
+    public static FTFBiomeLocateQuery locateQuery(ServerLevel level, int minBiomeAreaBlocks) {
         RandomState randomState = level.getChunkSource().randomState();
         if (!((Object) randomState instanceof FTFRandomState ftfState)) {
             return null;
@@ -285,7 +352,8 @@ public final class LocateBiomeCommand {
             ftfState.generatorContext(),
             randomState.sampler(),
 			runtime.placement(),
-            () -> isCurrent(binding, expected)
+            () -> isCurrent(binding, expected),
+            minBiomeAreaBlocks
         );
     }
 
@@ -358,13 +426,15 @@ public final class LocateBiomeCommand {
 		int distance = (int) Math.sqrt((double) match.distanceSq());
 		source.sendSuccess(() -> successMessage(biomeId, coordinates, distance), false);
         FTFCommon.LOGGER.info(
-            "Located FTF biome {} in {} ms ({} columns, horizontal step {}, vertical step {}, roles {})",
+            "Located FTF biome {} in {} ms ({} columns, horizontal step {}, vertical step {}, roles {}, min area {}x{} blocks)",
             biomeId,
             TimeUnit.NANOSECONDS.toMillis(elapsedNanos),
             result.columns(),
             result.plan().resolution().horizontalStep(),
             result.plan().resolution().verticalStep(),
-            result.plan().roles().roles()
+            result.plan().roles().roles(),
+            result.plan().minBiomeAreaBlocks(),
+            result.plan().minBiomeAreaBlocks()
         );
         return true;
     }

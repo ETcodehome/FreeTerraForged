@@ -32,6 +32,7 @@ import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Presets;
 import etcodehome.freeterraforged.registries.FTFRegistries;
 import etcodehome.freeterraforged.server.command.LocateBiomeCommand;
+import etcodehome.freeterraforged.server.command.LocateCommandOptions;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.biome.ReferenceWeirdness;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
@@ -45,6 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BiomeLocateAreaTest {
@@ -103,6 +105,74 @@ class BiomeLocateAreaTest {
 		assertNotNull(patchResult.match(), "Contiguous minimum biome patch must be matched");
 		assertEquals(new BlockPos(16, 64, 16), patchResult.match().position());
 		assertEquals(targetBiome, patchResult.match().biome());
+	}
+
+	@Test
+	@DisplayName("Verify LocateCommandOptions parses --min-size and --size with boundary and fallback rules")
+	void testLocateCommandOptionsMinSizeParsing() throws Exception {
+		// Valid custom sizes
+		LocateCommandOptions opt16 = LocateCommandOptions.parse("--min-size 16");
+		assertEquals(16, opt16.minSize());
+
+		LocateCommandOptions opt20 = LocateCommandOptions.parse("--size=20");
+		assertEquals(20, opt20.minSize());
+
+		// 0 and negative fall back to default (12)
+		LocateCommandOptions optZero = LocateCommandOptions.parse("--min-size 0");
+		assertEquals(FTFBiomeLocateQuery.DEFAULT_MIN_BIOME_AREA_BLOCKS, optZero.minSize());
+
+		LocateCommandOptions optNeg = LocateCommandOptions.parse("--min-size -5");
+		assertEquals(FTFBiomeLocateQuery.DEFAULT_MIN_BIOME_AREA_BLOCKS, optNeg.minSize());
+
+		// Extreme values (> 64) fail outright
+		assertThrows(com.mojang.brigadier.exceptions.CommandSyntaxException.class, () ->
+			LocateCommandOptions.parse("--min-size 65")
+		);
+		assertThrows(com.mojang.brigadier.exceptions.CommandSyntaxException.class, () ->
+			LocateCommandOptions.parse("--size 1000")
+		);
+	}
+
+	@Test
+	@DisplayName("Verify custom minimum size plan dynamically adjusts area requirement")
+	void testCustomMinimumSizeRejectionAndAcceptance() {
+		Holder<Biome> targetBiome = Holder.Reference.createStandAlone(null, Biomes.PLAINS);
+		Holder<Biome> otherBiome = Holder.Reference.createStandAlone(null, Biomes.FOREST);
+
+		// 16-block requirement (k = 4 quarts)
+		BiomeLocateSearch.SearchPlan plan16 = new BiomeLocateSearch.SearchPlan(
+			new BiomePlacementPlan.TargetRoles(true, Set.of(BiomePlacementPlan.Role.SURFACE), true, false),
+			new BiomeSearchResolution(4, 4),
+			16
+		);
+		assertEquals(4, plan16.minBiomeAreaQuarts());
+
+		// 12x12 patch (3x3 quarts) at (4..6, 4..6) -> should FAIL plan16
+		BiomeLocateSearch.Query patch12Query = createSyntheticGridQuery(
+			plan16,
+			(qx, qz) -> (qx >= 4 && qx < 4 + 3 && qz >= 4 && qz < 4 + 3) ? targetBiome : otherBiome
+		);
+		BiomeLocateSearch.Result result12 = BiomeLocateSearch.findFirst(
+			patch12Query,
+			targetBiome::equals,
+			new BlockPos(16, 64, 16),
+			new LocateSearchSettings(1, 5)
+		).join();
+		assertNull(result12.match(), "12x12 patch must fail when min size is set to 16 blocks");
+
+		// 16x16 patch (4x4 quarts) at (4..7, 4..7) -> should PASS plan16
+		BiomeLocateSearch.Query patch16Query = createSyntheticGridQuery(
+			plan16,
+			(qx, qz) -> (qx >= 4 && qx < 4 + 4 && qz >= 4 && qz < 4 + 4) ? targetBiome : otherBiome
+		);
+		BiomeLocateSearch.Result result16 = BiomeLocateSearch.findFirst(
+			patch16Query,
+			targetBiome::equals,
+			new BlockPos(16, 64, 16),
+			new LocateSearchSettings(1, 5)
+		).join();
+		assertNotNull(result16.match(), "16x16 patch must pass when min size is set to 16 blocks");
+		assertEquals(new BlockPos(16, 64, 16), result16.match().position());
 	}
 
 	@Test
@@ -276,7 +346,7 @@ class BiomeLocateAreaTest {
 						if (!target.test(center)) {
 							return null;
 						}
-						int k = LocateBiomeCommand.MIN_BIOME_AREA_BLOCKS / QuartPos.SIZE;
+						int k = searchPlan.minBiomeAreaQuarts();
 						for (int oz = 0; oz < k; oz++) {
 							for (int ox = 0; ox < k; ox++) {
 								if (!center.equals(grid.biomeAt(qx + ox, qz + oz))) {

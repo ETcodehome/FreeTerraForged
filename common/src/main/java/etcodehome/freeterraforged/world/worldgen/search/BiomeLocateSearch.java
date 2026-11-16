@@ -10,6 +10,7 @@ import org.jetbrains.annotations.Nullable;
 import etcodehome.freeterraforged.world.worldgen.runtime.BiomePlacementPlan;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
+import net.minecraft.core.QuartPos;
 import net.minecraft.world.level.biome.Biome;
 
 /** Outward, first-match biome search across the placement domains selected by a compiled FTF plan. */
@@ -92,11 +93,26 @@ public final class BiomeLocateSearch {
 
 	public record SearchPlan(
 		BiomePlacementPlan.TargetRoles roles,
-		BiomeSearchResolution resolution
+		BiomeSearchResolution resolution,
+		int minBiomeAreaBlocks
 	) {
+		public SearchPlan(
+			BiomePlacementPlan.TargetRoles roles,
+			BiomeSearchResolution resolution
+		) {
+			this(roles, resolution, FTFBiomeLocateQuery.DEFAULT_MIN_BIOME_AREA_BLOCKS);
+		}
+
 		public SearchPlan {
 			roles = Objects.requireNonNull(roles, "roles");
 			resolution = Objects.requireNonNull(resolution, "resolution");
+			if (minBiomeAreaBlocks < 0) {
+				throw new IllegalArgumentException("minBiomeAreaBlocks must not be negative");
+			}
+		}
+
+		public int minBiomeAreaQuarts() {
+			return this.minBiomeAreaBlocks / QuartPos.SIZE;
 		}
 	}
 

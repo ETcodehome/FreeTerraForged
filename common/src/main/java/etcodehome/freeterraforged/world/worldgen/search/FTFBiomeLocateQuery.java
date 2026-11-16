@@ -1,5 +1,6 @@
 package etcodehome.freeterraforged.world.worldgen.search;
 
+import java.util.BitSet;
 import java.util.Objects;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
@@ -22,8 +23,9 @@ import net.minecraft.world.level.biome.Climate;
 
 /** Final-biome column query backed by an immutable FTF runtime plan. */
 public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
-	public static final int MIN_BIOME_AREA_BLOCKS = 12;
-	private static final int MIN_BIOME_AREA_QUARTS = MIN_BIOME_AREA_BLOCKS / QuartPos.SIZE;
+	public static final int DEFAULT_MIN_BIOME_AREA_BLOCKS = 12;
+	public static final int MAX_MIN_BIOME_AREA_BLOCKS = 64;
+	public static final int MIN_BIOME_AREA_BLOCKS = DEFAULT_MIN_BIOME_AREA_BLOCKS;
 	private static final int MIN_COORDINATE = -Level.MAX_LEVEL_SIZE;
 	private static final int MAX_COORDINATE = Level.MAX_LEVEL_SIZE - 1;
 
@@ -34,6 +36,7 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 	private final BiomeLocateCellOptimization cellOptimization;
 	private final boolean directSource;
 	private final BooleanSupplier valid;
+	private final int minBiomeAreaBlocks;
 
 	public FTFBiomeLocateQuery(
 		WorldgenBiomeSelection.Executable selection,
@@ -41,6 +44,17 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 		Climate.Sampler climateSampler,
 		BiomePlacementPlan placements,
 		BooleanSupplier valid
+	) {
+		this(selection, context, climateSampler, placements, valid, DEFAULT_MIN_BIOME_AREA_BLOCKS);
+	}
+
+	public FTFBiomeLocateQuery(
+		WorldgenBiomeSelection.Executable selection,
+		GeneratorContext context,
+		Climate.Sampler climateSampler,
+		BiomePlacementPlan placements,
+		BooleanSupplier valid,
+		int minBiomeAreaBlocks
 	) {
 		this.selection = Objects.requireNonNull(selection, "selection");
 		this.context = Objects.requireNonNull(context, "context");
@@ -53,6 +67,26 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 		this.cellOptimization = BiomeLocateCellOptimization.compile(selection, context, this.climateSampler);
 		this.directSource = selection.plan().providerSelection().directInput().isPresent();
 		this.valid = Objects.requireNonNull(valid, "valid");
+		this.minBiomeAreaBlocks = sanitizeMinSize(minBiomeAreaBlocks);
+	}
+
+	public static int sanitizeMinSize(int minSize) {
+		return minSize <= 0 ? DEFAULT_MIN_BIOME_AREA_BLOCKS : minSize;
+	}
+
+	public FTFBiomeLocateQuery withMinBiomeAreaBlocks(int minBiomeAreaBlocks) {
+		return new FTFBiomeLocateQuery(
+			this.selection,
+			this.context,
+			this.climateSampler,
+			this.placements,
+			this.valid,
+			minBiomeAreaBlocks
+		);
+	}
+
+	public int minBiomeAreaBlocks() {
+		return this.minBiomeAreaBlocks;
 	}
 
 	@Override
@@ -60,7 +94,8 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 		BiomePlacementPlan.TargetRoles roles = this.placements.classify(target);
 		return new BiomeLocateSearch.SearchPlan(
 			roles,
-			BiomeSearchResolution.derive(this.placements.searchScales(), roles)
+			BiomeSearchResolution.derive(this.placements.searchScales(), roles),
+			this.minBiomeAreaBlocks
 		);
 	}
 
@@ -144,14 +179,19 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 		Objects.requireNonNull(match, "match");
 		Objects.requireNonNull(plan, "plan");
 		this.requireValid();
+		int minBlocks = plan.minBiomeAreaBlocks();
+		int k = plan.minBiomeAreaQuarts();
+		if (k <= 1) {
+			return true;
+		}
 		BlockPos pos = match.position();
 		Holder<Biome> expected = match.biome();
 		int anchorX = QuartPos.toBlock(QuartPos.fromBlock(pos.getX()));
 		int anchorY = pos.getY();
 		int anchorZ = QuartPos.toBlock(QuartPos.fromBlock(pos.getZ()));
 		boolean checkSurface = plan.roles().searchesSurface() && !plan.roles().searchesUnderground();
-		for (int dz = 0; dz < MIN_BIOME_AREA_BLOCKS; dz += QuartPos.SIZE) {
-			for (int dx = 0; dx < MIN_BIOME_AREA_BLOCKS; dx += QuartPos.SIZE) {
+		for (int dz = 0; dz < minBlocks; dz += QuartPos.SIZE) {
+			for (int dx = 0; dx < minBlocks; dx += QuartPos.SIZE) {
 				int x = anchorX + dx;
 				int z = anchorZ + dz;
 				if (!inWorldBounds(x, z)) {
@@ -161,7 +201,7 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 					this.context,
 					x,
 					z,
-					true,
+					checkSurface,
 					this.cellOptimization::canUseRaw
 				)) {
 					Cell cell = sample.cell();
@@ -318,7 +358,7 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 		int centerSurfaceY,
 		int blockZ
 	) {
-		int k = MIN_BIOME_AREA_QUARTS;
+		int k = plan.minBiomeAreaQuarts();
 		if (k <= 1) {
 			return new BiomeLocateSearch.Match(
 				new BlockPos(blockX, centerSurfaceY, blockZ),
@@ -327,11 +367,14 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 			);
 		}
 		int g = 2 * k - 1;
+		int totalBits = g * g;
+		BitSet evaluatedMask = new BitSet(totalBits);
+		BitSet matchedMask = new BitSet(totalBits);
 		int centerGx = k - 1;
 		int centerGz = k - 1;
-		long centerBit = 1L << (centerGz * g + centerGx);
-		long evaluatedMask = centerBit;
-		long matchedMask = centerBit;
+		int centerBit = centerGz * g + centerGx;
+		evaluatedMask.set(centerBit);
+		matchedMask.set(centerBit);
 
 		for (int oz = 0; oz < k; oz++) {
 			for (int ox = 0; ox < k; ox++) {
@@ -342,9 +385,9 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 					for (int qx = 0; qx < k; qx++) {
 						int gx = startGx + qx;
 						int gz = startGz + qz;
-						long bit = 1L << (gz * g + gx);
-						if ((evaluatedMask & bit) == 0L) {
-							evaluatedMask |= bit;
+						int bit = gz * g + gx;
+						if (!evaluatedMask.get(bit)) {
+							evaluatedMask.set(bit);
 							int nx = blockX + (gx - (k - 1)) * QuartPos.SIZE;
 							int nz = blockZ + (gz - (k - 1)) * QuartPos.SIZE;
 							if (inWorldBounds(nx, nz)) {
@@ -358,12 +401,12 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 									Cell neighborCell = sample.cell();
 									int nSurfaceY = this.surfaceY(neighborCell);
 									if (biome.equals(this.resolveAt(neighborCell, nx, nSurfaceY, nz))) {
-										matchedMask |= bit;
+										matchedMask.set(bit);
 									}
 								}
 							}
 						}
-						if ((matchedMask & bit) == 0L) {
+						if (!matchedMask.get(bit)) {
 							allMatch = false;
 							break;
 						}
@@ -410,7 +453,7 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 		int blockY,
 		int blockZ
 	) {
-		int k = MIN_BIOME_AREA_QUARTS;
+		int k = plan.minBiomeAreaQuarts();
 		if (k <= 1) {
 			return new BiomeLocateSearch.Match(
 				new BlockPos(blockX, blockY, blockZ),
@@ -419,11 +462,14 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 			);
 		}
 		int g = 2 * k - 1;
+		int totalBits = g * g;
+		BitSet evaluatedMask = new BitSet(totalBits);
+		BitSet matchedMask = new BitSet(totalBits);
 		int centerGx = k - 1;
 		int centerGz = k - 1;
-		long centerBit = 1L << (centerGz * g + centerGx);
-		long evaluatedMask = centerBit;
-		long matchedMask = centerBit;
+		int centerBit = centerGz * g + centerGx;
+		evaluatedMask.set(centerBit);
+		matchedMask.set(centerBit);
 
 		for (int oz = 0; oz < k; oz++) {
 			for (int ox = 0; ox < k; ox++) {
@@ -434,9 +480,9 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 					for (int qx = 0; qx < k; qx++) {
 						int gx = startGx + qx;
 						int gz = startGz + qz;
-						long bit = 1L << (gz * g + gx);
-						if ((evaluatedMask & bit) == 0L) {
-							evaluatedMask |= bit;
+						int bit = gz * g + gx;
+						if (!evaluatedMask.get(bit)) {
+							evaluatedMask.set(bit);
 							int nx = blockX + (gx - (k - 1)) * QuartPos.SIZE;
 							int nz = blockZ + (gz - (k - 1)) * QuartPos.SIZE;
 							if (inWorldBounds(nx, nz)) {
@@ -456,13 +502,13 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 											roles, neighborCell, nx, blockY, nz
 										);
 										if (biome.equals(neighborBiome)) {
-											matchedMask |= bit;
+											matchedMask.set(bit);
 										}
 									}
 								}
 							}
 						}
-						if ((matchedMask & bit) == 0L) {
+						if (!matchedMask.get(bit)) {
 							allMatch = false;
 							break;
 						}

@@ -31,6 +31,7 @@ public final class FTFLanguageProvider {
 			this.add("freeterraforged.commands.locate.options.whole_number", "The value for %s must be a whole number.");
 			this.add("freeterraforged.commands.locate.options.timeout", "Locate timeout must be at least 1 second; received %s.");
 			this.add("freeterraforged.commands.locate.options.workers", "Locate workers must be between 1 and %s; received %s.");
+			this.add("freeterraforged.commands.locate.options.size_too_large", "Minimum biome size must not exceed %s blocks; received %s.");
 			this.add("freeterraforged.commands.locate.terrain.unknown", "Unknown terrain type: %s.");
 			this.add("freeterraforged.commands.locate.terrain.not_ftf", "No FreeTerraForged world is available.");
 			this.add("freeterraforged.commands.locate.terrain.no_active_search", "No FreeTerraForged locate search is running.");
