@@ -13,6 +13,7 @@ public final class FTFChunkGenerators {
 
 	public static void bootstrap() {
 		register("noise", TERRAFORGED);
+		RegistryUtil.register(BuiltInRegistries.BIOME_SOURCE, "unified", UnifiedBiomeSource.CODEC);
 	}
 
 	private static void register(String name, MapCodec<? extends ChunkGenerator> codec) {
