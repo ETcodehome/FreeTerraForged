@@ -593,6 +593,25 @@ public final class PresetValidationRunner {
 			FTFCommon.LOGGER.info("[FTF-Test] PASSED: Live biome locate comparison ({})", locateNotes);
 			testRecords.add(new TestRecord(currentTestName, locateNotes, true, null));
 
+			currentTestName = "presetValidation.allVanillaBiomesCoverage." + loader;
+			watchdog.setStep(currentTestName);
+			VanillaBiomeCoverageValidator.Result coverageResult = VanillaBiomeCoverageValidator.validate(
+				server, loader, watchdog::setStep
+			);
+			watchdog.setStep(currentTestName);
+			String coverageNotes = String.format(
+				java.util.Locale.ROOT,
+				"%d/%d Overworld biomes located (>= 8x8 area) & %d non-Overworld rejected in %dms (max: %s @ %dms)",
+				coverageResult.overworldBiomesVerified(),
+				coverageResult.overworldBiomesVerified(),
+				coverageResult.nonOverworldBiomesRejected(),
+				coverageResult.totalMillis(),
+				coverageResult.slowestBiome(),
+				coverageResult.maxBiomeMillis()
+			);
+			FTFCommon.LOGGER.info("[FTF-Test] PASSED: Complete vanilla biome coverage validation ({})", coverageNotes);
+			testRecords.add(new TestRecord(currentTestName, coverageNotes, true, null));
+
 			currentTestName = "presetValidation.terrainLocateLivePlan." + loader;
 			watchdog.setStep(currentTestName);
 			TerrainLocateValidator.Result terrainLocate = TerrainLocateValidator.validate(

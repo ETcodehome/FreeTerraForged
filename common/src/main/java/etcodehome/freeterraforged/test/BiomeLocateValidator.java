@@ -363,19 +363,27 @@ public final class BiomeLocateValidator {
 		BiomeLocateSearch.Match match
 	) {
 		BlockPos position = match.position();
-		// Force FULL promotion, then read the exact stored quart. Level#getBiome uses BiomeManager's zoom/fiddle
-		// algorithm and may intentionally select an adjacent quart, which is not the coordinate locate evaluated.
-		var chunk = level.getChunk(position.getX() >> 4, position.getZ() >> 4);
-		Holder<Biome> generated = chunk.getNoiseBiome(
-			QuartPos.fromBlock(position.getX()),
-			QuartPos.fromBlock(position.getY()),
-			QuartPos.fromBlock(position.getZ())
-		);
-		if (!expected.equals(generated)) {
-			throw new AssertionError(
-				"FTF locate predicted " + biomeName(expected) + " at " + position
-					+ " but the finished chunk contains " + biomeName(generated)
-			);
+		// Force FULL promotion, then read the exact stored quarts across the 8x8 block area.
+		// Level#getBiome uses BiomeManager's zoom/fiddle algorithm and may intentionally select an adjacent quart,
+		// which is not the coordinate locate evaluated.
+		for (int dz = 0; dz < FTFBiomeLocateQuery.MIN_BIOME_AREA_BLOCKS; dz += QuartPos.SIZE) {
+			for (int dx = 0; dx < FTFBiomeLocateQuery.MIN_BIOME_AREA_BLOCKS; dx += QuartPos.SIZE) {
+				int x = position.getX() + dx;
+				int z = position.getZ() + dz;
+				var chunk = level.getChunk(x >> 4, z >> 4);
+				Holder<Biome> generated = chunk.getNoiseBiome(
+					QuartPos.fromBlock(x),
+					QuartPos.fromBlock(position.getY()),
+					QuartPos.fromBlock(z)
+				);
+				if (!expected.equals(generated)) {
+					throw new AssertionError(
+						"FTF locate predicted 8x8 area of " + biomeName(expected) + " at " + position
+							+ " but the finished chunk at (" + x + ", " + position.getY() + ", " + z + ") contains "
+							+ biomeName(generated)
+					);
+				}
+			}
 		}
 	}
 

@@ -20,6 +20,7 @@ import java.util.stream.Stream;
 public final class LocalTestReportGenerator {
 
 	public static final List<String> BASE_TEST_TOKENS = List.of(
+		"presetValidation.allVanillaBiomesCoverage",
 		"presetValidation.checkSynchronizedRegistry",
 		"presetValidation.spawnChunkRegularity",
 		"presetValidation.builtinRiversFallback",
