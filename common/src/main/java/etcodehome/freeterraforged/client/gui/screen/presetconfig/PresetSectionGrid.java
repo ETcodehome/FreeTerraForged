@@ -30,15 +30,17 @@ final class PresetSectionGrid extends AbstractScrollWidget implements ContainerE
 	private final Font font;
 	private final List<Card> cards = new ArrayList<>();
 	private final List<ClipboardButton> buttons = new ArrayList<>();
+	private Layout layout;
 	private GuiEventListener focusedChild;
 	private boolean dragging;
 	private int innerHeight;
 
-	PresetSectionGrid(int x, int y, int width, int height, Font font, List<Section> sections) {
+	PresetSectionGrid(int x, int y, int width, int height, Font font, List<Section> sections, Layout layout) {
 		super(x, y, width, height, Component.translatableWithFallback(
 			"freeterraforged.gui.preset_view.settings", "Preset settings"
 		));
 		this.font = font;
+		this.layout = layout;
 		Component copied = Component.translatableWithFallback(
 			"freeterraforged.gui.preset_view.copied", "Copied to clipboard"
 		);
@@ -61,6 +63,15 @@ final class PresetSectionGrid extends AbstractScrollWidget implements ContainerE
 			this.cards.add(new Card(section.title(), sectionButtons));
 		}
 		this.layoutCards();
+	}
+
+	void setLayout(Layout layout) {
+		if (this.layout == layout) {
+			return;
+		}
+		this.layout = layout;
+		this.layoutCards();
+		this.setScrollAmount(0.0D);
 	}
 
 	void tick() {
@@ -193,7 +204,9 @@ final class PresetSectionGrid extends AbstractScrollWidget implements ContainerE
 
 	private void layoutCards() {
 		int contentWidth = Math.max(1, this.getWidth() - GRID_PADDING * 2);
-		int columns = Math.max(1, Math.min(MAX_COLUMNS, (contentWidth + CARD_GAP) / (MIN_CARD_WIDTH + CARD_GAP)));
+		int columns = this.layout == Layout.SINGLE_COLUMN
+			? 1
+			: Math.max(1, Math.min(MAX_COLUMNS, (contentWidth + CARD_GAP) / (MIN_CARD_WIDTH + CARD_GAP)));
 		columns = Math.min(columns, Math.max(1, this.cards.size()));
 		int cardWidth = Math.max(1, Math.min(
 			MAX_CARD_WIDTH,
@@ -227,6 +240,11 @@ final class PresetSectionGrid extends AbstractScrollWidget implements ContainerE
 			}
 		}
 		return shortest;
+	}
+
+	enum Layout {
+		MASONRY,
+		SINGLE_COLUMN
 	}
 
 	@Override

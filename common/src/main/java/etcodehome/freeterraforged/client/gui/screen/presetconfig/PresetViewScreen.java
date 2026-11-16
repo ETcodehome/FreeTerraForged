@@ -12,6 +12,8 @@ import etcodehome.freeterraforged.client.gui.widget.WidgetList;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.CycleButton;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
@@ -19,6 +21,7 @@ import net.minecraft.network.chat.Component;
 /** Native, read-only browser for a server-supplied active-preset snapshot. */
 public final class PresetViewScreen extends Screen {
 	private static final String KEY = "freeterraforged.gui.preset_view.";
+	private static PresetSectionGrid.Layout preferredLayout = PresetSectionGrid.Layout.MASONRY;
 
 	private final String presetJson;
 	private final String dimension;
@@ -26,6 +29,7 @@ public final class PresetViewScreen extends Screen {
 	private final String presetName;
 	private final List<Category> model;
 	private String selectedCategory;
+	private PresetSectionGrid.Layout layout = preferredLayout;
 	private WidgetList<Button> categories;
 	private PresetSectionGrid settings;
 	private ClipboardButton copyJsonButton;
@@ -53,8 +57,10 @@ public final class PresetViewScreen extends Screen {
 		int gap = 8;
 		int categoryWidth = Math.max(112, Math.min(180, this.width / 5));
 		int settingsWidth = Math.max(120, this.width - margin * 2 - categoryWidth - gap - 8);
+		int layoutButtonY = bottom - 20;
+		int categoryHeight = Math.max(40, layoutButtonY - top - gap);
 
-		this.categories = new WidgetList<>(this.minecraft, categoryWidth, contentHeight, top, 24);
+		this.categories = new WidgetList<>(this.minecraft, categoryWidth, categoryHeight, top, 24);
 		this.categories.setX(margin);
 		this.categories.setRenderSelected(false);
 		for (Category category : this.model) {
@@ -79,11 +85,33 @@ public final class PresetViewScreen extends Screen {
 			settingsWidth,
 			contentHeight,
 			this.font,
-			selected == null ? List.of() : selected.sections()
+			selected == null ? List.of() : selected.sections(),
+			this.layout
 		);
 
 		this.addRenderableWidget(this.categories);
 		this.addRenderableWidget(this.settings);
+		CycleButton<PresetSectionGrid.Layout> layoutButton = CycleButton
+			.<PresetSectionGrid.Layout>builder(PresetViewScreen::layoutName)
+			.withValues(List.of(PresetSectionGrid.Layout.values()))
+			.withInitialValue(this.layout)
+			.create(
+				margin,
+				layoutButtonY,
+				categoryWidth,
+				20,
+				Component.translatableWithFallback(KEY + "layout", "Layout"),
+				(ignored, value) -> {
+					this.layout = value;
+					preferredLayout = value;
+					this.settings.setLayout(value);
+				}
+			);
+		layoutButton.setTooltip(Tooltip.create(Component.translatableWithFallback(
+			KEY + "layout.tooltip",
+			"Switch between masonry and single-column section layouts"
+		)));
+		this.addRenderableWidget(layoutButton);
 
 		int buttonWidth = Math.min(160, Math.max(120, (this.width - 24) / 2));
 		int buttonY = this.height - 27;
@@ -137,5 +165,12 @@ public final class PresetViewScreen extends Screen {
 			}
 		}
 		return Component.translatableWithFallback(KEY + "unnamed", "Unnamed preset").getString();
+	}
+
+	private static Component layoutName(PresetSectionGrid.Layout layout) {
+		return switch (layout) {
+			case MASONRY -> Component.translatableWithFallback(KEY + "layout.masonry", "Masonry");
+			case SINGLE_COLUMN -> Component.translatableWithFallback(KEY + "layout.single_column", "Single column");
+		};
 	}
 }

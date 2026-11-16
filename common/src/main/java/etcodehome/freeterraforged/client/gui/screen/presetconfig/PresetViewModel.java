@@ -24,7 +24,8 @@ final class PresetViewModel {
 	private static final Gson PRETTY_JSON = new GsonBuilder().setPrettyPrinting().create();
 	private static final String GUI = FTFCommon.MOD_ID + ".gui.";
 	private static final String VIEW = GUI + "preset_view.";
-	private static final List<String> CATEGORY_ORDER = List.of(
+	// Mirrors the preset editor's page order; viewer-only pages follow their related editor page.
+	private static final List<String> EDITOR_CATEGORY_ORDER = List.of(
 		"world",
 		"surface",
 		"caves",
@@ -107,7 +108,7 @@ final class PresetViewModel {
 
 	static List<Category> create(JsonObject root) {
 		List<Category> categories = new ArrayList<>();
-		for (String categoryKey : orderedKeys(root, CATEGORY_ORDER)) {
+		for (String categoryKey : orderedKeys(root, EDITOR_CATEGORY_ORDER)) {
 			categories.add(new Category(
 				categoryKey,
 				categoryTitle(categoryKey),

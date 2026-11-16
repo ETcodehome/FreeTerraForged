@@ -59,6 +59,10 @@ public final class FTFLanguageProvider {
 			this.add(FTFTranslationKeys.resolve("gui.preset_view.copied"), "Copied to clipboard");
 			this.add(FTFTranslationKeys.resolve("gui.preset_view.setting_help"), "Read-only active preset setting");
 			this.add(FTFTranslationKeys.resolve("gui.preset_view.narration"), "Select a setting to copy its JSON value");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.layout"), "Layout");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.layout.tooltip"), "Switch between masonry and single-column section layouts");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.layout.masonry"), "Masonry");
+			this.add(FTFTranslationKeys.resolve("gui.preset_view.layout.single_column"), "Single column");
 			this.add(FTFTranslationKeys.resolve("gui.preset_view.category.flow"), "River Flow Settings");
 			this.add(FTFTranslationKeys.resolve("gui.preset_view.category.presentation"), "Preset Details");
 			this.add(FTFTranslationKeys.resolve("gui.preset_view.section.climate_effects"), "Climate Effects");
