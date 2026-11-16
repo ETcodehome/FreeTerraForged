@@ -4,7 +4,7 @@ import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.CellPopulator;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.Rivermap;
 
-public interface Continent extends CellPopulator {
+public interface Continent extends CellPopulator, AutoCloseable {
     float getEdgeValue(float x, float z);
     
     default float getLandValue(float x, float z) {
@@ -18,4 +18,15 @@ public interface Continent extends CellPopulator {
     default Rivermap getRivermap(Cell cell) {
         return this.getRivermap(cell.continentX, cell.continentZ);
     }
+
+    default boolean isInBridgedSector(int cx, int cz, float dx, float dz) {
+        return false;
+    }
+
+    default boolean isInBridgedSector(float x, float z) {
+        return false;
+    }
+
+	@Override
+	void close();
 }

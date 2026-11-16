@@ -20,7 +20,7 @@ public class FTFPlacementModifiers {
     }
     
     @SafeVarargs
-    @Deprecated(forRemoval = true) // use biome modifiers to remove features instead
+    // Biome modifiers cannot preserve this filter's dimension-specific behavior.
 	public static BlacklistDimensionFilter blacklistDimensions(ResourceKey<LevelStem>... levels) {
     	return new BlacklistDimensionFilter(ImmutableList.copyOf(levels));
     }
@@ -37,9 +37,15 @@ public class FTFPlacementModifiers {
     public static LegacyCountExtraModifier countExtra(int count, float extraChance, int extraCount) {
     	return new LegacyCountExtraModifier(count, extraChance, extraCount);
     }
+
+    public static PlacementModifier countExtraPlacement(int count, float extraChance, int extraCount) {
+        // This sampler and codec are part of existing presets' same-seed contract.
+        // WeightedListInt uses a different random draw, even for equivalent probabilities.
+        return new LegacyCountExtraModifier(count, extraChance, extraCount);
+    }
     
     private static <P extends PlacementModifier> PlacementModifierType<P> register(String name, MapCodec<P> codec) {
-    	PlacementModifierType<P> type = () -> codec;
+    	PlacementModifierType<P> type = () -> codec.codec();
 		RegistryUtil.register(BuiltInRegistries.PLACEMENT_MODIFIER_TYPE, name, type);
 		return type;
     }

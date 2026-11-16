@@ -69,8 +69,8 @@ public class TerrainSettingsPage extends PresetEditorPage {
 	private Slider volcanoVerticalScale;
 	private Slider volcanoHorizontalScale;
 
-	public TerrainSettingsPage(PresetConfigScreen screen, PresetEntry preset) {
-		super(screen, preset);
+	public TerrainSettingsPage(PresetConfigScreen screen) {
+		super(screen);
 	}
 
 	@Override
@@ -398,11 +398,11 @@ public class TerrainSettingsPage extends PresetEditorPage {
 
 	@Override
 	public Optional<Page> previous() {
-		return Optional.of(new ClimateSettingsPage(this.screen, this.preset));
+		return Optional.of(new ClimateSettingsPage(this.screen));
 	}
 
 	@Override
 	public Optional<Page> next() {
-		return Optional.of(new RiverSettingsPage(this.screen, this.preset));
+		return Optional.of(new RiverSettingsPage(this.screen));
 	}
 }

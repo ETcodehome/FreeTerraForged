@@ -10,7 +10,7 @@ import net.minecraft.data.PackOutput;
 public final class DataGenUtil {
 
 	@ExpectPlatform
-	public static DataProvider createRegistryProvider(PackOutput output, CompletableFuture<HolderLookup.Provider> providerLookup) {
+	public static DataProvider createRegistryProvider(PackOutput output, CompletableFuture<HolderLookup.Provider> registries) {
 		throw new IllegalStateException();
 	}
 }

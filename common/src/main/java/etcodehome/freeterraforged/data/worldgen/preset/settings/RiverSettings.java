@@ -122,4 +122,48 @@ public class RiverSettings {
         	return new Wetland(this.chance, this.sizeMin, this.sizeMax);
         }
     }
+
+    public static RiverSettings makeDefault(){
+        return new RiverSettings(
+            -807426906,
+            10,
+
+            //main rivers
+            new River(
+                7,
+                1,
+                3,
+                24,
+                10,
+                1.0F
+            ),
+
+            //branch rivers
+            new River(
+                7,
+                1,
+                3,
+                16,
+                10,
+                1.0F
+            ),
+
+            new Lake(
+                0.50F,
+                0.0F,
+                1.00F,
+                10,
+                150,
+                500,
+                1,
+                10
+            ),
+
+            new Wetland(
+                0.50F,
+                50,
+                500
+            )
+        );
+    }
 }

@@ -124,8 +124,8 @@ public class ContinentalHydrology {
         return (float) BOUNDARIES[NUM_STEPS - 1].y;
     }
 
-    public static float getTargetWaterHeight(float continentEdge) {
-        return fixedCurvedStep(continentEdge);
+    public static float getTargetWaterHeight(float controlPoint) {
+        return fixedCurvedStep(controlPoint);
     }
 
     public static float getComplexWaterHeight(float waterTableBaseGradient, float globalContinentScale, float thisContinentScale) {

@@ -1,5 +1,6 @@
 package etcodehome.freeterraforged.registries;
 
+import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import etcodehome.freeterraforged.world.worldgen.biome.modifier.BiomeModifier;
 import etcodehome.freeterraforged.world.worldgen.noise.domain.Domain;

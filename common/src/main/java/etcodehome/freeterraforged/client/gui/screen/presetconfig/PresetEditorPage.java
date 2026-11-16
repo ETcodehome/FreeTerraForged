@@ -6,6 +6,7 @@ import java.util.Optional;
 import com.google.common.collect.ImmutableList;
 
 import etcodehome.freeterraforged.client.gui.widget.Slider;
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
@@ -16,7 +17,10 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.levelgen.WorldOptions;
 import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
 import etcodehome.freeterraforged.client.gui.screen.page.BisectedPage;
+import etcodehome.freeterraforged.client.gui.screen.page.LinkedPageScreen.SaveResult;
 import etcodehome.freeterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
+import etcodehome.freeterraforged.client.gui.widget.Slider;
+import etcodehome.freeterraforged.FTFCommon;
 
 public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, AbstractWidget, AbstractWidget> {
 	// Independent control components
@@ -42,13 +46,14 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	private Preview3D preview3D;
 	private Preview2D preview2D;
 
-	public PresetEditorPage(PresetConfigScreen screen, PresetEntry preset) {
+	public PresetEditorPage(PresetConfigScreen screen) {
 		super(screen);
 
-		this.preset = preset;
+		this.preset = PresetManager.PM.cachedPreset;
 	}
 
 	protected void regenerate() {
+		this.screen.previewRequestKeys().invalidatePreset();
 
 		if (this.preview3D != null) {
 			this.preview3D.regenerate();
@@ -198,7 +203,7 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		this.seedRandomize = Button.builder(Component.literal("🎲"), (button) -> {
 					String newSeed = String.valueOf(WorldOptions.randomSeed());
 					this.seedEdit.setValue(newSeed);
-					this.seedEdit.moveCursorToStart(false);
+					this.seedEdit.moveCursorToStart();
 				})
 				.tooltip(Tooltip.create(Component.translatable(FTFTranslationKeys.GUI_BUTTON_RANDOMIZE_SEED)))
 				.bounds(0, 0, 20, 20)
@@ -221,13 +226,13 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		this.zoom2D.setX(x);
 		this.zoom2D.setY(yBase);
 		this.zoom2D.setWidth(width);
-		this.zoom2D.setHeight(20);
+		this.zoom2D.height = 20;
 		this.screen.addWidgetToScreen(this.zoom2D);
 
 		this.renderMode2D.setX(x);
 		this.renderMode2D.setY(yBase + 24);
 		this.renderMode2D.setWidth(width);
-		this.renderMode2D.setHeight(20);
+		this.renderMode2D.height = 20;
 		this.screen.addWidgetToScreen(this.renderMode2D);
 	}
 
@@ -248,29 +253,30 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		this.seedEdit.setX(x);
 		this.seedEdit.setY(yBase);
 		this.seedEdit.setWidth(editWidth);
-		this.seedEdit.setHeight(20);
+		this.seedEdit.height = 20;
 
 		// Resets cursor & clears selection highlight without selecting text
-		this.seedEdit.moveCursorToStart(false);
+		this.seedEdit.moveCursorToStart();
+		this.seedEdit.setHighlightPos(0);
 		this.screen.addWidgetToScreen(this.seedEdit);
 
 		this.seedRandomize.setX(x + editWidth + gap);
 		this.seedRandomize.setY(yBase);
 		this.seedRandomize.setWidth(buttonWidth);
-		this.seedRandomize.setHeight(20);
+		this.seedRandomize.height = 20;
 		this.screen.addWidgetToScreen(this.seedRandomize);
 
 		// Controls
 		this.zoom3D.setX(x);
 		this.zoom3D.setY(yBase + 24);
 		this.zoom3D.setWidth(width);
-		this.zoom3D.setHeight(20);
+		this.zoom3D.height = 20;
 		this.screen.addWidgetToScreen(this.zoom3D);
 
 		this.renderMode3D.setX(x);
 		this.renderMode3D.setY(yBase + 48);
 		this.renderMode3D.setWidth(width);
-		this.renderMode3D.setHeight(20);
+		this.renderMode3D.height = 20;
 		this.screen.addWidgetToScreen(this.renderMode3D);
 	}
 
@@ -284,35 +290,58 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 
 		if (this.preview3D != null) {
 			this.screen.removeWidgetFromScreen(this.preview3D);
-			try { this.preview3D.close(); } catch (Exception e) { e.printStackTrace(); }
-			this.preview3D = null;
 		}
 		if (this.preview2D != null) {
 			this.screen.removeWidgetFromScreen(this.preview2D);
-			try { this.preview2D.close(); } catch (Exception e) { e.printStackTrace(); }
-			this.preview2D = null;
 		}
+		this.closePreviews();
 	}
 
 	@Override
 	public void onCancel() {
 		super.onCancel();
-		try {
-			if (this.preview3D != null) this.preview3D.close();
-			if (this.preview2D != null) this.preview2D.close();
-		} catch (Exception e) { e.printStackTrace(); }
+		this.closePreviews();
+	}
+
+	private void closePreviews() {
+		Preview3D closing3D = this.preview3D;
+		Preview2D closing2D = this.preview2D;
 		this.preview3D = null;
 		this.preview2D = null;
+		Throwable failure = null;
+		try {
+			if (closing3D != null) closing3D.close();
+		} catch (RuntimeException | Error closeFailure) {
+			failure = closeFailure;
+		}
+		try {
+			if (closing2D != null) closing2D.close();
+		} catch (RuntimeException | Error closeFailure) {
+			if (failure == null) {
+				failure = closeFailure;
+			} else if (closeFailure instanceof Error && !(failure instanceof Error)) {
+				closeFailure.addSuppressed(failure);
+				failure = closeFailure;
+			} else {
+				failure.addSuppressed(closeFailure);
+			}
+		}
+		if (failure instanceof Error error) {
+			throw error;
+		}
+		if (failure != null) {
+			FTFCommon.LOGGER.error("Failed closing preset preview widgets", failure);
+		}
 	}
 
 	@Override
-	public void onSave() {
-		super.onSave();
+	public SaveResult onSave() {
 		try {
-			this.screen.applyPreset(this.preset);
 			this.preset.save();
+			this.screen.updateDefaultPresetIfSource(this.preset);
+			return this.screen.applyPreset(this.preset);
 		} catch (IOException e) {
-			e.printStackTrace();
+			return this.screen.reportPresetApplyFailure(e);
 		}
 	}
 }

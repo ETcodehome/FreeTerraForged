@@ -19,7 +19,6 @@ public record TerrainPopulator(Terrain type, Noise base, Noise height, Noise ero
 
         cell.terrain = this.type;
         cell.height = Math.max(base + height, 0.0F);
-        cell.erosion = this.erosion.compute(x, z, 0);
         cell.weirdness = this.weirdness.compute(x, z, 0);
     }
     

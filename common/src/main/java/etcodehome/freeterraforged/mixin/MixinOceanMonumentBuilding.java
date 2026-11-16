@@ -66,6 +66,9 @@ public class MixinOceanMonumentBuilding implements OceanMonumentBuildingFix {
 		CallbackInfo ci
 	) {
 		this.ftf$configuredSeaLevel = OceanMonumentSeaLevel.configured(level);
+		if(this.ftf$configuredSeaLevel == Integer.MIN_VALUE) {
+			return;
+		}
 
 		// CAS guards against concurrent postProcess() calls across this monument's chunks double-moving the piece.
 		if (!this.ftf$oceanDepthAdjusted.compareAndSet(false, true)) {

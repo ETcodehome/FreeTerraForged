@@ -2,41 +2,75 @@ package etcodehome.freeterraforged.client.gui.screen.presetconfig;
 
 import java.util.Locale;
 
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.ControlPoints;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import net.minecraft.network.chat.Component;
 import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
 
-final class PreviewDetails {
+public final class PreviewDetails {
     private PreviewDetails() {
     }
 
-    static Detail forCell(RenderMode mode, Cell cell, Levels levels, String biomeId) {
+    public static Detail forCell(RenderMode mode, Cell cell, Levels levels, String biomeId) {
         return switch (mode) {
             case BIOME -> new Detail(
-                Component.translatable(FTFTranslationKeys.GUI_LABEL_PREVIEW_BIOME),
-                biomeId == null ? "" : biomeId
+                    Component.translatable(FTFTranslationKeys.GUI_LABEL_PREVIEW_BIOME),
+                    biomeId == null ? "" : biomeId
             );
             case TRANSITION_POINTS -> new Detail(Component.literal("Category"), cell.terrain.getCategory().name());
-            case TEMPERATURE -> value("Temperature", cell.regionTemperature);
-            case MOISTURE -> value("Moisture", cell.regionMoisture);
+            case TEMPERATURE -> value("Temperature", cell.temperature);
+            case MOISTURE -> value("Moisture", cell.moisture);
+            case EROSION -> value("Erosion", cell.erosion);
+            case GRADIENT -> value("Gradient", cell.gradient);
+            case SEDIMENT -> value("Sediment", cell.sediment);
+            case WEIRDNESS -> value("Weirdness", cell.weirdness);
+            case CONTINENTALNESS -> value("Continentalness", cell.continentalness);
+            case BIOME_REGION_EDGE -> value("Mask", cell.biomeRegionEdge);
             case BIOME_CELLS -> value("Biome Cell", cell.biomeRegionId);
             case MACRO_NOISE -> value("Macro Noise", cell.macroBiomeId);
             case TERRAIN_REGION -> new Detail(Component.literal("Terrain Type"), cell.terrain.getName());
             case HYPSOMETRIC, TOPOGRAPHY -> new Detail(
-                Component.literal("Elevation"),
-                "Y=" + levels.scale(cell.height)
+                    Component.literal("Elevation"),
+                    "Y=" + levels.scale(cell.height) + " H=" + cell.height
             );
             case CONTINENT_UPLIFT -> value("Uplift", cell.waterTable);
-            case CONTINENT_EDGE -> value("Continent Edge", cell.continentEdge);
+            case CONTROL_POINT -> new Detail(Component.literal("Control Point"), formatControlPoint(cell.controlPoint));
             case RIVER_ZONE -> new Detail(Component.literal("River Zone"), cell.riverZone.name());
         };
+    }
+
+    private static String formatControlPoint(float value) {
+        ControlPoints cp = PresetManager.PM.worldSettings.controlPoints;
+        String bandName;
+
+        // Compare against live user-tuned ControlPoints thresholds
+        if (value <= cp.islandInland) {
+            bandName = "Island Inland (C0)";
+        } else if (value <= cp.islandCoast) {
+            bandName = "Island Coast (C1)";
+        } else if (value <= cp.deepOcean) {
+            bandName = "Deep Ocean (C2)";
+        } else if (value <= cp.shallowOcean) {
+            bandName = "Shallow Ocean (C3)";
+        } else if (value <= cp.beach) {
+            bandName = "Beach (C4)";
+        } else if (value <= cp.coast) {
+            bandName = "Coast (C5)";
+        } else if (value <= cp.inland) {
+            bandName = "Near-Inland (C6)";
+        } else {
+            bandName = "Far-Inland (C7)";
+        }
+
+        return String.format(Locale.ROOT, "%.4f (%s)", value, bandName);
     }
 
     private static Detail value(String label, float value) {
         return new Detail(Component.literal(label), String.format(Locale.ROOT, "%.4f", value));
     }
 
-    record Detail(Component label, String value) {
+    public record Detail(Component label, String value) {
     }
 }

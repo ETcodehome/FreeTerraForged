@@ -10,14 +10,14 @@ import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.SurfaceSettings;
 import etcodehome.freeterraforged.world.worldgen.feature.BushFeature;
 import etcodehome.freeterraforged.world.worldgen.feature.DecorateSnowFeature;
-import etcodehome.freeterraforged.world.worldgen.feature.ErodeFeature;
+import etcodehome.freeterraforged.world.worldgen.feature.ScreeFeature;
 import etcodehome.freeterraforged.world.worldgen.feature.FTFFeatures;
 import etcodehome.freeterraforged.world.worldgen.feature.template.placement.TemplatePlacements;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderGetter;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.data.worldgen.BootstrapContext;
+import net.minecraft.data.worldgen.BootstapContext;
 import net.minecraft.data.worldgen.features.FeatureUtils;
 import net.minecraft.data.worldgen.features.MiscOverworldFeatures;
 import net.minecraft.data.worldgen.placement.PlacementUtils;
@@ -105,25 +105,25 @@ public class PresetConfiguredFeatures {
 	public static final ResourceKey<ConfiguredFeature<?, ?>> JUNGLE_EDGE_TREES = createKey("jungle_edge_trees");
 	public static final ResourceKey<ConfiguredFeature<?, ?>> RIVER_GASKET = createKey("river_gasket");
 	
-	public static void bootstrap(Preset preset, BootstrapContext<ConfiguredFeature<?, ?>> ctx) {
+	public static void bootstrap(Preset preset, BootstapContext<ConfiguredFeature<?, ?>> ctx) {
 		MiscellaneousSettings miscellaneous = preset.miscellaneous();
 		SurfaceSettings surface = preset.surface();
-		SurfaceSettings.Erosion erosion = surface.erosion();
+		SurfaceSettings.Scree scree = surface.scree();
 
 		// Pass the configured selectors directly into the final parameters of the Config record
-		ErodeFeature.Config erodeConfig = new ErodeFeature.Config(
-				erosion.rockVariance,
-				erosion.rockMin,
-				erosion.dirtVariance,
-				erosion.dirtMin,
-				erosion.rockSteepness,
-				erosion.dirtSteepness,
-				erosion.screeSteepness,
+		ScreeFeature.Config erodeConfig = new ScreeFeature.Config(
+				scree.rockVariance,
+				scree.rockMin,
+				scree.dirtVariance,
+				scree.dirtMin,
+				scree.rockSteepness,
+				scree.dirtSteepness,
+				scree.screeSteepness,
 				6F / 255F,
 				3F / 255F
 		);
 
-		if(miscellaneous.erosionDecorator) {
+		if(miscellaneous.screeDecorator) {
 			FeatureUtils.register(ctx, ERODE, FTFFeatures.ERODE, erodeConfig);
 		}
 		
@@ -256,9 +256,9 @@ public class PresetConfiguredFeatures {
 				makeWeighted(0.4F, jungleBush)
 			)));
 			FeatureUtils.register(ctx, FOREST_GRASS, Feature.RANDOM_SELECTOR, makeRandom(
-				makeInlined(Feature.RANDOM_PATCH, makePatch(Blocks.SHORT_GRASS, 48)),
+				makeInlined(Feature.RANDOM_PATCH, makePatch(Blocks.GRASS, 48)),
 				List.of(
-					makeWeighted(0.5F, makeInlined(Feature.RANDOM_PATCH, makePatch(Blocks.SHORT_GRASS, 56))),
+					makeWeighted(0.5F, makeInlined(Feature.RANDOM_PATCH, makePatch(Blocks.GRASS, 56))),
 					makeWeighted(0.4F, makeInlined(Feature.RANDOM_PATCH, makePatch(Blocks.TALL_GRASS, 56))),
 					makeWeighted(0.2F, makeInlined(Feature.RANDOM_PATCH, makePatch(Blocks.LARGE_FERN, 48))),
 					makeWeighted(0.2F, makeInlined(Feature.RANDOM_PATCH, makePatch(Blocks.FERN, 24)))

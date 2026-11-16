@@ -14,6 +14,9 @@ import etcodehome.freeterraforged.client.gui.Tooltips;
 import etcodehome.freeterraforged.client.gui.widget.Label;
 import etcodehome.freeterraforged.client.gui.widget.Slider;
 import etcodehome.freeterraforged.client.gui.widget.ValueButton;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.GenericBooleanSetting;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.GenericFloatSetting;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.GenericIntSetting;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.CycleButton;
@@ -21,20 +24,19 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 
-@Deprecated
 final class PresetWidgets {
-	
+
 	public static EditBox createEditBox(Font font, Consumer<String> responder, Component prompt) {
 		EditBox box = new EditBox(font, -1, -1, -1, -1, CommonComponents.EMPTY);
 		box.setResponder(responder);
 		box.setHint(prompt);
 		return box;
 	}
-	
+
 	public static Label createLabel(String text) {
 		return createLabel(Component.translatable(text));
 	}
-	
+
 	public static Label createLabel(Component text) {
 		return new Label(-1, -1, -1, -1, text);
 	}
@@ -48,11 +50,57 @@ final class PresetWidgets {
 	public static Slider createFloatSlider(float initial, float min, float max, String text, Slider.Callback callback) {
 		return createSlider(initial, min, max, text, Slider.Format.FLOAT, callback);
 	}
-	
+
+	public static Slider createFloatSlider(
+			float currentValue,
+			GenericFloatSetting setting,
+			Consumer<Float> setter,
+			Runnable onChange
+	) {
+		return createSlider(
+				currentValue,
+				setting.softMin,
+				setting.softMax,
+				setting.resolvedToken,
+				Slider.Format.FLOAT,
+				(slider, value) -> {
+					float scaled = (float) slider.scaleValue(value);
+					setter.accept(scaled);
+					if (onChange != null) {
+						onChange.run();
+					}
+					return value;
+				}
+		);
+	}
+
 	public static Slider createIntSlider(int initial, int min, int max, String text, Slider.Callback callback) {
 		return createSlider(initial, min, max, text, Slider.Format.INT, callback);
 	}
-	
+
+	public static Slider createIntSlider(
+			int currentValue,
+			GenericIntSetting setting,
+			Consumer<Integer> setter,
+			Runnable onChange
+	) {
+		return createSlider(
+				currentValue,
+				setting.softMin,
+				setting.softMax,
+				setting.resolvedToken,
+				Slider.Format.INT,
+				(slider, value) -> {
+					int scaled = (int) slider.scaleValue(value);
+					setter.accept(scaled);
+					if (onChange != null) {
+						onChange.run();
+					}
+					return value;
+				}
+		);
+	}
+
 	public static <T extends Enum<T>> CycleButton<T> createCycle(T[] values, T initial, String text, CycleButton.OnValueChange<T> callback) {
 		return createCycle(ImmutableList.copyOf(values), initial, text, callback, T::name);
 	}
@@ -60,7 +108,7 @@ final class PresetWidgets {
 	public static <T> CycleButton<T> createCycle(Collection<T> values, T initial, String text, CycleButton.OnValueChange<T> callback, Function<T, String> name) {
 		return createCycle(values, initial, Optional.of(text), callback, name);
 	}
-	
+
 	public static <T> CycleButton<T> createCycle(Collection<T> values, T initial, Optional<String> text, CycleButton.OnValueChange<T> callback, Function<T, String> name) {
 		CycleButton.Builder<T> builder = CycleButton.<T>builder((e) -> {
 			return Component.literal(name.apply(e));
@@ -74,25 +122,51 @@ final class PresetWidgets {
 		});
 		return button;
 	}
-	
+
 	public static CycleButton<Boolean> createToggle(boolean initial, String text, CycleButton.OnValueChange<Boolean> callback) {
 		CycleButton<Boolean> button = CycleButton.booleanBuilder(Component.translatable(FTFTranslationKeys.GUI_BUTTON_TRUE), Component.translatable(FTFTranslationKeys.GUI_BUTTON_FALSE)).withInitialValue(initial).create(-1, -1, -1, -1, Component.translatable(text), callback);
 		button.setTooltip(Tooltips.create(Tooltips.translationKey(text)));
 		return button;
 	}
-	
+
+	public static CycleButton<Boolean> createToggle(
+			boolean initial,
+			GenericBooleanSetting setting,
+			Consumer<Boolean> setter,
+			Runnable onChange
+	) {
+		CycleButton<Boolean> button = CycleButton.booleanBuilder(
+						Component.translatable(FTFTranslationKeys.GUI_BUTTON_TRUE),
+						Component.translatable(FTFTranslationKeys.GUI_BUTTON_FALSE)
+				)
+				.withInitialValue(initial)
+				.create(
+						-1, -1, -1, -1,
+						Component.translatable(setting.resolvedToken),
+						(cycleButton, value) -> {
+							setter.accept(value);
+							if (onChange != null) {
+								onChange.run();
+							}
+						}
+				);
+
+		button.setTooltip(Tooltips.create(Tooltips.translationKey(setting.resolvedToken)));
+		return button;
+	}
+
 	public static Button createThrowingButton(String text, Toasts.ThrowingRunnable run) {
 		return Button.builder(Component.translatable(text), (b) -> {
 			Toasts.tryOrToast(Tooltips.failTranslationKey(text), run);
 		}).build();
 	}
-	
+
 	public static <T> ValueButton<T> createValueButton(String text, Button.OnPress onPress, T initial) {
 		ValueButton<T> button = new ValueButton<>(-1, -1, -1, -1, Component.translatable(text), onPress, initial);
 		button.setTooltip(Tooltips.create(Tooltips.translationKey(text)));
 		return button;
 	}
-	
+
 	@SuppressWarnings("unchecked")
 	public static ValueButton<Integer> createRandomButton(String text, int initial, Consumer<Integer> onPress) {
 		return createValueButton(text, (button) -> {

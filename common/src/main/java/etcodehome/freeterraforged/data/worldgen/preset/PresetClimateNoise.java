@@ -3,14 +3,14 @@ package etcodehome.freeterraforged.data.worldgen.preset;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.ClimateSettings;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
-import net.minecraft.data.worldgen.BootstrapContext;
+import net.minecraft.data.worldgen.BootstapContext;
 import net.minecraft.resources.ResourceKey;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 
 public class PresetClimateNoise {
 	public static final ResourceKey<Noise> BIOME_EDGE_SHAPE = createKey("biome_edge_shape");
 	
-	public static void bootstrap(Preset preset, BootstrapContext<Noise> ctx) {
+	public static void bootstrap(Preset preset, BootstapContext<Noise> ctx) {
 		WorldSettings worldSettings = preset.world();
 		WorldSettings.Properties properties = worldSettings.properties;
 		

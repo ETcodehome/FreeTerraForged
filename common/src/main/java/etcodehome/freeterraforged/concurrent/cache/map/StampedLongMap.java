@@ -5,6 +5,9 @@ import java.util.function.Consumer;
 import java.util.function.LongFunction;
 import java.util.function.Predicate;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
@@ -63,20 +66,46 @@ public class StampedLongMap<T> implements LongMap<T> {
 	}
 
 	@Override
-	public int removeIf(Predicate<T> predicate) {
+	public boolean remove(long key, T expected, Consumer<T> consumer) {
 		long stamp = this.lock.writeLock();
+		T removed = null;
 		try {
-			int startSize = this.map.size();
-			ObjectIterator<Long2ObjectMap.Entry<T>> iterator = this.map.long2ObjectEntrySet().fastIterator();
-			while (iterator.hasNext()) {
-				if (predicate.test(iterator.next().getValue())) {
-					iterator.remove();
-				}
+			if (this.map.get(key) == expected) {
+				removed = this.map.remove(key);
 			}
-			return startSize - this.map.size();
 		} finally {
 			this.lock.unlockWrite(stamp);
 		}
+		if (removed != null) {
+			consumer.accept(removed);
+			return true;
+		}
+		return false;
+	}
+
+	@Override
+	public int removeIf(Predicate<T> predicate) {
+		return this.removeIf(predicate, ignored -> {});
+	}
+
+	@Override
+	public int removeIf(Predicate<T> predicate, Consumer<T> removal) {
+		List<T> removed = new ArrayList<>();
+		long stamp = this.lock.writeLock();
+		try {
+			ObjectIterator<Long2ObjectMap.Entry<T>> iterator = this.map.long2ObjectEntrySet().fastIterator();
+			while (iterator.hasNext()) {
+				T value = iterator.next().getValue();
+				if (predicate.test(value)) {
+					iterator.remove();
+					removed.add(value);
+				}
+			}
+		} finally {
+			this.lock.unlockWrite(stamp);
+		}
+		LongMap.acceptAll(removed, removal);
+		return removed.size();
 	}
 
 	@Override

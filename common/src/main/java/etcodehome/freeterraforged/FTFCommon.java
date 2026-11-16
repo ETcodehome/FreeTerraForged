@@ -18,6 +18,9 @@ import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
 import etcodehome.freeterraforged.world.worldgen.structure.rule.StructureRule;
 import etcodehome.freeterraforged.world.worldgen.structure.rule.StructureRules;
 import etcodehome.freeterraforged.world.worldgen.surface.rule.FTFSurfaceRules;
+import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementConfigStore;
+import etcodehome.freeterraforged.world.worldgen.runtime.FTFChunkGenerators;
+import etcodehome.freeterraforged.world.worldgen.biome.modifier.BiomeModifier;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -32,6 +35,8 @@ public class FTFCommon {
 	public static final Logger LOGGER = LogManager.getLogger("FreeTerraForged");
 
 	public static void bootstrap() {
+		BiomeReplacementConfigStore.initialize();
+		FTFChunkGenerators.bootstrap();
 		FTFBuiltInRegistries.bootstrap();
 		TemplatePlacements.bootstrap();
 		TemplateDecorators.bootstrap();
@@ -49,12 +54,13 @@ public class FTFCommon {
 		StructureRules.bootstrap();
 
 		RegistryUtil.createDataRegistry(FTFRegistries.NOISE, Noise.DIRECT_CODEC, false);
+		RegistryUtil.createDataRegistry(FTFRegistries.BIOME_MODIFIER, BiomeModifier.DIRECT_CODEC, false);
 		RegistryUtil.createDataRegistry(FTFRegistries.PRESET, Preset.DIRECT_CODEC, false);
 		RegistryUtil.createDataRegistry(FTFRegistries.STRUCTURE_RULE, StructureRule.DIRECT_CODEC, false);
 	}
 
 	public static ResourceLocation location(String name) {
-		if (name.contains(":")) return ResourceLocation.parse(name);
-		return ResourceLocation.fromNamespaceAndPath(FTFCommon.MOD_ID, name);
+		if (name.contains(":")) return new ResourceLocation(name);
+		return new ResourceLocation(FTFCommon.MOD_ID, name);
 	}
 }

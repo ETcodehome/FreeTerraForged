@@ -2,7 +2,7 @@ package etcodehome.freeterraforged.mixin;
 
 import net.minecraft.server.level.WorldGenRegion;
 import net.minecraft.world.level.chunk.ChunkAccess;
-import net.minecraft.world.level.chunk.status.ChunkStatus;
+import net.minecraft.world.level.chunk.ChunkStatus;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -23,7 +23,7 @@ public abstract class MixinWorldGenRegionCache {
     @Unique private ChunkStatus ftf$lastStatus;
 
     @Inject(
-            method = "getChunk(IILnet/minecraft/world/level/chunk/status/ChunkStatus;Z)Lnet/minecraft/world/level/chunk/ChunkAccess;",
+            method = "getChunk(IILnet/minecraft/world/level/chunk/ChunkStatus;Z)Lnet/minecraft/world/level/chunk/ChunkAccess;",
             at = @At("HEAD"),
             cancellable = true)
     private void ftf$memoHit(final int x, final int z, final ChunkStatus chunkStatus, final boolean requireChunk,
@@ -38,7 +38,7 @@ public abstract class MixinWorldGenRegionCache {
     }
 
     @Inject(
-            method = "getChunk(IILnet/minecraft/world/level/chunk/status/ChunkStatus;Z)Lnet/minecraft/world/level/chunk/ChunkAccess;",
+            method = "getChunk(IILnet/minecraft/world/level/chunk/ChunkStatus;Z)Lnet/minecraft/world/level/chunk/ChunkAccess;",
             at = @At("RETURN"))
     private void ftf$memoStore(final int x, final int z, final ChunkStatus chunkStatus, final boolean requireChunk,
                                final CallbackInfoReturnable<ChunkAccess> cir) {

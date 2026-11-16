@@ -303,7 +303,7 @@ public class FeatureTemplate {
 
     public static Optional<FeatureTemplate> load(InputStream data) {
         try {
-            CompoundTag root = NbtIo.readCompressed(data, NbtAccounter.unlimitedHeap());
+            CompoundTag root = NbtIo.readCompressed(data);
             if (!root.contains("palette") || !root.contains("blocks")) {
                 return Optional.empty();
             }

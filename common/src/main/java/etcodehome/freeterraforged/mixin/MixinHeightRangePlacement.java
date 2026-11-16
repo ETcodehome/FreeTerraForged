@@ -34,11 +34,13 @@ class MixinHeightRangePlacement {
 			callback.setReturnValue(orePositions.orElseThrow());
 			return;
 		}
-		if (DynamicOrePlacement.isStandardOrePlacement((HeightRangePlacement)(Object)this, context)) {
+		HeightRangePlacement placement = (HeightRangePlacement)(Object)this;
+		if (!DynamicHeightRangePlacement.isCanonicalRange(placement)
+			|| DynamicOrePlacement.isStandardOrePlacement(placement, context)) {
 			return;
 		}
 		DynamicHeightRangePlacement.getPositions(
-			(HeightRangePlacement)(Object)this,
+			placement,
 			context,
 			random,
 			origin

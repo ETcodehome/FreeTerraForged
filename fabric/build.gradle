@@ -29,11 +29,8 @@ dependencies {
     modImplementation "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}"
     modApi("net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}") { exclude group: 'net.fabricmc', module: 'fabric-loader' }
     modApi "dev.architectury:architectury-fabric:${rootProject.architectury_version}"
-    modCompileOnly "maven.modrinth:biolith:3.0.14-fabric"
-    // The Fabric artifact declares a v1 class-tweaker through the legacy access-widener key,
-    // which this Loom version cannot parse. The shared implementation is identical and the
-    // NeoForge artifact is already Mojang-mapped, so use it only as the compile-time API.
-    compileOnly "maven.modrinth:lithostitched:1.7.13-neoforge-21.1"
+    modImplementation "com.github.glitchfiend:TerraBlender-fabric:${rootProject.minecraft_version}-${rootProject.terrablender_version}"
+    modCompileOnly "maven.modrinth:biolith:1.0.1-beta.1-fabric"
     common(project(path: ":common", configuration: "namedElements")) { transitive false }
     shadowCommon(project(path: ":common", configuration: "transformProductionFabric")) { transitive false }
     compileOnly "dev.architectury:architectury-injectables:1.0.13"
@@ -44,6 +41,7 @@ repositories {
 }
 
 processResources {
+    duplicatesStrategy "exclude"
     inputs.property "version", project.version
 
     filesMatching("fabric.mod.json") {
@@ -63,6 +61,21 @@ remapJar {
     input.set shadowJar.archiveFile
     dependsOn shadowJar
     archiveClassifier.set("fabric-${rootProject.minecraft_version}")
+
+    doLast {
+        def jarPath = archiveFile.get().asFile.toPath()
+        def uri = java.net.URI.create("jar:" + jarPath.toUri())
+        def env = [( "create" ): "false"]
+        java.nio.file.FileSystems.newFileSystem(uri, env).withCloseable { fs ->
+            def refmapPath = fs.getPath("freeterraforged-common-refmap.json")
+            if (java.nio.file.Files.exists(refmapPath)) {
+                def content = new String(java.nio.file.Files.readAllBytes(refmapPath), java.nio.charset.StandardCharsets.UTF_8)
+                content = content.replace("Lnet/minecraft/class_1966;getNoiseBiome(", "Lnet/minecraft/class_1966;method_38109(")
+                content = content.replace("Lnet/minecraft/class_4766;getNoiseBiome(", "Lnet/minecraft/class_4766;method_38109(")
+                java.nio.file.Files.write(refmapPath, content.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+            }
+        }
+    }
 }
 
 jar {
@@ -70,6 +83,7 @@ jar {
 }
 
 sourcesJar {
+    duplicatesStrategy "exclude"
     def commonSources = project(":common").sourcesJar
     dependsOn commonSources
     from commonSources.archiveFile.map { zipTree(it) }

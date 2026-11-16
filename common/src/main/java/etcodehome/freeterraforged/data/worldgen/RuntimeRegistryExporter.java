@@ -50,7 +50,7 @@ public class RuntimeRegistryExporter implements DataProvider {
         }
 
         Registry<T> registry = optionalRegistry.get();
-        PackOutput.PathProvider pathProvider = this.output.createRegistryElementsPathProvider(registryData.key());
+        PackOutput.PathProvider pathProvider = this.output.createPathProvider(PackOutput.Target.DATA_PACK, registryData.key().location().getPath());
 
         for (Holder.Reference<T> holder : registry.holders().toList()) {
             // Encode using the un-tainted pure Vanilla ops

@@ -1,6 +1,6 @@
 plugins {
     id "architectury-plugin" version "3.4.164"
-    id "dev.architectury.loom" version "1.11.445" apply false
+    id "dev.architectury.loom" version "1.7.435" apply false
 }
 
 architectury {
@@ -45,12 +45,12 @@ allprojects {
 
     tasks.withType(JavaCompile) {
         options.encoding = "UTF-8"
-        options.release = 21
+        options.release = 17
     }
 
     java {
         toolchain {
-            languageVersion = JavaLanguageVersion.of(21)
+            languageVersion = JavaLanguageVersion.of(17)
         }
         withSourcesJar()
     }

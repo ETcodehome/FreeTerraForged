@@ -1,5 +1,9 @@
 accessWidener	v2	named
 
+accessible class net/minecraft/world/level/levelgen/structure/structures/OceanMonumentPieces$OceanMonumentPiece
+extendable class net/minecraft/world/level/levelgen/NoiseBasedChunkGenerator
+accessible method net/minecraft/world/level/levelgen/NoiseBasedChunkGenerator createNoiseChunk (Lnet/minecraft/world/level/chunk/ChunkAccess;Lnet/minecraft/world/level/StructureManager;Lnet/minecraft/world/level/levelgen/blending/Blender;Lnet/minecraft/world/level/levelgen/RandomState;)Lnet/minecraft/world/level/levelgen/NoiseChunk;
+
 accessible class net/minecraft/world/level/levelgen/SurfaceRules$Condition
 accessible class net/minecraft/world/level/levelgen/SurfaceRules$Context
 accessible class net/minecraft/world/level/levelgen/SurfaceRules$SurfaceRule
@@ -56,7 +60,7 @@ accessible method net/minecraft/world/level/levelgen/NoiseRouterData entrances (
 accessible method net/minecraft/world/level/levelgen/NoiseRouterData postProcess (Lnet/minecraft/world/level/levelgen/DensityFunction;)Lnet/minecraft/world/level/levelgen/DensityFunction;
 accessible method net/minecraft/world/level/levelgen/NoiseRouterData noiseGradientDensity (Lnet/minecraft/world/level/levelgen/DensityFunction;Lnet/minecraft/world/level/levelgen/DensityFunction;)Lnet/minecraft/world/level/levelgen/DensityFunction;
 accessible method net/minecraft/world/level/levelgen/NoiseRouterData getFunction (Lnet/minecraft/core/HolderGetter;Lnet/minecraft/resources/ResourceKey;)Lnet/minecraft/world/level/levelgen/DensityFunction;
-accessible method net/minecraft/world/level/levelgen/NoiseRouterData registerAndWrap (Lnet/minecraft/data/worldgen/BootstrapContext;Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/world/level/levelgen/DensityFunction;)Lnet/minecraft/world/level/levelgen/DensityFunction;
+accessible method net/minecraft/world/level/levelgen/NoiseRouterData registerAndWrap (Lnet/minecraft/data/worldgen/BootstapContext;Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/world/level/levelgen/DensityFunction;)Lnet/minecraft/world/level/levelgen/DensityFunction;
 accessible field net/minecraft/client/gui/screens/worldselection/CreateWorldScreen tabNavigationBar Lnet/minecraft/client/gui/components/tabs/TabNavigationBar;
 accessible method net/minecraft/world/level/biome/Climate$ParameterPoint fitness (Lnet/minecraft/world/level/biome/Climate$TargetPoint;)J
 accessible class net/minecraft/world/level/biome/Climate$RTree
@@ -66,6 +70,3 @@ accessible field net/minecraft/world/level/biome/Climate$RTree$Node parameterSpa
 accessible class net/minecraft/world/level/biome/Climate$RTree$Leaf
 accessible field net/minecraft/world/level/biome/Climate$RTree$Leaf value Ljava/lang/Object;
 accessible method net/minecraft/world/level/biome/Climate$RTree$Leaf <init> (Lnet/minecraft/world/level/biome/Climate$ParameterPoint;Ljava/lang/Object;)V
-accessible class net/minecraft/world/level/levelgen/DensityFunctions$Marker
-accessible class net/minecraft/world/level/levelgen/DensityFunctions$Marker$Type
-accessible method net/minecraft/world/level/levelgen/DensityFunctions$Marker <init> (Lnet/minecraft/world/level/levelgen/DensityFunctions$Marker$Type;Lnet/minecraft/world/level/levelgen/DensityFunction;)V

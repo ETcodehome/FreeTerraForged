@@ -6,12 +6,10 @@ import net.minecraft.world.level.levelgen.DensityFunction;
 import etcodehome.freeterraforged.FTFCommon;
 
 public final class FTFDensityFunctionTags {
-	// i dont like this but dont know what to do about it
-	// note: this should only include functions not present in the NoiseRouter
-	@Deprecated
+	// This tag marks registered density functions that the runtime must include outside the NoiseRouter.
 	public static final TagKey<DensityFunction> ADDITIONAL_NOISE_ROUTER_FUNCTIONS = resolve("additional_noise_router_functions");
-	
+
     private static TagKey<DensityFunction> resolve(String path) {
-    	return TagKey.create(Registries.DENSITY_FUNCTION, FTFCommon.location(path));
+	return TagKey.create(Registries.DENSITY_FUNCTION, FTFCommon.location(path));
     }
 }

@@ -11,7 +11,7 @@ public class Cell {
     private static final Cell DEFAULTS = new Cell();
     private static final Cell EMPTY = new Cell() {
 
-    	@Override
+        @Override
         public boolean isAbsent() {
             return true;
         }
@@ -21,18 +21,27 @@ public class Cell {
         return new SimpleResource<>(new Cell(), Cell::reset);
     });
 
-    /**
-     * THIS IS NOT A NORMALIZED 0-1 RANGED VALUE - MAX IS PRESET WORLD HEIGHT / 256
-     */
+    /// Surface height represented as a terrainScaler factor.
+    /// Range -X.XF to +X.XF
     public float height;
+
+    /// Surface height change caused by erosion filter pass represented as a terrainscaler factor
+    /// Range -X.XF to +X.XF
     public float heightErosion;
+
+    /// Surface height before the erosion pass runs (pre-filter) represented as a terrainScaler factor
+    /// Range -X.XF to +X.XF
+    public float preErosionHeight;
     public float sediment;
     public float gradient;
-    public float regionMoisture;
-    public float regionTemperature;
     public float continentId;
     public float continentSizeModifier;
-    public float continentEdge;
+
+    /// Relative position inside the presets control point bands.
+    /// Control point preset band values alter what the empirical value conceptually maps to.
+    /// Range | 0.0F to 1.0F (Normalized)
+    public float controlPoint;
+
     public float waterTable;
     public float continentDistance;
     public float terrainRegionId;
@@ -41,6 +50,10 @@ public class Cell {
     public float terrainRegionCenterZ;
     public float biomeRegionId;
     public float biomeRegionEdge;
+    public float biomeRegionCenterX;
+    public float biomeRegionCenterZ;
+    public long biomeRegionX;
+    public long biomeRegionZ;
     public float macroBiomeId;
     public float riverMask;
     public float riverWaterLevel = 0.0F;
@@ -51,6 +64,9 @@ public class Cell {
     public Terrain terrain;
     public float erosion;
     public float weirdness;
+    /// Vanilla continentalness parameter assigned by the remap.
+    /// Range: -1.20F (C0 Island Inland) to +1.00F (C7 Continental Interior Peak)
+    public float continentalness;
     // Terrain-selected erosion before rivers and climate apply biome-specific overrides.
     public float terrainErosion;
     public float temperature;
@@ -62,8 +78,6 @@ public class Cell {
     public boolean hasFlow;
 
     public Cell() {
-        this.regionMoisture = 0.5F;
-        this.regionTemperature = 0.5F;
         this.biomeRegionEdge = 1.0F;
         this.riverMask = 1.0F;
         this.erosionMask = false;
@@ -71,16 +85,14 @@ public class Cell {
         this.waterTable = 0.0F;
         this.continentSizeModifier = 1.0F;
     }
-    
+
     public void copyFrom(Cell other) {
         this.height = other.height;
         this.heightErosion = other.heightErosion;
         this.sediment = other.sediment;
         this.gradient = other.gradient;
-        this.regionMoisture = other.regionMoisture;
-        this.regionTemperature = other.regionTemperature;
         this.continentId = other.continentId;
-        this.continentEdge = other.continentEdge;
+        this.controlPoint = other.controlPoint;
         this.continentDistance = other.continentDistance;
         this.terrainRegionId = other.terrainRegionId;
         this.terrainRegionEdge = other.terrainRegionEdge;
@@ -88,6 +100,10 @@ public class Cell {
         this.terrainRegionCenterZ = other.terrainRegionCenterZ;
         this.biomeRegionId = other.biomeRegionId;
         this.biomeRegionEdge = other.biomeRegionEdge;
+        this.biomeRegionCenterX = other.biomeRegionCenterX;
+        this.biomeRegionCenterZ = other.biomeRegionCenterZ;
+        this.biomeRegionX = other.biomeRegionX;
+        this.biomeRegionZ = other.biomeRegionZ;
         this.macroBiomeId = other.macroBiomeId;
         this.riverMask = other.riverMask;
         this.continentX = other.continentX;
@@ -96,6 +112,7 @@ public class Cell {
         this.terrain = other.terrain;
         this.erosion = other.erosion;
         this.weirdness = other.weirdness;
+        this.continentalness = other.continentalness;
         this.terrainErosion = other.terrainErosion;
         this.temperature = other.temperature;
         this.moisture = other.moisture;
@@ -129,7 +146,7 @@ public class Cell {
         }
         return resource;
     }
-    
+
     public interface Visitor {
         void visit(Cell cell, int x, int z);
     }

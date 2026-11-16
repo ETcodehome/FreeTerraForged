@@ -12,6 +12,7 @@ public record ConditionalFlatCache(DensityFunction function) implements MarkerFu
 	public static final MapCodec<ConditionalFlatCache> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		HOLDER_HELPER_CODEC.fieldOf("function").forGetter(ConditionalFlatCache::function)
 	).apply(instance, ConditionalFlatCache::new));
+	public static final KeyDispatchDataCodec<ConditionalFlatCache> KEY_CODEC = KeyDispatchDataCodec.of(CODEC);
 
 	@Override
 	public double compute(FunctionContext ctx) {
@@ -20,7 +21,7 @@ public record ConditionalFlatCache(DensityFunction function) implements MarkerFu
 	
 	@Override
 	public KeyDispatchDataCodec<ConditionalFlatCache> codec() {
-		return new KeyDispatchDataCodec<>(CODEC);
+		return KEY_CODEC;
 	}
 
 	@Override

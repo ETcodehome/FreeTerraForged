@@ -3,7 +3,7 @@ package etcodehome.freeterraforged.data.worldgen.preset;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
 import etcodehome.freeterraforged.world.worldgen.util.Seed;
-import net.minecraft.data.worldgen.BootstrapContext;
+import net.minecraft.data.worldgen.BootstapContext;
 import net.minecraft.resources.ResourceKey;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 
@@ -11,7 +11,7 @@ public class PresetStrataNoise {
 	public static final ResourceKey<Noise> STRATA_SELECTOR = createKey("selector");
 	public static final ResourceKey<Noise> STRATA_DEPTH = createKey("depth");
 
-	public static void bootstrap(Preset preset, BootstrapContext<Noise> ctx) {
+	public static void bootstrap(Preset preset, BootstapContext<Noise> ctx) {
 		Seed seed = new Seed(1234153);
 		int strataScale = preset.miscellaneous().strataRegionSize;
 		

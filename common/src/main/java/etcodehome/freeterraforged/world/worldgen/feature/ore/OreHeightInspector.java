@@ -23,9 +23,9 @@ final class OreHeightInspector {
 	}
 
 	HeightSemantics inspect(HeightRangePlacement placement) {
-		JsonElement encoded = HeightRangePlacement.CODEC.codec()
+		JsonElement encoded = HeightRangePlacement.CODEC
 			.encodeStart(this.ops, placement)
-			.getOrThrow(message -> new InspectionFailure("height_codec", message));
+			.getOrThrow(false, message -> { throw new InspectionFailure("height_codec", message); });
 		JsonObject root = object(encoded, "height_codec", "height placement");
 		JsonObject height = object(required(root, "height", "height_codec"), "height_codec", "height provider");
 		if (!height.has("type")) {

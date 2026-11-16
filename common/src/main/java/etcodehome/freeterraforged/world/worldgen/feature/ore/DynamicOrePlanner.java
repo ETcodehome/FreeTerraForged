@@ -49,6 +49,23 @@ public final class DynamicOrePlanner {
 		return new DynamicOrePlanner(new OreContractClassifier(registries)).build(biomes, verticalFrame);
 	}
 
+	public DynamicOrePlan build(
+		net.minecraft.core.HolderLookup.Provider lookups,
+		Iterable<Holder<PlacedFeature>> features,
+		VerticalFrame verticalFrame
+	) {
+		List<FeatureInput> inputs = new ArrayList<>();
+		for (Holder<PlacedFeature> holder : features) {
+			inputs.add(new FeatureInput(
+				holder.unwrapKey().map(key -> key.location().toString()).orElse("<direct>"),
+				holder.value()
+			));
+		}
+		return new DynamicOrePlanner(new OreContractClassifier(lookups)).build(
+			List.of(new BiomeInput(List.of(inputs))), verticalFrame
+		);
+	}
+
 	DynamicOrePlan build(List<BiomeInput> biomes, VerticalFrame frame) {
 		Map<String, PlacedFeature> active = new TreeMap<>();
 		Set<String> conflicts = new TreeSet<>();

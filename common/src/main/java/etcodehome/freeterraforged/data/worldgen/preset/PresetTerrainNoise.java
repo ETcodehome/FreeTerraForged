@@ -5,22 +5,17 @@ import etcodehome.freeterraforged.world.worldgen.noise.function.DistanceFunction
 import etcodehome.freeterraforged.world.worldgen.noise.function.EdgeFunction;
 import etcodehome.freeterraforged.world.worldgen.noise.function.Interpolation;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
-import net.minecraft.data.worldgen.BootstrapContext;
+import net.minecraft.data.worldgen.BootstapContext;
 import net.minecraft.resources.ResourceKey;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 
 public class PresetTerrainNoise {
 	public static final ResourceKey<Noise> MOUNTAIN_CHAIN_ALPHA = createKey("mountain_chain_alpha");
-	public static final ResourceKey<Noise> RIVER_ALPHA = createKey("river_alpha");
-	public static final ResourceKey<Noise> LAKE_ALPHA = createKey("lake_alpha");
-	public static final ResourceKey<Noise> SWAMP_ALPHA = createKey("swamp_alpha");
 	
 	public static final ResourceKey<Noise> EROSION = createKey("erosion");
 	public static final ResourceKey<Noise> RIDGES = createKey("ridges");
-	public static final ResourceKey<Noise> RIDGES_FOLDED = createKey("ridges_folded");
-	public static final ResourceKey<Noise> OFFSET = createKey("offset");
 	
-	public static void bootstrap(Preset preset, BootstrapContext<Noise> ctx) {
+	public static void bootstrap(Preset preset, BootstapContext<Noise> ctx) {
 		PresetTerrainTypeNoise.bootstrap(preset, ctx);
 		
 		Noise mountainChainAlpha = PresetNoiseData.registerAndWrap(ctx, MOUNTAIN_CHAIN_ALPHA, makeMountainChainAlpha(0));

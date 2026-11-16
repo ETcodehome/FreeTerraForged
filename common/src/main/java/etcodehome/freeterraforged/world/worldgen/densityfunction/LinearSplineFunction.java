@@ -21,6 +21,7 @@ public record LinearSplineFunction(DensityFunction input, List<Pair<Double, Dens
 		DensityFunction.HOLDER_HELPER_CODEC.fieldOf("input").forGetter(LinearSplineFunction::input),
 		ExtraCodecs.nonEmptyList(Codec.pair(Codec.DOUBLE, DensityFunction.HOLDER_HELPER_CODEC).listOf()).fieldOf("points").forGetter(LinearSplineFunction::points)
 	).apply(instance, LinearSplineFunction::new));
+	public static final KeyDispatchDataCodec<LinearSplineFunction> KEY_CODEC = KeyDispatchDataCodec.of(CODEC);
 	
 	public LinearSplineFunction(DensityFunction input, List<Pair<Double, DensityFunction>> points) {
 		this(input, points, min(points), max(points));
@@ -68,7 +69,7 @@ public record LinearSplineFunction(DensityFunction input, List<Pair<Double, Dens
 
 	@Override
 	public KeyDispatchDataCodec<LinearSplineFunction> codec() {
-		return new KeyDispatchDataCodec<>(CODEC);
+		return KEY_CODEC;
 	}
 
 	public static LinearSplineFunction.Builder builder(DensityFunction input) {

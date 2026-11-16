@@ -15,7 +15,7 @@ final class PreviewCancellation {
     }
 
     void check() {
-        if (this.cancelled) {
+        if (this.cancelled || Thread.currentThread().isInterrupted()) {
             throw new CancellationException("Preview request superseded");
         }
     }

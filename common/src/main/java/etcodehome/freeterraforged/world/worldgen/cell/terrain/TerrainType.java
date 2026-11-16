@@ -12,6 +12,7 @@ public class TerrainType {
     public static final Terrain COAST = register("coast", TerrainCategory.COAST);
     public static final Terrain BEACH = register("beach", TerrainCategory.BEACH);
     public static final Terrain RIVER = register("river", TerrainCategory.RIVER);
+    public static final Terrain LAKE = register("lake", TerrainCategory.LAKE);
     public static final Terrain WETLAND = registerWetlands("wetland", TerrainCategory.WETLAND);
     public static final Terrain FLATS = register("flats", TerrainCategory.FLATLAND);
     public static final Terrain BADLANDS = registerBadlands("badlands", TerrainCategory.FLATLAND);
