@@ -592,7 +592,7 @@ public final class UndergroundBiomeBanding {
 		}
 
 		public T backgroundValue(Climate.TargetPoint target) {
-			return this.background.findValue(target);
+			return this.background.findValueBruteForce(target);
 		}
 
 		public T findValue(Climate.TargetPoint target, int quartX, int quartY, int quartZ) {
@@ -621,7 +621,7 @@ public final class UndergroundBiomeBanding {
 			TargetSampler targetSampler
 		) {
 			if (!this.appliesAt(target)) {
-				return this.original.findValue(target);
+				return this.original.findValueBruteForce(target);
 			}
 
 			StageCandidate<T>[] candidates = (target.depth() < this.deepStart && this.shallowCandidates != null && this.shallowCandidates.length > 0)
@@ -631,7 +631,7 @@ public final class UndergroundBiomeBanding {
 				candidates = this.shallowCandidates;
 			}
 			if (candidates == null || candidates.length == 0) {
-				return this.original.findValue(target);
+				return this.original.findValueBruteForce(target);
 			}
 
 			// 1. Surface clearance protection: cave biomes must never project through the surface
@@ -641,7 +641,7 @@ public final class UndergroundBiomeBanding {
 			);
 			float effectiveCoverage = this.density * surfaceFactor;
 			if (effectiveCoverage <= 0.0F) {
-				return this.background.findValue(target);
+				return this.background.findValueBruteForce(target);
 			}
 
 			int candidateCount = candidates.length;
@@ -662,7 +662,7 @@ public final class UndergroundBiomeBanding {
 				long covHash = hash2D(this.seed ^ OCCUPANCY_CELL_SALT, cellX, cellZ);
 				float regionRoll = (float) ((covHash >>> 11) * 0x1.0p-53);
 				if (regionRoll >= effectiveCoverage) {
-					return this.background.findValue(target);
+					return this.background.findValueBruteForce(target);
 				}
 			}
 

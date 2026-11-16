@@ -35,7 +35,39 @@ final class AuthoritativeTileSearch {
 		ParallelFirstSearch.Control control,
 		CellEvaluator<M> evaluator
 	) {
+		return findFirst(
+			context,
+			tile,
+			latticeOriginX,
+			latticeOriginZ,
+			step,
+			sampleClimate,
+			rawEquivalent,
+			null,
+			control,
+			evaluator
+		);
+	}
+
+	static <M> ParallelFirstSearch.TileResult<M> findFirst(
+		GeneratorContext context,
+		ParallelFirstSearch.Tile tile,
+		int latticeOriginX,
+		int latticeOriginZ,
+		int step,
+		boolean sampleClimate,
+		@Nullable Predicate<Cell> rawEquivalent,
+		@Nullable BiomeLocateCellOptimization.TargetFilter targetFilter,
+		ParallelFirstSearch.Control control,
+		CellEvaluator<M> evaluator
+	) {
 		long samples = tile.sampleCount(latticeOriginX, latticeOriginZ, step);
+		if (samples == 0L) {
+			return new ParallelFirstSearch.TileResult<>(null, 0L);
+		}
+		if (targetFilter != null && targetFilter.canSkipTile(tile)) {
+			return new ParallelFirstSearch.TileResult<>(null, samples);
+		}
 		if (samples <= MAX_POINT_SAMPLES) {
 			return tile.findFirst(
 				latticeOriginX,
@@ -43,22 +75,75 @@ final class AuthoritativeTileSearch {
 				step,
 				control,
 				(blockX, blockZ) -> {
-					try (AuthoritativeSample sample = AuthoritativeSample.open(
-						context, blockX, blockZ, sampleClimate, rawEquivalent
+					try (AuthoritativeSample sample = AuthoritativeSample.openIfCandidate(
+						context, blockX, blockZ, sampleClimate, rawEquivalent, targetFilter
 					)) {
-						return evaluator.test(sample.cell(), blockX, blockZ);
+						return sample != null ? evaluator.test(sample.cell(), blockX, blockZ) : null;
 					}
 				}
 			);
 		}
-		try (AuthoritativeRegion region = AuthoritativeRegion.open(context, tile)) {
+		if (rawEquivalent == null && targetFilter == null) {
+			try (AuthoritativeRegion region = AuthoritativeRegion.open(context, tile)) {
+				return tile.findFirst(
+					latticeOriginX,
+					latticeOriginZ,
+					step,
+					control,
+					(blockX, blockZ) -> evaluator.test(region.cell(blockX, blockZ), blockX, blockZ)
+				);
+			}
+		}
+
+		AuthoritativeRegion[] lazyRegion = new AuthoritativeRegion[1];
+		try {
 			return tile.findFirst(
 				latticeOriginX,
 				latticeOriginZ,
 				step,
 				control,
-				(blockX, blockZ) -> evaluator.test(region.cell(blockX, blockZ), blockX, blockZ)
+				(blockX, blockZ) -> {
+					if (lazyRegion[0] != null) {
+						return evaluator.test(lazyRegion[0].cell(blockX, blockZ), blockX, blockZ);
+					}
+					Cell generated = context.filteredChunkCache.getExistingFilteredCell(blockX, blockZ);
+					if (generated != null) {
+						try (AuthoritativeSample sample = AuthoritativeSample.wrapResolved(
+							context, blockX, blockZ, generated, false
+						)) {
+							return evaluator.test(sample.cell(), blockX, blockZ);
+						}
+					}
+					Cell rawCell = AuthoritativeSample.threadRawCell();
+					if (targetFilter != null && !targetFilter.requiresClimateForRawPrecheck()) {
+						context.heightmap.apply(rawCell.reset(), blockX, blockZ, false);
+						if (!targetFilter.canMatchRaw(rawCell)) {
+							return null;
+						}
+						if (sampleClimate) {
+							context.heightmap.applyClimate(rawCell, blockX, blockZ, true);
+						}
+					} else {
+						context.heightmap.apply(rawCell.reset(), blockX, blockZ, sampleClimate);
+						if (targetFilter != null && !targetFilter.canMatchRaw(rawCell)) {
+							return null;
+						}
+					}
+					if (rawEquivalent != null && rawEquivalent.test(rawCell)) {
+						try (AuthoritativeSample sample = AuthoritativeSample.wrapResolved(
+							context, blockX, blockZ, rawCell, true
+						)) {
+							return evaluator.test(sample.cell(), blockX, blockZ);
+						}
+					}
+					lazyRegion[0] = AuthoritativeRegion.open(context, tile);
+					return evaluator.test(lazyRegion[0].cell(blockX, blockZ), blockX, blockZ);
+				}
 			);
+		} finally {
+			if (lazyRegion[0] != null) {
+				lazyRegion[0].close();
+			}
 		}
 	}
 
