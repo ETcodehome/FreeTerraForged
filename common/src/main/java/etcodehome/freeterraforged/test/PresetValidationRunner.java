@@ -1517,17 +1517,27 @@ public final class PresetValidationRunner {
 				if (resolvedViaSource == null || resolvedViaCell == null) {
 					throw new AssertionError("Foreign Climate.Sampler failed to resolve biome on TerraForgedChunkGenerator (Issue #298)");
 				}
+
+				var nbtOps = net.minecraft.resources.RegistryOps.create(net.minecraft.nbt.NbtOps.INSTANCE, server.registryAccess());
+				String encodedBiomeSourceKey = net.minecraft.world.level.biome.BiomeSource.CODEC
+					.encodeStart(nbtOps, liveTfGen.getBiomeSource())
+					.result()
+					.map(net.minecraft.nbt.Tag::toString)
+					.orElse(null);
+				if (encodedBiomeSourceKey == null || !encodedBiomeSourceKey.contains("freeterraforged:unified")) {
+					throw new AssertionError("UnifiedBiomeSource failed to serialize via BiomeSource.CODEC for stronghold cache keys (Issue #297): " + encodedBiomeSourceKey);
+				}
 			}
 
 			FTFCommon.LOGGER.info(
-				"[FTF-Test] PASSED: Mod compatibility shims verified (non-FTF dimension fallback continents={}, erosion={}, ridges={}; foreign Climate.Sampler adopted cleanly).",
+				"[FTF-Test] PASSED: Mod compatibility shims verified (non-FTF dimension fallback continents={}, erosion={}, ridges={}; foreign Climate.Sampler adopted cleanly; UnifiedBiomeSource codec verified).",
 				String.format(java.util.Locale.ROOT, "%.4f", fallbackContinent),
 				String.format(java.util.Locale.ROOT, "%.4f", fallbackErosion),
 				String.format(java.util.Locale.ROOT, "%.4f", fallbackRidges)
 			);
 			testRecords.add(new TestRecord(
 				currentTestName,
-				"Non-FTF dimension CellSampler fallback (#340/#310) & foreign Climate.Sampler adoption (#298) verified",
+				"Non-FTF dimension CellSampler fallback (#340/#310), foreign Climate.Sampler adoption (#298) & UnifiedBiomeSource codec (#297) verified",
 				true,
 				null
 			));
