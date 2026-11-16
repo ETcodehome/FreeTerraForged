@@ -1,5 +1,7 @@
 package etcodehome.freeterraforged.world.worldgen.cell.continent.uplift;
 
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager.PM;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.world.worldgen.cell.continent.advanced.AbstractContinent;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
@@ -60,7 +62,8 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
 
     public UpliftContinentGenerator(Seed seed, GeneratorContext context) {
         super(seed, context);
-        WorldSettings settings = context.preset.world();
+        Preset preset = context.preset != null ? context.preset : PM.toPreset();
+        WorldSettings settings = preset.world();
         int tectonicScale = settings.continent.continentScale * 4;
         this.continentSettings = settings.continent;
         this.macroWarpStrength = settings.continent.macroWarpStrength;

@@ -1,5 +1,7 @@
 package etcodehome.freeterraforged.world.worldgen.cell.continent.simple;
 
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager.PM;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.noise.domain.Domain;
 import etcodehome.freeterraforged.world.worldgen.noise.domain.Domains;
@@ -38,7 +40,8 @@ public abstract class ContinentGenerator implements SimpleContinent {
 	}
     
     public ContinentGenerator(Seed seed, GeneratorContext context) {
-        WorldSettings settings = context.preset.world();
+        Preset preset = context.preset != null ? context.preset : PM.toPreset();
+        WorldSettings settings = preset.world();
         int tectonicScale = settings.continent.continentScale * 4;
         this.continentScale = settings.continent.continentScale / 2;
         this.seed = seed.next();
@@ -48,7 +51,7 @@ public abstract class ContinentGenerator implements SimpleContinent {
         this.clampMin = 0.2F;
         this.clampMax = 1.0F;
         this.clampRange = this.clampMax - this.clampMin;
-        this.offsetAlpha = context.preset.world().continent.continentJitter;
+        this.offsetAlpha = settings.continent.continentJitter;
         
         Domain warp = Domains.domainPerlin(seed.next(), 20, 2, 20.0F);
         warp = Domains.compound(warp, Domains.domainSimplex(seed.next(), this.continentScale, 3, this.continentScale));

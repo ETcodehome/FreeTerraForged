@@ -2,6 +2,7 @@ package etcodehome.freeterraforged.client.gui.screen.presetconfig;
 
 import java.util.Optional;
 
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager.PM;
 import etcodehome.freeterraforged.client.gui.widget.Slider;
 import etcodehome.freeterraforged.client.gui.widget.ValueButton;
 import net.minecraft.client.gui.components.CycleButton;
@@ -64,6 +65,8 @@ class RiverSettingsPage extends PresetEditorPage {
 		super.init();
 		
 		Preset preset = this.preset.getPreset();
+		PM.riverSettings = preset.rivers();
+		PM.flowSettings = preset.flow();
 
 		FlowSettings flow = preset.flow();
 

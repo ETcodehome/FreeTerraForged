@@ -2,6 +2,7 @@ package etcodehome.freeterraforged.client.gui.screen.presetconfig;
 
 import java.util.Optional;
 
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager.PM;
 import etcodehome.freeterraforged.client.gui.widget.Slider;
 import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.network.chat.Component;
@@ -39,6 +40,7 @@ public class MiscellaneousPage extends PresetEditorPage {
 		
 		Preset preset = this.preset.getPreset();
 		MiscellaneousSettings miscellaneous = preset.miscellaneous();
+		PM.miscellaneousSettings = miscellaneous;
 		
 		this.smoothLayerDecorator = PresetWidgets.createToggle(miscellaneous.smoothLayerDecorator, FTFTranslationKeys.GUI_BUTTON_SMOOTH_LAYER_DECORATOR, (button, value) -> {
 			miscellaneous.smoothLayerDecorator = value;

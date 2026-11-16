@@ -7,6 +7,7 @@ import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
 import net.minecraft.core.HolderGetter;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetClimateNoise;
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager.PM;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetNoiseData;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.ClimateSettings;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
@@ -53,8 +54,7 @@ public record Climate(int randomSeed, Noise offsetX, Noise offsetZ, int offsetDi
 	public static Climate make(Continent continent, GeneratorContext context) {
 		HolderGetter<Noise> noiseLookup = context.noiseLookup;
 		
-		Preset preset = context.preset;
-		
+		Preset preset = context.preset != null ? context.preset : PM.toPreset();
 		WorldSettings worldSettings = preset.world();
 		ClimateSettings climateSettings = preset.climate();
 		

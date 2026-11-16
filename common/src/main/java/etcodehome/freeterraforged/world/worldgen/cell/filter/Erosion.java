@@ -741,7 +741,7 @@ public class Erosion implements Filter {
     }
 
     public static IntFunction<Erosion> factory(final GeneratorContext context) {
-        return new Factory(Seed.toInt(context.seed.root()), context.levels, context.preset != null ? context.preset.erosionFilters() : null);
+        return new Factory(Seed.toInt(context.seed.root()), context.levels, context.preset != null ? context.preset.erosionFilters() : PresetManager.PM.erosionFilterSettings);
     }
 
     private static class Factory implements IntFunction<Erosion> {

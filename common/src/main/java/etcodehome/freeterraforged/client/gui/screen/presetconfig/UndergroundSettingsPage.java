@@ -2,6 +2,7 @@ package etcodehome.freeterraforged.client.gui.screen.presetconfig;
 
 import java.util.Optional;
 
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager.PM;
 import etcodehome.freeterraforged.client.gui.widget.Slider;
 import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.network.chat.Component;
@@ -42,7 +43,10 @@ public class UndergroundSettingsPage extends PresetEditorPage {
 
 		Preset preset = this.preset.getPreset();
 		CaveSettings caves = preset.caves();
+		PM.caveSettings = caves;
 		ClimateSettings climate = preset.climate();
+		PM.climateSettings = climate;
+		PM.worldSettings = preset.world();
 		ClimateSettings.BiomeShape biomeShape = climate.biomeShape;
 
 		int maximumUndergroundVerticalSize = PresetSettingsBounds.maximumUndergroundBiomeVerticalSize(

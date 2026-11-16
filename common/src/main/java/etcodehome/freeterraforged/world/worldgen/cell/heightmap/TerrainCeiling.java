@@ -39,6 +39,10 @@ public record TerrainCeiling(float compressionStart, float linearEnd, float tail
 		return tailStart + tailRoom * excess / (softness + excess);
 	}
 
+	public static TerrainCeiling make() {
+		return make(etcodehome.freeterraforged.data.worldgen.preset.PresetManager.PM.worldSettings.properties);
+	}
+
 	public static TerrainCeiling make(WorldSettings.Properties properties) {
 		int terrainScaler = terrainScaler(properties);
 		int availableHeight = Math.max(1, properties.worldHeight - properties.seaLevel);
@@ -50,6 +54,10 @@ public record TerrainCeiling(float compressionStart, float linearEnd, float tail
 		float linearEnd = compressionStart + 1.0F;
 		float tailStart = (properties.worldHeight - surfaceHeadroom - tailHeadroom) / (float) terrainScaler;
 		return new TerrainCeiling(compressionStart, linearEnd, tailStart, maximum);
+	}
+
+	public static boolean isEnabled() {
+		return etcodehome.freeterraforged.data.worldgen.preset.PresetManager.PM.terrainSettings.general.mountainVariety > 0.0F;
 	}
 
 	public static boolean isEnabled(Preset preset) {

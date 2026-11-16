@@ -1,5 +1,6 @@
 package etcodehome.freeterraforged.world.worldgen.search;
 
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.Terrain;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
@@ -15,6 +16,10 @@ public record TerrainSearchResolution(int horizontalStep) {
 		if (horizontalStep < 4 || horizontalStep % 4 != 0) {
 			throw new IllegalArgumentException("Terrain search step must be positive and quart-aligned");
 		}
+	}
+
+	public static TerrainSearchResolution derive(Terrain target) {
+		return derive(PresetManager.PM.toPreset(), target);
 	}
 
 	public static TerrainSearchResolution derive(Preset preset, Terrain target) {

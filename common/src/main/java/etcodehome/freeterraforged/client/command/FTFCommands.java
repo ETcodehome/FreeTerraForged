@@ -2,8 +2,12 @@ package etcodehome.freeterraforged.client.command;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import etcodehome.freeterraforged.FTFCommon;
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
+import etcodehome.freeterraforged.data.worldgen.preset.PresetTokens;
+import etcodehome.freeterraforged.data.worldgen.preset.PresetTokens.SettingsToken;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.TerrainMapGenerator;
 import etcodehome.freeterraforged.server.command.LocateTerrainCommand;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
@@ -14,6 +18,7 @@ import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 import net.minecraft.core.BlockPos;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.ClickEvent;
@@ -22,6 +27,7 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.levelgen.RandomState;
+import etcodehome.freeterraforged.world.worldgen.runtime.IFTFChunkMap;
 
 import javax.imageio.ImageIO;
 import java.awt.Graphics2D;
@@ -166,6 +172,69 @@ public class FTFCommands {
                                     context.getSource().sendSystemMessage(Component.literal("[FTF-Perf] Reset worldgen performance counters."));
                                     return 1;
                                 })))
+                .then(Commands.literal("live")
+                        .executes(context -> {
+                            context.getSource().sendSystemMessage(Component.literal("§e[FTF Live Config] Usage: /ftf live <token> [value] or /ftf live regen\nRun '/ftf live <token>' to view, or '/ftf live <token> <value>' to modify in real-time."));
+                            return 1;
+                        })
+                        .then(Commands.literal("regen")
+                                .executes(context -> {
+                                    ServerLevel serverLevel = deduceServerLevel(context.getSource());
+                                    if (serverLevel != null && serverLevel.getChunkSource().chunkMap instanceof IFTFChunkMap ftfChunkMap) {
+                                        ftfChunkMap.freeterraforged$regenerateAllWorldContents();
+                                        context.getSource().sendSystemMessage(Component.literal("§a[FTF] Regenerating world contents around player(s)..."));
+                                        return 1;
+                                    } else {
+                                        context.getSource().sendFailure(Component.literal("§c[FTF] Unable to regenerate world contents (not an FTF chunk map or level not available)."));
+                                        return 0;
+                                    }
+                                }))
+                        .then(Commands.argument("token", StringArgumentType.word())
+                                .suggests((context, builder) -> SharedSuggestionProvider.suggest(PresetTokens.getAllTokenNames(), builder))
+                                .executes(context -> {
+                                    String tokenName = StringArgumentType.getString(context, "token");
+                                    SettingsToken token = PresetTokens.get(tokenName);
+                                    if (token == null) {
+                                        context.getSource().sendFailure(Component.literal("§c[FTF] Unknown settings token: " + tokenName));
+                                        return 0;
+                                    }
+                                    context.getSource().sendSystemMessage(Component.literal(String.format("§e[FTF] %s = %s", token.name(), token.get())));
+                                    return 1;
+                                })
+                                .then(Commands.argument("value", StringArgumentType.greedyString())
+                                        .suggests((context, builder) -> {
+                                            String tokenName = StringArgumentType.getString(context, "token");
+                                            SettingsToken token = PresetTokens.get(tokenName);
+                                            if (token != null) {
+                                                return SharedSuggestionProvider.suggest(token.suggestions(), builder);
+                                            }
+                                            return builder.buildFuture();
+                                        })
+                                        .executes(context -> {
+                                            String tokenName = StringArgumentType.getString(context, "token");
+                                            String valueStr = StringArgumentType.getString(context, "value");
+                                            SettingsToken token = PresetTokens.get(tokenName);
+                                            if (token == null) {
+                                                context.getSource().sendFailure(Component.literal("§c[FTF] Unknown settings token: " + tokenName));
+                                                return 0;
+                                            }
+                                            try {
+                                                String oldValue = token.get();
+                                                token.set(valueStr.trim());
+                                                PresetManager.PM.notifyChanged(token.name());
+
+                                                ServerLevel serverLevel = deduceServerLevel(context.getSource());
+                                                if (serverLevel != null && serverLevel.getChunkSource().chunkMap instanceof IFTFChunkMap ftfChunkMap) {
+                                                    ftfChunkMap.freeterraforged$regenerateAllWorldContents();
+                                                }
+
+                                                context.getSource().sendSystemMessage(Component.literal(String.format("§a[FTF] Set %s to %s (was %s). Regenerating world contents around player(s)...", token.name(), token.get(), oldValue)));
+                                                return 1;
+                                            } catch (Exception e) {
+                                                context.getSource().sendFailure(Component.literal("§c[FTF] Failed to set " + tokenName + ": " + e.getMessage()));
+                                                return 0;
+                                            }
+                                        }))))
                 .then(LocateTerrainCommand.build())
         );
     }
@@ -191,7 +260,7 @@ public class FTFCommands {
         }
         ServerPlayer player = source.getPlayer();
         if (player == null) {
-            return source.getServer().overworld();
+            return source.getServer() != null ? source.getServer().overworld() : null;
         }
         return (ServerLevel) player.getCommandSenderWorld();
     }

@@ -1,5 +1,6 @@
 package etcodehome.freeterraforged.world.worldgen.structure;
 
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager.PM;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.levelgen.RandomState;
@@ -16,10 +17,7 @@ public final class OceanMonumentSeaLevel {
 		if ((Object) randomState instanceof FTFRandomState rtfRandomState
 			&& rtfRandomState.isTerraForged()
 			&& rtfRandomState.generatorContext() != null) {
-			Preset preset = rtfRandomState.preset();
-			if (preset != null) {
-				return preset.world().properties.seaLevel;
-			}
+			return PM.worldSettings.properties.seaLevel;
 		}
 		return NOT_FTF;
 	}

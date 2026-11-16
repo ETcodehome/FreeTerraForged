@@ -48,7 +48,8 @@ public record BeachDetect(Levels levels, ControlPoints transition) implements Fi
     
     public static BeachDetect make(GeneratorContext ctx) {
         Levels levels = ctx.levels;
-        ControlPoints transition = ctx.preset.world().controlPoints;
+        var preset = ctx.preset != null ? ctx.preset : etcodehome.freeterraforged.data.worldgen.preset.PresetManager.PM.toPreset();
+        ControlPoints transition = preset.world().controlPoints;
         return new BeachDetect(levels, transition);
     }
 }

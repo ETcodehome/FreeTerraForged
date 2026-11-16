@@ -2,6 +2,7 @@ package etcodehome.freeterraforged.world.worldgen.cell.heightmap;
 
 import org.jetbrains.annotations.Nullable;
 
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager.PM;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.ControlPoints;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetNoiseData;
@@ -155,8 +156,8 @@ public record Heightmap(
 	public static Heightmap make(GeneratorContext ctx) {
     	HolderGetter<Noise> noiseLookup = ctx.noiseLookup;
     	
-        Preset preset = ctx.preset;
-        WorldSettings world = ctx.preset.world();
+        Preset preset = ctx.preset != null ? ctx.preset : PM.toPreset();
+        WorldSettings world = preset.world();
         WorldSettings.ControlPoints controlPoints = world.controlPoints;
 
         TerrainSettings terrainSettings = preset.terrain();
@@ -259,8 +260,8 @@ public record Heightmap(
         }, controlPoints.shallowOcean, controlPoints.inland);
         
         // Wrap with archipelago layer if enabled
-        if (ctx.preset.island().spawnIslands) {
-            terrain = new IslandBlender(terrain, new ArchipelagoPopulator(ctx.preset.island(), ctx.levels, controlPoints, ctx.seed, world.properties.oceanDepth), ctx.levels);
+        if (preset.island().spawnIslands) {
+            terrain = new IslandBlender(terrain, new ArchipelagoPopulator(preset.island(), ctx.levels, controlPoints, ctx.seed, world.properties.oceanDepth), ctx.levels);
         }
 
         Noise beachNoise = Noises.perlin2(ctx.seed.next(), 20, 1);

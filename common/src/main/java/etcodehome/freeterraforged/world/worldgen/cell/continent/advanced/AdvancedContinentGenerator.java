@@ -1,5 +1,7 @@
 package etcodehome.freeterraforged.world.worldgen.cell.continent.advanced;
 
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager.PM;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.noise.domain.Domain;
 import etcodehome.freeterraforged.world.worldgen.noise.domain.Domains;
@@ -26,7 +28,8 @@ public class AdvancedContinentGenerator extends AbstractContinent implements Sim
     
     public AdvancedContinentGenerator(Seed seed, GeneratorContext context) {
         super(seed, context);
-        WorldSettings settings = context.preset.world();
+        Preset preset = context.preset != null ? context.preset : PM.toPreset();
+        WorldSettings settings = preset.world();
         int tectonicScale = settings.continent.continentScale * 4;
         this.frequency = 1.0F / tectonicScale;
         this.varianceSeed = seed.next();

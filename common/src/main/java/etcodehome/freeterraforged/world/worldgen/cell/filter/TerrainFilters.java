@@ -32,8 +32,9 @@ public class TerrainFilters {
         this.ground = context.levels.ground;
         this.levels = context.levels;
         this.controlPoints = this.beachDetect.transition();
-        if (context.preset != null && TerrainCeiling.isEnabled(context.preset)) {
-            this.terrainCeiling = TerrainCeiling.make(context.preset.world().properties);
+        var preset = context.preset != null ? context.preset : etcodehome.freeterraforged.data.worldgen.preset.PresetManager.PM.toPreset();
+        if (TerrainCeiling.isEnabled(preset)) {
+            this.terrainCeiling = TerrainCeiling.make(preset.world().properties);
         } else {
             this.terrainCeiling = null;
         }

@@ -4,7 +4,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager.PM;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.ContinentType;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.RiverSettings;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
 import etcodehome.freeterraforged.world.worldgen.cell.continent.Continent;
 import etcodehome.freeterraforged.world.worldgen.cell.continent.uplift.UpliftContinentGenerator;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
@@ -36,19 +40,22 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
     protected final float shallowOcean;
 
     public BaseRiverGenerator(T continent, GeneratorContext context) {
+        Preset preset = context.preset != null ? context.preset : PM.toPreset();
+        WorldSettings world = preset.world();
+        RiverSettings rivers = preset.rivers();
         this.continent = continent;
         this.levels = context.levels;
-        this.continentScale = context.preset.world().continent.continentScale;
-        this.minEdgeValue = context.preset.world().controlPoints.inland;
-        this.shallowOcean = context.preset.world().controlPoints.shallowOcean;
-        this.bridgeAware = (continent instanceof UpliftContinentGenerator || context.preset.world().continent.continentType == ContinentType.UPLIFT)
-                && context.preset.world().continent.bridgeChance > 0.0F;
-        this.seed = Seed.toInt(context.seed.root() + context.preset.rivers().seedOffset);
-        this.count = context.preset.rivers().riverCount;
-        this.main = RiverConfig.builder(context.levels).bankHeight(context.preset.rivers().mainRivers.minBankHeight, context.preset.rivers().mainRivers.maxBankHeight).bankWidth(context.preset.rivers().mainRivers.bankWidth).bedWidth(context.preset.rivers().mainRivers.bedWidth).bedDepth(context.preset.rivers().mainRivers.bedDepth).fade(context.preset.rivers().mainRivers.fade).length(5000).main(true).order(0).build();
-        this.fork = RiverConfig.builder(context.levels).bankHeight(context.preset.rivers().branchRivers.minBankHeight, context.preset.rivers().branchRivers.maxBankHeight).bankWidth(context.preset.rivers().branchRivers.bankWidth).bedWidth(context.preset.rivers().branchRivers.bedWidth).bedDepth(context.preset.rivers().branchRivers.bedDepth).fade(context.preset.rivers().branchRivers.fade).length(4500).order(1).build();
-        this.wetland = new WetlandConfig(context.preset.rivers().wetlands);
-        this.lake = LakeConfig.of(context.preset.rivers().lakes, context.levels);
+        this.continentScale = world.continent.continentScale;
+        this.minEdgeValue = world.controlPoints.inland;
+        this.shallowOcean = world.controlPoints.shallowOcean;
+        this.bridgeAware = (continent instanceof UpliftContinentGenerator || world.continent.continentType == ContinentType.UPLIFT)
+                && world.continent.bridgeChance > 0.0F;
+        this.seed = Seed.toInt(context.seed.root() + rivers.seedOffset);
+        this.count = rivers.riverCount;
+        this.main = RiverConfig.builder(context.levels).bankHeight(rivers.mainRivers.minBankHeight, rivers.mainRivers.maxBankHeight).bankWidth(rivers.mainRivers.bankWidth).bedWidth(rivers.mainRivers.bedWidth).bedDepth(rivers.mainRivers.bedDepth).fade(rivers.mainRivers.fade).length(5000).main(true).order(0).build();
+        this.fork = RiverConfig.builder(context.levels).bankHeight(rivers.branchRivers.minBankHeight, rivers.branchRivers.maxBankHeight).bankWidth(rivers.branchRivers.bankWidth).bedWidth(rivers.branchRivers.bedWidth).bedDepth(rivers.branchRivers.bedDepth).fade(rivers.branchRivers.fade).length(4500).order(1).build();
+        this.wetland = new WetlandConfig(rivers.wetlands);
+        this.lake = LakeConfig.of(rivers.lakes, context.levels);
     }
 
     @Override

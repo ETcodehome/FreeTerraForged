@@ -4,6 +4,7 @@ import java.util.Optional;
 
 import com.google.common.collect.ImmutableList;
 
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager.PM;
 import etcodehome.freeterraforged.client.gui.widget.Slider;
 import etcodehome.freeterraforged.world.worldgen.noise.function.DistanceFunction;
 import net.minecraft.client.gui.components.CycleButton;
@@ -64,6 +65,7 @@ public class WorldSettingsPage extends PresetEditorPage {
 		
 		Preset preset = this.preset.getPreset();
 		WorldSettings world = preset.world();
+		PM.worldSettings = world;
 		WorldSettings.Continent continent = world.continent;
 		WorldSettings.ControlPoints controlPoints = world.controlPoints;
 		WorldSettings.Properties properties = world.properties;

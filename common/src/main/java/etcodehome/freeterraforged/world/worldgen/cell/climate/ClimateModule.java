@@ -31,8 +31,13 @@ public class ClimateModule {
 	private Noise macroBiomeNoise;
 	private Continent continent;
 	private ControlPoints controlPoints;
+	private ClimateSettings climateSettings;
 	private Levels levels;
 	
+	public ClimateModule(Seed seed, Continent continent, Levels levels) {
+		this(seed, continent, PresetManager.PM.worldSettings.controlPoints, PresetManager.PM.climateSettings, levels);
+	}
+
 	public ClimateModule(Seed seed, Continent continent, WorldSettings.ControlPoints controlPoints, ClimateSettings climateSettings, Levels levels) {
 		int biomeSize = climateSettings.biomeShape.biomeSize();
 		
@@ -53,6 +58,7 @@ public class ClimateModule {
 		this.seed = seed.next();
 		this.biomeFreq = 1.0F / biomeSize;
 		this.controlPoints = controlPoints;
+		this.climateSettings = climateSettings;
 		this.warpStrength = (float) climateSettings.biomeShape.biomeWarpStrength;
 		this.levels = levels;
 		
@@ -171,8 +177,9 @@ public class ClimateModule {
 		// getNormalizedInlandElevation returns 0.0 at sea level and 1.0 at maximum terrain height
 		float heightNorm = NoiseUtil.clamp(this.levels.getNormalizedInlandElevation(height), 0.0F, 1.0F);
 
+		ClimateSettings cs = this.climateSettings != null ? this.climateSettings : PresetManager.PM.climateSettings;
 		// Calculate exponential warp factor (k ranges from 1.0 at sea level to 4.0 at peak height)
-		float exponent = (float) Math.pow(2.0, heightNorm * PresetManager.PM.climateSettings.altitudeCoolingStrength);
+		float exponent = (float) Math.pow(2.0, heightNorm * cs.altitudeCoolingStrength);
 
 		float tempNormalized = NoiseUtil.clamp(rawTemp, 0.0F, 1.0F);
 
@@ -186,10 +193,11 @@ public class ClimateModule {
 		float heightNorm = (height <= this.levels.ground) ? 0.0F :
 				NoiseUtil.clamp(this.levels.getNormalizedInlandElevation(height), 0.0F, 1.0F);
 
+		ClimateSettings cs = this.climateSettings != null ? this.climateSettings : PresetManager.PM.climateSettings;
 		// Coastal boost fades as elevation rises inland
 		float coastalInfluence = 1.0F - heightNorm;
 		if (coastalInfluence > 0.0F) {
-			moisture = moisture + (1.0F - moisture) * (PresetManager.PM.climateSettings.coastalMoistureBoost * coastalInfluence);
+			moisture = moisture + (1.0F - moisture) * (cs.coastalMoistureBoost * coastalInfluence);
 		}
 
 		// Return boosted moisture directly at or below sea level
@@ -198,7 +206,7 @@ public class ClimateModule {
 		}
 
 		// Rain Shadow Exponent (k ranges from 1.0 at sea level to ~3.48 at max peak)
-		float exponent = (float) Math.pow(2.0, heightNorm * PresetManager.PM.climateSettings.rainShadowStrength);
+		float exponent = (float) Math.pow(2.0, heightNorm * cs.rainShadowStrength);
 
 		// Power curve preserves 1.0 (rainforests) while exponentially drying mid-tier moisture
 		return (float) Math.pow(moisture, exponent);

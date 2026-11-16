@@ -1,5 +1,7 @@
 package etcodehome.freeterraforged.world.worldgen.cell.continent.advanced;
 
+import etcodehome.freeterraforged.data.worldgen.preset.PresetManager.PM;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.util.PosUtil;
 import etcodehome.freeterraforged.world.worldgen.util.Seed;
@@ -30,7 +32,8 @@ public abstract class AbstractContinent implements SimpleContinent {
     }
 
     public AbstractContinent(Seed seed, GeneratorContext context) {
-        WorldSettings settings = context.preset.world();
+        Preset preset = context.preset != null ? context.preset : PM.toPreset();
+        WorldSettings settings = preset.world();
         this.seed = seed.next();
         this.skippingSeed = seed.next();
         this.continentScale = settings.continent.continentScale;
