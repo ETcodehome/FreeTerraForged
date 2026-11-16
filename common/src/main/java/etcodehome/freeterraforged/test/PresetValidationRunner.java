@@ -601,9 +601,11 @@ public final class PresetValidationRunner {
 			watchdog.setStep(currentTestName);
 			String coverageNotes = String.format(
 				java.util.Locale.ROOT,
-				"%d/%d Overworld biomes located (>= 8x8 area) & %d non-Overworld rejected in %dms (max: %s @ %dms)",
+				"%d/%d Overworld biomes located (>= %dx%d area) & %d non-Overworld rejected in %dms (max: %s @ %dms)",
 				coverageResult.overworldBiomesVerified(),
 				coverageResult.overworldBiomesVerified(),
+				etcodehome.freeterraforged.world.worldgen.search.FTFBiomeLocateQuery.MIN_BIOME_AREA_BLOCKS,
+				etcodehome.freeterraforged.world.worldgen.search.FTFBiomeLocateQuery.MIN_BIOME_AREA_BLOCKS,
 				coverageResult.nonOverworldBiomesRejected(),
 				coverageResult.totalMillis(),
 				coverageResult.slowestBiome(),

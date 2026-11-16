@@ -363,7 +363,7 @@ public final class BiomeLocateValidator {
 		BiomeLocateSearch.Match match
 	) {
 		BlockPos position = match.position();
-		// Force FULL promotion, then read the exact stored quarts across the 8x8 block area.
+		// Force FULL promotion, then read the exact stored quarts across the minimum biome block area.
 		// Level#getBiome uses BiomeManager's zoom/fiddle algorithm and may intentionally select an adjacent quart,
 		// which is not the coordinate locate evaluated.
 		for (int dz = 0; dz < FTFBiomeLocateQuery.MIN_BIOME_AREA_BLOCKS; dz += QuartPos.SIZE) {
@@ -378,7 +378,8 @@ public final class BiomeLocateValidator {
 				);
 				if (!expected.equals(generated)) {
 					throw new AssertionError(
-						"FTF locate predicted 8x8 area of " + biomeName(expected) + " at " + position
+						"FTF locate predicted " + FTFBiomeLocateQuery.MIN_BIOME_AREA_BLOCKS + "x"
+							+ FTFBiomeLocateQuery.MIN_BIOME_AREA_BLOCKS + " area of " + biomeName(expected) + " at " + position
 							+ " but the finished chunk at (" + x + ", " + position.getY() + ", " + z + ") contains "
 							+ biomeName(generated)
 					);

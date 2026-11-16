@@ -173,7 +173,7 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 	}
 
 	/**
-	 * Verifies that the 8x8 block area anchored at {@code match.position()} is composed of {@code match.biome()}.
+	 * Verifies that the minimum biome area (e.g. 12x12 blocks) anchored at {@code match.position()} is composed of {@code match.biome()}.
 	 */
 	public boolean hasMinimumBiomeArea(BiomeLocateSearch.Match match, BiomeLocateSearch.SearchPlan plan) {
 		Objects.requireNonNull(match, "match");

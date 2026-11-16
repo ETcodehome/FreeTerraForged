@@ -37,7 +37,7 @@ import net.minecraft.world.phys.Vec3;
 /**
  * System test validator that retrieves the complete list of vanilla Minecraft biomes from the server
  * registry and verifies via {@code /ftf locate biome} that every vanilla Overworld biome generates
- * reasonable-sized (>= 8x8 block) non-dithered areas.
+ * reasonable-sized non-dithered areas (default >= 12x12 blocks).
  */
 public final class VanillaBiomeCoverageValidator {
 	private static final long PER_BIOME_TIMEOUT_SECONDS = Long.getLong(
@@ -120,7 +120,7 @@ public final class VanillaBiomeCoverageValidator {
 			}
 		}
 
-		// 2. Locate every vanilla Overworld biome via /ftf locate biome and verify >= 8x8 block area
+		// 2. Locate every vanilla Overworld biome via /ftf locate biome and verify minimum area (>= 12x12 blocks)
 		List<BiomeEntryResult> entries = new ArrayList<>(overworldBiomes.size());
 		List<String> failures = new ArrayList<>();
 		long suiteStartNanos = System.nanoTime();
