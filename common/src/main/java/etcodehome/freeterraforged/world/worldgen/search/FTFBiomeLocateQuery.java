@@ -22,16 +22,10 @@ import net.minecraft.world.level.biome.Climate;
 
 /** Final-biome column query backed by an immutable FTF runtime plan. */
 public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
-	public static final int MIN_BIOME_AREA_BLOCKS = 8;
+	public static final int MIN_BIOME_AREA_BLOCKS = 12;
 	private static final int MIN_BIOME_AREA_QUARTS = MIN_BIOME_AREA_BLOCKS / QuartPos.SIZE;
 	private static final int MIN_COORDINATE = -Level.MAX_LEVEL_SIZE;
 	private static final int MAX_COORDINATE = Level.MAX_LEVEL_SIZE - 1;
-	private static final int[][] AREA_ANCHOR_OFFSETS = {
-		{ 1, 1 },
-		{ 0, 1 },
-		{ 1, 0 },
-		{ 0, 0 }
-	};
 
 	private final WorldgenBiomeSelection.Executable selection;
 	private final GeneratorContext context;
@@ -171,15 +165,10 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 					this.cellOptimization::canUseRaw
 				)) {
 					Cell cell = sample.cell();
-					if (!expected.equals(this.resolveAt(cell, x, anchorY, z))) {
+					int y = checkSurface ? this.surfaceY(cell) : anchorY;
+					Holder<Biome> actual = this.resolveAt(cell, x, y, z);
+					if (!expected.equals(actual)) {
 						return false;
-					}
-					if (checkSurface) {
-						int surfaceY = this.surfaceY(cell);
-						if (QuartPos.fromBlock(surfaceY) != QuartPos.fromBlock(anchorY)
-							&& !expected.equals(this.resolveAt(cell, x, surfaceY, z))) {
-							return false;
-						}
 					}
 				}
 			}
@@ -202,7 +191,7 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 		BiomePlacementPlan.TargetRoles roles = plan.roles();
 		boolean surfaceFirst = roles.searchesSurface() && originY >= surfaceY;
 		if (surfaceFirst) {
-			BiomeLocateSearch.Match surface = this.matchSurfaceAt(target, origin, cell, blockX, surfaceY, blockZ);
+			BiomeLocateSearch.Match surface = this.matchSurfaceAt(target, plan, origin, cell, blockX, surfaceY, blockZ);
 			if (surface != null) {
 				return surface;
 			}
@@ -223,7 +212,7 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 					}
 					if (lowerValid) {
 						BiomeLocateSearch.Match match = this.matchUndergroundAt(
-							target, roles, origin, cell, blockX, startY - offset, blockZ
+							target, plan, roles, origin, cell, blockX, startY - offset, blockZ
 						);
 						if (match != null) {
 							return match;
@@ -231,7 +220,7 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 					}
 					if (upperValid) {
 						BiomeLocateSearch.Match match = this.matchUndergroundAt(
-							target, roles, origin, cell, blockX, startY + offset, blockZ
+							target, plan, roles, origin, cell, blockX, startY + offset, blockZ
 						);
 						if (match != null) {
 							return match;
@@ -242,7 +231,7 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 		}
 
 		if (roles.searchesSurface() && !surfaceFirst) {
-			return this.matchSurfaceAt(target, origin, cell, blockX, surfaceY, blockZ);
+			return this.matchSurfaceAt(target, plan, origin, cell, blockX, surfaceY, blockZ);
 		}
 		return null;
 	}
@@ -250,6 +239,7 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 	@Nullable
 	private BiomeLocateSearch.Match matchUndergroundAt(
 		Predicate<Holder<Biome>> target,
+		BiomeLocateSearch.SearchPlan plan,
 		BiomePlacementPlan.TargetRoles roles,
 		BlockPos origin,
 		Cell cell,
@@ -261,7 +251,7 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 		if (biome == null || !target.test(biome)) {
 			return null;
 		}
-		return this.findUndergroundAreaMatch(biome, roles, origin, blockX, blockY, blockZ);
+		return this.findUndergroundAreaMatch(biome, plan, roles, origin, blockX, blockY, blockZ);
 	}
 
 	@Nullable
@@ -305,6 +295,7 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 	@Nullable
 	private BiomeLocateSearch.Match matchSurfaceAt(
 		Predicate<Holder<Biome>> target,
+		BiomeLocateSearch.SearchPlan plan,
 		BlockPos origin,
 		Cell cell,
 		int blockX,
@@ -315,173 +306,180 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 		if (!target.test(biome)) {
 			return null;
 		}
-		return this.findSurfaceAreaMatch(biome, origin, blockX, surfaceY, blockZ);
+		return this.findSurfaceAreaMatch(biome, plan, origin, blockX, surfaceY, blockZ);
 	}
 
 	@Nullable
 	private BiomeLocateSearch.Match findSurfaceAreaMatch(
 		Holder<Biome> biome,
+		BiomeLocateSearch.SearchPlan plan,
 		BlockPos origin,
 		int blockX,
 		int centerSurfaceY,
 		int blockZ
 	) {
-		int evaluatedMask = 1 << 4; // Center (1, 1) is bit 4
-		int matchedMask = 1 << 4;
-		int sY00 = centerSurfaceY;
-		int sY10 = centerSurfaceY;
-		int sY01 = centerSurfaceY;
+		int k = MIN_BIOME_AREA_QUARTS;
+		if (k <= 1) {
+			return new BiomeLocateSearch.Match(
+				new BlockPos(blockX, centerSurfaceY, blockZ),
+				biome,
+				distanceSq(origin, blockX, blockZ)
+			);
+		}
+		int g = 2 * k - 1;
+		int centerGx = k - 1;
+		int centerGz = k - 1;
+		long centerBit = 1L << (centerGz * g + centerGx);
+		long evaluatedMask = centerBit;
+		long matchedMask = centerBit;
 
-		for (int[] anchorOffset : AREA_ANCHOR_OFFSETS) {
-			int ax = anchorOffset[0];
-			int az = anchorOffset[1];
-			boolean allMatch = true;
-			for (int oz = 0; oz < MIN_BIOME_AREA_QUARTS && allMatch; oz++) {
-				for (int ox = 0; ox < MIN_BIOME_AREA_QUARTS; ox++) {
-					int gx = ax + ox;
-					int gz = az + oz;
-					int bit = 1 << (gz * 3 + gx);
-					if ((evaluatedMask & bit) == 0) {
-						evaluatedMask |= bit;
-						int nx = blockX + (gx - 1) * QuartPos.SIZE;
-						int nz = blockZ + (gz - 1) * QuartPos.SIZE;
-						if (inWorldBounds(nx, nz)) {
-							try (AuthoritativeSample sample = AuthoritativeSample.openNeighbor(
-								this.context,
-								nx,
-								nz,
-								true,
-								this.cellOptimization::canUseRaw
-							)) {
-								Cell neighborCell = sample.cell();
-								int nSurfaceY = this.surfaceY(neighborCell);
-								if (gx == 0 && gz == 0) {
-									sY00 = nSurfaceY;
-								} else if (gx == 1 && gz == 0) {
-									sY10 = nSurfaceY;
-								} else if (gx == 0 && gz == 1) {
-									sY01 = nSurfaceY;
-								}
-								boolean matches = biome.equals(this.resolveAt(neighborCell, nx, nSurfaceY, nz));
-								if (matches && QuartPos.fromBlock(nSurfaceY) != QuartPos.fromBlock(centerSurfaceY)) {
-									matches = biome.equals(this.resolveAt(neighborCell, nx, centerSurfaceY, nz));
-								}
-								if (matches) {
-									matchedMask |= bit;
+		for (int oz = 0; oz < k; oz++) {
+			for (int ox = 0; ox < k; ox++) {
+				int startGx = (k - 1) - ox;
+				int startGz = (k - 1) - oz;
+				boolean allMatch = true;
+				for (int qz = 0; qz < k && allMatch; qz++) {
+					for (int qx = 0; qx < k; qx++) {
+						int gx = startGx + qx;
+						int gz = startGz + qz;
+						long bit = 1L << (gz * g + gx);
+						if ((evaluatedMask & bit) == 0L) {
+							evaluatedMask |= bit;
+							int nx = blockX + (gx - (k - 1)) * QuartPos.SIZE;
+							int nz = blockZ + (gz - (k - 1)) * QuartPos.SIZE;
+							if (inWorldBounds(nx, nz)) {
+								try (AuthoritativeSample sample = AuthoritativeSample.openNeighbor(
+									this.context,
+									nx,
+									nz,
+									true,
+									this.cellOptimization::canUseRaw
+								)) {
+									Cell neighborCell = sample.cell();
+									int nSurfaceY = this.surfaceY(neighborCell);
+									if (biome.equals(this.resolveAt(neighborCell, nx, nSurfaceY, nz))) {
+										matchedMask |= bit;
+									}
 								}
 							}
 						}
-					}
-					if ((matchedMask & bit) == 0) {
-						allMatch = false;
-						break;
+						if ((matchedMask & bit) == 0L) {
+							allMatch = false;
+							break;
+						}
 					}
 				}
-			}
-			if (allMatch) {
-				int anchorX = blockX + (ax - 1) * QuartPos.SIZE;
-				int anchorZ = blockZ + (az - 1) * QuartPos.SIZE;
-				int anchorY = (ax == 1 && az == 1) ? centerSurfaceY
-					: (ax == 0 && az == 1) ? sY01
-					: (ax == 1 && az == 0) ? sY10
-					: sY00;
-				if (QuartPos.fromBlock(anchorY) != QuartPos.fromBlock(centerSurfaceY)
-					&& !this.verifySurfaceSquareAtY(biome, anchorX, anchorY, anchorZ)) {
-					continue;
+				if (allMatch) {
+					int anchorX = blockX - ox * QuartPos.SIZE;
+					int anchorZ = blockZ - oz * QuartPos.SIZE;
+					int anchorY;
+					if (ox == 0 && oz == 0) {
+						anchorY = centerSurfaceY;
+					} else {
+						try (AuthoritativeSample aSample = AuthoritativeSample.openNeighbor(
+							this.context,
+							anchorX,
+							anchorZ,
+							true,
+							this.cellOptimization::canUseRaw
+						)) {
+							anchorY = this.surfaceY(aSample.cell());
+						}
+					}
+					BiomeLocateSearch.Match candidate = new BiomeLocateSearch.Match(
+						new BlockPos(anchorX, anchorY, anchorZ),
+						biome,
+						distanceSq(origin, anchorX, anchorZ)
+					);
+					if (this.hasMinimumBiomeArea(candidate, plan)) {
+						return candidate;
+					}
 				}
-				return new BiomeLocateSearch.Match(
-					new BlockPos(anchorX, anchorY, anchorZ),
-					biome,
-					distanceSq(origin, anchorX, anchorZ)
-				);
 			}
 		}
 		return null;
 	}
 
-	private boolean verifySurfaceSquareAtY(Holder<Biome> biome, int anchorX, int anchorY, int anchorZ) {
-		for (int dz = 0; dz < MIN_BIOME_AREA_BLOCKS; dz += QuartPos.SIZE) {
-			for (int dx = 0; dx < MIN_BIOME_AREA_BLOCKS; dx += QuartPos.SIZE) {
-				int x = anchorX + dx;
-				int z = anchorZ + dz;
-				try (AuthoritativeSample sample = AuthoritativeSample.openNeighbor(
-					this.context,
-					x,
-					z,
-					true,
-					this.cellOptimization::canUseRaw
-				)) {
-					if (!biome.equals(this.resolveAt(sample.cell(), x, anchorY, z))) {
-						return false;
-					}
-				}
-			}
-		}
-		return true;
-	}
-
 	@Nullable
 	private BiomeLocateSearch.Match findUndergroundAreaMatch(
 		Holder<Biome> biome,
+		BiomeLocateSearch.SearchPlan plan,
 		BiomePlacementPlan.TargetRoles roles,
 		BlockPos origin,
 		int blockX,
 		int blockY,
 		int blockZ
 	) {
-		int evaluatedMask = 1 << 4;
-		int matchedMask = 1 << 4;
+		int k = MIN_BIOME_AREA_QUARTS;
+		if (k <= 1) {
+			return new BiomeLocateSearch.Match(
+				new BlockPos(blockX, blockY, blockZ),
+				biome,
+				distanceSq(origin, blockX, blockZ)
+			);
+		}
+		int g = 2 * k - 1;
+		int centerGx = k - 1;
+		int centerGz = k - 1;
+		long centerBit = 1L << (centerGz * g + centerGx);
+		long evaluatedMask = centerBit;
+		long matchedMask = centerBit;
 
-		for (int[] anchorOffset : AREA_ANCHOR_OFFSETS) {
-			int ax = anchorOffset[0];
-			int az = anchorOffset[1];
-			boolean allMatch = true;
-			for (int oz = 0; oz < MIN_BIOME_AREA_QUARTS && allMatch; oz++) {
-				for (int ox = 0; ox < MIN_BIOME_AREA_QUARTS; ox++) {
-					int gx = ax + ox;
-					int gz = az + oz;
-					int bit = 1 << (gz * 3 + gx);
-					if ((evaluatedMask & bit) == 0) {
-						evaluatedMask |= bit;
-						int nx = blockX + (gx - 1) * QuartPos.SIZE;
-						int nz = blockZ + (gz - 1) * QuartPos.SIZE;
-						if (inWorldBounds(nx, nz)) {
-							try (AuthoritativeSample sample = AuthoritativeSample.openNeighbor(
-								this.context,
-								nx,
-								nz,
-								true,
-								this.cellOptimization::canUseRaw
-							)) {
-								Cell neighborCell = sample.cell();
-								int neighborMaxY = alignDownToQuart(
-									Math.min(this.surfaceY(neighborCell) - 1, this.context.levels.worldHeight - 1)
-								);
-								if (blockY <= neighborMaxY) {
-									Holder<Biome> neighborBiome = this.resolveUndergroundCandidateAt(
-										roles, neighborCell, nx, blockY, nz
+		for (int oz = 0; oz < k; oz++) {
+			for (int ox = 0; ox < k; ox++) {
+				int startGx = (k - 1) - ox;
+				int startGz = (k - 1) - oz;
+				boolean allMatch = true;
+				for (int qz = 0; qz < k && allMatch; qz++) {
+					for (int qx = 0; qx < k; qx++) {
+						int gx = startGx + qx;
+						int gz = startGz + qz;
+						long bit = 1L << (gz * g + gx);
+						if ((evaluatedMask & bit) == 0L) {
+							evaluatedMask |= bit;
+							int nx = blockX + (gx - (k - 1)) * QuartPos.SIZE;
+							int nz = blockZ + (gz - (k - 1)) * QuartPos.SIZE;
+							if (inWorldBounds(nx, nz)) {
+								try (AuthoritativeSample sample = AuthoritativeSample.openNeighbor(
+									this.context,
+									nx,
+									nz,
+									true,
+									this.cellOptimization::canUseRaw
+								)) {
+									Cell neighborCell = sample.cell();
+									int neighborMaxY = alignDownToQuart(
+										Math.min(this.surfaceY(neighborCell) - 1, this.context.levels.worldHeight - 1)
 									);
-									if (biome.equals(neighborBiome)) {
-										matchedMask |= bit;
+									if (blockY <= neighborMaxY) {
+										Holder<Biome> neighborBiome = this.resolveUndergroundCandidateAt(
+											roles, neighborCell, nx, blockY, nz
+										);
+										if (biome.equals(neighborBiome)) {
+											matchedMask |= bit;
+										}
 									}
 								}
 							}
 						}
-					}
-					if ((matchedMask & bit) == 0) {
-						allMatch = false;
-						break;
+						if ((matchedMask & bit) == 0L) {
+							allMatch = false;
+							break;
+						}
 					}
 				}
-			}
-			if (allMatch) {
-				int anchorX = blockX + (ax - 1) * QuartPos.SIZE;
-				int anchorZ = blockZ + (az - 1) * QuartPos.SIZE;
-				return new BiomeLocateSearch.Match(
-					new BlockPos(anchorX, blockY, anchorZ),
-					biome,
-					distanceSq(origin, anchorX, anchorZ)
-				);
+				if (allMatch) {
+					int anchorX = blockX - ox * QuartPos.SIZE;
+					int anchorZ = blockZ - oz * QuartPos.SIZE;
+					BiomeLocateSearch.Match candidate = new BiomeLocateSearch.Match(
+						new BlockPos(anchorX, blockY, anchorZ),
+						biome,
+						distanceSq(origin, anchorX, anchorZ)
+					);
+					if (this.hasMinimumBiomeArea(candidate, plan)) {
+						return candidate;
+					}
+				}
 			}
 		}
 		return null;

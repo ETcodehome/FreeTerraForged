@@ -126,7 +126,7 @@ public final class SurfaceBiomeFilter<T> {
 		}
 		Optional<Climate.ParameterList<T>> parameters = this.surfaceParameters();
 		if (parameters.isPresent()) {
-			T fallback = parameters.orElseThrow().findValue(target);
+			T fallback = parameters.orElseThrow().findValueBruteForce(target);
 			if (!this.isUnderground(fallback)) {
 				return fallback;
 			}

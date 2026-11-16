@@ -313,13 +313,13 @@ public final class WorldgenPlans {
 		private ProviderResult resolveProvider(ProviderDomain provider, Climate.TargetPoint target) {
 			Climate.ParameterList<Holder<Biome>> candidates = provider.candidates();
 			Climate.TargetPoint selectionTarget = this.oceanProjections.get(provider.id()).apply(target);
-			Holder<Biome> selected = candidates.findValue(selectionTarget);
+			Holder<Biome> selected = candidates.findValueBruteForce(selectionTarget);
 			boolean deferred = this.deferredPlaceholder.isPresent()
 				&& this.deferredPlaceholder.get().equals(selected);
 			if (deferred) {
 				candidates = this.fallback.orElseThrow();
 				selectionTarget = this.fallbackOceanProjection.apply(target);
-				selected = candidates.findValue(selectionTarget);
+				selected = candidates.findValueBruteForce(selectionTarget);
 			}
 			return new ProviderResult(provider.id(), selected, selected, deferred, candidates, selectionTarget);
 		}

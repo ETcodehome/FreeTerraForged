@@ -56,10 +56,12 @@ class BiomeLocateAreaTest {
 	}
 
 	@Test
-	@DisplayName("Verify 8x8 minimum biome area constant and dithering rejection in synthetic query")
+	@DisplayName("Verify minimum biome area constant and dithering rejection in synthetic query")
 	void testMinimumBiomeAreaRejectsSingleQuartDithering() throws Exception {
-		assertEquals(8, FTFBiomeLocateQuery.MIN_BIOME_AREA_BLOCKS);
-		assertEquals(8, LocateBiomeCommand.MIN_BIOME_AREA_BLOCKS);
+		int expectedBlocks = LocateBiomeCommand.MIN_BIOME_AREA_BLOCKS;
+		int expectedQuarts = expectedBlocks / QuartPos.SIZE;
+		assertEquals(expectedBlocks, FTFBiomeLocateQuery.MIN_BIOME_AREA_BLOCKS);
+		assertEquals(expectedBlocks, LocateBiomeCommand.MIN_BIOME_AREA_BLOCKS);
 
 		Holder<Biome> targetBiome = Holder.Reference.createStandAlone(null, Biomes.PLAINS);
 		Holder<Biome> otherBiome = Holder.Reference.createStandAlone(null, Biomes.FOREST);
@@ -74,7 +76,7 @@ class BiomeLocateAreaTest {
 			new BiomeSearchResolution(4, 4)
 		);
 
-		// 1. Single 4x4 quart dither pixel at (16, 16) surrounded by otherBiome -> must NOT match 8x8 area
+		// 1. Single 4x4 quart dither pixel at (16, 16) surrounded by otherBiome -> must NOT match minimum area
 		BiomeLocateSearch.Query ditheredQuery = createSyntheticGridQuery(
 			plan,
 			(qx, qz) -> (qx == 4 && qz == 4) ? targetBiome : otherBiome
@@ -85,12 +87,12 @@ class BiomeLocateAreaTest {
 			new BlockPos(0, 64, 0),
 			new LocateSearchSettings(1, 1)
 		).join();
-		assertNull(ditherResult.match(), "Isolated 4x4 quart dithering pixel must be rejected by 8x8 area check");
+		assertNull(ditherResult.match(), "Isolated 4x4 quart dithering pixel must be rejected by area check");
 
-		// 2. Contiguous 2x2 quart (8x8 block) patch at quarts (4..5, 4..5) -> blocks (16..23, 16..23) -> MUST match
+		// 2. Contiguous patch of required size at quarts (4..4+k-1, 4..4+k-1) -> MUST match
 		BiomeLocateSearch.Query patchQuery = createSyntheticGridQuery(
 			plan,
-			(qx, qz) -> (qx >= 4 && qx <= 5 && qz >= 4 && qz <= 5) ? targetBiome : otherBiome
+			(qx, qz) -> (qx >= 4 && qx < 4 + expectedQuarts && qz >= 4 && qz < 4 + expectedQuarts) ? targetBiome : otherBiome
 		);
 		BiomeLocateSearch.Result patchResult = BiomeLocateSearch.findFirst(
 			patchQuery,
@@ -98,13 +100,12 @@ class BiomeLocateAreaTest {
 			new BlockPos(16, 64, 16),
 			new LocateSearchSettings(1, 5)
 		).join();
-		assertNotNull(patchResult.match(), "Contiguous 8x8 block (2x2 quart) biome patch must be matched");
+		assertNotNull(patchResult.match(), "Contiguous minimum biome patch must be matched");
 		assertEquals(new BlockPos(16, 64, 16), patchResult.match().position());
 		assertEquals(targetBiome, patchResult.match().biome());
 	}
 
 	@Test
-	@DisplayName("Verify raw candidate parameter bound has zero false negatives across all Overworld biomes")
 	void testRawCandidateBoundHasZeroFalseNegatives() throws Exception {
 		OverworldBiomeBuilder builder = new OverworldBiomeBuilder();
 		List<Pair<Climate.ParameterPoint, ResourceKey<Biome>>> entries = new ArrayList<>();
@@ -275,8 +276,9 @@ class BiomeLocateAreaTest {
 						if (!target.test(center)) {
 							return null;
 						}
-						for (int oz = 0; oz < 2; oz++) {
-							for (int ox = 0; ox < 2; ox++) {
+						int k = LocateBiomeCommand.MIN_BIOME_AREA_BLOCKS / QuartPos.SIZE;
+						for (int oz = 0; oz < k; oz++) {
+							for (int ox = 0; ox < k; ox++) {
 								if (!center.equals(grid.biomeAt(qx + ox, qz + oz))) {
 									return null;
 								}
