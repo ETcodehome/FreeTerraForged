@@ -9,12 +9,23 @@ import etcodehome.freeterraforged.world.worldgen.cell.rivermap.river.*;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.continent.SimpleContinent;
+import etcodehome.freeterraforged.world.worldgen.cell.rivermap.Rivermap;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.gen.GenWarp;
 
 public class SimpleRiverGenerator extends BaseRiverGenerator<SimpleContinent> {
+	protected final TriSubdivisionRiverGenerator triSubdivision;
 
 	public SimpleRiverGenerator(SimpleContinent continent, GeneratorContext context) {
 		super(continent, context);
+		this.triSubdivision = new TriSubdivisionRiverGenerator(continent, context);
+	}
+
+	@Override
+	public Rivermap generateRivers(int x, int z, long id) {
+		if (this.continent instanceof UpliftContinentGenerator) {
+			return this.triSubdivision.generateRivers(x, z, id);
+		}
+		return super.generateRivers(x, z, id);
 	}
 
 	@Override

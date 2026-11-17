@@ -9,7 +9,7 @@ public class ContinentalHydrology {
 
     private static final Step[] BOUNDARIES;
     private static final double TRANSITION_WIDTH = 0.02;
-    private static final int NUM_STEPS = 15;
+    public static final int NUM_STEPS = 15;
 
     // --- FLAT BOUNDARY LOOKUP FIELDS ---
     // Storing 30 exact coordinate split-points (2 per step: Ramp Start & Plateau Start)
@@ -162,5 +162,21 @@ public class ContinentalHydrology {
         }
 
         return 0.0F;
+    }
+
+    /**
+     * Returns the array of center coordinates (in gradient input space [0, 1]) for all
+     * flat plateau areas in the hydrology step function, sorted in ascending order.
+     * Index 0 is the base plateau near sea level, and index NUM_STEPS is the highest plateau.
+     */
+    public static float[] getPlateauCenters() {
+        float[] centers = new float[NUM_STEPS + 1];
+        centers[0] = (float) (SPLITS[0] / 2.0);
+        for (int i = 0; i < NUM_STEPS; i++) {
+            double pStart = SPLITS[i * 2 + 1];
+            double pEnd = (i + 1 < NUM_STEPS) ? SPLITS[(i + 1) * 2] : 1.0;
+            centers[i + 1] = (float) ((pStart + pEnd) / 2.0);
+        }
+        return centers;
     }
 }

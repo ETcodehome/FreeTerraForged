@@ -434,6 +434,10 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
         return this.bridgeChance;
     }
 
+    public float getFrequency() {
+        return this.frequency;
+    }
+
     public PlateUpliftBridge getPlateUpliftBridge() {
         return this.plateUpliftBridge;
     }
