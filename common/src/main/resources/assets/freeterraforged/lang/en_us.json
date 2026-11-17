@@ -1,5 +1,8 @@
 {
   "freeterraforged.gui.button.edit": "Edit",
+  "key.categories.freeterraforged": "FreeTerraForged",
+  "key.freeterraforged.open_preset_view": "Open Preset View",
+  "key.freeterraforged.shift": "Shift + %s",
   "freeterraforged.commands.locate.options.unknown": "Unknown locate option: %s.",
   "freeterraforged.commands.locate.options.duplicate": "Locate option %s was supplied more than once.",
   "freeterraforged.commands.locate.options.missing_value": "Locate option %s requires a value.",
