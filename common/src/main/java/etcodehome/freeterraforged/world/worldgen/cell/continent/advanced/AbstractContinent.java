@@ -20,6 +20,15 @@ public abstract class AbstractContinent implements SimpleContinent {
     protected RiverCache riverCache;
     protected ControlPoints controlPoints;
     
+    protected AbstractContinent(int seed, float jitter) {
+        this.seed = seed;
+        this.skippingSeed = seed ^ 0x9e3779b9;
+        this.jitter = jitter;
+        this.continentScale = 4000;
+        this.skipThreshold = 0.5F;
+        this.hasSkipping = true;
+    }
+
     public AbstractContinent(Seed seed, GeneratorContext context) {
         WorldSettings settings = context.preset.world();
         this.seed = seed.next();

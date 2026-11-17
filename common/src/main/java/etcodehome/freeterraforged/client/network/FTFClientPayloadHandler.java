@@ -1,6 +1,7 @@
 package etcodehome.freeterraforged.client.network;
 
 import etcodehome.freeterraforged.network.FlowFieldSyncPayload;
+import etcodehome.freeterraforged.network.ActivePresetSnapshotPayload;
 import etcodehome.freeterraforged.world.worldgen.IFlowFieldHolder;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.entity.player.Player;
@@ -12,6 +13,10 @@ import etcodehome.freeterraforged.world.worldgen.IFlowSettingsHolder;
 import etcodehome.freeterraforged.world.worldgen.IFlowFieldHolder;
 
 public class FTFClientPayloadHandler {
+
+	public static void handleActivePresetSnapshot(ActivePresetSnapshotPayload payload) {
+		ActivePresetSnapshotHandlers.handle(payload);
+	}
 
     public static void handleFlowFieldSync(FlowFieldSyncPayload payload, Player player) {
         if (player != null && player.level() instanceof ClientLevel clientLevel) {

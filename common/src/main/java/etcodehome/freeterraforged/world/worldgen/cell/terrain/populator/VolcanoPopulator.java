@@ -1,7 +1,6 @@
 package etcodehome.freeterraforged.world.worldgen.cell.terrain.populator;
 
 import etcodehome.freeterraforged.world.worldgen.biome.Erosion;
-import etcodehome.freeterraforged.world.worldgen.biome.Weirdness;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.RegionConfig;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
@@ -85,7 +84,7 @@ public class VolcanoPopulator implements CellPopulator, WeightedPopulator {
                 ? 1.0F
                 : NoiseUtil.interpHermite(NoiseUtil.clamp((value - this.blendLower) / this.blendRange, 0.0F, 1.0F));
         cell.erosion = NoiseUtil.lerp(this.baseErosion.compute(x, z, 0), Erosion.LEVEL_4.mid(), influence);
-        cell.weirdness = NoiseUtil.lerp(this.baseWeirdness.compute(x, z, 0), Weirdness.LOW_SLICE_NORMAL_DESCENDING.mid(), influence);
+        cell.weirdness = this.baseWeirdness.compute(x, z, 0);
 
         if (value > maxHeight) {
             float steepnessModifier = 1.0F;

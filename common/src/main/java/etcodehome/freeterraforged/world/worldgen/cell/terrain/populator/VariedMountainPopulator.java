@@ -46,12 +46,10 @@ public class VariedMountainPopulator implements CellPopulator, WeightedPopulator
 		}
 		this.edgeReference.apply(cell, x, z);
 		float borderHeight = cell.height;
-		float borderErosion = cell.erosion;
 		float borderWeirdness = cell.weirdness;
 
 		selected.apply(cell, x, z);
 		cell.height = NoiseUtil.lerp(borderHeight, cell.height, alpha);
-		cell.erosion = NoiseUtil.lerp(borderErosion, cell.erosion, alpha);
 		cell.weirdness = NoiseUtil.lerp(borderWeirdness, cell.weirdness, alpha);
 	}
 

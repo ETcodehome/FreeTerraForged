@@ -58,6 +58,33 @@ allprojects {
     }
 }
 
+tasks.register("checkPathPurity") {
+    group = "verification"
+    description = "Enforces that no OS-specific drive letters or user home paths are hardcoded in Java sources"
+    doLast {
+        def forbiddenPatterns = [
+            (java.util.regex.Pattern.compile('"[A-Za-z]:[/\\\\]')): "Hardcoded Windows drive letter in string literal",
+            (java.util.regex.Pattern.compile('"[/\\\\]?(Users|home)[/\\\\]')): "Hardcoded user home directory in string literal",
+            (java.util.regex.Pattern.compile('"[^"]*(\\.(gemini|cursor|agent))[/\\\\]')): "Hardcoded agent-specific directory in string literal"
+        ]
+        def violations = []
+        fileTree(dir: ".", include: ["common/src/**", "fabric/src/**", "neoforge/src/**"]).each { file ->
+            int lineNum = 0
+            file.eachLine("UTF-8") { line ->
+                lineNum++
+                forbiddenPatterns.each { pattern, desc ->
+                    if (line =~ pattern) {
+                        violations << "${file.path}:${lineNum} - ${desc}: ${line.trim()}"
+                    }
+                }
+            }
+        }
+        if (!violations.isEmpty()) {
+            throw new GradleException("Cross-platform path purity check failed:\n" + violations.join("\n"))
+        }
+    }
+}
+
 tasks.register("archiveUnitTestReport") {
     group = "verification"
     description = "Archives automated unit test XML results to unit_tests_report.txt"
@@ -111,6 +138,7 @@ tasks.register("archiveUnitTestReport") {
 
 evaluationDependsOn(":common")
 project(":common").tasks.named("test").configure {
+    dependsOn(rootProject.tasks.named("checkPathPurity"))
     finalizedBy(rootProject.tasks.named("archiveUnitTestReport"))
 }
 

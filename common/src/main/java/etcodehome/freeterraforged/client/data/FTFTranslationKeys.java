@@ -65,6 +65,7 @@ public final class FTFTranslationKeys {
 	public static final String GUI_BUTTON_LARGE_ORE_VEINS = resolve("gui.button.largeOreVeins");
 	public static final String GUI_BUTTON_LEGACY_CARVER_DISTRIBUTION = resolve("gui.button.legacyCarverDistribution");
 	public static final String GUI_BUTTON_CLIMATE_SEED_OFFSET = resolve("gui.button.climateSeedOffset");
+	public static final String GUI_BUTTON_CLIMATE_NOISE_TYPE = resolve("gui.button.climateNoiseType");
 	public static final String GUI_BUTTON_BIOME_EDGE_TYPE = resolve("gui.button.biomeEdgeType");
 	public static final String GUI_BUTTON_UNDERGROUND_BIOME_BANDING = resolve("gui.button.undergroundBiomeBanding");
 	public static final String GUI_BUTTON_RENDER_MODE = resolve("gui.button.renderMode");
@@ -94,6 +95,11 @@ public final class FTFTranslationKeys {
 	public static final String GUI_SLIDER_CONTINENT_NOISE_OCTAVES = resolve("gui.slider.continentNoiseOctaves");
 	public static final String GUI_SLIDER_CONTINENT_NOISE_GAIN = resolve("gui.slider.continentNoiseGain");
 	public static final String GUI_SLIDER_CONTINENT_NOISE_LACUNARITY = resolve("gui.slider.continentNoiseLacunarity");
+	public static final String GUI_SLIDER_BRIDGE_CHANCE = resolve("gui.slider.bridgeChance");
+	public static final String GUI_SLIDER_TECTONIC_PLATE_UPLIFT = resolve("gui.slider.tectonicPlateUplift");
+	public static final String GUI_SLIDER_TECTONIC_ROUNDING = resolve("gui.slider.tectonicRounding");
+	public static final String GUI_SLIDER_MACRO_WARP_STRENGTH = resolve("gui.slider.macroWarpStrength");
+	public static final String GUI_SLIDER_COASTAL_COMPLEXITY = resolve("gui.slider.coastalComplexity");
 	public static final String GUI_SLIDER_ISLAND_INLAND = resolve("gui.slider.islandInland");
 	public static final String GUI_SLIDER_ISLAND_COAST = resolve("gui.slider.islandCoast");
 	public static final String GUI_SLIDER_DEEP_OCEAN = resolve("gui.slider.deepOcean");
@@ -133,6 +139,12 @@ public final class FTFTranslationKeys {
 	public static final String GUI_SLIDER_MOISTURE_MAX = resolve("gui.slider.moistureMax");
 	public static final String GUI_SLIDER_MOISTURE_OFFSET_BIAS = resolve("gui.slider.moistureOffsetBias");
 	public static final String GUI_SLIDER_MOISTURE_DISTRIBUTION_BIAS = resolve("gui.slider.moistureDistributionBias");
+	public static final String GUI_SLIDER_EROSION_SCALE = resolve("gui.slider.erosionScale");
+	public static final String GUI_SLIDER_EROSION_FALLOFF = resolve("gui.slider.erosionFalloff");
+	public static final String GUI_SLIDER_EROSION_MIN = resolve("gui.slider.erosionMin");
+	public static final String GUI_SLIDER_EROSION_MAX = resolve("gui.slider.erosionMax");
+	public static final String GUI_SLIDER_EROSION_OFFSET_BIAS = resolve("gui.slider.erosionOffsetBias");
+	public static final String GUI_SLIDER_EROSION_DISTRIBUTION_BIAS = resolve("gui.slider.erosionDistributionBias");
 	public static final String GUI_SLIDER_BIOME_SIZE = resolve("gui.slider.biomeSize");
 	public static final String GUI_SLIDER_UNDERGROUND_BIOME_SIZE = resolve("gui.slider.undergroundBiomeSize");
 	public static final String GUI_SLIDER_UNDERGROUND_BIOME_VERTICAL_SIZE = resolve("gui.slider.undergroundBiomeVerticalSize");

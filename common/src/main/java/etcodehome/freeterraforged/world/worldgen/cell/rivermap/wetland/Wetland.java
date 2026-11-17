@@ -108,25 +108,14 @@ public class Wetland {
         // Restrict Biome and Water Level to the basin.
         // Never lower an existing level: river carvers store an absolute water height here, and
         // overwriting it with the uplift offset (0 on the lowest water table step) dries the channel.
-        if (internalAlpha > 0.1F) {
-            cell.riverWaterLevel = Math.max(cell.riverWaterLevel, upliftOffset);
-        }
-
-        if (dist >= tEnd) {
-            cell.terrain = TerrainType.WETLAND;
-            cell.erosionMask = true;
-        }
-
-        // Strict Biome Containment
-        // Ensure water level is set for the carved area so pools form correctly against the walls
         if (internalAlpha > 0.0F) {
-            cell.riverWaterLevel = Math.max(cell.riverWaterLevel, upliftOffset);
+            cell.riverWaterLevel = Math.max(cell.riverWaterLevel, localWaterSurface);
         }
 
         // Strictly restrict the Wetland biome to the flat bottom of the bowl.
         // The walls (dist < tEnd) will retain their original biome, meaning the fade-out
         // happens entirely in the surrounding biomes.
-        if (dist >= tEnd) {
+        if (dist >= tEnd && cell.height <= localWaterSurface) {
             cell.terrain = TerrainType.WETLAND;
             cell.erosionMask = true;
         }
@@ -143,6 +132,9 @@ public class Wetland {
             float mounds = localMoundMin + (moundHeightNoise * localMoundVariance);
 
             cell.height = NoiseUtil.lerp(cell.height, mounds, shapeAlpha * 0.8F);
+            if (cell.height > localWaterSurface) {
+                cell.erosionMask = false;
+            }
         }
 
         cell.riverMask = Math.min(cell.riverMask, 1.0F - totalAlpha);

@@ -37,6 +37,7 @@ public class FastStrataSequenceRule implements SurfaceRules.SurfaceRule {
 	private final SurfaceRules.Context context;
 	private final SurfaceRules.SurfaceRule base;
 	private final @Nullable SurfaceRules.SurfaceRule strata;
+	private final int minBedrockY;
 	private long lastCheckedXZ = Long.MIN_VALUE;
 	private boolean isBadlands;
 	private boolean isDesert;
@@ -49,6 +50,7 @@ public class FastStrataSequenceRule implements SurfaceRules.SurfaceRule {
 		this.context = context;
 		this.base = base;
 		this.strata = strata;
+		this.minBedrockY = (context.context != null ? context.context.getMinGenY() : (context.chunk != null ? context.chunk.getMinBuildHeight() : -64)) + 5;
 	}
 
 	@Override
@@ -72,7 +74,7 @@ public class FastStrataSequenceRule implements SurfaceRules.SurfaceRule {
 			// Note: When stone extends to the bottom of the world without caves below, Minecraft's stoneDepthBelow
 			// underflows to <= 0 (currentY - WAY_BELOW_MIN_Y + 1). Thus (depthBelow <= 0 || depthBelow > 4) ensures
 			// we are safe from cave ceilings even in completely solid columns.
-			if (y <= 0 && y > -59 && depthAbove > 10 && (depthBelow <= 0 || depthBelow > 4)) {
+			if (y <= 0 && y > this.minBedrockY && depthAbove > 10 && (depthBelow <= 0 || depthBelow > 4)) {
 				if (WorldgenPerfTracker.ACTIVE) {
 					WorldgenPerfTracker.stats().strataFastPathHits++;
 				}

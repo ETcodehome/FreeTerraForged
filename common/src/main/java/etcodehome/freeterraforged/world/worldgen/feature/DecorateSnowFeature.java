@@ -88,7 +88,7 @@ public class DecorateSnowFeature extends Feature<Config> {
 					}
 					int scaledY = levels.scale(cell.height);
 			        int surfaceY = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
-			        if(scaledY == surfaceY && scaledY >= generator.getSeaLevel()) {
+			        if(Math.abs(scaledY - surfaceY) <= 2 && surfaceY >= generator.getSeaLevel()) {
 				        pos.set(worldX, surfaceY, worldZ);
 				        
 				        if(config.erode) {
@@ -127,10 +127,11 @@ public class DecorateSnowFeature extends Feature<Config> {
 				                }
 				            }
 
+				            int snowLevel = getSnowLevel(cell, levels, pos.getY() - 1);
 				            if(state.is(Blocks.SNOW)) {
-				            	smoothSnow(chunk, pos, getSnowLevel(cell, levels));
-				            } else if(config.coverPlants && pos.getY() == surfaceY + 1 && isCoverable(state)) {
-				            	coverPlant(level, chunk, pos, getSnowLevel(cell, levels));
+				            	smoothSnow(chunk, pos, snowLevel);
+				            } else if(config.coverPlants && isCoverable(state)) {
+				            	coverPlant(level, chunk, pos, snowLevel);
 				            }
 				        }
 			        }
@@ -159,9 +160,9 @@ public class DecorateSnowFeature extends Feature<Config> {
         }
     }
     
-    private static int getSnowLevel(Cell cell, Levels levels) {
-		float heightWithFractionalComponent = cell.height / levels.unit;
-        float depth = getDepth(heightWithFractionalComponent);
+    static int getSnowLevel(Cell cell, Levels levels, int groundY) {
+        float continuousHeight = cell.height / levels.unit;
+        float depth = continuousHeight - groundY;
         return depth > 0.0F ? getLevel(depth) : 0;
     }
 
@@ -175,7 +176,7 @@ public class DecorateSnowFeature extends Feature<Config> {
         fixBaseBlock(chunk, pos, layer, level);
     }
 
-    private static boolean isCoverable(BlockState state) {
+    static boolean isCoverable(BlockState state) {
         // Never strand the other half of a tall plant, discard block entity data, or remove a fluid.
         return state.is(FTFBlockTags.SNOW_COVERABLE)
             && !state.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)
@@ -211,7 +212,7 @@ public class DecorateSnowFeature extends Feature<Config> {
     }
 
     private static void fixBaseBlock(ChunkAccess chunk, BlockPos pos, BlockState layerMaterial, int level) {
-        if (level > 1 && layerMaterial.is(Blocks.SNOW)) {
+        if (level > 1 && (layerMaterial.is(Blocks.SNOW) || layerMaterial.is(Blocks.SNOW_BLOCK))) {
             BlockPos pos1 = pos.below();
             BlockState below = chunk.getBlockState(pos1);
 
@@ -234,12 +235,12 @@ public class DecorateSnowFeature extends Feature<Config> {
     }
     
     private static int getLevel(float depth) {
-        if (depth > 1) {
-            depth = getDepth(depth);
-        } else if (depth < 0) {
-            depth = 0;
+        if (depth >= 1.0F) {
+            return (int) MAX;
+        } else if (depth <= 0.0F) {
+            return (int) MIN;
         }
-        return NoiseUtil.round(depth * MAX);
+        return Math.max((int) MIN, Math.min((int) MAX, NoiseUtil.round(depth * MAX)));
     }
 
     private static float getDepth(float height) {
@@ -255,12 +256,16 @@ public class DecorateSnowFeature extends Feature<Config> {
     }
 
 	public record Config(boolean erode, boolean smooth, ScreeFeature.Config erodeConfig, boolean coverPlants) implements FeatureConfiguration {
+		public Config(boolean erode, boolean smooth, ScreeFeature.Config erodeConfig) {
+			this(erode, smooth, erodeConfig, true);
+		}
+
 		public static final Codec<Config> CODEC = RecordCodecBuilder.create(instance -> instance.group(
 			Codec.BOOL.fieldOf("erode").forGetter(Config::erode),
 			Codec.BOOL.fieldOf("smooth").forGetter(Config::smooth),
 			ScreeFeature.Config.CODEC.fieldOf("erode_config").forGetter(Config::erodeConfig),
-			// Optional so generated preset packs in existing worlds keep decoding with the original behavior.
-			Codec.BOOL.optionalFieldOf("cover_plants", false).forGetter(Config::coverPlants)
+			// Optional so generated preset packs in existing worlds decode with default enabled.
+			Codec.BOOL.optionalFieldOf("cover_plants", true).forGetter(Config::coverPlants)
 		).apply(instance, Config::new));
 	}
 }

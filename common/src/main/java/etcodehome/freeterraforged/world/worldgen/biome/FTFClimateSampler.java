@@ -11,8 +11,9 @@ import etcodehome.freeterraforged.world.worldgen.runtime.BiomeCellCache;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenRuntimeBinding;
 
 public interface FTFClimateSampler {
-	void setSpawnSearch(SpawnSearch search);
+	void setSpawnSearch(@Nullable SpawnSearch search);
 
+	@Nullable
 	SpawnSearch getSpawnSearch();
 
 	void setClimateQuerySemantics(

@@ -59,7 +59,7 @@ public class UndergroundSettingsPage extends PresetEditorPage {
 			caves.entranceCaveProbability = (float) slider.scaleValue(value);
 			return value;
 		});
-		this.cheeseCaveDepthOffset = PresetWidgets.createFloatSlider(caves.cheeseCaveDepthOffset, 1.5625F, 10.0F, FTFTranslationKeys.GUI_SLIDER_CHEESE_CAVE_DEPTH_OFFSET, (slider, value) -> {
+		this.cheeseCaveDepthOffset = PresetWidgets.createFloatSlider(caves.cheeseCaveDepthOffset, 0.0F, 1.5F, FTFTranslationKeys.GUI_SLIDER_CHEESE_CAVE_DEPTH_OFFSET, (slider, value) -> {
 			caves.cheeseCaveDepthOffset = (float) slider.scaleValue(value);
 			return value;
 		});

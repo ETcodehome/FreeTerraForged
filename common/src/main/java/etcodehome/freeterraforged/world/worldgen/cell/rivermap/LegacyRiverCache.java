@@ -22,23 +22,34 @@ public class LegacyRiverCache extends RiverCache {
     public Rivermap getRivers(int x, int z) {
         ThreadLocalCache tc = THREAD_CACHE.get();
         if (tc.owner.get() == this && tc.lastRivermap != null && tc.lastX == x && tc.lastZ == z) {
+            tc.lastRivermap.touch();
             return tc.lastRivermap;
         }
-        Rivermap rivermap = this.cache.computeIfAbsent(NoiseUtil.seed(x, z), id -> {
-            if (!WorldgenPerfTracker.ACTIVE) {
-                return this.generator.generateRivers(x, z, id);
-            }
-            long t0 = System.nanoTime();
-            Rivermap rm = this.generator.generateRivers(x, z, id);
-            WorldgenPerfTracker.ThreadStats ts = WorldgenPerfTracker.stats();
-            ts.rivermapGenerateCount++;
-            ts.rivermapGenerateNanos += (System.nanoTime() - t0);
-            return rm;
-        });
+
+        long key = NoiseUtil.seed(x, z);
+        Rivermap rivermap = this.cache.getIfOpen(key);
+        if (rivermap == null) {
+            rivermap = this.computeRivers(x, z, key);
+        }
+
+        rivermap.touch();
         tc.owner = new WeakReference<>(this);
         tc.lastX = x;
         tc.lastZ = z;
         tc.lastRivermap = rivermap;
         return rivermap;
+    }
+
+    @Override
+    protected Rivermap generateRivers(int x, int z, long key) {
+        if (!WorldgenPerfTracker.ACTIVE) {
+            return this.generator.generateRivers(x, z, key);
+        }
+        long t0 = System.nanoTime();
+        Rivermap rm = this.generator.generateRivers(x, z, key);
+        WorldgenPerfTracker.ThreadStats ts = WorldgenPerfTracker.stats();
+        ts.rivermapGenerateCount++;
+        ts.rivermapGenerateNanos += (System.nanoTime() - t0);
+        return rm;
     }
 }

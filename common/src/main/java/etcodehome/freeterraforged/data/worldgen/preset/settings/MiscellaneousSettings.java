@@ -18,8 +18,8 @@ public class MiscellaneousSettings {
 		Codec.BOOL.fieldOf("vanillaLavaSprings").forGetter((s) -> s.vanillaLavaSprings),
 		Codec.FLOAT.fieldOf("mountainBiomeUsage").forGetter((s) -> s.mountainBiomeUsage),
 		Codec.FLOAT.fieldOf("volcanoBiomeUsage").forGetter((s) -> s.volcanoBiomeUsage),
-		// Optional so presets and worlds saved before this setting existed keep their original behavior.
-		Codec.BOOL.optionalFieldOf("snowCoversSmallPlants", false).forGetter((s) -> s.snowCoversSmallPlants)
+		// Optional so presets and worlds saved before this setting existed decode with default enabled.
+		Codec.BOOL.optionalFieldOf("snowCoversSmallPlants", true).forGetter((s) -> s.snowCoversSmallPlants)
 	).apply(instance, MiscellaneousSettings::new));
 	
 	public boolean smoothLayerDecorator;
@@ -68,6 +68,24 @@ public class MiscellaneousSettings {
 		this.volcanoBiomeUsage = volcanoBiomeUsage;
 		this.snowCoversSmallPlants = snowCoversSmallPlants;
 	}
+
+	public MiscellaneousSettings(
+		boolean smoothLayerDecorator,
+		int strataRegionSize,
+		boolean strataDecorator,
+		boolean oreCompatibleStoneOnly,
+		boolean screeDecorator,
+		boolean plainStoneErosion,
+		boolean naturalSnowDecorator,
+		boolean customBiomeFeatures,
+		boolean vanillaSprings,
+		boolean vanillaLavaLakes,
+		boolean vanillaLavaSprings,
+	    float mountainBiomeUsage,
+	    float volcanoBiomeUsage
+	) {
+		this(smoothLayerDecorator, strataRegionSize, strataDecorator, oreCompatibleStoneOnly, screeDecorator, plainStoneErosion, naturalSnowDecorator, customBiomeFeatures, vanillaSprings, vanillaLavaLakes, vanillaLavaSprings, mountainBiomeUsage, volcanoBiomeUsage, true);
+	}
 	
 	public MiscellaneousSettings copy() {
 		return new MiscellaneousSettings(this.smoothLayerDecorator, this.strataRegionSize, this.strataDecorator, this.oreCompatibleStoneOnly, this.screeDecorator, this.plainStoneErosion, this.naturalSnowDecorator, this.customBiomeFeatures, this.vanillaSprings, this.vanillaLavaLakes, this.vanillaLavaSprings, this.mountainBiomeUsage, this.volcanoBiomeUsage, this.snowCoversSmallPlants);
@@ -88,7 +106,7 @@ public class MiscellaneousSettings {
 			false,
 			0.85438144F,
 			0.855F,
-			false
+			true
 		);
 	}
 }

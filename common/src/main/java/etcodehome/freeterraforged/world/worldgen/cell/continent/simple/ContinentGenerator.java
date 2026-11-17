@@ -105,10 +105,10 @@ public abstract class ContinentGenerator implements SimpleContinent {
             }
         }
         cell.continentId = this.cellIdentity(this.seed, cellX, cellY);
-        cell.continentEdge = this.cellEdgeValue(edgeDistance, edgeDistance2);
+        cell.controlPoint = this.cellEdgeValue(edgeDistance, edgeDistance2);
         cell.continentX = (int) (centerX / this.frequency);
         cell.continentZ = (int) (centerY / this.frequency);
-        cell.continentEdge *= this.getShape(x, y, cell.continentEdge);
+        cell.controlPoint *= this.getShape(x, y, cell.controlPoint);
     }
     
     @Override

@@ -91,7 +91,7 @@ public final class WorldgenBenchmarkRunner {
                     int cx = PosUtil.unpackLeft(packedCenter);
                     int cz = PosUtil.unpackRight(packedCenter);
                     ctx.lookup.applyCell(cell.reset(), cx, cz, false, false);
-                    if (cell.continentEdge >= inlandThreshold && cell.height > ctx.levels.water && !cell.terrain.isSubmerged()) {
+                    if (cell.controlPoint >= inlandThreshold && cell.height > ctx.levels.water && !cell.terrain.isSubmerged()) {
                         return new BlockPos(cx, ctx.levels.scale(cell.height), cz);
                     }
                 }
@@ -125,9 +125,9 @@ public final class WorldgenBenchmarkRunner {
             Cell centerCell = new Cell();
             ctx.lookup.applyCell(centerCell.reset(), blockX, blockZ, false, false);
             terrainInfo = String.format(
-                "terrain=%s, continentEdge=%.3f, surfaceY=%d",
+                "terrain=%s, controlPoint=%.3f, surfaceY=%d",
                 centerCell.terrain.getName(),
-                centerCell.continentEdge,
+                centerCell.controlPoint,
                 ctx.levels.scale(centerCell.height)
             );
         }

@@ -190,12 +190,12 @@ public class ChunkFilterGrid implements FilterGrid {
             context.biomeSurfaceEnvelope.prepopulateFromChunkGrid(
                 context, chunkX, chunkZ, grid.cells, TOTAL_SIZE, BORDER
             );
-            CellSampler.seedThreadCacheFromGrid(
-                context.lookup, grid.blockX, grid.blockZ, TOTAL_SIZE, BORDER, CHUNK_SIZE, grid.cells
-            );
             if (context.filters != null) {
                 context.filters.apply(grid);
             }
+            CellSampler.seedThreadCacheFromGrid(
+                context.lookup, grid.blockX, grid.blockZ, TOTAL_SIZE, BORDER, CHUNK_SIZE, grid.cells
+            );
             Cell[] chunkCells = allocateHolderCells();
             grid.copyTo(chunkCells);
             return chunkCells;
@@ -210,9 +210,6 @@ public class ChunkFilterGrid implements FilterGrid {
             context.biomeSurfaceEnvelope.prepopulateFromChunkGrid(
                 context, chunkX, chunkZ, grid.cells, TOTAL_SIZE, BORDER
             );
-            CellSampler.seedThreadCacheFromGrid(
-                context.lookup, grid.blockX, grid.blockZ, TOTAL_SIZE, BORDER, CHUNK_SIZE, grid.cells
-            );
         } finally {
             ts.insideGridInit = prevInside;
         }
@@ -221,6 +218,9 @@ public class ChunkFilterGrid implements FilterGrid {
         if (context.filters != null) {
             context.filters.apply(grid);
         }
+        CellSampler.seedThreadCacheFromGrid(
+            context.lookup, grid.blockX, grid.blockZ, TOTAL_SIZE, BORDER, CHUNK_SIZE, grid.cells
+        );
         Cell[] chunkCells = allocateHolderCells();
         grid.copyTo(chunkCells);
         long t2 = System.nanoTime();

@@ -68,7 +68,7 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 			new AtomicReference<>(Map.of());
 	private WorldgenProviderCatalog providerCatalog;
 	private volatile WorldgenRuntimeBinding runtime;
-	private FTFRandomState randomState;
+	private volatile FTFRandomState randomState;
 	private final ThreadLocal<BiomeDecorationPlan> activeBiomeDecoration = new ThreadLocal<>();
 	private final ThreadLocal<WorldgenPlans.Structures> activeStructures = new ThreadLocal<>();
 	private static final ThreadLocal<Cell> SCRATCH_CELL = ThreadLocal.withInitial(Cell::new);
@@ -304,6 +304,11 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 	WorldgenBiomeSelection.Executable currentBiomeSelection() {
 		WorldgenRuntimeBinding current = this.runtime;
 		return current == null ? null : current.current().biomeSelection();
+	}
+
+	Optional<etcodehome.freeterraforged.data.worldgen.preset.settings.Preset> activePreset() {
+		FTFRandomState current = this.randomState;
+		return current == null ? Optional.empty() : Optional.ofNullable(current.preset());
 	}
 
 	public synchronized WorldgenPlan refreshInputs(
@@ -789,6 +794,9 @@ public final class TerraForgedChunkGenerator extends NoiseBasedChunkGenerator
 		this.randomState = null;
 		this.providerCatalog = null;
 		this.preServerFailures.set(Map.of());
+		this.activeBiomeDecoration.remove();
+		this.activeStructures.remove();
+		etcodehome.freeterraforged.world.worldgen.biome.UndergroundBiomeBanding.clearThreadCaches();
 		Throwable failure = null;
 		try {
 			if (closingRandomState != null) {

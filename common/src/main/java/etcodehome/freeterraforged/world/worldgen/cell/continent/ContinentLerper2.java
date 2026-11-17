@@ -28,15 +28,15 @@ public class ContinentLerper2 implements CellPopulator {
     
     @Override
     public void apply(Cell cell, float x, float y) {
-        if (cell.continentEdge < this.blendLower) {
+        if (cell.controlPoint < this.blendLower) {
             this.lower.apply(cell, x, y);
             return;
         }
-        if (cell.continentEdge > this.blendUpper) {
+        if (cell.controlPoint > this.blendUpper) {
             this.upper.apply(cell, x, y);
             return;
         }
-        float alpha = this.interpolation.apply((cell.continentEdge - this.blendLower) / this.blendRange);
+        float alpha = this.interpolation.apply((cell.controlPoint - this.blendLower) / this.blendRange);
         this.lower.apply(cell, x, y);
         float lowerHeight = cell.height;
         this.upper.apply(cell, x, y);

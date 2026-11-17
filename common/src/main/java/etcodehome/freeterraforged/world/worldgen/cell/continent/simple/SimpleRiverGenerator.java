@@ -10,10 +10,9 @@ import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.continent.SimpleContinent;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.gen.GenWarp;
-import etcodehome.freeterraforged.world.worldgen.cell.rivermap.river.*;
 
 public class SimpleRiverGenerator extends BaseRiverGenerator<SimpleContinent> {
-	
+
 	public SimpleRiverGenerator(SimpleContinent continent, GeneratorContext context) {
 		super(continent, context);
 	}
@@ -33,12 +32,19 @@ public class SimpleRiverGenerator extends BaseRiverGenerator<SimpleContinent> {
 			float x3 = x + dx * length;
 			float z3 = z + dz * length;
 			float valleyWidth = 275.0F * River.MAIN_VALLEY.next(random);
-			River river = new River((float) (int) x2, (float) (int) z2, (float) (int) x3, (float) (int) z3);
+			float boundingRadius = this.main.calculateBoundingRadius(this.levels);
+			River river = new River((float) (int) x2, (float) (int) z2, (float) (int) x3, (float) (int) z3, boundingRadius);
 			RiverCarverSettings settings = new RiverCarverSettings(random);
 			settings.fadeIn = this.main.fade;
 			settings.valleySize = valleyWidth;
 			RiverWarp riverWarp = RiverWarp.create(0.1F, 0.85F, random);
 			FTFRiverCarver carver = new UpliftRiverCarver(river, riverWarp, this.main, settings, this.levels, this.lake, this.continent instanceof UpliftContinentGenerator);
+			// Abandon roots that start or point into a bridged sector between adjacent bridged continents,
+			// or whose mouth would sit on a bridged cell border (still land) or cross into a neighbour cell.
+			// Everything above has already consumed its random values, so continents without bridged borders generate exactly as before.
+			if (this.isInBridgedSector(x, z, dx, dz) || this.isInBridgedSector(x2, z2) || this.terminatesOnLand(x3, z3) || this.endsInNeighbourCell(x, z, x3, z3)) {
+				continue;
+			}
 			Network.Builder branch = Network.builder(carver);
 			roots.add(branch);
 		}

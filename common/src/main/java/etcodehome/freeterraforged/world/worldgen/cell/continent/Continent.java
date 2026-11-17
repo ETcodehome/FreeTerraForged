@@ -19,6 +19,14 @@ public interface Continent extends CellPopulator, AutoCloseable {
         return this.getRivermap(cell.continentX, cell.continentZ);
     }
 
+    default boolean isInBridgedSector(int cx, int cz, float dx, float dz) {
+        return false;
+    }
+
+    default boolean isInBridgedSector(float x, float z) {
+        return false;
+    }
+
 	@Override
 	void close();
 }

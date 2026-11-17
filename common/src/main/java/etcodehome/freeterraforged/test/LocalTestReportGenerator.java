@@ -20,6 +20,10 @@ import java.util.stream.Stream;
 public final class LocalTestReportGenerator {
 
 	public static final List<String> BASE_TEST_TOKENS = List.of(
+		"presetValidation.adaptiveBiomeLocate",
+		"presetValidation.biomeLocateLivePlan",
+		"presetValidation.allVanillaBiomesCoverage",
+		"presetValidation.terrainLocateLivePlan",
 		"presetValidation.checkSynchronizedRegistry",
 		"presetValidation.spawnChunkRegularity",
 		"presetValidation.builtinRiversFallback",
@@ -31,10 +35,13 @@ public final class LocalTestReportGenerator {
 		"presetValidation.customFileResolution",
 		"presetValidation.multiRunSeamContinuity",
 		"presetValidation.inGameCommandParity",
+		"presetValidation.continentalnessDistributionAndControlPoints",
 		"presetValidation.twoStageReloadSpawnPersistence",
 		"presetValidation.nonFtfWorldResolution",
 		"presetValidation.modCompatibilityShims",
+		"presetValidation.undergroundBiomeBanding",
 		"presetValidation.biomeReplacementValidation",
+		"presetValidation.worldgenMemoryLeak",
 		"presetValidation.snowCoverCompatibility"
 	);
 
@@ -124,11 +131,11 @@ public final class LocalTestReportGenerator {
 				}
 			}
 
-			// Discover diagnostic reports (*_report.txt excluding suite_summary and timeout)
+			// Discover diagnostic reports (*_report.txt excluding suite_summary, timeout and unit_tests)
 			List<DiagnosticLog> diagnosticLogs = new ArrayList<>();
 			for (Path f : allFiles) {
 				String name = f.getFileName().toString();
-				if (name.endsWith("_report.txt") && !name.startsWith("suite_summary_") && !name.startsWith("timeout_")) {
+				if (name.endsWith("_report.txt") && !name.startsWith("suite_summary_") && !name.startsWith("timeout_") && !name.equals("unit_tests_report.txt")) {
 					try {
 						String logContent = Files.readString(f, StandardCharsets.UTF_8);
 						diagnosticLogs.add(new DiagnosticLog(name, logContent));
@@ -147,10 +154,10 @@ public final class LocalTestReportGenerator {
 				failures.add("Automated unit test suite failed: " + unitTestSummary.failures() + " failure(s), " + unitTestSummary.errors() + " error(s)");
 			}
 
-			// Calculate stats
+			// Calculate stats (excluding ingested unitTest entries from system test counts)
 			int totalExpected = BASE_TEST_TOKENS.size() * 2;
-			long passedCount = resultsByToken.values().stream().filter(TestResult::passed).count();
-			long failedCount = resultsByToken.values().stream().filter(r -> !r.passed()).count();
+			long passedCount = resultsByToken.values().stream().filter(r -> !r.token().startsWith("unitTest.")).filter(TestResult::passed).count();
+			long failedCount = resultsByToken.values().stream().filter(r -> !r.token().startsWith("unitTest.")).filter(r -> !r.passed()).count();
 			boolean overallPassed = (passedCount >= totalExpected) && (failedCount == 0);
 			if (unitTestSummary != null) {
 				overallPassed = overallPassed && unitTestSummary.passed();
@@ -511,14 +518,19 @@ public final class LocalTestReportGenerator {
 		}
 
 		// Filter Buttons
-		int totalCombined = results.size() + (unitTestSummary != null ? unitTestSummary.total() : 0);
-		int passedCombined = passedCount + (unitTestSummary != null ? (unitTestSummary.total() - unitTestSummary.failures()) : 0);
-		int failedCombined = failedCount + (unitTestSummary != null ? unitTestSummary.failures() : 0);
+		long systemTotal = results.values().stream().filter(r -> !r.token().startsWith("unitTest.")).count();
+		int unitTotal = unitTestSummary != null ? unitTestSummary.total() : 0;
+		int unitPassed = unitTestSummary != null ? (unitTestSummary.total() - unitTestSummary.failures()) : 0;
+		int unitFailed = unitTestSummary != null ? unitTestSummary.failures() : 0;
+
+		long totalCombined = systemTotal + unitTotal;
+		long passedCombined = passedCount + unitPassed;
+		long failedCombined = failedCount + unitFailed;
 		sb.append("  <div class=\"filters\">\n");
 		sb.append("    <button class=\"filter-btn active\" onclick=\"filterRows('all', this)\">All (").append(totalCombined).append(")</button>\n");
-		sb.append("    <button class=\"filter-btn\" onclick=\"filterRows('system', this)\">System Tests (").append(results.size()).append(")</button>\n");
+		sb.append("    <button class=\"filter-btn\" onclick=\"filterRows('system', this)\">System Tests (").append(systemTotal).append(")</button>\n");
 		if (unitTestSummary != null) {
-			sb.append("    <button class=\"filter-btn\" onclick=\"filterRows('unit', this)\">Unit Tests (").append(unitTestSummary.total()).append(")</button>\n");
+			sb.append("    <button class=\"filter-btn\" onclick=\"filterRows('unit', this)\">Unit Tests (").append(unitTotal).append(")</button>\n");
 		}
 		sb.append("    <button class=\"filter-btn\" onclick=\"filterRows('pass', this)\">Passed (").append(passedCombined).append(")</button>\n");
 		if (failedCombined > 0) {

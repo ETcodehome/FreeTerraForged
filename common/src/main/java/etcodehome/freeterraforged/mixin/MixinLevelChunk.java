@@ -1,6 +1,7 @@
 package etcodehome.freeterraforged.mixin;
 
 import etcodehome.freeterraforged.world.worldgen.IFlowFieldHolder;
+import etcodehome.freeterraforged.world.worldgen.IChunkCellsHolder;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -25,6 +26,11 @@ public abstract class MixinLevelChunk {
 				levelHolder.freeterraforged$getOrCreateFlowField().copyFrom(source);
 			}
 		}
-
+		if ((Object) protoChunk instanceof IChunkCellsHolder protoCells) {
+			protoCells.freeterraforged$setChunkCells(null);
+		}
+		if ((Object) this instanceof IChunkCellsHolder levelCells) {
+			levelCells.freeterraforged$setChunkCells(null);
+		}
 	}
 }

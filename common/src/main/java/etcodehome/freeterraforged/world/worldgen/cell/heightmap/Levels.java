@@ -14,6 +14,7 @@ public class Levels {
     private int groundY;
     public int groundLevel;
     public int waterLevel;
+    public int oceanDepth;
     public float ground;
     public float water;
     private float elevationRange;
@@ -29,6 +30,7 @@ public class Levels {
         this.terrainScaleFactor = Math.max(1, terrainScaleFactor);
         this.worldHeight = Math.max(1, height);
         this.worldDepth = Math.max(0, depth);
+        this.oceanDepth = Math.max(10, properties.oceanDepth);
         this.unit = NoiseUtil.div(1, this.terrainScaleFactor);
         this.min = this.scale(-this.worldDepth);
         this.waterLevel = seaLevel;

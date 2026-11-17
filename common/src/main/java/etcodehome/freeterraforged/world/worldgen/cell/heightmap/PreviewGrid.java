@@ -15,15 +15,30 @@ import etcodehome.freeterraforged.world.worldgen.cell.rivermap.Rivermap;
 public final class PreviewGrid implements FilterGrid {
     private final int size;
     private final Cell[] cells;
+    private final float zoom;
     private int blockX;
     private int blockZ;
 
-    public PreviewGrid(int size) {
+    public PreviewGrid(int size, float zoom) {
         this.size = size;
+        this.zoom = zoom > 0.0F ? zoom : 1.0F;
         this.cells = new Cell[size * size];
         for (int i = 0; i < this.cells.length; i++) {
             this.cells[i] = new Cell();
         }
+    }
+
+    public PreviewGrid(int size) {
+        this(size, 1.0F);
+    }
+
+    public float getZoom() {
+        return this.zoom;
+    }
+
+    @Override
+    public float getCellSpacing() {
+        return this.zoom;
     }
 
     public int size() {
@@ -104,7 +119,7 @@ public final class PreviewGrid implements FilterGrid {
         int size,
         BooleanSupplier cancelled
     ) {
-        PreviewGrid grid = new PreviewGrid(size);
+        PreviewGrid grid = new PreviewGrid(size, zoom);
         float translateX = centerX - size * zoom / 2.0F;
         float translateZ = centerZ - size * zoom / 2.0F;
         grid.blockX = (int) translateX;

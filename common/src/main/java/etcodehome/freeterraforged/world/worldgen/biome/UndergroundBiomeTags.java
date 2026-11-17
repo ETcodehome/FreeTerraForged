@@ -5,6 +5,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.Biomes;
 
 /** Common tag spellings used by biome mods to identify cave biomes. */
 public final class UndergroundBiomeTags {
@@ -21,7 +22,8 @@ public final class UndergroundBiomeTags {
 		}
 		@SuppressWarnings("unchecked")
 		Holder<Biome> holder = (Holder<Biome>) rawHolder;
-		return holder.is(IS_CAVE) || holder.is(IS_UNDERGROUND) || holder.is(CAVES);
+		return holder.is(IS_CAVE) || holder.is(IS_UNDERGROUND) || holder.is(CAVES)
+			|| holder.is(Biomes.LUSH_CAVES) || holder.is(Biomes.DRIPSTONE_CAVES) || holder.is(Biomes.DEEP_DARK);
 	}
 
 	private static TagKey<Biome> common(String path) {

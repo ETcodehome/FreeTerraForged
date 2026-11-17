@@ -40,6 +40,7 @@ final class PreviewTileClimateSampler implements MarkerFunction.Mapped {
 		private final float translateX;
 		private final float translateZ;
 		private final float zoom;
+		private Cell activeCell;
 		private int lastX = Integer.MIN_VALUE;
 		private int lastZ = Integer.MIN_VALUE;
 		private Cell lastCell;
@@ -55,19 +56,27 @@ final class PreviewTileClimateSampler implements MarkerFunction.Mapped {
 			this.zoom = zoom;
 		}
 
+		void setActiveCell(Cell cell) {
+			this.activeCell = cell;
+		}
+
 		Cell lookup(FunctionContext context) {
+			if (this.activeCell != null) {
+				return this.activeCell;
+			}
 			return this.lookupBlock(context.blockX(), context.blockZ());
 		}
 
 		Cell lookupBlock(int blockX, int blockZ) {
+			if (this.activeCell != null) {
+				return this.activeCell;
+			}
 			if (this.lastCell == null || blockX != this.lastX || blockZ != this.lastZ) {
 				this.lastCell = null;
 				int size = this.grid.size();
 				int x = (int) Math.round((blockX - (double) this.translateX) / this.zoom);
 				int z = (int) Math.round((blockZ - (double) this.translateZ) / this.zoom);
-				if (x >= 0 && x < size && z >= 0 && z < size
-					&& this.translateX + x * (double) this.zoom == blockX
-					&& this.translateZ + z * (double) this.zoom == blockZ) {
+				if (x >= 0 && x < size && z >= 0 && z < size) {
 					this.lastCell = this.grid.lookup(x, z);
 				} else {
 					this.worldLookup.applyCell(this.sampledCell.reset(), blockX, blockZ, false, true);
