@@ -11,6 +11,7 @@ import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
 /** One independently filtered cell and its dependency halo, scoped to the current locate worker. */
 final class AuthoritativeSample implements AutoCloseable {
 	private static final ThreadLocal<Cell> RAW_CELL = ThreadLocal.withInitial(Cell::new);
+	private static final ThreadLocal<Cell> NEIGHBOR_RAW_CELL = ThreadLocal.withInitial(Cell::new);
 
 	private final GeneratorContext context;
 	@Nullable
@@ -19,6 +20,7 @@ final class AuthoritativeSample implements AutoCloseable {
 	private final int blockX;
 	private final int blockZ;
 	private final boolean raw;
+	@Nullable
 	private final CellSampler.LookupScope lookupScope;
 	private boolean closed;
 
@@ -26,30 +28,56 @@ final class AuthoritativeSample implements AutoCloseable {
 		GeneratorContext context,
 		int blockX,
 		int blockZ,
-		boolean sampleClimate,
-		@Nullable Predicate<Cell> rawEquivalent
+		Cell cell,
+		boolean raw,
+		@Nullable PointFilterGrid grid,
+		boolean installLookupScope
 	) {
 		this.context = context;
 		this.blockX = blockX;
 		this.blockZ = blockZ;
+		this.cell = cell;
+		this.raw = raw;
+		this.grid = grid;
+		this.lookupScope = installLookupScope
+			? CellSampler.pushLookupOverride(
+				context.lookup,
+				(x, z, ignoredClimate) -> this.lookup(x, z)
+			)
+			: null;
+	}
+
+	private static AuthoritativeSample create(
+		GeneratorContext context,
+		int blockX,
+		int blockZ,
+		boolean sampleClimate,
+		@Nullable Predicate<Cell> rawEquivalent,
+		boolean neighbor
+	) {
+		Cell activeRegionCell = neighbor ? AuthoritativeRegion.findActiveInteriorCell(context, blockX, blockZ) : null;
+		if (activeRegionCell != null) {
+			return new AuthoritativeSample(context, blockX, blockZ, activeRegionCell, false, null, false);
+		}
 		Cell generated = context.filteredChunkCache.getExistingFilteredCell(blockX, blockZ);
+		if (generated != null) {
+			return new AuthoritativeSample(context, blockX, blockZ, generated, false, null, true);
+		}
 		Cell rawCell = null;
-		if (generated == null && rawEquivalent != null) {
-			rawCell = RAW_CELL.get();
+		if (rawEquivalent != null) {
+			rawCell = (neighbor ? NEIGHBOR_RAW_CELL : RAW_CELL).get();
 			context.heightmap.apply(rawCell.reset(), blockX, blockZ, sampleClimate);
 			if (!rawEquivalent.test(rawCell)) {
 				rawCell = null;
 			}
 		}
-		this.raw = rawCell != null;
-		this.grid = generated == null && rawCell == null
-			? PointFilterGrid.generate(blockX, blockZ, context, sampleClimate)
-			: null;
-		this.cell = generated != null ? generated : rawCell != null ? rawCell : this.grid.center();
-		this.lookupScope = CellSampler.pushLookupOverride(
-			context.lookup,
-			(x, z, ignoredClimate) -> this.lookup(x, z)
-		);
+		if (rawCell != null) {
+			return new AuthoritativeSample(context, blockX, blockZ, rawCell, true, null, true);
+		}
+		PointFilterGrid grid = neighbor
+			? PointFilterGrid.generateNeighbor(blockX, blockZ, context, sampleClimate)
+			: PointFilterGrid.generate(blockX, blockZ, context, sampleClimate);
+		return new AuthoritativeSample(context, blockX, blockZ, grid.center(), false, grid, true);
 	}
 
 	static AuthoritativeSample open(
@@ -59,7 +87,69 @@ final class AuthoritativeSample implements AutoCloseable {
 		boolean sampleClimate,
 		@Nullable Predicate<Cell> rawEquivalent
 	) {
-		return new AuthoritativeSample(context, blockX, blockZ, sampleClimate, rawEquivalent);
+		return create(context, blockX, blockZ, sampleClimate, rawEquivalent, false);
+	}
+
+	static AuthoritativeSample openNeighbor(
+		GeneratorContext context,
+		int blockX,
+		int blockZ,
+		boolean sampleClimate,
+		@Nullable Predicate<Cell> rawEquivalent
+	) {
+		return create(context, blockX, blockZ, sampleClimate, rawEquivalent, true);
+	}
+
+	@Nullable
+	static AuthoritativeSample openIfCandidate(
+		GeneratorContext context,
+		int blockX,
+		int blockZ,
+		boolean sampleClimate,
+		@Nullable Predicate<Cell> rawEquivalent,
+		@Nullable BiomeLocateCellOptimization.TargetFilter targetFilter
+	) {
+		if (targetFilter == null) {
+			return open(context, blockX, blockZ, sampleClimate, rawEquivalent);
+		}
+		Cell generated = context.filteredChunkCache.getExistingFilteredCell(blockX, blockZ);
+		if (generated != null) {
+			return new AuthoritativeSample(context, blockX, blockZ, generated, false, null, true);
+		}
+		Cell rawCell = RAW_CELL.get();
+		if (!targetFilter.requiresClimateForRawPrecheck()) {
+			context.heightmap.apply(rawCell.reset(), blockX, blockZ, false);
+			if (!targetFilter.canMatchRaw(rawCell)) {
+				return null;
+			}
+			if (sampleClimate) {
+				context.heightmap.applyClimate(rawCell, blockX, blockZ, true);
+			}
+		} else {
+			context.heightmap.apply(rawCell.reset(), blockX, blockZ, sampleClimate);
+			if (!targetFilter.canMatchRaw(rawCell)) {
+				return null;
+			}
+		}
+		if (rawEquivalent != null && rawEquivalent.test(rawCell)) {
+			return new AuthoritativeSample(context, blockX, blockZ, rawCell, true, null, true);
+		}
+		PointFilterGrid grid = PointFilterGrid.generate(blockX, blockZ, context, sampleClimate);
+		return new AuthoritativeSample(context, blockX, blockZ, grid.center(), false, grid, true);
+	}
+
+	static AuthoritativeSample wrapResolved(
+		GeneratorContext context,
+		int blockX,
+		int blockZ,
+		Cell cell,
+		boolean raw
+	) {
+		return new AuthoritativeSample(context, blockX, blockZ, cell, raw, null, true);
+	}
+
+	static Cell threadRawCell() {
+		return RAW_CELL.get();
 	}
 
 	Cell cell() {
@@ -87,7 +177,9 @@ final class AuthoritativeSample implements AutoCloseable {
 	public void close() {
 		if (!this.closed) {
 			this.closed = true;
-			this.lookupScope.close();
+			if (this.lookupScope != null) {
+				this.lookupScope.close();
+			}
 		}
 	}
 }

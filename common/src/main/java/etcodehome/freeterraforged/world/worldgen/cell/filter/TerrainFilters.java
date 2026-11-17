@@ -128,7 +128,7 @@ public class TerrainFilters {
 	 * filter pipeline so future filters and fields must extend the same contract.
 	 */
 	public boolean preservesRawBiomeLocateInputs(Cell cell, Set<CellSampler.Field> sampledFields) {
-		if (cell.height > this.ground) {
+		if (cell.height > this.ground && !cell.erosionMask) {
 			return false;
 		}
 		if (this.terrainCeiling != null

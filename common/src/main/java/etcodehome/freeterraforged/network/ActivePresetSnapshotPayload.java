@@ -46,7 +46,7 @@ public record ActivePresetSnapshotPayload(
 		ActivePresetSnapshot snapshot = payload.snapshot();
 		buffer.writeResourceLocation(payload.purpose());
 		buffer.writeUtf(snapshot.presetJson(), MAX_TEXT_LENGTH);
-		buffer.writeUtf(snapshot.dimension(), 256);
+		buffer.writeUtf(snapshot.dimension(), 32767);
 		buffer.writeLong(snapshot.seed());
 		buffer.writeInt(snapshot.playerX());
 		buffer.writeInt(snapshot.playerZ());
@@ -59,7 +59,7 @@ public record ActivePresetSnapshotPayload(
 		ResourceLocation purpose = buffer.readResourceLocation();
 		ActivePresetSnapshot snapshot = new ActivePresetSnapshot(
 			buffer.readUtf(MAX_TEXT_LENGTH),
-			buffer.readUtf(256),
+			buffer.readUtf(32767),
 			buffer.readLong(),
 			buffer.readInt(),
 			buffer.readInt(),

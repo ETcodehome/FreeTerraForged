@@ -11,6 +11,7 @@ final class PointFilterGrid implements FilterGrid {
 	static final int TOTAL_SIZE = BORDER * 2 + 1;
 	static final int TOTAL_CELLS = TOTAL_SIZE * TOTAL_SIZE;
 	private static final ThreadLocal<PointFilterGrid> THREAD_LOCAL = ThreadLocal.withInitial(PointFilterGrid::new);
+	private static final ThreadLocal<PointFilterGrid> NEIGHBOR_THREAD_LOCAL = ThreadLocal.withInitial(PointFilterGrid::new);
 
 	private final Cell[] cells = new Cell[TOTAL_CELLS];
 	private int blockX;
@@ -34,7 +35,25 @@ final class PointFilterGrid implements FilterGrid {
 		GeneratorContext context,
 		boolean sampleCenterClimate
 	) {
-		PointFilterGrid grid = THREAD_LOCAL.get();
+		return populate(THREAD_LOCAL.get(), centerX, centerZ, context, sampleCenterClimate);
+	}
+
+	static PointFilterGrid generateNeighbor(
+		int centerX,
+		int centerZ,
+		GeneratorContext context,
+		boolean sampleCenterClimate
+	) {
+		return populate(NEIGHBOR_THREAD_LOCAL.get(), centerX, centerZ, context, sampleCenterClimate);
+	}
+
+	private static PointFilterGrid populate(
+		PointFilterGrid grid,
+		int centerX,
+		int centerZ,
+		GeneratorContext context,
+		boolean sampleCenterClimate
+	) {
 		grid.blockX = centerX - BORDER;
 		grid.blockZ = centerZ - BORDER;
 		for (int z = 0; z < TOTAL_SIZE; z++) {

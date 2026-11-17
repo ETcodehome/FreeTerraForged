@@ -14,23 +14,29 @@ import com.mojang.brigadier.exceptions.DynamicCommandExceptionType;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 
+import org.jetbrains.annotations.Nullable;
+
 import etcodehome.freeterraforged.FTFCommon;
+import etcodehome.freeterraforged.world.worldgen.search.FTFBiomeLocateQuery;
 import etcodehome.freeterraforged.world.worldgen.search.LocateSearchSettings;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
 
 /** Parses the optional flags shared by terrain and biome locate commands. */
-record LocateCommandOptions(
+public record LocateCommandOptions(
 	LocateSearchSettings searchSettings,
-	boolean pauseMainThread
+	boolean pauseMainThread,
+	@Nullable Integer minSize
 ) {
 	static final String ARGUMENT = "options";
 
 	private static final String TIMEOUT = "--timeout";
 	private static final String PAUSE_MAIN_THREAD = "--pause-main-thread";
 	private static final String WORKERS = "--workers";
-	private static final List<String> FLAGS = List.of(TIMEOUT, PAUSE_MAIN_THREAD, WORKERS);
+	private static final String MIN_SIZE = "--min-size";
+	private static final String SIZE = "--size";
+	private static final List<String> FLAGS = List.of(TIMEOUT, PAUSE_MAIN_THREAD, WORKERS, MIN_SIZE, SIZE);
 	private static final String KEY = FTFCommon.MOD_ID + ".commands.locate.options.";
 	private static final DynamicCommandExceptionType ERROR_UNKNOWN = new DynamicCommandExceptionType(
 		option -> Component.translatableWithFallback(
@@ -62,20 +68,30 @@ record LocateCommandOptions(
 			KEY + "workers", "Locate workers must be between 1 and %s; received %s.", maximum, value
 		)
 	);
+	static final Dynamic2CommandExceptionType ERROR_SIZE_TOO_LARGE = new Dynamic2CommandExceptionType(
+		(value, max) -> Component.translatableWithFallback(
+			KEY + "size_too_large", "Minimum biome size must not exceed %s blocks; received %s.", max, value
+		)
+	);
 
-	LocateCommandOptions {
+	LocateCommandOptions(LocateSearchSettings searchSettings, boolean pauseMainThread) {
+		this(searchSettings, pauseMainThread, null);
+	}
+
+	public LocateCommandOptions {
 		searchSettings = Objects.requireNonNull(searchSettings, "searchSettings");
 	}
 
-	static LocateCommandOptions defaults() {
-		return new LocateCommandOptions(LocateSearchSettings.defaults(), false);
+	public static LocateCommandOptions defaults() {
+		return new LocateCommandOptions(LocateSearchSettings.defaults(), false, null);
 	}
 
-	static LocateCommandOptions parse(String input) throws CommandSyntaxException {
+	public static LocateCommandOptions parse(String input) throws CommandSyntaxException {
 		LocateSearchSettings defaults = LocateSearchSettings.defaults();
 		long timeoutSeconds = defaults.timeoutSeconds();
 		boolean pauseMainThread = false;
 		int workers = defaults.workerThreads();
+		Integer minSize = null;
 		List<String> tokens = tokens(input);
 		Set<String> seen = new HashSet<>();
 
@@ -85,7 +101,8 @@ record LocateCommandOptions(
 			if (!FLAGS.contains(option)) {
 				throw ERROR_UNKNOWN.create(token);
 			}
-			if (!seen.add(option)) {
+			String canonicalOption = option.equals(SIZE) ? MIN_SIZE : option;
+			if (!seen.add(canonicalOption)) {
 				throw ERROR_DUPLICATE.create(option);
 			}
 
@@ -106,12 +123,17 @@ record LocateCommandOptions(
 					index += value.consumedNext() ? 1 : 0;
 					workers = parseWorkers(value.text());
 				}
+				case MIN_SIZE, SIZE -> {
+					Value value = value(token, tokens, index, option);
+					index += value.consumedNext() ? 1 : 0;
+					minSize = parseMinSize(value.text());
+				}
 				default -> throw ERROR_UNKNOWN.create(token);
 			}
 		}
 
 		return new LocateCommandOptions(
-			new LocateSearchSettings(timeoutSeconds, workers), pauseMainThread
+			new LocateSearchSettings(timeoutSeconds, workers), pauseMainThread, minSize
 		);
 	}
 
@@ -135,6 +157,11 @@ record LocateCommandOptions(
 			if (previous.equals(WORKERS)) {
 				return SharedSuggestionProvider.suggest(
 					List.of(Integer.toString(LocateSearchSettings.DEFAULT_WORKER_THREADS)), active
+				);
+			}
+			if (previous.equals(MIN_SIZE) || previous.equals(SIZE)) {
+				return SharedSuggestionProvider.suggest(
+					List.of(Integer.toString(FTFBiomeLocateQuery.DEFAULT_MIN_BIOME_AREA_BLOCKS)), active
 				);
 			}
 		}
@@ -212,6 +239,22 @@ record LocateCommandOptions(
 		}
 		if (parsed < 1 || parsed > LocateSearchSettings.MAX_WORKER_THREADS) {
 			throw ERROR_WORKERS.create(value, LocateSearchSettings.MAX_WORKER_THREADS);
+		}
+		return parsed;
+	}
+
+	private static int parseMinSize(String value) throws CommandSyntaxException {
+		int parsed;
+		try {
+			parsed = Integer.parseInt(value);
+		} catch (NumberFormatException invalid) {
+			throw ERROR_WHOLE_NUMBER.create(MIN_SIZE);
+		}
+		if (parsed > FTFBiomeLocateQuery.MAX_MIN_BIOME_AREA_BLOCKS) {
+			throw ERROR_SIZE_TOO_LARGE.create(parsed, FTFBiomeLocateQuery.MAX_MIN_BIOME_AREA_BLOCKS);
+		}
+		if (parsed <= 0) {
+			return FTFBiomeLocateQuery.DEFAULT_MIN_BIOME_AREA_BLOCKS;
 		}
 		return parsed;
 	}

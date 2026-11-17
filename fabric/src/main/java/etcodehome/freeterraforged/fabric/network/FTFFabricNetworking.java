@@ -1,10 +1,9 @@
 package etcodehome.freeterraforged.fabric.network;
 
-import etcodehome.freeterraforged.network.FlowFieldSyncPayload;
 import etcodehome.freeterraforged.network.ActivePresetSnapshotPayload;
-import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import etcodehome.freeterraforged.network.FlowFieldSyncPayload;
 import etcodehome.freeterraforged.network.FlowSettingsSyncPayload;
+import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 
 public class FTFFabricNetworking {
 
