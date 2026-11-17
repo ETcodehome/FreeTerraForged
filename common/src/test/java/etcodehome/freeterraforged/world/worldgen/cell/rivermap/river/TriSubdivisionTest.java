@@ -114,6 +114,9 @@ public class TriSubdivisionTest {
             int confluences = 0;
             int mountainNodes = 0;
             int populatedMountainNodes = 0;
+            int totalLakes = 0;
+            int terminalMountainLakes = 0;
+            int valleyLakes = 0;
             for (TriSubdivisionRiverGenerator.FaceDrainageGraph g : graphs) {
                 assertEquals(ContinentalHydrology.NUM_STEPS, g.rows.size(), "Row count must strictly match ContinentalHydrology terracing steps (15)");
                 for (List<TriSubdivisionRiverGenerator.DrainageNode> row : g.rows) {
@@ -125,6 +128,11 @@ public class TriSubdivisionTest {
                             assertEquals(0, n.feederCount, "Culled nodes must have 0 feeders");
                         } else {
                             if (n.isMountain) mountainNodes++;
+                            if (n.isLake) {
+                                totalLakes++;
+                                if (n.isPopulated) terminalMountainLakes++;
+                                else valleyLakes++;
+                            }
                             if (n.isPopulated) {
                                 totalPopulatedNodes++;
                                 if (n.isMountain) populatedMountainNodes++;
@@ -145,13 +153,14 @@ public class TriSubdivisionTest {
                 }
             }
 
-            System.out.printf("[Test] Candidate Nodes: %d (Culled: %d, Valid Land: %d), Populated: %d, River Segments: %d, Headwaters: %d, Confluences: %d, Mountain Nodes: %d (Populated: %d)%n",
-                    totalCandidateNodes, totalCulledNodes, totalCandidateNodes - totalCulledNodes, totalPopulatedNodes, totalConnections, headwaters, confluences, mountainNodes, populatedMountainNodes);
+            System.out.printf("[Test] Candidate Nodes: %d (Culled: %d, Valid Land: %d), Populated: %d, River Segments: %d, Headwaters: %d, Confluences: %d, Mountain Nodes: %d (Populated: %d), Lake Spawns: %d (Mountain Terminal: %d, Valley: %d)%n",
+                    totalCandidateNodes, totalCulledNodes, totalCandidateNodes - totalCulledNodes, totalPopulatedNodes, totalConnections, headwaters, confluences, mountainNodes, populatedMountainNodes, totalLakes, terminalMountainLakes, valleyLakes);
             assertTrue(totalCulledNodes > 0, "Some candidate nodes must be culled due to sea level");
             assertTrue(totalPopulatedNodes > 0, "Expected some nodes to be populated at riverCount = 8");
             assertTrue(totalPopulatedNodes < totalCandidateNodes - totalCulledNodes, "Every land node should NOT be connected at riverCount = 8");
-            assertEquals(totalPopulatedNodes, totalConnections, "Every populated node should have exactly one downstream connection");
+            assertEquals(totalPopulatedNodes - terminalMountainLakes, totalConnections, "Every non-terminal populated node should have exactly one downstream connection");
             assertTrue(confluences > 0, "Expected multiple upstream nodes to merge into single downstream nodes (confluences)");
+            assertTrue(totalLakes > 0, "Lake spawns should be present on continent");
 
             // Build full Rivermap to verify carver and warp integration
             Rivermap rivermap = gen.generateRivers(centerX, centerZ, PosUtil.pack(centerX, centerZ));
@@ -356,6 +365,17 @@ public class TriSubdivisionTest {
                             continue;
                         }
 
+                        if (node.isLake && !node.isPopulated) {
+                            // Unconnected valley lake spawn (Purple)
+                            double lakeR = 5.0;
+                            g2.setColor(new Color(168, 85, 247)); // Purple-500 fill
+                            g2.fill(new Ellipse2D.Double(nx - lakeR, nz - lakeR, lakeR * 2.0, lakeR * 2.0));
+                            g2.setStroke(new BasicStroke(1.5F));
+                            g2.setColor(new Color(233, 213, 255)); // Purple-200 outline
+                            g2.draw(new Ellipse2D.Double(nx - lakeR, nz - lakeR, lakeR * 2.0, lakeR * 2.0));
+                            continue;
+                        }
+
                         if (!node.isPopulated) {
                             // Unconnected candidate node (subdivision grid slot)
                             if (node.isMountain) {
@@ -369,19 +389,28 @@ public class TriSubdivisionTest {
                         }
 
                         double radius = (node.feederCount >= 2) ? 6.5 : (node.feederCount == 1 ? 4.5 : 3.5);
-                        if (node.isMountain) {
+                        if (node.isLake) {
+                            // Terminal mountain lake spawn (Deep violet purple with lavender glow)
+                            double lakeR = 7.0;
+                            g2.setColor(new Color(147, 51, 234));
+                            g2.fill(new Ellipse2D.Double(nx - lakeR, nz - lakeR, lakeR * 2.0, lakeR * 2.0));
+                            g2.setStroke(new BasicStroke(2.2F));
+                            g2.setColor(new Color(245, 208, 254));
+                            g2.draw(new Ellipse2D.Double(nx - lakeR, nz - lakeR, lakeR * 2.0, lakeR * 2.0));
+                        } else if (node.isMountain) {
                             g2.setColor(new Color(239, 68, 68)); // Vivid red for mountain nodes
+                            g2.fill(new Ellipse2D.Double(nx - radius, nz - radius, radius * 2.0, radius * 2.0));
                         } else {
                             g2.setColor(nodeCol);
+                            g2.fill(new Ellipse2D.Double(nx - radius, nz - radius, radius * 2.0, radius * 2.0));
                         }
-                        g2.fill(new Ellipse2D.Double(nx - radius, nz - radius, radius * 2.0, radius * 2.0));
 
                         // Confluence marker: bright cyan ring for merged nodes
                         if (node.feederCount >= 2) {
                             g2.setStroke(new BasicStroke(2.0F));
                             g2.setColor(new Color(0, 229, 255));
                             g2.draw(new Ellipse2D.Double(nx - radius - 2.0, nz - radius - 2.0, (radius + 2.0) * 2.0, (radius + 2.0) * 2.0));
-                        } else if (node.feederCount == 0) {
+                        } else if (node.feederCount == 0 && !node.isLake) {
                             // Outer white ring for headwaters
                             g2.setStroke(new BasicStroke(1.5F));
                             g2.setColor(Color.WHITE);
@@ -407,10 +436,10 @@ public class TriSubdivisionTest {
 
             // 8. Legend and Diagnostic Overlay
             g2.setColor(new Color(15, 23, 42, 235)); // Slate dark background
-            g2.fillRoundRect(25, 25, 570, 425, 16, 16);
+            g2.fillRoundRect(25, 25, 570, 455, 16, 16);
             g2.setStroke(new BasicStroke(1.5F));
             g2.setColor(new Color(255, 255, 255, 90));
-            g2.drawRoundRect(25, 25, 570, 425, 16, 16);
+            g2.drawRoundRect(25, 25, 570, 455, 16, 16);
 
             g2.setFont(new Font("SansSerif", Font.BOLD, 17));
             g2.setColor(Color.WHITE);
@@ -423,9 +452,10 @@ public class TriSubdivisionTest {
             g2.drawString(String.format("Candidate Nodes: %d (Culled: %d, Land: %d) | Populated: %d", totalCandidateNodes, totalCulledNodes, totalCandidateNodes - totalCulledNodes, totalPopulatedNodes), 45, 116);
             g2.drawString(String.format("River Segments: %d | Confluences: %d | Headwaters: %d", totalConnections, confluences, headwaters), 45, 134);
             g2.drawString(String.format("Mountain Nodes (Red): %d (Populated: %d) | Valley/Lowland: %d", mountainNodes, populatedMountainNodes, (totalCandidateNodes - totalCulledNodes) - mountainNodes), 45, 152);
+            g2.drawString(String.format("Lake Spawns (Purple): %d (Mountain Terminal: %d, Valley: %d) | Lake Chance: %.0f%%", totalLakes, terminalMountainLakes, valleyLakes, gen.getLakeChance() * 100.0F), 45, 170);
 
             // Legend swatches
-            int legendY = 176;
+            int legendY = 194;
 
             // Peak
             g2.setColor(new Color(255, 215, 0));
@@ -448,6 +478,16 @@ public class TriSubdivisionTest {
             g2.drawLine(45, legendY - 2, 60, legendY - 2);
             g2.setColor(Color.WHITE);
             g2.drawString("Headwater Origin (Empty node on terrace row)", 68, legendY + 2);
+
+            // Lake Spawn Node (Purple)
+            legendY += 22;
+            g2.setColor(new Color(168, 85, 247));
+            g2.fill(new Ellipse2D.Double(47, legendY - 6, 8, 8));
+            g2.setStroke(new BasicStroke(1.5F));
+            g2.setColor(new Color(233, 213, 255));
+            g2.draw(new Ellipse2D.Double(47, legendY - 6, 8, 8));
+            g2.setColor(Color.WHITE);
+            g2.drawString("Lake Spawn Node (Purple - terminal mountain lake / unconnected valley lake)", 68, legendY + 2);
 
             // Mountain Terrain Node (Red)
             legendY += 22;

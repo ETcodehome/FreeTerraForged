@@ -43,6 +43,7 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
         public boolean isPopulated;
         public boolean isCulled;
         public boolean isMountain;
+        public boolean isLake;
 
         public DrainageNode(float x, float z, float gradient, int row, int col) {
             this.x = x;
@@ -54,6 +55,7 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
             this.isPopulated = false;
             this.isCulled = false;
             this.isMountain = false;
+            this.isLake = false;
         }
     }
 
@@ -131,6 +133,10 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
             return cell.terrain.isMountain() || cell.terrain == TerrainType.ISLAND_MOUNTAINS;
         }
         return false;
+    }
+
+    public float getLakeChance() {
+        return (this.lake != null) ? this.lake.chance : 0.30F;
     }
 
     /**
@@ -740,6 +746,16 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
 
                 DrainageNode cand1 = validNextNodes.get(nearCol1);
                 DrainageNode cand2 = validNextNodes.get(nearCol2);
+
+                // When both downstream candidates are mountains, 80% chance to form a lake and terminate; 20% chance to continue unstopped
+                boolean bothDownstreamMountain = cand1.isMountain && (nearCol1 == nearCol2 || cand2.isMountain);
+                if (bothDownstreamMountain && riverCount < 30) {
+                    if (connRandom.nextFloat() < 0.80F) {
+                        node.isLake = true;
+                        continue;
+                    }
+                }
+
                 boolean fed1 = cand1.feederCount > 0;
                 boolean fed2 = cand2.feederCount > 0;
                 boolean fedDiff = nearCol1 != nearCol2 && (fed1 ^ fed2);
@@ -783,6 +799,26 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
 
                 boolean isMain = (node.feederCount >= 2) || (r <= 2 && node.col == 0);
                 graph.addConnection(new RiverConnection(node, targetNode, isHeadwater, isMain));
+            }
+        }
+
+        // 4. Unconnected, non-mountain nodes have a chance to spawn lakes based on preset lake chance
+        float lakeChance = (this.lake != null) ? this.lake.chance : 0.30F;
+        if (lakeChance > 0.0F && riverCount < 30) {
+            for (int r = 0; r < rowCount; r++) {
+                List<DrainageNode> row = graph.rows.get(r);
+                for (int col = 0; col < row.size(); col++) {
+                    DrainageNode node = row.get(col);
+                    if (!node.isCulled && !node.isPopulated && node.feederCount == 0 && !node.isMountain) {
+                        long lakeSeed = ((long) Float.floatToIntBits(node.x) * 8192837L)
+                                      ^ ((long) Float.floatToIntBits(node.z) * 1928371L)
+                                      ^ (faceSeed + (long) r * 2003L + (long) col * 17L);
+                        Random lakeRandom = new Random(lakeSeed);
+                        if (lakeRandom.nextFloat() < lakeChance) {
+                            node.isLake = true;
+                        }
+                    }
+                }
             }
         }
 
