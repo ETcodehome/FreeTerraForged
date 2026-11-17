@@ -107,6 +107,7 @@ public class TriSubdivisionTest {
             System.out.printf("[Test] Generated %d drainage face graphs for continent%n", graphs.size());
 
             int totalCandidateNodes = 0;
+            int totalCulledNodes = 0;
             int totalPopulatedNodes = 0;
             int totalConnections = 0;
             int headwaters = 0;
@@ -116,7 +117,11 @@ public class TriSubdivisionTest {
                 for (List<TriSubdivisionRiverGenerator.DrainageNode> row : g.rows) {
                     totalCandidateNodes += row.size();
                     for (TriSubdivisionRiverGenerator.DrainageNode n : row) {
-                        if (n.isPopulated) {
+                        if (n.isCulled) {
+                            totalCulledNodes++;
+                            assertFalse(n.isPopulated, "Culled nodes must never be populated");
+                            assertEquals(0, n.feederCount, "Culled nodes must have 0 feeders");
+                        } else if (n.isPopulated) {
                             totalPopulatedNodes++;
                             if (n.feederCount >= 2) confluences++;
                         }
@@ -129,13 +134,16 @@ public class TriSubdivisionTest {
                     // Verify monotonic gradient descent: from.row < to.row and from.gradient >= to.gradient
                     assertTrue(conn.from.row < conn.to.row, "Successive nodes must strictly head down the row tiers");
                     assertTrue(conn.from.gradient >= conn.to.gradient, "Successive nodes must monotonically descend gradient");
+                    assertFalse(conn.from.isCulled, "Connection origin must never be culled");
+                    assertFalse(conn.to.isCulled, "Connection destination must never be culled");
                 }
             }
 
-            System.out.printf("[Test] Candidate Nodes: %d, Populated Nodes: %d, River Segments: %d, Headwaters: %d, Confluences: %d%n",
-                    totalCandidateNodes, totalPopulatedNodes, totalConnections, headwaters, confluences);
+            System.out.printf("[Test] Candidate Nodes: %d (Culled: %d, Valid Land: %d), Populated Nodes: %d, River Segments: %d, Headwaters: %d, Confluences: %d%n",
+                    totalCandidateNodes, totalCulledNodes, totalCandidateNodes - totalCulledNodes, totalPopulatedNodes, totalConnections, headwaters, confluences);
+            assertTrue(totalCulledNodes > 0, "Some candidate nodes must be culled due to sea level");
             assertTrue(totalPopulatedNodes > 0, "Expected some nodes to be populated at riverCount = 8");
-            assertTrue(totalPopulatedNodes < totalCandidateNodes, "Every node should NOT be connected at riverCount = 8");
+            assertTrue(totalPopulatedNodes < totalCandidateNodes - totalCulledNodes, "Every land node should NOT be connected at riverCount = 8");
             assertEquals(totalPopulatedNodes, totalConnections, "Every populated node should have exactly one downstream connection");
             assertTrue(confluences > 0, "Expected multiple upstream nodes to merge into single downstream nodes (confluences)");
 
@@ -271,29 +279,18 @@ public class TriSubdivisionTest {
                 }
             }
 
-            // 4. Draw Warped River Flow Channels (continuous meandering water paths)
+            // 4. Draw Warped River Flow Channels (continuous rounded meandering water paths)
             for (TriSubdivisionRiverGenerator.FaceDrainageGraph fg : graphs) {
                 long faceWarpSeed = ((long) fg.faceIndex * 123456789L) ^ worldSeed;
-                Random warpRandom = new Random(faceWarpSeed);
 
                 for (TriSubdivisionRiverGenerator.RiverConnection conn : fg.connections) {
-                    RiverConfig cfg = conn.isMain ? gen.main : gen.fork;
-                    float boundingRadius = cfg.calculateBoundingRadius(ctx.levels);
-                    River river = new River(conn.from.x, conn.from.z, conn.to.x, conn.to.z, boundingRadius);
-                    RiverWarp riverWarp = RiverWarp.create(0.1F, 0.85F, warpRandom);
-
                     Path2D.Double warpedPath = new Path2D.Double();
-                    int samples = 35;
+                    int samples = 40;
                     for (int s = 0; s <= samples; s++) {
                         float t = s / (float) samples;
-                        float unwarpedX = river.x1 + t * river.dx;
-                        float unwarpedZ = river.z1 + t * river.dz;
-                        long offset = riverWarp.getOffset(unwarpedX, unwarpedZ, t, river);
-                        float wx = unwarpedX + PosUtil.unpackLeftf(offset);
-                        float wz = unwarpedZ + PosUtil.unpackRightf(offset);
-
-                        double px = mapX.apply(wx);
-                        double pz = mapZ.apply(wz);
+                        double[] pt = TriSubdivisionRiverGenerator.sampleRoundedSpline(conn, fg.outgoing, fg.incoming, t, faceWarpSeed);
+                        double px = mapX.apply((float) pt[0]);
+                        double pz = mapZ.apply((float) pt[1]);
                         if (s == 0) {
                             warpedPath.moveTo(px, pz);
                         } else {
@@ -347,6 +344,11 @@ public class TriSubdivisionTest {
                     for (TriSubdivisionRiverGenerator.DrainageNode node : row) {
                         double nx = mapX.apply(node.x);
                         double nz = mapZ.apply(node.z);
+
+                        if (node.isCulled) {
+                            // Culled candidate node (below sea level / ocean) - do not draw
+                            continue;
+                        }
 
                         if (!node.isPopulated) {
                             // Unconnected candidate node (subdivision grid slot)
@@ -403,7 +405,7 @@ public class TriSubdivisionTest {
             g2.setColor(new Color(203, 213, 225));
             g2.drawString(String.format("Centroid Peak: (%d, %d) | Seed: %d", centerX, centerZ, worldSeed), 45, 80);
             g2.drawString(String.format("Active Ocean Faces: %d | Terraces (Rows): %d (15 steps)", graphs.size(), ContinentalHydrology.NUM_STEPS), 45, 98);
-            g2.drawString(String.format("Candidate Grid Nodes: %d | Populated River Nodes: %d (riverCount = %d)", totalCandidateNodes, totalPopulatedNodes, preset.rivers().riverCount), 45, 116);
+            g2.drawString(String.format("Candidate Nodes: %d (Culled: %d, Land: %d) | Populated: %d", totalCandidateNodes, totalCulledNodes, totalCandidateNodes - totalCulledNodes, totalPopulatedNodes), 45, 116);
             g2.drawString(String.format("River Segments: %d | Confluences: %d | Headwaters: %d", totalConnections, confluences, headwaters), 45, 134);
 
             // Legend swatches
@@ -532,10 +534,11 @@ public class TriSubdivisionTest {
             assertEquals(0, populated0, "At riverCount = 0, no nodes should be populated");
             assertEquals(0, connections0, "At riverCount = 0, no connections should exist");
 
-            // 2. Test riverCount = 30: every node populated, every node connected
+            // 2. Test riverCount = 30: every unculled node populated, every unculled node connected
             Random random30 = new Random(PosUtil.pack(centerX, centerZ) + gen.seed);
             List<TriSubdivisionRiverGenerator.FaceDrainageGraph> graphs30 = gen.buildDrainageGraphs(voronoi, frequency, random30, 30);
             int candidate30 = 0;
+            int culled30 = 0;
             int populated30 = 0;
             int connections30 = 0;
             for (TriSubdivisionRiverGenerator.FaceDrainageGraph g : graphs30) {
@@ -543,13 +546,19 @@ public class TriSubdivisionTest {
                 for (List<TriSubdivisionRiverGenerator.DrainageNode> row : g.rows) {
                     candidate30 += row.size();
                     for (TriSubdivisionRiverGenerator.DrainageNode n : row) {
-                        if (n.isPopulated) populated30++;
+                        if (n.isCulled) {
+                            culled30++;
+                        } else if (n.isPopulated) {
+                            populated30++;
+                        }
                     }
                 }
             }
             assertTrue(candidate30 > 0, "Candidate nodes must exist");
-            assertEquals(candidate30, populated30, "At riverCount = 30, every node must be populated");
-            assertEquals(candidate30, connections30, "At riverCount = 30, every node must have a connection");
+            assertTrue(culled30 > 0, "Ocean candidate nodes must be culled");
+            int landCandidates30 = candidate30 - culled30;
+            assertEquals(landCandidates30, populated30, "At riverCount = 30, every unculled land node must be populated");
+            assertEquals(landCandidates30, connections30, "At riverCount = 30, every unculled land node must have a connection");
         }
     }
 }

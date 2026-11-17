@@ -2,10 +2,13 @@ package etcodehome.freeterraforged.world.worldgen.cell.rivermap.river;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
+import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.continent.SimpleContinent;
 import etcodehome.freeterraforged.world.worldgen.cell.continent.uplift.PlateUpliftBridge;
 import etcodehome.freeterraforged.world.worldgen.cell.continent.uplift.UpliftContinentGenerator;
@@ -13,6 +16,8 @@ import etcodehome.freeterraforged.world.worldgen.cell.rivermap.ContinentalHydrol
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.Rivermap;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.gen.GenWarp;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
+import etcodehome.freeterraforged.world.worldgen.noise.module.Simplex2;
+import etcodehome.freeterraforged.world.worldgen.util.PosUtil;
 
 /**
  * Generates dendritic river networks by subdividing the triangular faces of a Voronoi centroid
@@ -35,6 +40,7 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
         public final int col;
         public int feederCount;
         public boolean isPopulated;
+        public boolean isCulled;
 
         public DrainageNode(float x, float z, float gradient, int row, int col) {
             this.x = x;
@@ -44,6 +50,7 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
             this.col = col;
             this.feederCount = 0;
             this.isPopulated = false;
+            this.isCulled = false;
         }
     }
 
@@ -77,6 +84,8 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
         public final float v2Z;
         public final List<List<DrainageNode>> rows = new ArrayList<>();
         public final List<RiverConnection> connections = new ArrayList<>();
+        public final Map<DrainageNode, RiverConnection> outgoing = new IdentityHashMap<>();
+        public final Map<DrainageNode, List<RiverConnection>> incoming = new IdentityHashMap<>();
 
         public FaceDrainageGraph(int faceIndex, float apexX, float apexZ, float v1X, float v1Z, float v2X, float v2Z) {
             this.faceIndex = faceIndex;
@@ -86,6 +95,204 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
             this.v1Z = v1Z;
             this.v2X = v2X;
             this.v2Z = v2Z;
+        }
+
+        public void addConnection(RiverConnection conn) {
+            this.connections.add(conn);
+            this.outgoing.put(conn.from, conn);
+            this.incoming.computeIfAbsent(conn.to, k -> new ArrayList<>()).add(conn);
+        }
+    }
+
+    private final ThreadLocal<Cell> scratchCell = ThreadLocal.withInitial(Cell::new);
+
+    /**
+     * Checks whether a world position (x, z) is below sea level (in the ocean).
+     */
+    public boolean isBelowSeaLevel(float x, float z) {
+        if (this.continent instanceof UpliftContinentGenerator uplift) {
+            Cell cell = this.scratchCell.get();
+            uplift.apply(cell, x, z);
+            return cell.waterTable <= 0.001F;
+        }
+        return this.continent.getEdgeValue(x, z) < this.minEdgeValue;
+    }
+
+    /**
+     * Samples a smooth, rounded, organic spline position between conn.from and conn.to at parameter t in [0, 1].
+     * Uses Catmull-Rom cubic Hermite spline interpolation aligned with upstream and downstream flow directions,
+     * combined with multi-frequency simplex domain warping and harmonic wiggles to match the organic meandering
+     * style of FreeTerraForged rivers.
+     */
+    public static double[] sampleRoundedSpline(
+            RiverConnection conn,
+            Map<DrainageNode, RiverConnection> outgoingMap,
+            Map<DrainageNode, List<RiverConnection>> incomingMap,
+            float t,
+            long seed
+    ) {
+        float x1 = conn.from.x;
+        float z1 = conn.from.z;
+        float x2 = conn.to.x;
+        float z2 = conn.to.z;
+
+        float segDx = x2 - x1;
+        float segDz = z2 - z1;
+        float segLen = (float) Math.sqrt(segDx * segDx + segDz * segDz);
+        if (segLen < 1.0e-4F) {
+            return new double[]{x1, z1};
+        }
+
+        float unitSegX = segDx / segLen;
+        float unitSegZ = segDz / segLen;
+
+        // 1. Determine incoming tangent at (x1, z1) (averaging all incoming feeders at confluences)
+        float inDx = unitSegX;
+        float inDz = unitSegZ;
+        List<RiverConnection> inList = incomingMap != null ? incomingMap.get(conn.from) : null;
+        if (inList != null && !inList.isEmpty()) {
+            float sumDx = 0.0F;
+            float sumDz = 0.0F;
+            for (RiverConnection inConn : inList) {
+                float dx = x1 - inConn.from.x;
+                float dz = z1 - inConn.from.z;
+                float len = (float) Math.sqrt(dx * dx + dz * dz);
+                if (len > 1.0e-4F) {
+                    sumDx += dx / len;
+                    sumDz += dz / len;
+                }
+            }
+            float sumLen = (float) Math.sqrt(sumDx * sumDx + sumDz * sumDz);
+            if (sumLen > 1.0e-4F) {
+                inDx = sumDx / sumLen;
+                inDz = sumDz / sumLen;
+            }
+        }
+
+        // 2. Determine outgoing tangent at (x2, z2)
+        float outDx = unitSegX;
+        float outDz = unitSegZ;
+        RiverConnection outConn = outgoingMap != null ? outgoingMap.get(conn.to) : null;
+        if (outConn != null) {
+            float dx = outConn.to.x - x2;
+            float dz = outConn.to.z - z2;
+            float len = (float) Math.sqrt(dx * dx + dz * dz);
+            if (len > 1.0e-4F) {
+                outDx = dx / len;
+                outDz = dz / len;
+            }
+        }
+
+        // 3. Smooth normalized tangents at ends
+        float tan1X = inDx + unitSegX;
+        float tan1Z = inDz + unitSegZ;
+        float len1 = (float) Math.sqrt(tan1X * tan1X + tan1Z * tan1Z);
+        if (len1 > 1.0e-4F) {
+            tan1X /= len1;
+            tan1Z /= len1;
+        }
+
+        float tan2X = unitSegX + outDx;
+        float tan2Z = unitSegZ + outDz;
+        float len2 = (float) Math.sqrt(tan2X * tan2X + tan2Z * tan2Z);
+        if (len2 > 1.0e-4F) {
+            tan2X /= len2;
+            tan2Z /= len2;
+        }
+
+        // 4. Cubic Hermite spline interpolation
+        float h00 = (2.0F * t - 3.0F) * t * t + 1.0F;
+        float h10 = ((t - 2.0F) * t + 1.0F) * t;
+        float h01 = (-2.0F * t + 3.0F) * t * t;
+        float h11 = (t - 1.0F) * t * t;
+
+        float m1X = tan1X * segLen * 0.85F;
+        float m1Z = tan1Z * segLen * 0.85F;
+        float m2X = tan2X * segLen * 0.85F;
+        float m2Z = tan2Z * segLen * 0.85F;
+
+        float sx = h00 * x1 + h10 * m1X + h01 * x2 + h11 * m2X;
+        float sz = h00 * z1 + h10 * m1Z + h01 * z2 + h11 * m2Z;
+
+        // Spline tangent at t
+        float dh00 = (6.0F * t - 6.0F) * t;
+        float dh10 = (3.0F * t - 4.0F) * t + 1.0F;
+        float dh01 = (-6.0F * t + 6.0F) * t;
+        float dh11 = (3.0F * t - 2.0F) * t;
+
+        float dSx = dh00 * x1 + dh10 * m1X + dh01 * x2 + dh11 * m2X;
+        float dSz = dh00 * z1 + dh10 * m1Z + dh01 * z2 + dh11 * m2Z;
+        float dLen = (float) Math.sqrt(dSx * dSx + dSz * dSz);
+
+        float normX = 0.0F;
+        float normZ = 0.0F;
+        if (dLen > 1.0e-4F) {
+            // Perpendicular normal to the flow
+            normX = dSz / dLen;
+            normZ = -dSx / dLen;
+        }
+
+        // 5. Multi-frequency simplex meandering + harmonic wiggle (RiverWarp style)
+        // Envelope ensures zero offset at exact node coordinates so junctions connect seamlessly
+        float envelope = (float) Math.sin(t * Math.PI);
+
+        // Low-frequency sweeping meander
+        float meanderFreq = 0.0016F;
+        float meanderNoise = Simplex2.sample(sx * meanderFreq, sz * meanderFreq, (int) seed);
+        float meanderAmp = 38.0F * envelope;
+
+        // Secondary higher-frequency organic wiggle
+        float wiggleFreq = 0.0065F;
+        float rads = meanderNoise * (float) Math.PI + (sx + sz) * wiggleFreq;
+        float wiggleAmp = 14.0F * envelope;
+
+        float totalOffset = meanderNoise * meanderAmp + NoiseUtil.cos(rads) * wiggleAmp;
+
+        double finalX = sx + normX * totalOffset;
+        double finalZ = sz + normZ * totalOffset;
+
+        return new double[]{finalX, finalZ};
+    }
+
+    /**
+     * RiverWarp adapter that computes domain warping along the Catmull-Rom cubic Hermite spline
+     * with multi-frequency simplex meandering and harmonic wiggles matching FreeTerraForged river styling.
+     */
+    public static class SplineRiverWarp extends RiverWarp {
+        private final RiverConnection conn;
+        private final Map<DrainageNode, RiverConnection> outgoingMap;
+        private final Map<DrainageNode, List<RiverConnection>> incomingMap;
+        private final long seed;
+
+        public SplineRiverWarp(
+                RiverConnection conn,
+                Map<DrainageNode, RiverConnection> outgoingMap,
+                Map<DrainageNode, List<RiverConnection>> incomingMap,
+                long seed
+        ) {
+            super((int) seed, 0.0F, 1.0F, 0.0016F, 38.0F);
+            this.conn = conn;
+            this.outgoingMap = outgoingMap;
+            this.incomingMap = incomingMap;
+            this.seed = seed;
+        }
+
+        @Override
+        public boolean test(float t) {
+            return t >= 0.0F && t <= 1.0F;
+        }
+
+        @Override
+        public long getOffset(float x, float z, float t, River river) {
+            if (t < 0.0F || t > 1.0F) {
+                return 0L;
+            }
+            double[] splinePt = sampleRoundedSpline(this.conn, this.outgoingMap, this.incomingMap, t, this.seed);
+            float lx = river.x1 + t * river.dx;
+            float lz = river.z1 + t * river.dz;
+            float dx = (float) splinePt[0] - lx;
+            float dz = (float) splinePt[1] - lz;
+            return PosUtil.packf(dx, dz);
         }
     }
 
@@ -144,11 +351,8 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
 
         for (FaceDrainageGraph graph : graphs) {
             java.util.Map<RiverConnection, Network.Builder> builderMap = new java.util.IdentityHashMap<>();
-            java.util.Map<DrainageNode, RiverConnection> outgoingMap = new java.util.IdentityHashMap<>();
 
             for (RiverConnection conn : graph.connections) {
-                outgoingMap.put(conn.from, conn);
-
                 RiverConfig config = conn.isMain ? this.main : this.fork;
                 float boundingRadius = config.calculateBoundingRadius(this.levels);
                 River river = new River(conn.from.x, conn.from.z, conn.to.x, conn.to.z, boundingRadius);
@@ -167,7 +371,7 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
             // Wire upstream tributary feeders as children of their downstream parent builder
             for (RiverConnection conn : graph.connections) {
                 Network.Builder curBuilder = builderMap.get(conn);
-                RiverConnection downstream = outgoingMap.get(conn.to);
+                RiverConnection downstream = graph.outgoing.get(conn.to);
 
                 if (downstream != null) {
                     Network.Builder downBuilder = builderMap.get(downstream);
@@ -337,12 +541,45 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
             graph.rows.add(rowNodes);
         }
 
+        // 2. Identify and propagate culling for nodes below sea level or downstream of ocean
+        for (int r = 0; r < rowCount; r++) {
+            List<DrainageNode> curRow = graph.rows.get(r);
+            List<DrainageNode> prevRow = (r > 0) ? graph.rows.get(r - 1) : null;
+
+            for (DrainageNode node : curRow) {
+                // Direct sea level check
+                if (this.isBelowSeaLevel(node.x, node.z)) {
+                    node.isCulled = true;
+                    continue;
+                }
+
+                // Upstream candidate check (propagating top-down from row r-1)
+                if (prevRow != null) {
+                    DrainageNode nearestUpstream = null;
+                    float minDistSq = Float.MAX_VALUE;
+                    for (DrainageNode uNode : prevRow) {
+                        float dx = uNode.x - node.x;
+                        float dz = uNode.z - node.z;
+                        float dSq = dx * dx + dz * dz;
+                        if (dSq < minDistSq) {
+                            minDistSq = dSq;
+                            nearestUpstream = uNode;
+                        }
+                    }
+
+                    if (nearestUpstream != null && nearestUpstream.isCulled) {
+                        node.isCulled = true;
+                    }
+                }
+            }
+        }
+
         // If riverCount is 0, no nodes are populated and zero connections are formed
         if (riverCount <= 0) {
             return graph;
         }
 
-        // 2. Starting from top of the centroid and working down row by row
+        // 3. Starting from top of the centroid and working down row by row
         for (int r = 0; r < rowCount; r++) {
             List<DrainageNode> curRow = graph.rows.get(r);
             int curCount = curRow.size();
@@ -354,6 +591,9 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
 
             for (int col = 0; col < curCount; col++) {
                 DrainageNode node = curRow.get(col);
+                if (node.isCulled) {
+                    continue;
+                }
 
                 // Position-seeded roll for this specific candidate node
                 long posSeed = ((long) Float.floatToIntBits(node.x) * 3129871L)
@@ -379,40 +619,44 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
                 continue;
             }
 
-            // If at the bottom terrace (ocean baseline), connect populated nodes to ocean
-            if (r == rowCount - 1) {
-                for (DrainageNode bottomNode : activeNodes) {
-                    boolean isHeadwater = (bottomNode.feederCount == 0);
-                    float s = (2.0F * bottomNode.col + 1.0F) / (2.0F * (float) curCount);
-                    float mouthX = (1.0F - s) * v1X + s * v2X;
-                    float mouthZ = (1.0F - s) * v1Z + s * v2Z;
+            // Downward routing to row below
+            List<DrainageNode> nextRow = (r < rowCount - 1) ? graph.rows.get(r + 1) : null;
+            List<DrainageNode> validNextNodes = new ArrayList<>();
+            if (nextRow != null) {
+                for (DrainageNode cand : nextRow) {
+                    if (!cand.isCulled) {
+                        validNextNodes.add(cand);
+                    }
+                }
+            }
 
-                    DrainageNode mouthNode = new DrainageNode(mouthX, mouthZ, 0.0F, rowCount, bottomNode.col);
-                    mouthNode.isPopulated = true;
-                    boolean isMain = (bottomNode.feederCount >= 2);
-                    graph.connections.add(new RiverConnection(bottomNode, mouthNode, isHeadwater, isMain));
+            // If at the bottom terrace (ocean baseline) OR all candidates below are culled (ocean margin reached):
+            if (r == rowCount - 1 || validNextNodes.isEmpty()) {
+                for (DrainageNode edgeNode : activeNodes) {
+                    boolean isHeadwater = (edgeNode.feederCount == 0);
+                    DrainageNode mouthNode = createOceanMouthNode(edgeNode, apexX, apexZ, rowCount);
+                    boolean isMain = (edgeNode.feederCount >= 2);
+                    graph.addConnection(new RiverConnection(edgeNode, mouthNode, isHeadwater, isMain));
                 }
                 continue;
             }
 
-            // Intermediate rows: connect to (position seeded random choice) one of nearest two nodes in row below
-            List<DrainageNode> nextRow = graph.rows.get(r + 1);
-            int nextCount = nextRow.size();
-
+            // Intermediate rows: connect to position-seeded choice of nearest two valid nodes below
+            int nextCount = validNextNodes.size();
             int lastTargetCol = 0;
 
             for (int i = 0; i < activeNodes.size(); i++) {
                 DrainageNode node = activeNodes.get(i);
                 boolean isHeadwater = (node.feederCount == 0);
 
-                // Find nearest two nodes in row below by Euclidean distance
+                // Find nearest two nodes in validNextNodes by Euclidean distance
                 float bestDist1 = Float.MAX_VALUE;
                 float bestDist2 = Float.MAX_VALUE;
                 int nearCol1 = 0;
                 int nearCol2 = 0;
 
                 for (int k = 0; k < nextCount; k++) {
-                    DrainageNode candidate = nextRow.get(k);
+                    DrainageNode candidate = validNextNodes.get(k);
                     float dx = candidate.x - node.x;
                     float dz = candidate.z - node.z;
                     float dSq = dx * dx + dz * dz;
@@ -447,16 +691,66 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
                 targetCol = Math.min(nextCount - 1, targetCol);
                 lastTargetCol = targetCol;
 
-                DrainageNode targetNode = nextRow.get(targetCol);
+                DrainageNode targetNode = validNextNodes.get(targetCol);
                 targetNode.feederCount++;
                 targetNode.isPopulated = true;
 
                 boolean isMain = (node.feederCount >= 2) || (r <= 2 && node.col == 0);
-                graph.connections.add(new RiverConnection(node, targetNode, isHeadwater, isMain));
+                graph.addConnection(new RiverConnection(node, targetNode, isHeadwater, isMain));
             }
         }
 
         return graph;
+    }
+
+    private DrainageNode createOceanMouthNode(DrainageNode edgeNode, float apexX, float apexZ, int rowCount) {
+        float dx = edgeNode.x - apexX;
+        float dz = edgeNode.z - apexZ;
+        float len = (float) Math.sqrt(dx * dx + dz * dz);
+        if (len < 1.0e-4F) {
+            DrainageNode mouthNode = new DrainageNode(edgeNode.x, edgeNode.z, 0.0F, rowCount, edgeNode.col);
+            mouthNode.isPopulated = true;
+            return mouthNode;
+        }
+
+        float ux = dx / len;
+        float uz = dz / len;
+
+        float curDist = 0.0F;
+        float maxStep = 500.0F;
+        float stepSize = 15.0F;
+        float mouthDist = 0.0F;
+
+        while (curDist <= maxStep) {
+            float testX = edgeNode.x + ux * curDist;
+            float testZ = edgeNode.z + uz * curDist;
+            if (this.isBelowSeaLevel(testX, testZ)) {
+                // Binary search refined coastline crossing
+                float lo = curDist - stepSize;
+                float hi = curDist;
+                for (int b = 0; b < 6; b++) {
+                    float mid = (lo + hi) * 0.5F;
+                    if (this.isBelowSeaLevel(edgeNode.x + ux * mid, edgeNode.z + uz * mid)) {
+                        hi = mid;
+                    } else {
+                        lo = mid;
+                    }
+                }
+                mouthDist = hi;
+                break;
+            }
+            curDist += stepSize;
+        }
+
+        if (mouthDist <= 0.0F) {
+            mouthDist = 60.0F;
+        }
+
+        float mouthX = edgeNode.x + ux * mouthDist;
+        float mouthZ = edgeNode.z + uz * mouthDist;
+        DrainageNode mouthNode = new DrainageNode(mouthX, mouthZ, 0.0F, rowCount, edgeNode.col);
+        mouthNode.isPopulated = true;
+        return mouthNode;
     }
 
     /**

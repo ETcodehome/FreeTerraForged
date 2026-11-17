@@ -41,6 +41,7 @@ import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 import etcodehome.freeterraforged.world.worldgen.runtime.BiomePlacementPlan;
+import etcodehome.freeterraforged.world.worldgen.util.PosUtil;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -277,8 +278,16 @@ class BiomeLocateAreaTest {
 			Cell cell = new Cell();
 			int missedTiles = 0;
 			int riverTiles = 0;
-			for (int rcz = 580; rcz <= 700; rcz += 4) {
-				for (int rcx = -400; rcx <= -280; rcx += 4) {
+			int totalTilesChecked = 0;
+			int landTiles = 0;
+			long center = ctx.heightmap.continent().getNearestCenter(-5000, 10000);
+			int cx = PosUtil.unpackLeft(center);
+			int cz = PosUtil.unpackRight(center);
+			int centerRcx = cx >> 4;
+			int centerRcz = cz >> 4;
+
+			for (int rcz = centerRcz - 60; rcz <= centerRcz + 60; rcz += 4) {
+				for (int rcx = centerRcx - 60; rcx <= centerRcx + 60; rcx += 4) {
 					ParallelFirstSearch.Tile tile = new ParallelFirstSearch.Tile(rcx, rcz);
 					boolean skipped = riverFilter.canSkipTile(tile);
 					boolean hasHydrology = false;
