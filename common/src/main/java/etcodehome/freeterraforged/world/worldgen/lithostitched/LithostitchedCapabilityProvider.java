@@ -442,7 +442,7 @@ public final class LithostitchedCapabilityProvider implements WorldgenCapability
 					for (CompiledDispatch dispatch : compiledDispatches) {
 						LithostitchedInjectionBridge.CapturedInjector injector = dispatch.injector();
 						if (injector.criteria().orElseThrow().matches(blockX, blockY, blockZ, target, region)) {
-							biome = dispatch.candidates().findValueBruteForce(target);
+							biome = dispatch.candidates().findValue(target);
 							break;
 						}
 					}

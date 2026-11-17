@@ -83,21 +83,21 @@ final class TerrainBiomeRoleSelection {
 					// 3. If classified as a dry land biome (e.g. plains), prefer regional wetland candidates, else river
 					Climate.ParameterList<Holder<Biome>> wetlandCandidates = this.wetlands.get(result.candidates());
 					if (wetlandCandidates != null) {
-						Holder<Biome> wetland = wetlandCandidates.findValueBruteForce(result.target());
+						Holder<Biome> wetland = wetlandCandidates.findValue(result.target());
 						if (wetland != null) {
 							return wetland;
 						}
 					}
-					return riverCandidates.findValueBruteForce(result.target());
+					return riverCandidates.findValue(result.target());
 				} else {
 					// Submerged river channel or lake:
-					return selected.is(BiomeTags.IS_RIVER) ? selected : riverCandidates.findValueBruteForce(result.target());
+					return selected.is(BiomeTags.IS_RIVER) ? selected : riverCandidates.findValue(result.target());
 				}
 			} else if (selected.is(BiomeTags.IS_RIVER)) {
 				// Dry land (river banks, lake shores, wetland hummocks):
 				// Strict channel restriction: dry land must not receive river biomes
 				Climate.ParameterList<Holder<Biome>> nonRiverCandidates = this.nonRivers.get(result.candidates());
-				return nonRiverCandidates != null ? nonRiverCandidates.findValueBruteForce(result.target()) : selected;
+				return nonRiverCandidates != null ? nonRiverCandidates.findValue(result.target()) : selected;
 			}
 			return selected;
 		} finally {
