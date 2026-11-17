@@ -21,6 +21,9 @@ public final class FTFLanguageProvider {
 			this.add(FTFTranslationKeys.DEFAULT_PRESET_PACK_NAME, "FreeTerraForged Default Preset");
 			this.add("resourcePack.ftf_default_preset.name", "FreeTerraForged Default Preset");
 			this.add("generator.freeterraforged.freeterraforged", "FTF Enhanced");
+			this.add("key.categories.freeterraforged", "FreeTerraForged");
+			this.add("key.freeterraforged.open_preview", "Open Preview");
+			this.add("key.freeterraforged.shift", "Shift + %s");
 			this.add(FTFTranslationKeys.MUD_SWAMPS_METADATA_DESCRIPTION, "Changes the swamp material to mud");
 			this.add(FTFTranslationKeys.NO_ERROR_MESSAGE, "{No error message}");
 

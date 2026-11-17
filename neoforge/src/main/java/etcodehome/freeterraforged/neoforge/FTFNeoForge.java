@@ -35,6 +35,8 @@ public class FTFNeoForge {
 		// Register client-only listeners safely when running on the physical client
 		if (FMLEnvironment.dist == Dist.CLIENT) {
 			modEventBus.addListener(FTFNeoForgeClient::registerPresetEditors);
+			modEventBus.addListener(FTFNeoForgePreviewKeyMapping::register);
+			NeoForge.EVENT_BUS.addListener(FTFNeoForgePreviewKeyMapping::onClientTick);
 		}
 
 		modEventBus.addListener(FTFNeoForge::gatherData);
