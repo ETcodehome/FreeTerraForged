@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.Locale;
 
 import com.google.common.collect.ImmutableList;
 import com.google.gson.JsonParser;
@@ -16,6 +17,7 @@ import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.ActivePresetSnapshot;
 import etcodehome.freeterraforged.network.PreviewLocateRequestPayload;
 import etcodehome.freeterraforged.network.PreviewLocationPayload;
+import etcodehome.freeterraforged.network.PreviewTeleportRequestPayload;
 import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementConfig;
 import etcodehome.freeterraforged.world.worldgen.runtime.BiomeReplacementConfigSnapshot;
 import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
@@ -35,11 +37,12 @@ import net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket;
 import net.minecraft.world.level.WorldDataConfiguration;
 import net.minecraft.world.level.biome.MultiNoiseBiomeSource;
 import net.minecraft.world.level.biome.MultiNoiseBiomeSourceParameterList;
-import net.minecraft.world.level.biome.MultiNoiseBiomeSourceParameterLists;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.dimension.BuiltinDimensionTypes;
 import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.level.dimension.LevelStem;
 import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
+import net.minecraft.world.level.levelgen.NoiseSettings;
 
 /** Standalone, read-only version of FTF's native terrain preview. */
 public final class PresetPreviewScreen extends Screen implements PreviewController {
@@ -63,9 +66,11 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 	private Preview2D preview2D;
 	private Preview3D preview3D;
 	private PreviewNavigation navigation;
+	private Button teleportButton;
 	private Component status = Component.empty();
 	private int navigationX;
 	private int navigationZ;
+	private Integer navigationY;
 	private boolean navigated;
 	private long latestLocateRequest;
 	private boolean locatePending;
@@ -76,9 +81,12 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 		this.snapshot = snapshot;
 		this.preset = preset.copy();
 		String name = this.preset.presentation().presetName;
-		this.presetName = name == null || name.isBlank()
-			? Component.translatableWithFallback(KEY + "unnamed", "Unnamed preset").getString()
-			: name;
+		this.presetName = presetDisplayName(name == null || name.isBlank()
+			? Component.translatableWithFallback(KEY + "unnamed", "Unnamed").getString()
+			: name);
+		this.navigationX = snapshot.playerX();
+		this.navigationZ = snapshot.playerZ();
+		this.navigated = true;
 		String content = snapshot.biomeReplacements().isBlank()
 			? "format_version=1\n"
 			: snapshot.biomeReplacements();
@@ -141,14 +149,36 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 		this.registries = minecraft.getConnection().registryAccess();
 		Holder<DimensionType> dimensionType = this.registries.lookupOrThrow(Registries.DIMENSION_TYPE)
 			.getOrThrow(BuiltinDimensionTypes.OVERWORLD);
-		Holder<NoiseGeneratorSettings> settings = this.registries.lookupOrThrow(Registries.NOISE_SETTINGS)
-			.getOrThrow(NoiseGeneratorSettings.OVERWORLD);
-		Holder<MultiNoiseBiomeSourceParameterList> parameters = this.registries
-			.lookupOrThrow(Registries.MULTI_NOISE_BIOME_SOURCE_PARAMETER_LIST)
-			.getOrThrow(MultiNoiseBiomeSourceParameterLists.OVERWORLD);
+		// Dynamic worldgen registries are not synchronized to a connected client. Recreate the
+		// generator inputs consumed by the preview from the authoritative preset and the synchronized
+		// biome registry instead of assuming the client owns a world-creation registry context.
+		NoiseGeneratorSettings defaults = NoiseGeneratorSettings.dummy();
+		var properties = this.preset.world().properties;
+		Holder<NoiseGeneratorSettings> settings = Holder.direct(new NoiseGeneratorSettings(
+			NoiseSettings.create(
+				-properties.worldDepth,
+				properties.worldDepth + properties.worldHeight,
+				1,
+				2
+			),
+			Blocks.STONE.defaultBlockState(),
+			Blocks.WATER.defaultBlockState(),
+			defaults.noiseRouter(),
+			defaults.surfaceRule(),
+			properties.spawnType.getParameterPoints(),
+			properties.seaLevel,
+			false,
+			true,
+			this.preset.caves().largeOreVeins,
+			false
+		));
+		MultiNoiseBiomeSourceParameterList parameters = new MultiNoiseBiomeSourceParameterList(
+			MultiNoiseBiomeSourceParameterList.Preset.OVERWORLD,
+			this.registries.lookupOrThrow(Registries.BIOME)
+		);
 		this.selectedStem = new LevelStem(
 			dimensionType,
-			new TerraForgedChunkGenerator(MultiNoiseBiomeSource.createFromPreset(parameters), settings)
+			new TerraForgedChunkGenerator(MultiNoiseBiomeSource.createFromList(parameters.parameters()), settings)
 		);
 		this.dataConfiguration = WorldDataConfiguration.DEFAULT.expandFeatures(
 			minecraft.getConnection().enabledFeatures()
@@ -206,6 +236,9 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 		));
 		int leftX = Math.max(margin, this.width / 2 - gap / 2 - previewSize);
 		int rightX = this.width / 2 + gap / 2;
+		int navigationX = (this.width - previewSize) / 2;
+		int teleportWidth = Math.min(90, Math.max(64, previewSize / 4));
+		int navigationWidth = previewSize - teleportWidth - 4;
 
 		this.zoom2D.setRectangle(previewSize, 20, leftX, layout.zoomY());
 		this.renderMode2D.setRectangle(previewSize, 20, leftX, layout.modeY());
@@ -222,7 +255,7 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 		this.addRenderableWidget(this.renderMode3D);
 
 		this.navigation = PreviewNavigation.forInWorldPreview(
-			this.font, leftX, previewSize, layout, () -> this.registries, new PreviewNavigation.Handler() {
+			this.font, navigationX, navigationWidth, layout, () -> this.registries, new PreviewNavigation.Handler() {
 			@Override
 			public void edited() {
 				PresetPreviewScreen.this.cancelLocate();
@@ -266,6 +299,11 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 		this.addRenderableWidget(this.navigation.input());
 		this.addRenderableWidget(this.navigation.submitButton());
 		this.addRenderableWidget(this.navigation.suggestionsWidget());
+		this.teleportButton = this.addRenderableWidget(Button.builder(
+			Component.translatableWithFallback(KEY + "teleport", "Teleport"),
+			ignored -> this.teleportToSelection()
+		).bounds(navigationX + navigationWidth + 4, layout.navigationY(), teleportWidth, 20).build());
+		this.setTeleportEnabled(!this.locatePending);
 		this.addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, ignored -> this.onClose())
 			.bounds(this.width / 2 - 50, this.height - 27, 100, 20).build());
 	}
@@ -285,6 +323,7 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 			requestId, type, target.trim(), this.snapshot.dimension()
 		)));
 		this.locatePending = true;
+		this.setTeleportEnabled(false);
 		this.navigation.pending();
 		this.status = Component.translatableWithFallback(
 			KEY + "searching", "Searching for %s %s...",
@@ -298,11 +337,15 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 			return;
 		}
 		this.locatePending = false;
+		this.setTeleportEnabled(true);
 		if (!location.found()) {
 			this.navigation.failed();
 			this.status = this.locationMessage(location).copy().withStyle(ChatFormatting.RED);
 			return;
 		}
+		this.navigationY = location.targetType() == PreviewLocateRequestPayload.TargetType.BIOME
+			? location.y()
+			: null;
 		this.setPreviewNavigation(location.x(), location.z());
 		this.regeneratePreviews();
 		this.navigation.succeeded();
@@ -311,12 +354,34 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 
 	private void navigateTo(int x, int z) {
 		this.cancelLocate();
+		this.navigationY = null;
 		this.setPreviewNavigation(x, z);
+		this.setTeleportEnabled(true);
 		this.regeneratePreviews();
 		this.navigation.succeeded();
 		this.status = Component.translatableWithFallback(
 			KEY + "centered", "Preview moved to x%s z%s.", x, z
 		).withStyle(ChatFormatting.GREEN);
+	}
+
+	private void teleportToSelection() {
+		if (this.minecraft.getConnection() == null || this.locatePending) {
+			return;
+		}
+		this.minecraft.getConnection().send(new ServerboundCustomPayloadPacket(new PreviewTeleportRequestPayload(
+			this.snapshot.dimension(),
+			this.navigationX,
+			this.navigationY == null ? 0 : this.navigationY,
+			this.navigationZ,
+			this.navigationY != null
+		)));
+		this.onClose();
+	}
+
+	private void setTeleportEnabled(boolean enabled) {
+		if (this.teleportButton != null) {
+			this.teleportButton.active = enabled;
+		}
 	}
 
 	private Component locationMessage(PreviewLocationPayload location) {
@@ -389,19 +454,17 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 
 	@Override
 	public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-		this.renderBackground(graphics, mouseX, mouseY, partialTick);
-		graphics.drawCenteredString(this.font, this.title, this.width / 2, 8, 0xFFFFFF);
+		super.render(graphics, mouseX, mouseY, partialTick);
 		graphics.drawCenteredString(
 			this.font,
-			Component.literal(this.presetName + "  •  " + this.snapshot.dimension()).withStyle(ChatFormatting.GRAY),
+			Component.empty().append(this.title).append(" — ").append(this.presetName),
 			this.width / 2,
-			22,
-			0xA0A0A0
+			8,
+			0xFFFFFF
 		);
 		if (!this.status.getString().isEmpty()) {
-			graphics.drawCenteredString(this.font, this.status, this.width / 2, 34, 0xFFFFFF);
+			graphics.drawCenteredString(this.font, this.status, this.width / 2, 24, 0xFFFFFF);
 		}
-		super.render(graphics, mouseX, mouseY, partialTick);
 	}
 
 	@Override
@@ -440,6 +503,7 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 			return;
 		}
 		this.locatePending = false;
+		this.setTeleportEnabled(true);
 		this.latestLocateRequest++;
 		if (this.minecraft.getConnection() != null) {
 			this.minecraft.getConnection().send(new ServerboundCustomPayloadPacket(new PreviewLocateRequestPayload(
@@ -490,6 +554,14 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 		}
 	}
 
+	private static String presetDisplayName(String name) {
+		String value = name.strip();
+		if (value.toLowerCase(Locale.ROOT).endsWith(" preset")) {
+			return value.substring(0, value.length() - " preset".length()).stripTrailing() + " Preset";
+		}
+		return value + " Preset";
+	}
+
 	private static final class PreviewUnavailableScreen extends Screen {
 		private final Component reason;
 
@@ -506,10 +578,9 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 
 		@Override
 		public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-			this.renderBackground(graphics, mouseX, mouseY, partialTick);
+			super.render(graphics, mouseX, mouseY, partialTick);
 			graphics.drawCenteredString(this.font, this.title, this.width / 2, this.height / 2 - 30, 0xFFFFFF);
 			graphics.drawCenteredString(this.font, this.reason, this.width / 2, this.height / 2 - 8, 0xFF5555);
-			super.render(graphics, mouseX, mouseY, partialTick);
 		}
 
 		@Override

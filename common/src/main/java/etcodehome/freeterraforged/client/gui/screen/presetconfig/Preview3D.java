@@ -14,7 +14,6 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.resources.ResourceLocation;
-import etcodehome.freeterraforged.data.worldgen.preset.settings.SpawnType;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.PreviewGrid;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.TerrainCeiling;
@@ -343,7 +342,7 @@ public class Preview3D extends Button implements IPreviewHandler {
             guiGraphics.fill(x, y, x + this.width, y + this.height, 0xFF000000);
         }
 
-        renderSpawnMarker(guiGraphics);
+        renderCenterMarker(guiGraphics);
         updateLegend(mx, my);
         renderLegend(guiGraphics, mx, my, this.state.legendLabels, this.state.legendValues, x, y + this.width + 30, 10, 0xFFFFFF);
     }
@@ -364,55 +363,37 @@ public class Preview3D extends Button implements IPreviewHandler {
         return darkenColor(baseColor, shadeFactor);
     }
 
-    private void renderSpawnMarker(GuiGraphics guiGraphics) {
-        WorldSettings.Properties props = this.page.preset().world().properties;
-
-        if (props.spawnType == SpawnType.USER_SELECTED || props.spawnType == SpawnType.CONTINENT_CENTER) {
-            int zoomValue = this.getZoom();
-            PreviewGrid activeTile = this.state.grid;
-            int tileSize = activeTile != null ? activeTile.size() : 0;
-
-            if (tileSize > 0) {
-                int activeCX = this.state.centerX;
-                int activeCZ = this.state.centerZ;
-
-                int ix = NoiseUtil.round(((float) (props.spawnX - activeCX) / zoomValue) + (tileSize / 2.0f));
-                int iz = NoiseUtil.round(((float) (props.spawnZ - activeCZ) / zoomValue) + (tileSize / 2.0f));
-
-                if (ix >= 0 && ix < tileSize && iz >= 0 && iz < tileSize) {
-                    Cell cell = activeTile.lookup(ix, iz);
-
-                    float rawBlockW = calculateBlockWidth(this.width, this.height, tileSize);
-                    int halfW = Math.max(1, (int) (rawBlockW / 2.0f));
-                    int halfH = Math.max(1, halfW / 2);
-
-                    int blockW = halfW * 2;
-                    int blockH = halfH * 2;
-
-                    int centerVisualX = this.getX() + (this.width / 2);
-                    int centerVisualY = this.getY() + (this.height / 2);
-
-                    int dx = ix - (tileSize / 2);
-                    int dz = iz - (tileSize / 2);
-
-                    int isoX = centerVisualX + (dx - dz) * halfW;
-                    int isoY = centerVisualY + (dx + dz) * halfH - Math.round(cell.height * getHeightScale((float) blockW, this.page.zoom3D().getLerpedValue()));
-
-                    int markerX = isoX + halfW;
-                    int markerY = isoY + halfH;
-
-                    int size = 6;
-                    int color = 0xFFFFFFFF;
-                    int shadow = 0xFF000000;
-
-                    guiGraphics.fill(markerX - size + 1, markerY + 1, markerX + size + 2, markerY + 2, shadow);
-                    guiGraphics.fill(markerX - size, markerY, markerX + size + 1, markerY + 1, color);
-
-                    guiGraphics.fill(markerX + 1, markerY - size + 1, markerX + 2, markerY + size + 2, shadow);
-                    guiGraphics.fill(markerX, markerY - size, markerX + 1, markerY + size + 1, color);
-                }
-            }
+    private void renderCenterMarker(GuiGraphics guiGraphics) {
+        PreviewGrid activeTile = this.state.grid;
+        int tileSize = activeTile != null ? activeTile.size() : 0;
+        if (tileSize <= 0) {
+            return;
         }
+
+        int ix = tileSize / 2;
+        int iz = tileSize / 2;
+        Cell cell = activeTile.lookup(ix, iz);
+
+        float rawBlockW = calculateBlockWidth(this.width, this.height, tileSize);
+        int halfW = Math.max(1, (int) (rawBlockW / 2.0f));
+        int halfH = Math.max(1, halfW / 2);
+        int blockW = halfW * 2;
+
+        int isoX = this.getX() + (this.width / 2);
+        int isoY = this.getY() + (this.height / 2)
+            - Math.round(cell.height * getHeightScale((float) blockW, this.page.zoom3D().getLerpedValue()));
+        int markerX = isoX + halfW;
+        int markerY = isoY + halfH;
+
+        int size = 6;
+        int color = 0xFFFFFFFF;
+        int shadow = 0xFF000000;
+
+        guiGraphics.fill(markerX - size + 1, markerY + 1, markerX + size + 2, markerY + 2, shadow);
+        guiGraphics.fill(markerX - size, markerY, markerX + size + 1, markerY + 1, color);
+
+        guiGraphics.fill(markerX + 1, markerY - size + 1, markerX + 2, markerY + size + 2, shadow);
+        guiGraphics.fill(markerX, markerY - size, markerX + 1, markerY + size + 1, color);
     }
 
     public void updateBounds(int x, int y, int width, int height) {

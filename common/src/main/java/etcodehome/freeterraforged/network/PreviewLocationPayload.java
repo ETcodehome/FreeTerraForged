@@ -11,6 +11,7 @@ public record PreviewLocationPayload(
 	PreviewLocateRequestPayload.TargetType targetType,
 	Status status,
 	int x,
+	int y,
 	int z,
 	String target
 ) implements CustomPacketPayload {
@@ -24,6 +25,7 @@ public record PreviewLocationPayload(
 			buffer.writeEnum(payload.targetType);
 			buffer.writeEnum(payload.status);
 			buffer.writeInt(payload.x);
+			buffer.writeInt(payload.y);
 			buffer.writeInt(payload.z);
 			buffer.writeUtf(payload.target, 256);
 		},
@@ -32,6 +34,7 @@ public record PreviewLocationPayload(
 			buffer.readUtf(256),
 			buffer.readEnum(PreviewLocateRequestPayload.TargetType.class),
 			buffer.readEnum(Status.class),
+			buffer.readInt(),
 			buffer.readInt(),
 			buffer.readInt(),
 			buffer.readUtf(256)

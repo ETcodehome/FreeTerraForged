@@ -37,14 +37,16 @@ public final class MinecraftBiomeSourceGraphs {
 		if (!(source instanceof MultiNoiseBiomeSource multiNoise)) {
 			throw new IllegalArgumentException("Selected biome source is not a multi-noise source");
 		}
-		var parameterLists = lookups.lookupOrThrow(Registries.MULTI_NOISE_BIOME_SOURCE_PARAMETER_LIST);
-		var retainedPreset = parameterLists.listElements()
-			.filter(holder -> multiNoise.stable(holder.key()))
-			.findFirst();
-		if (retainedPreset.isPresent()) {
-			return BiomeCandidateRoot.fromCandidates(
-				retainedPreset.orElseThrow().value().parameters()
-			);
+		var parameterLists = lookups.lookup(Registries.MULTI_NOISE_BIOME_SOURCE_PARAMETER_LIST);
+		if (parameterLists.isPresent()) {
+			var retainedPreset = parameterLists.orElseThrow().listElements()
+				.filter(holder -> multiNoise.stable(holder.key()))
+				.findFirst();
+			if (retainedPreset.isPresent()) {
+				return BiomeCandidateRoot.fromCandidates(
+					retainedPreset.orElseThrow().value().parameters()
+				);
+			}
 		}
 		var ops = RegistryOps.create(JsonOps.INSTANCE, lookups);
 		JsonElement encoded = MultiNoiseBiomeSource.CODEC.codec()
@@ -74,6 +76,10 @@ public final class MinecraftBiomeSourceGraphs {
 		);
 		return BiomeCandidateRoot.fromCandidates(
 			parameterLists
+			.orElseThrow(() -> new IllegalStateException(
+				"Selected multi-noise source references preset " + presetId
+					+ " but the parameter-list registry is unavailable"
+			))
 			.get(presetKey)
 			.orElseThrow(() -> new IllegalStateException(
 				"Selected multi-noise preset is absent from the final lookup graph: " + presetId

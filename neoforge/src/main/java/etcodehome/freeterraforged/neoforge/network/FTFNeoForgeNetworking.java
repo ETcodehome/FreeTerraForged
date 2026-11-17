@@ -10,6 +10,7 @@ import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import etcodehome.freeterraforged.network.PreviewLocateRequestPayload;
 import etcodehome.freeterraforged.network.PreviewLocationPayload;
+import etcodehome.freeterraforged.network.PreviewTeleportRequestPayload;
 import etcodehome.freeterraforged.server.command.PreviewLocateHandler;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -37,6 +38,9 @@ public class FTFNeoForgeNetworking {
 		);
 		registrar.playToServer(PreviewLocateRequestPayload.TYPE, PreviewLocateRequestPayload.CODEC, (payload, context) ->
 			context.enqueueWork(() -> PreviewLocateHandler.handle(payload, (ServerPlayer) context.player()))
+		);
+		registrar.playToServer(PreviewTeleportRequestPayload.TYPE, PreviewTeleportRequestPayload.CODEC, (payload, context) ->
+			context.enqueueWork(() -> PreviewLocateHandler.teleport(payload, (ServerPlayer) context.player()))
 		);
     }
 }

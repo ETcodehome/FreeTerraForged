@@ -7,18 +7,21 @@ import org.lwjgl.glfw.GLFW;
 import etcodehome.freeterraforged.world.worldgen.search.BiomeSearchTarget;
 import etcodehome.freeterraforged.world.worldgen.search.TerrainSearchTargets;
 import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 
 /** Shared native input controls and command grammar for FTF preview navigation. */
 final class PreviewNavigation {
     private static final String KEY = "freeterraforged.gui.preset_preview.";
-    private static final int BUTTON_WIDTH = 42;
+	private static final int BUTTON_WIDTH = 20;
     private static final int GAP = 4;
+	private static final ResourceLocation SEARCH_ICON = ResourceLocation.withDefaultNamespace("icon/search");
 
     private final Handler handler;
 	private final Context context;
@@ -79,8 +82,8 @@ final class PreviewNavigation {
 		this.help = Component.translatableWithFallback(
 			KEY + (context == Context.IN_WORLD ? "navigation_help" : "editor_navigation_help"),
 			context == Context.IN_WORLD
-				? "Enter here, spawn, x z, terrain <name>, or biome <namespace:id or #namespace:tag>. Press Enter or Go."
-				: "Enter x z, terrain <name>, or biome <namespace:id or #namespace:tag>. Press Enter or Go."
+				? "Enter here, spawn, x z, terrain <name>, or biome <namespace:id or #namespace:tag>. Press Enter or select Search."
+				: "Enter x z, terrain <name>, or biome <namespace:id or #namespace:tag>. Press Enter or select Search."
 		);
 
         int inputWidth = Math.max(20, width - BUTTON_WIDTH - GAP);
@@ -135,9 +138,14 @@ final class PreviewNavigation {
             this.handler.edited();
 			this.suggestions.refresh();
         });
-        this.submit = Button.builder(
-            Component.translatableWithFallback(KEY + "go", "Go"), ignored -> this.submit()
-        ).bounds(x + inputWidth + GAP, y, BUTTON_WIDTH, 20).build();
+		Component search = Component.translatableWithFallback(KEY + "search", "Search");
+		this.submit = new SearchButton(
+			x + inputWidth + GAP,
+			y,
+			search,
+			ignored -> this.submit()
+		);
+		this.submit.setTooltip(Tooltip.create(search));
     }
 
     EditBox input() {
@@ -211,6 +219,23 @@ final class PreviewNavigation {
 		return Component.literal(
 			font.plainSubstrByWidth(value, Math.max(0, maxWidth - font.width(ellipsis))) + ellipsis
 		);
+	}
+
+	private static final class SearchButton extends Button {
+		private SearchButton(int x, int y, Component message, OnPress onPress) {
+			super(x, y, BUTTON_WIDTH, 20, message, onPress, DEFAULT_NARRATION);
+		}
+
+		@Override
+		protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+			super.renderWidget(graphics, mouseX, mouseY, partialTick);
+			graphics.blitSprite(SEARCH_ICON, this.getX() + 4, this.getY() + 4, 12, 12);
+		}
+
+		@Override
+		public void renderString(GuiGraphics graphics, Font font, int color) {
+			// The native search sprite is the visible label. The component remains available to narration.
+		}
 	}
 
     private void submit() {
