@@ -87,12 +87,13 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
         public final float v1Z;
         public final float v2X;
         public final float v2Z;
+        public final boolean isBridged;
         public final List<List<DrainageNode>> rows = new ArrayList<>();
         public final List<RiverConnection> connections = new ArrayList<>();
         public final Map<DrainageNode, RiverConnection> outgoing = new IdentityHashMap<>();
         public final Map<DrainageNode, List<RiverConnection>> incoming = new IdentityHashMap<>();
 
-        public FaceDrainageGraph(int faceIndex, float apexX, float apexZ, float v1X, float v1Z, float v2X, float v2Z) {
+        public FaceDrainageGraph(int faceIndex, float apexX, float apexZ, float v1X, float v1Z, float v2X, float v2Z, boolean isBridged) {
             this.faceIndex = faceIndex;
             this.apexX = apexX;
             this.apexZ = apexZ;
@@ -100,6 +101,11 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
             this.v1Z = v1Z;
             this.v2X = v2X;
             this.v2Z = v2Z;
+            this.isBridged = isBridged;
+        }
+
+        public FaceDrainageGraph(int faceIndex, float apexX, float apexZ, float v1X, float v1Z, float v2X, float v2Z) {
+            this(faceIndex, apexX, apexZ, v1X, v1Z, v2X, v2Z, false);
         }
 
         public void addConnection(RiverConnection conn) {
@@ -430,8 +436,8 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
         float[] allPlateaus = ContinentalHydrology.getPlateauCenters();
 
         for (int i = 0; i < voronoi.edgeCount; i++) {
-            // Skip bridged borders (connecting to adjacent landmasses)
-            if (voronoi.isBridged[i]) {
+            // Skip bridged borders with tectonic uplift connection to adjacent Voronoi peak (prevents uphill rivers)
+            if (voronoi.isTectonicActive[i]) {
                 continue;
             }
 
@@ -439,6 +445,8 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
             if (PlateUpliftBridge.isSectorTooThin(voronoi.lo[i], voronoi.hi[i], voronoi.len[i])) {
                 continue;
             }
+
+            boolean isBridged = voronoi.isBridged[i];
 
             float vAx = (voronoi.mx[i] + voronoi.lo[i] * voronoi.tx[i]) / frequency;
             float vAz = (voronoi.my[i] + voronoi.lo[i] * voronoi.ty[i]) / frequency;
@@ -470,8 +478,8 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
             long faceSeed = random.nextLong() ^ ((long) i * 3141592653589793L);
             Random faceRandom = new Random(faceSeed);
 
-            FaceDrainageGraph graph = buildFaceGraph(i, apexX, apexZ, v1X, v1Z, v2X, v2Z, faceAltitude, baseWidth, allPlateaus, faceRandom, faceSeed, riverCount);
-            if (!graph.connections.isEmpty()) {
+            FaceDrainageGraph graph = buildFaceGraph(i, apexX, apexZ, v1X, v1Z, v2X, v2Z, faceAltitude, baseWidth, allPlateaus, faceRandom, faceSeed, riverCount, isBridged);
+            if (!graph.connections.isEmpty() || !graph.rows.isEmpty()) {
                 graphs.add(graph);
             }
         }
@@ -517,9 +525,10 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
      */
     private FaceDrainageGraph buildFaceGraph(
             int faceIndex, float apexX, float apexZ, float v1X, float v1Z, float v2X, float v2Z,
-            float faceAltitude, float baseWidth, float[] allPlateaus, Random faceRandom, long faceSeed, int riverCount
+            float faceAltitude, float baseWidth, float[] allPlateaus, Random faceRandom, long faceSeed, int riverCount,
+            boolean isBridged
     ) {
-        FaceDrainageGraph graph = new FaceDrainageGraph(faceIndex, apexX, apexZ, v1X, v1Z, v2X, v2Z);
+        FaceDrainageGraph graph = new FaceDrainageGraph(faceIndex, apexX, apexZ, v1X, v1Z, v2X, v2Z, isBridged);
 
         // Row count strictly matches ContinentalHydrology terracing step counts (NUM_STEPS = 15)
         int rowCount = ContinentalHydrology.NUM_STEPS;
@@ -562,6 +571,11 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
 
                 DrainageNode node = new DrainageNode(nodeX, nodeZ, u, r, col);
                 node.isMountain = this.isMountainTerrain(nodeX, nodeZ);
+
+                // On bridged tectonic borders, cull rows near the border to ensure rivers never reach the actual border
+                if (isBridged && r >= rowCount - 2) {
+                    node.isCulled = true;
+                }
                 rowNodes.add(node);
             }
             graph.rows.add(rowNodes);
@@ -692,13 +706,25 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
                 continue;
             }
 
-            // If at the bottom terrace (ocean baseline) OR all candidates below are culled (ocean margin reached):
+            // If at the bottom terrace (ocean baseline) OR all candidates below are culled (ocean margin reached or bridged border buffer reached):
             if (r == rowCount - 1 || validNextNodes.isEmpty()) {
                 for (DrainageNode edgeNode : activeNodes) {
-                    boolean isHeadwater = (edgeNode.feederCount == 0);
-                    DrainageNode mouthNode = createOceanMouthNode(edgeNode, apexX, apexZ, rowCount);
-                    boolean isMain = (edgeNode.feederCount >= 2);
-                    graph.addConnection(new RiverConnection(edgeNode, mouthNode, isHeadwater, isMain));
+                    DrainageNode waterMouth = findWaterMouthNode(edgeNode, apexX, apexZ, v1X, v1Z, v2X, v2Z, isBridged, rowCount);
+                    if (waterMouth != null) {
+                        // Encountered water (ocean/bay): connect cleanly to coastline mouth
+                        boolean isHeadwater = (edgeNode.feederCount == 0);
+                        boolean isMain = (edgeNode.feederCount >= 2);
+                        graph.addConnection(new RiverConnection(edgeNode, waterMouth, isHeadwater, isMain));
+                    } else if (isBridged) {
+                        // Bridged border segment: always ends in a lake if it doesn't encounter water; never reaches actual border
+                        edgeNode.isLake = true;
+                    } else {
+                        // Open ocean face fallback: ocean baseline mouth
+                        boolean isHeadwater = (edgeNode.feederCount == 0);
+                        DrainageNode mouthNode = createOceanMouthNode(edgeNode, apexX, apexZ, rowCount);
+                        boolean isMain = (edgeNode.feederCount >= 2);
+                        graph.addConnection(new RiverConnection(edgeNode, mouthNode, isHeadwater, isMain));
+                    }
                 }
                 continue;
             }
@@ -823,6 +849,90 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
         }
 
         return graph;
+    }
+
+    /**
+     * Looks forward from edgeNode along the sector drainage trajectory to find if a coastline crossing
+     * (sea level water) is encountered within maxStep blocks.
+     * On bridged segments, enforces a strict buffer from the Voronoi border so that rivers never reach the border.
+     * Returns a mouth node at the water if encountered, or null if water was not encountered.
+     */
+    private DrainageNode findWaterMouthNode(
+            DrainageNode edgeNode, float apexX, float apexZ,
+            float v1X, float v1Z, float v2X, float v2Z,
+            boolean isBridged, int rowCount
+    ) {
+        float dx = edgeNode.x - apexX;
+        float dz = edgeNode.z - apexZ;
+        float len = (float) Math.sqrt(dx * dx + dz * dz);
+        if (len < 1.0e-4F) {
+            return null;
+        }
+
+        float ux = dx / len;
+        float uz = dz / len;
+
+        float maxStep = 500.0F;
+
+        if (isBridged) {
+            // Compute distance from edgeNode along ray to the Voronoi border segment (v1 -> v2)
+            float bx = v2X - v1X;
+            float bz = v2Z - v1Z;
+            float v1ax = v1X - apexX;
+            float v1az = v1Z - apexZ;
+            float num = v1ax * bz - v1az * bx;
+            float den = dx * bz - dz * bx;
+
+            float borderBuffer = 200.0F;
+            if (Math.abs(den) > 1.0e-5F) {
+                float lambda = num / den;
+                float distToBorder = (lambda - 1.0F) * len;
+                float allowedStep = Math.max(0.0F, distToBorder - borderBuffer);
+                maxStep = Math.min(maxStep, allowedStep);
+            } else {
+                maxStep = 0.0F;
+            }
+
+            if (maxStep <= 15.0F) {
+                return null; // Too close to border, terminate in lake instead
+            }
+        }
+
+        float curDist = 0.0F;
+        float stepSize = 15.0F;
+        float mouthDist = -1.0F;
+
+        while (curDist <= maxStep) {
+            float testX = edgeNode.x + ux * curDist;
+            float testZ = edgeNode.z + uz * curDist;
+            if (this.isBelowSeaLevel(testX, testZ)) {
+                // Binary search refined coastline crossing
+                float lo = curDist - stepSize;
+                float hi = curDist;
+                for (int b = 0; b < 6; b++) {
+                    float mid = (lo + hi) * 0.5F;
+                    if (this.isBelowSeaLevel(edgeNode.x + ux * mid, edgeNode.z + uz * mid)) {
+                        hi = mid;
+                    } else {
+                        lo = mid;
+                    }
+                }
+                mouthDist = hi;
+                break;
+            }
+            curDist += stepSize;
+        }
+
+        if (mouthDist < 0.0F) {
+            return null; // Did not encounter water within allowed bounds
+        }
+
+        float mouthX = edgeNode.x + ux * mouthDist;
+        float mouthZ = edgeNode.z + uz * mouthDist;
+        int mouthRow = Math.min(rowCount - 1, edgeNode.row + 1);
+        DrainageNode mouthNode = new DrainageNode(mouthX, mouthZ, 0.0F, mouthRow, edgeNode.col);
+        mouthNode.isPopulated = true;
+        return mouthNode;
     }
 
     private DrainageNode createOceanMouthNode(DrainageNode edgeNode, float apexX, float apexZ, int rowCount) {

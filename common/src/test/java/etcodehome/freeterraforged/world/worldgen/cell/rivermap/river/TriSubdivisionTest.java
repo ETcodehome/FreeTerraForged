@@ -103,7 +103,7 @@ public class TriSubdivisionTest {
             Random random = new Random(PosUtil.pack(centerX, centerZ) + gen.seed);
             List<TriSubdivisionRiverGenerator.FaceDrainageGraph> graphs = gen.buildDrainageGraphs(voronoi, frequency, random);
 
-            assertFalse(graphs.isEmpty(), "At least one unbridged drainage face must be generated");
+            assertFalse(graphs.isEmpty(), "At least one drainage face must be generated");
             System.out.printf("[Test] Generated %d drainage face graphs for continent%n", graphs.size());
 
             int totalCandidateNodes = 0;
@@ -117,7 +117,11 @@ public class TriSubdivisionTest {
             int totalLakes = 0;
             int terminalMountainLakes = 0;
             int valleyLakes = 0;
+            int oceanFaces = 0;
+            int bridgedFaces = 0;
             for (TriSubdivisionRiverGenerator.FaceDrainageGraph g : graphs) {
+                if (g.isBridged) bridgedFaces++;
+                else oceanFaces++;
                 assertEquals(ContinentalHydrology.NUM_STEPS, g.rows.size(), "Row count must strictly match ContinentalHydrology terracing steps (15)");
                 for (List<TriSubdivisionRiverGenerator.DrainageNode> row : g.rows) {
                     totalCandidateNodes += row.size();
@@ -150,11 +154,17 @@ public class TriSubdivisionTest {
                     assertTrue(conn.from.gradient >= conn.to.gradient, "Successive nodes must monotonically descend gradient");
                     assertFalse(conn.from.isCulled, "Connection origin must never be culled");
                     assertFalse(conn.to.isCulled, "Connection destination must never be culled");
+
+                    // Verify that rivers on bridged segments never reach the actual border
+                    if (g.isBridged) {
+                        assertTrue(conn.from.row < ContinentalHydrology.NUM_STEPS - 2, "Bridged river origin must stay safely inside territory");
+                        assertTrue(conn.to.row < ContinentalHydrology.NUM_STEPS - 1, "Bridged river destination must never reach the actual border");
+                    }
                 }
             }
 
-            System.out.printf("[Test] Candidate Nodes: %d (Culled: %d, Valid Land: %d), Populated: %d, River Segments: %d, Headwaters: %d, Confluences: %d, Mountain Nodes: %d (Populated: %d), Lake Spawns: %d (Mountain Terminal: %d, Valley: %d)%n",
-                    totalCandidateNodes, totalCulledNodes, totalCandidateNodes - totalCulledNodes, totalPopulatedNodes, totalConnections, headwaters, confluences, mountainNodes, populatedMountainNodes, totalLakes, terminalMountainLakes, valleyLakes);
+            System.out.printf("[Test] Candidate Nodes: %d (Culled: %d, Valid Land: %d), Populated: %d, River Segments: %d, Headwaters: %d, Confluences: %d, Mountain Nodes: %d (Populated: %d), Lake Spawns: %d (Mountain Terminal: %d, Valley: %d), Faces: %d (Ocean: %d, Bridged: %d)%n",
+                    totalCandidateNodes, totalCulledNodes, totalCandidateNodes - totalCulledNodes, totalPopulatedNodes, totalConnections, headwaters, confluences, mountainNodes, populatedMountainNodes, totalLakes, terminalMountainLakes, valleyLakes, graphs.size(), oceanFaces, bridgedFaces);
             assertTrue(totalCulledNodes > 0, "Some candidate nodes must be culled due to sea level");
             assertTrue(totalPopulatedNodes > 0, "Expected some nodes to be populated at riverCount = 8");
             assertTrue(totalPopulatedNodes < totalCandidateNodes - totalCulledNodes, "Every land node should NOT be connected at riverCount = 8");
@@ -254,10 +264,14 @@ public class TriSubdivisionTest {
                 double bx = mapX.apply(vBx);
                 double bz = mapZ.apply(vBz);
 
-                if (voronoi.isBridged[i]) {
-                    // Bridged border (land saddle to neighbor continent)
+                if (voronoi.isTectonicActive[i]) {
+                    // Tectonic active border (peak-to-peak connection saddle - zero rivers generated)
+                    g2.setStroke(new BasicStroke(2.5F, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10.0F, new float[]{6.0F, 6.0F}, 0.0F));
+                    g2.setColor(new Color(239, 68, 68, 220)); // Bright red dashed line
+                } else if (voronoi.isBridged[i]) {
+                    // Bridged tectonic border (supercontinent landmass - rivers spawn and end in lakes before border)
                     g2.setStroke(new BasicStroke(2.0F, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10.0F, new float[]{8.0F, 8.0F}, 0.0F));
-                    g2.setColor(new Color(255, 110, 64, 140)); // Red-orange dashed line
+                    g2.setColor(new Color(251, 146, 60, 200)); // Amber-orange dashed line
                 } else {
                     // Coastal boundary to ocean
                     g2.setStroke(new BasicStroke(1.5F, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10.0F, new float[]{4.0F, 4.0F}, 0.0F));
@@ -436,10 +450,10 @@ public class TriSubdivisionTest {
 
             // 8. Legend and Diagnostic Overlay
             g2.setColor(new Color(15, 23, 42, 235)); // Slate dark background
-            g2.fillRoundRect(25, 25, 570, 455, 16, 16);
+            g2.fillRoundRect(25, 25, 570, 480, 16, 16);
             g2.setStroke(new BasicStroke(1.5F));
             g2.setColor(new Color(255, 255, 255, 90));
-            g2.drawRoundRect(25, 25, 570, 455, 16, 16);
+            g2.drawRoundRect(25, 25, 570, 480, 16, 16);
 
             g2.setFont(new Font("SansSerif", Font.BOLD, 17));
             g2.setColor(Color.WHITE);
@@ -448,7 +462,7 @@ public class TriSubdivisionTest {
             g2.setFont(new Font("SansSerif", Font.PLAIN, 12));
             g2.setColor(new Color(203, 213, 225));
             g2.drawString(String.format("Centroid Peak: (%d, %d) | Seed: %d", centerX, centerZ, worldSeed), 45, 80);
-            g2.drawString(String.format("Active Ocean Faces: %d | Terraces (Rows): %d (15 steps)", graphs.size(), ContinentalHydrology.NUM_STEPS), 45, 98);
+            g2.drawString(String.format("Active Faces: %d (Ocean: %d, Bridged: %d) | Terraces: %d (15 steps)", graphs.size(), oceanFaces, bridgedFaces, ContinentalHydrology.NUM_STEPS), 45, 98);
             g2.drawString(String.format("Candidate Nodes: %d (Culled: %d, Land: %d) | Populated: %d", totalCandidateNodes, totalCulledNodes, totalCandidateNodes - totalCulledNodes, totalPopulatedNodes), 45, 116);
             g2.drawString(String.format("River Segments: %d | Confluences: %d | Headwaters: %d", totalConnections, confluences, headwaters), 45, 134);
             g2.drawString(String.format("Mountain Nodes (Red): %d (Populated: %d) | Valley/Lowland: %d", mountainNodes, populatedMountainNodes, (totalCandidateNodes - totalCulledNodes) - mountainNodes), 45, 152);
@@ -526,13 +540,21 @@ public class TriSubdivisionTest {
             g2.setColor(Color.WHITE);
             g2.drawString("Unconnected Candidate Node (Terrace grid slot - not connected)", 68, legendY + 2);
 
-            // Bridged Border
+            // Tectonic Active Border
             legendY += 22;
-            g2.setStroke(new BasicStroke(2.0F, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10.0F, new float[]{6.0F, 6.0F}, 0.0F));
-            g2.setColor(new Color(255, 110, 64));
+            g2.setStroke(new BasicStroke(2.5F, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10.0F, new float[]{6.0F, 6.0F}, 0.0F));
+            g2.setColor(new Color(239, 68, 68));
             g2.drawLine(45, legendY - 2, 60, legendY - 2);
             g2.setColor(Color.WHITE);
-            g2.drawString("Bridged Tectonic Border (Connected supercontinent landmass)", 68, legendY + 2);
+            g2.drawString("Tectonic Active Border (Peak connection saddle - 0 rivers)", 68, legendY + 2);
+
+            // Bridged Tectonic Border
+            legendY += 22;
+            g2.setStroke(new BasicStroke(2.0F, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10.0F, new float[]{8.0F, 8.0F}, 0.0F));
+            g2.setColor(new Color(251, 146, 60));
+            g2.drawLine(45, legendY - 2, 60, legendY - 2);
+            g2.setColor(Color.WHITE);
+            g2.drawString("Bridged Tectonic Border (Rivers end in lakes before border)", 68, legendY + 2);
 
             // Coastal Ocean Boundary
             legendY += 22;
