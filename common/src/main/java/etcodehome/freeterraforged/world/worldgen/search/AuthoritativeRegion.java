@@ -9,14 +9,22 @@ import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
 
 /** One transient, fully filtered terrain region used by a locate worker. */
 final class AuthoritativeRegion implements AutoCloseable {
+	private static final ThreadLocal<AuthoritativeRegion> ACTIVE_REGION = new ThreadLocal<>();
+
+	private final GeneratorContext context;
+	private final ParallelFirstSearch.Tile tile;
 	private final RegionFilterGrid grid;
 	private final CellSampler.LookupScope lookupScope;
+	@Nullable
+	private final AuthoritativeRegion previousRegion;
 	private boolean closed;
 
 	private AuthoritativeRegion(
 		GeneratorContext context,
 		ParallelFirstSearch.Tile tile
 	) {
+		this.context = context;
+		this.tile = tile;
 		this.grid = RegionFilterGrid.THREAD_LOCAL.get();
 		this.grid.init(tile.regionChunkX(), tile.regionChunkZ(), context);
 		if (context.filters != null) {
@@ -26,6 +34,8 @@ final class AuthoritativeRegion implements AutoCloseable {
 			context.lookup,
 			(blockX, blockZ, sampleClimate) -> this.lookup(blockX, blockZ)
 		);
+		this.previousRegion = ACTIVE_REGION.get();
+		ACTIVE_REGION.set(this);
 	}
 
 	static AuthoritativeRegion open(
@@ -33,6 +43,21 @@ final class AuthoritativeRegion implements AutoCloseable {
 		ParallelFirstSearch.Tile tile
 	) {
 		return new AuthoritativeRegion(context, tile);
+	}
+
+	@Nullable
+	static Cell findActiveInteriorCell(GeneratorContext context, int blockX, int blockZ) {
+		AuthoritativeRegion active = ACTIVE_REGION.get();
+		if (active == null || active.closed || active.context != context) {
+			return null;
+		}
+		if (blockX < active.tile.minBlockX()
+			|| blockX >= active.tile.minBlockX() + ParallelFirstSearch.TILE_BLOCKS
+			|| blockZ < active.tile.minBlockZ()
+			|| blockZ >= active.tile.minBlockZ() + ParallelFirstSearch.TILE_BLOCKS) {
+			return null;
+		}
+		return active.lookup(blockX, blockZ);
 	}
 
 	Cell cell(int blockX, int blockZ) {
@@ -60,6 +85,11 @@ final class AuthoritativeRegion implements AutoCloseable {
 	public void close() {
 		if (!this.closed) {
 			this.closed = true;
+			if (this.previousRegion == null) {
+				ACTIVE_REGION.remove();
+			} else {
+				ACTIVE_REGION.set(this.previousRegion);
+			}
 			this.lookupScope.close();
 		}
 	}

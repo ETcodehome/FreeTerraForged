@@ -16,10 +16,17 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.JsonOps;
 import org.apache.commons.io.file.PathUtils;
+
+import etcodehome.freeterraforged.data.worldgen.preset.settings.MiscellaneousSettings;
+import etcodehome.freeterraforged.tags.FTFBlockTags;
+import etcodehome.freeterraforged.world.worldgen.feature.DecorateSnowFeature;
+import etcodehome.freeterraforged.world.worldgen.feature.ScreeFeature;
+import net.minecraft.world.level.block.Blocks;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -65,6 +72,11 @@ import etcodehome.freeterraforged.data.worldgen.preset.PresetManager;
 import etcodehome.freeterraforged.data.worldgen.preset.FTFWorldPresetDataPacks;
 import etcodehome.freeterraforged.data.worldgen.preset.FTFWorldPresets;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.ContinentType;
+import etcodehome.freeterraforged.data.worldgen.preset.settings.MiscellaneousSettings;
+import etcodehome.freeterraforged.tags.FTFBlockTags;
+import etcodehome.freeterraforged.world.worldgen.feature.DecorateSnowFeature;
+import etcodehome.freeterraforged.world.worldgen.feature.ScreeFeature;
+import net.minecraft.world.level.block.Blocks;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Presets;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
@@ -246,6 +258,59 @@ public final class PresetValidationRunner {
 	}
 
 	public record TestRecord(String name, String notes, boolean passed, String error) {}
+
+	private static void verifySnowCoverCompatibility() {
+		// Presets enable snowCoversSmallPlants by default.
+		MiscellaneousSettings defaults = MiscellaneousSettings.makeDefault();
+		if (!defaults.snowCoversSmallPlants) {
+			throw new AssertionError("Default miscellaneous settings must enable snow cover");
+		}
+		defaults.snowCoversSmallPlants = false;
+		JsonObject miscJson = MiscellaneousSettings.CODEC.encodeStart(JsonOps.INSTANCE, defaults)
+			.getOrThrow(msg -> new IllegalStateException("Failed to encode miscellaneous settings: " + msg))
+			.getAsJsonObject();
+		MiscellaneousSettings roundTrip = MiscellaneousSettings.CODEC.parse(JsonOps.INSTANCE, miscJson)
+			.getOrThrow(msg -> new IllegalStateException("Failed to decode miscellaneous settings: " + msg));
+		if (roundTrip.snowCoversSmallPlants) {
+			throw new AssertionError("snowCoversSmallPlants=false did not survive a codec round trip");
+		}
+		if (defaults.copy().snowCoversSmallPlants) {
+			throw new AssertionError("MiscellaneousSettings.copy() dropped snowCoversSmallPlants=false");
+		}
+		miscJson.remove("snowCoversSmallPlants");
+		MiscellaneousSettings legacy = MiscellaneousSettings.CODEC.parse(JsonOps.INSTANCE, miscJson)
+			.getOrThrow(msg -> new IllegalStateException("Legacy miscellaneous settings failed to decode: " + msg));
+		if (!legacy.snowCoversSmallPlants) {
+			throw new AssertionError("Legacy miscellaneous settings without snowCoversSmallPlants failed to decode as default enabled");
+		}
+
+		// Generated preset packs in existing worlds store decorate_snow configs.
+		DecorateSnowFeature.Config config = new DecorateSnowFeature.Config(true, true, new ScreeFeature.Config(0, 0, 0, 0, 0F, 0F, 0F, 0F, 0F), false);
+		JsonObject configJson = DecorateSnowFeature.Config.CODEC.encodeStart(JsonOps.INSTANCE, config)
+			.getOrThrow(msg -> new IllegalStateException("Failed to encode decorate_snow config: " + msg))
+			.getAsJsonObject();
+		if (DecorateSnowFeature.Config.CODEC.parse(JsonOps.INSTANCE, configJson)
+			.getOrThrow(msg -> new IllegalStateException("Failed to decode decorate_snow config: " + msg)).coverPlants()) {
+			throw new AssertionError("cover_plants=false did not survive a codec round trip");
+		}
+		configJson.remove("cover_plants");
+		if (!DecorateSnowFeature.Config.CODEC.parse(JsonOps.INSTANCE, configJson)
+			.getOrThrow(msg -> new IllegalStateException("Legacy decorate_snow config failed to decode: " + msg)).coverPlants()) {
+			throw new AssertionError("Legacy decorate_snow config without cover_plants failed to decode as default enabled");
+		}
+
+		// The bundled tag must resolve to small ground plants only.
+		if (!Blocks.POPPY.defaultBlockState().is(FTFBlockTags.SNOW_COVERABLE)
+			|| !Blocks.SHORT_GRASS.defaultBlockState().is(FTFBlockTags.SNOW_COVERABLE)
+			|| !Blocks.PINK_PETALS.defaultBlockState().is(FTFBlockTags.SNOW_COVERABLE)) {
+			throw new AssertionError("snow_coverable is missing expected small plants");
+		}
+		if (Blocks.TALL_GRASS.defaultBlockState().is(FTFBlockTags.SNOW_COVERABLE)
+			|| Blocks.SNOW.defaultBlockState().is(FTFBlockTags.SNOW_COVERABLE)
+			|| Blocks.OAK_SAPLING.defaultBlockState().is(FTFBlockTags.SNOW_COVERABLE)) {
+			throw new AssertionError("snow_coverable contains blocks that must never be covered");
+		}
+	}
 
 	private static String validateAdaptiveBiomeSearchResolution() {
 		String topology = LocateSearchValidator.validateTopology();
@@ -592,6 +657,27 @@ public final class PresetValidationRunner {
 			);
 			FTFCommon.LOGGER.info("[FTF-Test] PASSED: Live biome locate comparison ({})", locateNotes);
 			testRecords.add(new TestRecord(currentTestName, locateNotes, true, null));
+
+			currentTestName = "presetValidation.allVanillaBiomesCoverage." + loader;
+			watchdog.setStep(currentTestName);
+			VanillaBiomeCoverageValidator.Result coverageResult = VanillaBiomeCoverageValidator.validate(
+				server, loader, watchdog::setStep
+			);
+			watchdog.setStep(currentTestName);
+			String coverageNotes = String.format(
+				java.util.Locale.ROOT,
+				"%d/%d Overworld biomes located (>= %dx%d area) & %d non-Overworld rejected in %dms (max: %s @ %dms)",
+				coverageResult.overworldBiomesVerified(),
+				coverageResult.overworldBiomesVerified(),
+				etcodehome.freeterraforged.world.worldgen.search.FTFBiomeLocateQuery.MIN_BIOME_AREA_BLOCKS,
+				etcodehome.freeterraforged.world.worldgen.search.FTFBiomeLocateQuery.MIN_BIOME_AREA_BLOCKS,
+				coverageResult.nonOverworldBiomesRejected(),
+				coverageResult.totalMillis(),
+				coverageResult.slowestBiome(),
+				coverageResult.maxBiomeMillis()
+			);
+			FTFCommon.LOGGER.info("[FTF-Test] PASSED: Complete vanilla biome coverage validation ({})", coverageNotes);
+			testRecords.add(new TestRecord(currentTestName, coverageNotes, true, null));
 
 			currentTestName = "presetValidation.terrainLocateLivePlan." + loader;
 			watchdog.setStep(currentTestName);
@@ -1496,17 +1582,27 @@ public final class PresetValidationRunner {
 				if (resolvedViaSource == null || resolvedViaCell == null) {
 					throw new AssertionError("Foreign Climate.Sampler failed to resolve biome on TerraForgedChunkGenerator (Issue #298)");
 				}
+
+				var nbtOps = net.minecraft.resources.RegistryOps.create(net.minecraft.nbt.NbtOps.INSTANCE, server.registryAccess());
+				String encodedBiomeSourceKey = net.minecraft.world.level.biome.BiomeSource.CODEC
+					.encodeStart(nbtOps, liveTfGen.getBiomeSource())
+					.result()
+					.map(net.minecraft.nbt.Tag::toString)
+					.orElse(null);
+				if (encodedBiomeSourceKey == null || !encodedBiomeSourceKey.contains("freeterraforged:unified")) {
+					throw new AssertionError("UnifiedBiomeSource failed to serialize via BiomeSource.CODEC for stronghold cache keys (Issue #297): " + encodedBiomeSourceKey);
+				}
 			}
 
 			FTFCommon.LOGGER.info(
-				"[FTF-Test] PASSED: Mod compatibility shims verified (non-FTF dimension fallback continents={}, erosion={}, ridges={}; foreign Climate.Sampler adopted cleanly).",
+				"[FTF-Test] PASSED: Mod compatibility shims verified (non-FTF dimension fallback continents={}, erosion={}, ridges={}; foreign Climate.Sampler adopted cleanly; UnifiedBiomeSource codec verified).",
 				String.format(java.util.Locale.ROOT, "%.4f", fallbackContinent),
 				String.format(java.util.Locale.ROOT, "%.4f", fallbackErosion),
 				String.format(java.util.Locale.ROOT, "%.4f", fallbackRidges)
 			);
 			testRecords.add(new TestRecord(
 				currentTestName,
-				"Non-FTF dimension CellSampler fallback (#340/#310) & foreign Climate.Sampler adoption (#298) verified",
+				"Non-FTF dimension CellSampler fallback (#340/#310), foreign Climate.Sampler adoption (#298) & UnifiedBiomeSource codec (#297) verified",
 				true,
 				null
 			));
@@ -2348,6 +2444,16 @@ public final class PresetValidationRunner {
 				true,
 				null
 			));
+
+			// -----------------------------------------------------------------------------------------
+			// Snow Cover Setting Legacy Compatibility & Bundled Tag Resolution (Issue #284)
+			// -----------------------------------------------------------------------------------------
+			currentTestName = "presetValidation.snowCoverCompatibility." + loader;
+			watchdog.setStep(currentTestName);
+			FTFCommon.LOGGER.info("[FTF-Test] Verifying snow cover setting compatibility & snow_coverable tag...");
+			verifySnowCoverCompatibility();
+			FTFCommon.LOGGER.info("[FTF-Test] PASSED: Default presets and decorate_snow configs enable snow cover; explicit values round-trip; snow_coverable resolves.");
+			testRecords.add(new TestRecord(currentTestName, "Default presets & decorate_snow configs enable snow cover; explicit values round-trip; snow_coverable resolves", true, null));
 
 			// -----------------------------------------------------------------------------------------
 			// Complete Summary Banner

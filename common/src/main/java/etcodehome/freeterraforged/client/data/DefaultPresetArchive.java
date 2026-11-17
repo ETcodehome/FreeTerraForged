@@ -178,11 +178,7 @@ public final class DefaultPresetArchive {
 				return net.minecraft.network.chat.Component.translatable(builtinId).getString();
 			}
 			Path source = Path.of(savedPath);
-			String fileName = source.getFileName().toString();
-			if (fileName.endsWith(".json")) {
-				return fileName.substring(0, fileName.length() - 5);
-			}
-			return fileName;
+			return fileName(source);
 		} catch (Exception exception) {
 			return "FreeTerraForged";
 		}

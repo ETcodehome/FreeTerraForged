@@ -10,8 +10,13 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import com.mojang.datafixers.util.Pair;
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.DataResult;
+import com.mojang.serialization.DynamicOps;
 import com.mojang.serialization.MapCodec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
 
+import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
@@ -22,9 +27,34 @@ import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.BiomeSource;
 import net.minecraft.world.level.biome.Climate;
+import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 
 final class UnifiedBiomeSource extends BiomeSource {
 	private static final int PARALLEL_QUERY_THRESHOLD = 1024;
+	private static final Codec<BiomeSource> SAFE_ACQUISITION_SOURCE_CODEC = new Codec<>() {
+		@Override
+		public <T> DataResult<Pair<BiomeSource, T>> decode(DynamicOps<T> ops, T input) {
+			return BiomeSource.CODEC.decode(ops, input);
+		}
+
+		@Override
+		public <T> DataResult<T> encode(BiomeSource input, DynamicOps<T> ops, T prefix) {
+			try {
+				return BiomeSource.CODEC.encode(input, ops, prefix);
+			} catch (RuntimeException error) {
+				return DataResult.error(() -> "Unserializable acquisition biome source: " + error.getMessage());
+			}
+		}
+	};
+	static final MapCodec<UnifiedBiomeSource> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
+		SAFE_ACQUISITION_SOURCE_CODEC.fieldOf("acquisition_source").forGetter(UnifiedBiomeSource::acquisitionSource),
+		NoiseGeneratorSettings.CODEC.optionalFieldOf("settings").forGetter(UnifiedBiomeSource::generatorSettings),
+		Preset.DIRECT_CODEC.optionalFieldOf("preset").forGetter(UnifiedBiomeSource::activePreset),
+		Codec.STRING.optionalFieldOf("biome_replacement_fingerprint").forGetter(UnifiedBiomeSource::biomeReplacementFingerprint),
+		Codec.STRING.optionalFieldOf("tag_fingerprint").forGetter(UnifiedBiomeSource::tagFingerprint)
+	).apply(instance, (acquisitionSource, settings, preset, biomeReplacementFingerprint, tagFingerprint) ->
+		new UnifiedBiomeSource(acquisitionSource, Optional.empty())
+	));
 	private final BiomeSource acquisitionSource;
 	private final Optional<BiomeSourcePlanInput> acquisitionPlanInput;
 	private volatile TerraForgedChunkGenerator owner;
@@ -44,9 +74,33 @@ final class UnifiedBiomeSource extends BiomeSource {
 		this.owner = owner;
 	}
 
+	BiomeSource acquisitionSource() {
+		return this.acquisitionSource;
+	}
+
+	Optional<Holder<NoiseGeneratorSettings>> generatorSettings() {
+		TerraForgedChunkGenerator current = this.owner;
+		return current == null ? Optional.empty() : Optional.of(current.generatorSettings());
+	}
+
+	Optional<Preset> activePreset() {
+		TerraForgedChunkGenerator current = this.owner;
+		return current == null ? Optional.empty() : current.activePreset();
+	}
+
+	Optional<String> biomeReplacementFingerprint() {
+		TerraForgedChunkGenerator current = this.owner;
+		return current == null ? Optional.empty() : current.epoch().map(epoch -> epoch.biomeReplacementConfig().fingerprint());
+	}
+
+	Optional<String> tagFingerprint() {
+		TerraForgedChunkGenerator current = this.owner;
+		return current == null ? Optional.empty() : current.epoch().map(epoch -> epoch.tagEpoch().fingerprint());
+	}
+
 	@Override
 	protected MapCodec<? extends BiomeSource> codec() {
-		throw new UnsupportedOperationException("FTF runtime biome sources are serialized through their acquisition graph");
+		return CODEC;
 	}
 
 	@Override
