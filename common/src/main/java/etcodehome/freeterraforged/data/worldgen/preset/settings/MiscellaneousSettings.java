@@ -17,7 +17,9 @@ public class MiscellaneousSettings {
 		Codec.BOOL.fieldOf("vanillaLavaLakes").forGetter((s) -> s.vanillaLavaLakes),
 		Codec.BOOL.fieldOf("vanillaLavaSprings").forGetter((s) -> s.vanillaLavaSprings),
 		Codec.FLOAT.fieldOf("mountainBiomeUsage").forGetter((s) -> s.mountainBiomeUsage),
-		Codec.FLOAT.fieldOf("volcanoBiomeUsage").forGetter((s) -> s.volcanoBiomeUsage)
+		Codec.FLOAT.fieldOf("volcanoBiomeUsage").forGetter((s) -> s.volcanoBiomeUsage),
+		// Optional so presets and worlds saved before this setting existed decode with default enabled.
+		Codec.BOOL.optionalFieldOf("snowCoversSmallPlants", true).forGetter((s) -> s.snowCoversSmallPlants)
 	).apply(instance, MiscellaneousSettings::new));
 	
 	public boolean smoothLayerDecorator;
@@ -33,7 +35,40 @@ public class MiscellaneousSettings {
 	public boolean vanillaLavaSprings;
     public float mountainBiomeUsage;
     public float volcanoBiomeUsage;
+	public boolean snowCoversSmallPlants;
 	
+	public MiscellaneousSettings(
+		boolean smoothLayerDecorator,
+		int strataRegionSize,
+		boolean strataDecorator,
+		boolean oreCompatibleStoneOnly,
+		boolean screeDecorator,
+		boolean plainStoneErosion,
+		boolean naturalSnowDecorator,
+		boolean customBiomeFeatures,
+		boolean vanillaSprings,
+		boolean vanillaLavaLakes,
+		boolean vanillaLavaSprings,
+	    float mountainBiomeUsage,
+	    float volcanoBiomeUsage,
+		boolean snowCoversSmallPlants
+	) {
+		this.smoothLayerDecorator = smoothLayerDecorator;
+		this.strataRegionSize = strataRegionSize;
+		this.strataDecorator = strataDecorator;
+		this.oreCompatibleStoneOnly = oreCompatibleStoneOnly;
+		this.screeDecorator = screeDecorator;
+		this.plainStoneErosion = plainStoneErosion;
+		this.naturalSnowDecorator = naturalSnowDecorator;
+		this.customBiomeFeatures = customBiomeFeatures;
+		this.vanillaSprings = vanillaSprings;
+		this.vanillaLavaLakes = vanillaLavaLakes;
+		this.vanillaLavaSprings = vanillaLavaSprings;
+		this.mountainBiomeUsage = mountainBiomeUsage;
+		this.volcanoBiomeUsage = volcanoBiomeUsage;
+		this.snowCoversSmallPlants = snowCoversSmallPlants;
+	}
+
 	public MiscellaneousSettings(
 		boolean smoothLayerDecorator,
 		int strataRegionSize,
@@ -49,23 +84,11 @@ public class MiscellaneousSettings {
 	    float mountainBiomeUsage,
 	    float volcanoBiomeUsage
 	) {
-		this.smoothLayerDecorator = smoothLayerDecorator;
-		this.strataRegionSize = strataRegionSize;
-		this.strataDecorator = strataDecorator;
-		this.oreCompatibleStoneOnly = oreCompatibleStoneOnly;
-		this.screeDecorator = screeDecorator;
-		this.plainStoneErosion = plainStoneErosion;
-		this.naturalSnowDecorator = naturalSnowDecorator;
-		this.customBiomeFeatures = customBiomeFeatures;
-		this.vanillaSprings = vanillaSprings;
-		this.vanillaLavaLakes = vanillaLavaLakes;
-		this.vanillaLavaSprings = vanillaLavaSprings;
-		this.mountainBiomeUsage = mountainBiomeUsage;
-		this.volcanoBiomeUsage = volcanoBiomeUsage;
+		this(smoothLayerDecorator, strataRegionSize, strataDecorator, oreCompatibleStoneOnly, screeDecorator, plainStoneErosion, naturalSnowDecorator, customBiomeFeatures, vanillaSprings, vanillaLavaLakes, vanillaLavaSprings, mountainBiomeUsage, volcanoBiomeUsage, true);
 	}
 	
 	public MiscellaneousSettings copy() {
-		return new MiscellaneousSettings(this.smoothLayerDecorator, this.strataRegionSize, this.strataDecorator, this.oreCompatibleStoneOnly, this.screeDecorator, this.plainStoneErosion, this.naturalSnowDecorator, this.customBiomeFeatures, this.vanillaSprings, this.vanillaLavaLakes, this.vanillaLavaSprings, this.mountainBiomeUsage, this.volcanoBiomeUsage);
+		return new MiscellaneousSettings(this.smoothLayerDecorator, this.strataRegionSize, this.strataDecorator, this.oreCompatibleStoneOnly, this.screeDecorator, this.plainStoneErosion, this.naturalSnowDecorator, this.customBiomeFeatures, this.vanillaSprings, this.vanillaLavaLakes, this.vanillaLavaSprings, this.mountainBiomeUsage, this.volcanoBiomeUsage, this.snowCoversSmallPlants);
 	}
 
 	public static MiscellaneousSettings makeDefault(){
@@ -82,7 +105,8 @@ public class MiscellaneousSettings {
 			false,
 			false,
 			0.85438144F,
-			0.855F
+			0.855F,
+			true
 		);
 	}
 }
