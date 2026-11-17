@@ -160,7 +160,10 @@ jobs:
 
             // Base tokens representing the core test suites in canonical execution order
             const baseTestTokens = [
+              'presetValidation.adaptiveBiomeLocate',
+              'presetValidation.biomeLocateLivePlan',
               'presetValidation.allVanillaBiomesCoverage',
+              'presetValidation.terrainLocateLivePlan',
               'presetValidation.checkSynchronizedRegistry',
               'presetValidation.spawnChunkRegularity',
               'presetValidation.builtinRiversFallback',
@@ -172,7 +175,14 @@ jobs:
               'presetValidation.customFileResolution',
               'presetValidation.multiRunSeamContinuity',
               'presetValidation.inGameCommandParity',
-              'presetValidation.twoStageReloadSpawnPersistence'
+              'presetValidation.continentalnessDistributionAndControlPoints',
+              'presetValidation.twoStageReloadSpawnPersistence',
+              'presetValidation.nonFtfWorldResolution',
+              'presetValidation.modCompatibilityShims',
+              'presetValidation.undergroundBiomeBanding',
+              'presetValidation.biomeReplacementValidation',
+              'presetValidation.worldgenMemoryLeak',
+              'presetValidation.snowCoverCompatibility'
             ];
 
             const detailedReports = [];
@@ -237,7 +247,7 @@ jobs:
               }
             }
 
-            // Ensure all 24 tokens exist in parsedSuites (12 tests x 2 loaders)
+            // Ensure all expected tokens exist in parsedSuites (23 tests x 2 loaders)
             for (const base of baseTestTokens) {
               for (const loader of ['fabric', 'neoforge']) {
                 const expectedToken = `${base}.${loader}`;
