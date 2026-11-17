@@ -112,6 +112,8 @@ public class TriSubdivisionTest {
             int totalConnections = 0;
             int headwaters = 0;
             int confluences = 0;
+            int mountainNodes = 0;
+            int populatedMountainNodes = 0;
             for (TriSubdivisionRiverGenerator.FaceDrainageGraph g : graphs) {
                 assertEquals(ContinentalHydrology.NUM_STEPS, g.rows.size(), "Row count must strictly match ContinentalHydrology terracing steps (15)");
                 for (List<TriSubdivisionRiverGenerator.DrainageNode> row : g.rows) {
@@ -121,9 +123,13 @@ public class TriSubdivisionTest {
                             totalCulledNodes++;
                             assertFalse(n.isPopulated, "Culled nodes must never be populated");
                             assertEquals(0, n.feederCount, "Culled nodes must have 0 feeders");
-                        } else if (n.isPopulated) {
-                            totalPopulatedNodes++;
-                            if (n.feederCount >= 2) confluences++;
+                        } else {
+                            if (n.isMountain) mountainNodes++;
+                            if (n.isPopulated) {
+                                totalPopulatedNodes++;
+                                if (n.isMountain) populatedMountainNodes++;
+                                if (n.feederCount >= 2) confluences++;
+                            }
                         }
                     }
                 }
@@ -139,8 +145,8 @@ public class TriSubdivisionTest {
                 }
             }
 
-            System.out.printf("[Test] Candidate Nodes: %d (Culled: %d, Valid Land: %d), Populated Nodes: %d, River Segments: %d, Headwaters: %d, Confluences: %d%n",
-                    totalCandidateNodes, totalCulledNodes, totalCandidateNodes - totalCulledNodes, totalPopulatedNodes, totalConnections, headwaters, confluences);
+            System.out.printf("[Test] Candidate Nodes: %d (Culled: %d, Valid Land: %d), Populated: %d, River Segments: %d, Headwaters: %d, Confluences: %d, Mountain Nodes: %d (Populated: %d)%n",
+                    totalCandidateNodes, totalCulledNodes, totalCandidateNodes - totalCulledNodes, totalPopulatedNodes, totalConnections, headwaters, confluences, mountainNodes, populatedMountainNodes);
             assertTrue(totalCulledNodes > 0, "Some candidate nodes must be culled due to sea level");
             assertTrue(totalPopulatedNodes > 0, "Expected some nodes to be populated at riverCount = 8");
             assertTrue(totalPopulatedNodes < totalCandidateNodes - totalCulledNodes, "Every land node should NOT be connected at riverCount = 8");
@@ -352,13 +358,22 @@ public class TriSubdivisionTest {
 
                         if (!node.isPopulated) {
                             // Unconnected candidate node (subdivision grid slot)
-                            g2.setColor(new Color(148, 163, 184, 85));
-                            g2.fill(new Ellipse2D.Double(nx - 2.0, nz - 2.0, 4.0, 4.0));
+                            if (node.isMountain) {
+                                g2.setColor(new Color(239, 68, 68, 140)); // Red for mountain candidate
+                                g2.fill(new Ellipse2D.Double(nx - 2.5, nz - 2.5, 5.0, 5.0));
+                            } else {
+                                g2.setColor(new Color(148, 163, 184, 85));
+                                g2.fill(new Ellipse2D.Double(nx - 2.0, nz - 2.0, 4.0, 4.0));
+                            }
                             continue;
                         }
 
                         double radius = (node.feederCount >= 2) ? 6.5 : (node.feederCount == 1 ? 4.5 : 3.5);
-                        g2.setColor(nodeCol);
+                        if (node.isMountain) {
+                            g2.setColor(new Color(239, 68, 68)); // Vivid red for mountain nodes
+                        } else {
+                            g2.setColor(nodeCol);
+                        }
                         g2.fill(new Ellipse2D.Double(nx - radius, nz - radius, radius * 2.0, radius * 2.0));
 
                         // Confluence marker: bright cyan ring for merged nodes
@@ -392,10 +407,10 @@ public class TriSubdivisionTest {
 
             // 8. Legend and Diagnostic Overlay
             g2.setColor(new Color(15, 23, 42, 235)); // Slate dark background
-            g2.fillRoundRect(25, 25, 540, 380, 16, 16);
+            g2.fillRoundRect(25, 25, 570, 425, 16, 16);
             g2.setStroke(new BasicStroke(1.5F));
             g2.setColor(new Color(255, 255, 255, 90));
-            g2.drawRoundRect(25, 25, 540, 380, 16, 16);
+            g2.drawRoundRect(25, 25, 570, 425, 16, 16);
 
             g2.setFont(new Font("SansSerif", Font.BOLD, 17));
             g2.setColor(Color.WHITE);
@@ -407,9 +422,10 @@ public class TriSubdivisionTest {
             g2.drawString(String.format("Active Ocean Faces: %d | Terraces (Rows): %d (15 steps)", graphs.size(), ContinentalHydrology.NUM_STEPS), 45, 98);
             g2.drawString(String.format("Candidate Nodes: %d (Culled: %d, Land: %d) | Populated: %d", totalCandidateNodes, totalCulledNodes, totalCandidateNodes - totalCulledNodes, totalPopulatedNodes), 45, 116);
             g2.drawString(String.format("River Segments: %d | Confluences: %d | Headwaters: %d", totalConnections, confluences, headwaters), 45, 134);
+            g2.drawString(String.format("Mountain Nodes (Red): %d (Populated: %d) | Valley/Lowland: %d", mountainNodes, populatedMountainNodes, (totalCandidateNodes - totalCulledNodes) - mountainNodes), 45, 152);
 
             // Legend swatches
-            int legendY = 162;
+            int legendY = 176;
 
             // Peak
             g2.setColor(new Color(255, 215, 0));
@@ -432,6 +448,13 @@ public class TriSubdivisionTest {
             g2.drawLine(45, legendY - 2, 60, legendY - 2);
             g2.setColor(Color.WHITE);
             g2.drawString("Headwater Origin (Empty node on terrace row)", 68, legendY + 2);
+
+            // Mountain Terrain Node (Red)
+            legendY += 22;
+            g2.setColor(new Color(239, 68, 68));
+            g2.fill(new Ellipse2D.Double(47, legendY - 6, 8, 8));
+            g2.setColor(Color.WHITE);
+            g2.drawString("Mountain Terrain Node (Red - 80% non-mtn bias, suppressed headwaters)", 68, legendY + 2);
 
             // Confluence
             legendY += 22;

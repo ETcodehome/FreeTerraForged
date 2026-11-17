@@ -15,6 +15,7 @@ import etcodehome.freeterraforged.world.worldgen.cell.continent.uplift.UpliftCon
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.Rivermap;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.gen.GenWarp;
+import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Simplex2;
 import etcodehome.freeterraforged.world.worldgen.util.PosUtil;
@@ -41,6 +42,7 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
         public int feederCount;
         public boolean isPopulated;
         public boolean isCulled;
+        public boolean isMountain;
 
         public DrainageNode(float x, float z, float gradient, int row, int col) {
             this.x = x;
@@ -51,6 +53,7 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
             this.feederCount = 0;
             this.isPopulated = false;
             this.isCulled = false;
+            this.isMountain = false;
         }
     }
 
@@ -116,6 +119,18 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
             return cell.waterTable <= 0.001F;
         }
         return this.continent.getEdgeValue(x, z) < this.minEdgeValue;
+    }
+
+    /**
+     * Checks whether a world position (x, z) is mountain terrain.
+     */
+    public boolean isMountainTerrain(float x, float z) {
+        if (this.context != null && this.context.heightmap != null) {
+            Cell cell = this.scratchCell.get();
+            this.context.heightmap.applyTerrain(cell.reset(), x, z);
+            return cell.terrain.isMountain() || cell.terrain == TerrainType.ISLAND_MOUNTAINS;
+        }
+        return false;
     }
 
     /**
@@ -296,8 +311,11 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
         }
     }
 
+    protected final GeneratorContext context;
+
     public TriSubdivisionRiverGenerator(SimpleContinent continent, GeneratorContext context) {
         super(continent, context);
+        this.context = context;
     }
 
     @Override
@@ -536,7 +554,9 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
                 float nodeX = (1.0F - clampedS) * leftX + clampedS * rightX;
                 float nodeZ = (1.0F - clampedS) * leftZ + clampedS * rightZ;
 
-                rowNodes.add(new DrainageNode(nodeX, nodeZ, u, r, col));
+                DrainageNode node = new DrainageNode(nodeX, nodeZ, u, r, col);
+                node.isMountain = this.isMountainTerrain(nodeX, nodeZ);
+                rowNodes.add(node);
             }
             graph.rows.add(rowNodes);
         }
@@ -589,6 +609,17 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
             // Collect nodes in this row that will connect downward
             List<DrainageNode> activeNodes = new ArrayList<>();
 
+            // Downward candidates for this row
+            List<DrainageNode> nextRow = (r < rowCount - 1) ? graph.rows.get(r + 1) : null;
+            List<DrainageNode> validNextNodes = new ArrayList<>();
+            if (nextRow != null) {
+                for (DrainageNode cand : nextRow) {
+                    if (!cand.isCulled) {
+                        validNextNodes.add(cand);
+                    }
+                }
+            }
+
             for (int col = 0; col < curCount; col++) {
                 DrainageNode node = curRow.get(col);
                 if (node.isCulled) {
@@ -603,8 +634,44 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
                 float positionBasedRoll = posRandom.nextFloat();
 
                 if (node.feederCount == 0) {
+                    float effectiveSpawnChance = spawnChance;
+
+                    if (riverCount < 30) {
+                        // 1. If a node has a neighbour that is a river being fed by a parent, increase headwater likelihood by 50%
+                        boolean hasFedNeighbour = (col > 0 && !curRow.get(col - 1).isCulled && curRow.get(col - 1).feederCount > 0)
+                                               || (col < curCount - 1 && !curRow.get(col + 1).isCulled && curRow.get(col + 1).feederCount > 0);
+                        if (hasFedNeighbour) {
+                            effectiveSpawnChance = Math.min(1.0F, effectiveSpawnChance * 1.50F);
+                        }
+
+                        // 4. If a node is mountain terrain and both downstream nodes are mountain terrain, prevent headwater spawning 80% of the time
+                        if (node.isMountain && !validNextNodes.isEmpty()) {
+                            DrainageNode d1 = null;
+                            DrainageNode d2 = null;
+                            float dDist1 = Float.MAX_VALUE;
+                            float dDist2 = Float.MAX_VALUE;
+                            for (DrainageNode cand : validNextNodes) {
+                                float dx = cand.x - node.x;
+                                float dz = cand.z - node.z;
+                                float dSq = dx * dx + dz * dz;
+                                if (dSq < dDist1) {
+                                    dDist2 = dDist1;
+                                    d2 = d1;
+                                    dDist1 = dSq;
+                                    d1 = cand;
+                                } else if (dSq < dDist2) {
+                                    dDist2 = dSq;
+                                    d2 = cand;
+                                }
+                            }
+                            if (d1 != null && d1.isMountain && (d2 == null || d2.isMountain)) {
+                                effectiveSpawnChance *= 0.20F;
+                            }
+                        }
+                    }
+
                     // Empty node: check spawn chance > position based roll
-                    if (spawnChance > positionBasedRoll) {
+                    if (effectiveSpawnChance > positionBasedRoll) {
                         node.isPopulated = true;
                         activeNodes.add(node);
                     }
@@ -617,17 +684,6 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
 
             if (activeNodes.isEmpty()) {
                 continue;
-            }
-
-            // Downward routing to row below
-            List<DrainageNode> nextRow = (r < rowCount - 1) ? graph.rows.get(r + 1) : null;
-            List<DrainageNode> validNextNodes = new ArrayList<>();
-            if (nextRow != null) {
-                for (DrainageNode cand : nextRow) {
-                    if (!cand.isCulled) {
-                        validNextNodes.add(cand);
-                    }
-                }
             }
 
             // If at the bottom terrace (ocean baseline) OR all candidates below are culled (ocean margin reached):
@@ -682,8 +738,38 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
                               ^ (faceSeed + (long) r * 37L + (long) node.col * 17L);
                 Random connRandom = new Random(connSeed);
 
-                // Choose between the two nearest nodes (55% closer node, 45% second-nearest for lateral organic meandering)
-                int chosenCol = (connRandom.nextFloat() < 0.55F) ? nearCol1 : nearCol2;
+                DrainageNode cand1 = validNextNodes.get(nearCol1);
+                DrainageNode cand2 = validNextNodes.get(nearCol2);
+                boolean fed1 = cand1.feederCount > 0;
+                boolean fed2 = cand2.feederCount > 0;
+                boolean fedDiff = nearCol1 != nearCol2 && (fed1 ^ fed2);
+                boolean mtnDiff = nearCol1 != nearCol2 && (cand1.isMountain ^ cand2.isMountain);
+
+                int chosenCol;
+                if (nearCol1 == nearCol2) {
+                    chosenCol = nearCol1;
+                } else if (fedDiff && !mtnDiff) {
+                    // Bias candidate with an upstream parent 80% of the time
+                    int fedCol = fed1 ? nearCol1 : nearCol2;
+                    int unfedCol = fed1 ? nearCol2 : nearCol1;
+                    chosenCol = (connRandom.nextFloat() < 0.80F) ? fedCol : unfedCol;
+                } else if (mtnDiff && !fedDiff) {
+                    // Favor non-mountain candidate 80% of the time
+                    int nonMtnCol = (!cand1.isMountain) ? nearCol1 : nearCol2;
+                    int mtnCol = (cand1.isMountain) ? nearCol1 : nearCol2;
+                    chosenCol = (connRandom.nextFloat() < 0.80F) ? nonMtnCol : mtnCol;
+                } else if (fedDiff && mtnDiff) {
+                    // Both criteria apply: evaluate combined preference
+                    float score1 = 1.0F;
+                    float score2 = 1.0F;
+                    if (!cand1.isMountain) score1 *= 4.0F; else score2 *= 4.0F;
+                    if (fed1) score1 *= 4.0F; else score2 *= 4.0F;
+                    float p1 = score1 / (score1 + score2);
+                    chosenCol = (connRandom.nextFloat() < p1) ? nearCol1 : nearCol2;
+                } else {
+                    // Base organic meandering (55% closer node, 45% second-nearest)
+                    chosenCol = (connRandom.nextFloat() < 0.55F) ? nearCol1 : nearCol2;
+                }
 
                 // Enforce non-crossing constraint while allowing confluences (merging into the same node)
                 int minCol = (i == 0) ? 0 : lastTargetCol;
