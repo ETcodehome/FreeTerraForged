@@ -43,7 +43,11 @@ public class MountainRiverCutTest {
         if (env != null && !env.isBlank()) {
             return Path.of(env).toAbsolutePath().normalize();
         }
-        return Path.of("build", "reports", "preset-test-heightmaps").toAbsolutePath().normalize();
+        Path root = Path.of("").toAbsolutePath();
+        if (root.endsWith("common")) {
+            root = root.getParent();
+        }
+        return root.resolve(Path.of("build", "reports", "preset-test-heightmaps")).toAbsolutePath().normalize();
     }
 
     @BeforeAll

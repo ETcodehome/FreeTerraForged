@@ -133,6 +133,18 @@ tasks.register("archiveUnitTestReport") {
             unitTestReportFile.text = sb.toString()
             logger.lifecycle("[FTF-Test] Unit test outcomes archived to: ${unitTestReportFile.absolutePath}")
         }
+
+        def commonReportsDir = file("common/build/reports/preset-test-heightmaps")
+        if (commonReportsDir.exists() && commonReportsDir.isDirectory()) {
+            commonReportsDir.eachFile { f ->
+                if (f.isFile()) {
+                    def dest = new File(reportDir, f.name)
+                    if (!dest.exists() || dest.lastModified() < f.lastModified()) {
+                        dest.bytes = f.bytes
+                    }
+                }
+            }
+        }
     }
 }
 

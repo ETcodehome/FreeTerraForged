@@ -238,6 +238,15 @@ public final class LocalTestReportGenerator {
 			if (cmdVisual != null) cmdList.add(new ImageThumb(cmdVisual.getFileName().toString(), "Cmd Relief", "/ftf reliefmap Command"));
 			if (cmdRaw != null) cmdList.add(new ImageThumb(cmdRaw.getFileName().toString(), "Cmd Raw", "/ftf heightmap Command"));
 			if (!cmdList.isEmpty()) map.put(cmdToken, cmdList);
+
+			// 4. Built-in rivers and triangle subdivision network
+			String riverToken = "presetValidation.builtinRiversFallback." + loader;
+			List<ImageThumb> riverList = new ArrayList<>();
+			Path riverPreview = findLatest(allFiles, p -> p.getFileName().toString().equalsIgnoreCase("simulated_continent_uplift_preview.png"));
+			Path riverTopology = findLatest(allFiles, p -> p.getFileName().toString().equalsIgnoreCase("tri_subdivision_continent_review.png"));
+			if (riverPreview != null) riverList.add(new ImageThumb(riverPreview.getFileName().toString(), "Uplift Rivers", "Simulated Continent Uplift Rivers"));
+			if (riverTopology != null) riverList.add(new ImageThumb(riverTopology.getFileName().toString(), "Topology Map", "2D River & Lake Network Topology"));
+			if (!riverList.isEmpty()) map.put(riverToken, riverList);
 		}
 
 		return map;

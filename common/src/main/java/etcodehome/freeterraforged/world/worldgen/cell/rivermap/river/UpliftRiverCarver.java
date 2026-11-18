@@ -39,10 +39,8 @@ public class UpliftRiverCarver implements FTFRiverCarver {
     private Noise valleyPinchNoise;
     private Noise gullyNoise;
     private Noise rivuletNoise;
-    private Noise lakeWarpNoise;
     public LakeConfig lakeConfig;
     private boolean isUpliftContinent;
-    private final boolean isTerminalLake;
 
     // Precomputed immutable constants to alleviate CPU overhead per cell
     private final float bankHeightOffset;
@@ -54,7 +52,6 @@ public class UpliftRiverCarver implements FTFRiverCarver {
     public UpliftRiverCarver(River river, RiverWarp warp, RiverConfig config, RiverCarverSettings settings, Levels levels, LakeConfig lakeConfig, boolean isUpliftContinent) {
         this.fade = settings.fadeIn;
         this.fadeInv = 1.0F / settings.fadeIn;
-        this.isTerminalLake = settings.isTerminalLake;
 
         this.bedWidth = new Range(0.25F, (float)(config.bedWidth * config.bedWidth));
 
@@ -92,8 +89,6 @@ public class UpliftRiverCarver implements FTFRiverCarver {
         this.gullyNoise = Noises.simplex(9876, 65, 2);
         this.rivuletNoise = Noises.simplex(5432, 20, 2);
 
-        // Multi-octave simplex noise for complex, jagged lake boundaries (Scale 55, 3 Octaves)
-        this.lakeWarpNoise = Noises.simplex(7439, 55, 3);
 
         this.lakeConfig = lakeConfig;
         this.isUpliftContinent = isUpliftContinent;
@@ -108,9 +103,10 @@ public class UpliftRiverCarver implements FTFRiverCarver {
 
     @Override
     public void carve(Cell cell, float prevX, float prevZ, float prevT, float currX, float currZ, float currT) {
+        float effectiveT = (this.river.length < 5.0F) ? 1.0F : currT;
 
         // Fixed reference values
-        float distSqToCurr = this.getDistance2(currX, currZ, currT);
+        float distSqToCurr = this.getDistance2(currX, currZ, effectiveT);
 
         // Pre-bail if beyond the optimal calculated maximum zone 4 radius for this river/preset.
         // Avoids Math.sqrt, 3 layout noise samples, and valley mask math for outer bounding box corners.
@@ -119,7 +115,7 @@ public class UpliftRiverCarver implements FTFRiverCarver {
         }
 
         float currentLinearDist = (float) Math.sqrt(distSqToCurr);
-        float flatnessInput = isUpliftContinent ? cell.waterTable : currT;
+        float flatnessInput = NoiseUtil.clamp(effectiveT, 0.0F, 1.0F);
         float flatnessFactor = NoiseUtil.clamp(ContinentalHydrology.getFlatnessFactor(flatnessInput), 0.0F, 1.0F);
         float scaleFactor = 1.0F;
 
@@ -129,7 +125,7 @@ public class UpliftRiverCarver implements FTFRiverCarver {
         float valleyPinchVar = this.valleyPinchNoise.compute(currX, currZ, 6204) * 2.0F;
 
         // Always run mask logic to ensure clean falloffs
-        updateValleyMask(currT, distSqToCurr, scaleFactor, cell);
+        updateValleyMask(effectiveT, distSqToCurr, scaleFactor, cell);
 
         // Compute layout parameters
         float dynamicWidthMult = 1.0F + (widthVar * 0.35F);
@@ -138,9 +134,7 @@ public class UpliftRiverCarver implements FTFRiverCarver {
 
         // Zone radius calculations
         float biasedScale = scaleFactor * dynamicWidthMult * sideBias;
-        float zone1Radius = (float) Math.sqrt(this.getScaledSize(currT, this.bedWidth) * biasedScale);
-        float lakeMultiplier = getLakeMultiplier(cell, currT, currX, currZ, flatnessFactor);
-        zone1Radius *= lakeMultiplier;
+        float zone1Radius = (float) Math.sqrt(this.getScaledSize(effectiveT, this.bedWidth) * biasedScale);
 
         float zone2Width = this.zone2WidthFactor * biasedScale;
         float zone2Radius = zone1Radius + zone2Width;
@@ -181,14 +175,13 @@ public class UpliftRiverCarver implements FTFRiverCarver {
         float leadoutRadius = zone2Radius + leadoutWidth;
 
         // For flatter terrain (lowlands/plains), use bankWidth to provide an organic base valley width
-        float shrinkFactor = NoiseUtil.clamp(currT * this.fadeInv, 0.0F, 1.0F);
+        float shrinkFactor = NoiseUtil.clamp(effectiveT * this.fadeInv, 0.0F, 1.0F);
         float baseBankRun = config.bankWidth * dynamicWidthMult * valleyPinchMultiplier * shrinkFactor;
         float fadeWidth = Math.max(baseBankRun, heightBasedRun);
 
         // Clamp to max zone radius to prevent spatial bounds cutoff
         float fadeRadius = Math.min(leadoutRadius + fadeWidth, this.maxZone4Radius);
 
-        // Step 2: Early Exit Guard. If outside the fade radius, skip remaining operations
         if (currentLinearDist >= fadeRadius) return;
 
         // Step 3: Compute final cell heights
@@ -198,15 +191,15 @@ public class UpliftRiverCarver implements FTFRiverCarver {
         if (currentLinearDist < zone1Radius) {
             float depthVar = this.depthNoise.compute(currX, currZ, 3912);
             float dynamicDepthMult = 1.0F + (depthVar * 0.25F);
-            float depthProgress = NoiseUtil.clamp(currT, 0.0F, 1.0F);
+            float depthProgress = NoiseUtil.clamp(effectiveT, 0.0F, 1.0F);
             float bedDepthOffset = this.baseBedDepthOffset * dynamicDepthMult * depthProgress;
-            finalHeight = carveZone1Riverbed(cell, currT, distSqToCurr, bedDepthOffset, scaleFactor, targetWaterLevel, lakeMultiplier, flatnessFactor, depthVar);
+            finalHeight = carveZone1Riverbed(cell, effectiveT, distSqToCurr, bedDepthOffset, scaleFactor, targetWaterLevel, flatnessFactor, depthVar);
         } else if (currentLinearDist < zone2Radius) {
             finalHeight = carveZone2BankStep(currentLinearDist, zone1Radius, zone2Radius, targetWaterLevel, actualValleyFloorHeight);
         } else if (currentLinearDist < leadoutRadius) {
             finalHeight = actualValleyFloorHeight;
         } else {
-            finalHeight = carveValleySlopeFadeout(cell.height, currentLinearDist, leadoutRadius, fadeRadius, actualValleyFloorHeight, targetWaterLevel, currX, currZ, currT);
+            finalHeight = carveValleySlopeFadeout(cell.height, currentLinearDist, leadoutRadius, fadeRadius, actualValleyFloorHeight, targetWaterLevel, currX, currZ, effectiveT);
         }
 
         boolean carvedThisPass = finalHeight < cell.height;
@@ -220,17 +213,17 @@ public class UpliftRiverCarver implements FTFRiverCarver {
                 && carvedThisPass
                 && finalHeight < targetWaterLevel;
 
-        if (isSubMerged) {
-            storeFlowDirection(cell, currX, currZ, currT, zone1Radius, currentLinearDist, lakeMultiplier);
+        if (isSubMerged && !cell.terrain.isLake()) {
+            storeFlowDirection(cell, currX, currZ, currT, zone1Radius, currentLinearDist);
         }
     }
 
-    private void storeFlowDirection(Cell cell, float currX, float currZ, float currT, float zone1Radius, float currentLinearDist, float lakeMultiplier) {
+    private void storeFlowDirection(Cell cell, float currX, float currZ, float currT, float zone1Radius, float currentLinearDist) {
         float dx = this.river.dx;
         float dz = this.river.dz;
         float segmentLength = (float) Math.sqrt(dx * dx + dz * dz);
 
-        if (segmentLength < 0.0001F) {
+        if (segmentLength < 0.0001F || this.river.length < 5.0F) {
             cell.hasFlow = false;
             cell.flowAngle = 0;
             return;
@@ -258,21 +251,18 @@ public class UpliftRiverCarver implements FTFRiverCarver {
             inwardZ = 0.0F;
         }
 
-        // 4. Inward pull dampening factor (1.0 in standard rivers, drops toward 0.0 in wide lakes)
-        float lakeDampening = 1.0F / Math.max(1.0F, lakeMultiplier);
-
-        // 5. Normalized distance across channel (0.0 at center, 1.0 at bank)
+        // 4. Normalized distance across channel (0.0 at center, 1.0 at bank)
         float normalizedDist = zone1Radius > 0.0F ? NoiseUtil.clamp(currentLinearDist / zone1Radius, 0.0F, 1.0F) : 0.0F;
 
-        // 6. Inward turn weight: modest at banks, zero at center, suppressed in open lakes
-        float turnWeight = normalizedDist * 0.35F * lakeDampening;
+        // 5. Inward turn weight: modest at banks, zero at center
+        float turnWeight = normalizedDist * 0.35F;
 
-        // 7. Blend downstream vector with capped unit inward vector
+        // 6. Blend downstream vector with capped unit inward vector
         float flowX = dsX + (inwardX * turnWeight);
         float flowZ = dsZ + (inwardZ * turnWeight);
 
-        // 8. Calmer current in open lake bodies
-        float velocityMagnitude = (1.0F - (normalizedDist * normalizedDist * 0.50F)) * lakeDampening;
+        // 7. Velocity magnitude
+        float velocityMagnitude = 1.0F - (normalizedDist * normalizedDist * 0.50F);
 
         double radians = Math.atan2(flowZ, flowX);
 
@@ -310,47 +300,8 @@ public class UpliftRiverCarver implements FTFRiverCarver {
         return prospectiveZone;
     }
 
-    private float getLakeMultiplier(Cell cell, float currT, float currX, float currZ, float flatnessFactor) {
-        float plateauInput = isUpliftContinent ? cell.waterTable : currT;
-        float widenMultiplier = 1.0F;
-        int plateauIndex = ContinentalHydrology.getStepId(plateauInput);
-        if (this.shouldWidenOnPlateau(plateauIndex, lakeConfig, currT)) {
-            float lakeScaleMin = lakeConfig.sizeMin / 100.0F;
-            float lakeScaleMax = lakeConfig.sizeMax / 100.0F;
-
-            float baseStepScale = this.getLakeScaleForPlateau(plateauIndex, lakeScaleMin, lakeScaleMax);
-            float shorelineWarp = this.lakeWarpNoise.compute(currX, currZ, 7439);
-            float organicWarpFactor = baseStepScale * (1.0F + shorelineWarp * 0.45F);
-
-            float distanceMask = 1.0F;
-            float fadeWindow = 0.04F;
-
-            if (currT < lakeConfig.distanceMin) {
-                distanceMask = NoiseUtil.clamp((currT - (lakeConfig.distanceMin - fadeWindow)) / fadeWindow, 0.0F, 1.0F);
-            } else if (currT > lakeConfig.distanceMax) {
-                distanceMask = NoiseUtil.clamp(((lakeConfig.distanceMax + fadeWindow) - currT) / fadeWindow, 0.0F, 1.0F);
-            }
-
-            distanceMask = distanceMask * distanceMask * (3.0F - 2.0F * distanceMask);
-            widenMultiplier = 1.0F + (flatnessFactor * organicWarpFactor * distanceMask);
-        }
-
-        // Terminal lake widening at the base of ridges and terminal nodes
-        if (this.isTerminalLake && currT >= 0.35F) {
-            float tLake = (currT - 0.35F) / 0.65F;
-            float lakeShape = tLake * tLake * (3.0F - 2.0F * tLake);
-            float shorelineWarp = this.lakeWarpNoise.compute(currX, currZ, 7439);
-            float organicWarp = 1.0F + shorelineWarp * 0.35F;
-            float terminalLakeScale = (lakeConfig != null ? (lakeConfig.sizeMax / 100.0F) * 3.5F : 3.5F);
-            widenMultiplier = Math.max(widenMultiplier, 1.0F + (terminalLakeScale * lakeShape * organicWarp));
-        }
-
-        return widenMultiplier;
-    }
-
-    private float carveZone1Riverbed(Cell cell, float currT, float distSqToCurr, float bedDepthOffset, float sqScaleFactor, float targetWaterLevel, float widenMultiplier, float flatnessFactor, float depthVar) {
-        float effectiveScaleFactor = sqScaleFactor * (widenMultiplier * widenMultiplier);
-        float bedInfluence = this.getDistanceAlpha(currT, distSqToCurr, this.bedWidth, effectiveScaleFactor);
+    private float carveZone1Riverbed(Cell cell, float currT, float distSqToCurr, float bedDepthOffset, float sqScaleFactor, float targetWaterLevel, float flatnessFactor, float depthVar) {
+        float bedInfluence = this.getDistanceAlpha(currT, distSqToCurr, this.bedWidth, sqScaleFactor);
         bedInfluence = bedInfluence * bedInfluence * (3.0F - 2.0F * bedInfluence);
 
         // 1. Establish a baseline floor that naturally undulates between ~2.0 and ~2.6 blocks.
@@ -360,16 +311,7 @@ public class UpliftRiverCarver implements FTFRiverCarver {
         // 2. Base deep-water capability (driven by downstream progress)
         float progressiveDepth = bedDepthOffset;
 
-        // Repurpose depth noise to ensure lake basins break out of uniform parameters natively
-        if (widenMultiplier > 1.0F) {
-            float lakeDepthMulti = 0.35F + (lakeConfig.depth / 50.0F);
-            float lakeVariance = 1.0F + (depthVar * 0.40F);
-            progressiveDepth = progressiveDepth * (1.0F + (widenMultiplier - 1.0F) * lakeDepthMulti * lakeVariance);
-        }
-
         // 3. Combine the base floor with progressive depth, scaled by the regional flatness.
-        // Low flatness = channel is compacted tightly against our textured shallow floor.
-        // High flatness = channel expands deeply away from the baseline.
         float finalizedDepth = shallowNoiseFloor + (progressiveDepth * flatnessFactor);
 
         // 4. Inject structural deep-pocket trenches specifically when flatness factor is high
@@ -389,7 +331,7 @@ public class UpliftRiverCarver implements FTFRiverCarver {
         float bedHeight = targetWaterLevel - (finalizedDepth * bedInfluence);
 
         cell.moisture = 1.0F;
-        this.tag(cell, targetWaterLevel, bedHeight, widenMultiplier);
+        this.tag(cell, targetWaterLevel, bedHeight);
         return bedHeight;
     }
 
@@ -475,46 +417,6 @@ public class UpliftRiverCarver implements FTFRiverCarver {
         }
     }
 
-    private boolean shouldWidenOnPlateau(int plateauIndex, LakeConfig config, float currT) {
-        if (plateauIndex < -1) return false;
-
-        float fadeWindow = 0.04F;
-        if (currT < config.distanceMin - fadeWindow) return false;
-        if (currT > config.distanceMax + fadeWindow) return false;
-
-        int h1 = Float.floatToIntBits(this.river.x1);
-        int h2 = Float.floatToIntBits(this.river.z1);
-        long riverSeed = ((long) h1 << 32) | (h2 & 0xFFFFFFFFL);
-
-        riverSeed ^= plateauIndex * 0x5DEECE66DL;
-
-        return getDeterministicFloat(riverSeed) < config.chance;
-    }
-
-    private float getLakeScaleForPlateau(int plateauIndex, float minScale, float maxScale) {
-        int h1 = Float.floatToIntBits(this.river.x1);
-        int h2 = Float.floatToIntBits(this.river.z1);
-        long riverSeed = ((long) h1 << 32) | (h2 & 0xFFFFFFFFL);
-
-        riverSeed ^= plateauIndex * 0x2545F4914L;
-
-        return minScale + getDeterministicFloat(riverSeed) * (maxScale - minScale);
-    }
-
-    /**
-     * A stateless, high-quality mixing hash function that maps a long seed
-     * to a pseudo-random uniform float in the range [0.0f, 1.0f).
-     * Eliminates object allocation completely.
-     */
-    private static float getDeterministicFloat(long seed) {
-        seed ^= (seed >>> 33);
-        seed *= 0xff51afd7ed558ccdL;
-        seed ^= (seed >>> 33);
-        seed *= 0xc4ceb9fe1a85ec53L;
-        seed ^= (seed >>> 33);
-        return (float) (seed & 0xFFFFFF) / 16777216.0F;
-    }
-
     @Override
     public RiverConfig createForkConfig(float t, Levels levels) {
         int bedHeight = levels.scale(this.getScaledSize(t, this.bedDepth));
@@ -527,6 +429,9 @@ public class UpliftRiverCarver implements FTFRiverCarver {
     }
 
     private float getDistance2(float x, float y, float t) {
+        if (this.river.length < 5.0F) {
+            return Line.distSq(x, y, this.river.x1, this.river.z1);
+        }
         if (t <= 0.0F) return Line.distSq(x, y, this.river.x1, this.river.z1);
         if (t >= 1.0F) return Line.distSq(x, y, this.river.x2, this.river.z2);
         float px = this.river.x1 + t * this.river.dx;
@@ -535,13 +440,8 @@ public class UpliftRiverCarver implements FTFRiverCarver {
     }
 
     private float getDistanceAlpha(float t, float dist2, Range range, float sqScaleFactor) {
-
         float size2 = this.getScaledSize(t, range) * sqScaleFactor;
-
-        // fade is beyond area of maximum influence
         if (dist2 >= size2) return 0.0F;
-
-        // return a gradient between 1.0 (at the exact center) and 0.0 (right at the edge).
         return 1.0F - dist2 / size2;
     }
 
@@ -553,18 +453,15 @@ public class UpliftRiverCarver implements FTFRiverCarver {
         return NoiseUtil.lerp(range.min(), range.max(), t * this.fadeInv);
     }
 
-    private void tag(Cell cell, float waterLevel, float bedHeight, float widenMultiplier) {
+    private void tag(Cell cell, float waterLevel, float bedHeight) {
+        if (cell.terrain.isLake()) return;
         float newMax = Math.max(this.waterLine, waterLevel);
         if (newMax > cell.riverWaterLevel) {
             cell.riverWaterLevel = newMax;
         }
         if (bedHeight <= newMax) {
             cell.erosionMask = true;
-            if (this.isTerminalLake && widenMultiplier > 1.8F) {
-                cell.terrain = TerrainType.LAKE;
-            } else if (!cell.terrain.isLake()) {
-                cell.terrain = TerrainType.RIVER;
-            }
+            cell.terrain = TerrainType.RIVER;
         }
     }
 
@@ -577,14 +474,7 @@ public class UpliftRiverCarver implements FTFRiverCarver {
     public float getMaxZone4RadiusSq() { return this.maxZone4RadiusSq; }
 
     public static float calculateMaxRadius(RiverConfig config, RiverCarverSettings settings, Levels levels, LakeConfig lakeConfig) {
-        float maxLakeMultiplier = 1.0F;
-        if (lakeConfig != null) {
-            maxLakeMultiplier += (lakeConfig.sizeMax / 100.0F) * 1.45F;
-        }
-        if (settings != null && settings.isTerminalLake) {
-            maxLakeMultiplier = Math.max(maxLakeMultiplier, 5.0F);
-        }
-        float maxZone1 = (float) (config.bedWidth * 1.375F * maxLakeMultiplier);
+        float maxZone1 = (float) (config.bedWidth * 1.375F);
         float zone2WidthFactor = (config.maxBankHeight - config.minBankHeight) / levels.unit;
         float maxZone2 = zone2WidthFactor * 1.89F;
 

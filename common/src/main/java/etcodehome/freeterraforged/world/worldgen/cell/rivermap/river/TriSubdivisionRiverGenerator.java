@@ -131,6 +131,41 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
     private final ThreadLocal<Cell> scratchCell = ThreadLocal.withInitial(Cell::new);
 
     /**
+     * Checks whether a candidate node falls off the edge of the continental uplift plateau into lowlands.
+     */
+    private boolean isOffUpliftPlateau(DrainageNode node) {
+        Cell cell = this.scratchCell.get();
+        this.continent.apply(cell.reset(), node.x, node.z);
+        return cell.waterTable < 0.01F;
+    }
+
+    /**
+     * Checks whether a river connection crosses an uphill elevation rise in water table along its actual spline.
+     */
+    private boolean hasUphillRise(
+            RiverConnection conn,
+            Map<DrainageNode, RiverConnection> outgoing,
+            Map<DrainageNode, List<RiverConnection>> incoming,
+            long faceSeed
+    ) {
+        Cell cell = this.scratchCell.get();
+        float prevLevel = Float.MAX_VALUE;
+        for (int s = 0; s <= 20; s++) {
+            float t = s / 20.0F;
+            long pt = sampleSplinePacked(conn, outgoing, incoming, t, faceSeed);
+            float x = PosUtil.unpackLeftf(pt);
+            float z = PosUtil.unpackRightf(pt);
+            this.continent.apply(cell.reset(), x, z);
+            float waterLevel = ContinentalHydrology.getTargetWaterHeight(cell.waterTable);
+            if (waterLevel > prevLevel + 0.001F) {
+                return true;
+            }
+            prevLevel = waterLevel;
+        }
+        return false;
+    }
+
+    /**
      * Checks whether a world position (x, z) is below sea level (in the ocean).
      */
     public boolean isBelowSeaLevel(float x, float z) {
@@ -159,7 +194,7 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
      * combined with multi-frequency simplex domain warping and harmonic wiggles to match the organic meandering
      * style of FreeTerraForged rivers.
      */
-    public static double[] sampleRoundedSpline(
+    public static long sampleSplinePacked(
             RiverConnection conn,
             Map<DrainageNode, RiverConnection> outgoingMap,
             Map<DrainageNode, List<RiverConnection>> incomingMap,
@@ -175,7 +210,7 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
         float segDz = z2 - z1;
         float segLen = (float) Math.sqrt(segDx * segDx + segDz * segDz);
         if (segLen < 1.0e-4F) {
-            return new double[]{x1, z1};
+            return PosUtil.packf(x1, z1);
         }
 
         float unitSegX = segDx / segLen;
@@ -230,15 +265,15 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
             tan1Z = unitSegZ;
         }
 
-        // Enforce tan1 forward projection dot(tan1, unitSeg) >= 0.50 (angle <= 60 deg)
+        // Enforce tan1 forward projection dot(tan1, unitSeg) >= 0.80 (angle <= 36.8 deg)
         float dot1 = tan1X * unitSegX + tan1Z * unitSegZ;
-        if (dot1 < 0.50F) {
+        if (dot1 < 0.80F) {
             float perpX = tan1X - dot1 * unitSegX;
             float perpZ = tan1Z - dot1 * unitSegZ;
             float perpLen = (float) Math.sqrt(perpX * perpX + perpZ * perpZ);
             if (perpLen > 1.0e-4F) {
-                tan1X = 0.50F * unitSegX + 0.8660254F * (perpX / perpLen);
-                tan1Z = 0.50F * unitSegZ + 0.8660254F * (perpZ / perpLen);
+                tan1X = 0.80F * unitSegX + 0.60F * (perpX / perpLen);
+                tan1Z = 0.80F * unitSegZ + 0.60F * (perpZ / perpLen);
             } else {
                 tan1X = unitSegX;
                 tan1Z = unitSegZ;
@@ -256,31 +291,31 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
             tan2Z = unitSegZ;
         }
 
-        // Enforce tan2 forward projection dot(tan2, unitSeg) >= 0.50 (angle <= 60 deg)
+        // Enforce tan2 forward projection dot(tan2, unitSeg) >= 0.80 (angle <= 36.8 deg)
         float dot2 = tan2X * unitSegX + tan2Z * unitSegZ;
-        if (dot2 < 0.50F) {
+        if (dot2 < 0.80F) {
             float perpX = tan2X - dot2 * unitSegX;
             float perpZ = tan2Z - dot2 * unitSegZ;
             float perpLen = (float) Math.sqrt(perpX * perpX + perpZ * perpZ);
             if (perpLen > 1.0e-4F) {
-                tan2X = 0.50F * unitSegX + 0.8660254F * (perpX / perpLen);
-                tan2Z = 0.50F * unitSegZ + 0.8660254F * (perpZ / perpLen);
+                tan2X = 0.80F * unitSegX + 0.60F * (perpX / perpLen);
+                tan2Z = 0.80F * unitSegZ + 0.60F * (perpZ / perpLen);
             } else {
                 tan2X = unitSegX;
                 tan2Z = unitSegZ;
             }
         }
 
-        // 4. Cubic Hermite spline interpolation with scale factor 0.65 to guarantee S'(t) . unitSeg > 0
+        // 4. Cubic Hermite spline interpolation with scale factor 0.35 to guarantee S'(t) . unitSeg > 0
         float h00 = (2.0F * t - 3.0F) * t * t + 1.0F;
         float h10 = ((t - 2.0F) * t + 1.0F) * t;
         float h01 = (-2.0F * t + 3.0F) * t * t;
         float h11 = (t - 1.0F) * t * t;
 
-        float m1X = tan1X * segLen * 0.65F;
-        float m1Z = tan1Z * segLen * 0.65F;
-        float m2X = tan2X * segLen * 0.65F;
-        float m2Z = tan2Z * segLen * 0.65F;
+        float m1X = tan1X * segLen * 0.35F;
+        float m1Z = tan1Z * segLen * 0.35F;
+        float m2X = tan2X * segLen * 0.35F;
+        float m2Z = tan2Z * segLen * 0.35F;
 
         float sx = h00 * x1 + h10 * m1X + h01 * x2 + h11 * m2X;
         float sz = h00 * z1 + h10 * m1Z + h01 * z2 + h11 * m2Z;
@@ -299,24 +334,39 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
         // Low-frequency sweeping meander (~110 block wavelength for ~2 natural curves per 225m terrace step)
         float meanderFreq = 0.0090F;
         float meanderNoise = Simplex2.sample(sx * meanderFreq, sz * meanderFreq, (int) seed);
-        float meanderAmp = 22.0F * envelope;
+        float meanderAmp = 9.0F * envelope;
 
         // Secondary higher-frequency organic wiggle (~30 block wavelength)
         float wiggleFreq = 0.0350F;
         float rads = meanderNoise * (float) Math.PI + (sx + sz) * wiggleFreq;
-        float wiggleAmp = 8.0F * envelope;
+        float wiggleAmp = 3.5F * envelope;
 
         // Tertiary high-frequency organic chatter (~12 block wavelength) for natural riverbank variation
         float chatterFreq = 0.0800F;
         float chatterNoise = Simplex2.sample(sx * chatterFreq, sz * chatterFreq, (int) (seed ^ 0x9E3779B9L));
-        float chatterAmp = 3.0F * envelope;
+        float chatterAmp = 1.5F * envelope;
 
         float totalOffset = meanderNoise * meanderAmp + NoiseUtil.cos(rads) * wiggleAmp + chatterNoise * chatterAmp;
 
-        double finalX = sx + normX * totalOffset;
-        double finalZ = sz + normZ * totalOffset;
+        float finalX = sx + normX * totalOffset;
+        float finalZ = sz + normZ * totalOffset;
 
-        return new double[]{finalX, finalZ};
+        return PosUtil.packf(finalX, finalZ);
+    }
+
+    /**
+     * Compatibility helper returning double[] coordinates. For zero-allocation hot paths,
+     * use {@link #sampleSplinePacked(RiverConnection, Map, Map, float, long)}.
+     */
+    public static double[] sampleRoundedSpline(
+            RiverConnection conn,
+            Map<DrainageNode, RiverConnection> outgoingMap,
+            Map<DrainageNode, List<RiverConnection>> incomingMap,
+            float t,
+            long seed
+    ) {
+        long packed = sampleSplinePacked(conn, outgoingMap, incomingMap, t, seed);
+        return new double[]{PosUtil.unpackLeftf(packed), PosUtil.unpackRightf(packed)};
     }
 
     /**
@@ -328,6 +378,8 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
         private final Map<DrainageNode, RiverConnection> outgoingMap;
         private final Map<DrainageNode, List<RiverConnection>> incomingMap;
         private final long seed;
+        private final float kc1;
+        private final float kc2;
 
         public SplineRiverWarp(
                 RiverConnection conn,
@@ -340,6 +392,100 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
             this.outgoingMap = outgoingMap;
             this.incomingMap = incomingMap;
             this.seed = seed;
+
+            float x1 = conn.from.x;
+            float z1 = conn.from.z;
+            float x2 = conn.to.x;
+            float z2 = conn.to.z;
+            float segDx = x2 - x1;
+            float segDz = z2 - z1;
+            float segLen = (float) Math.sqrt(segDx * segDx + segDz * segDz);
+            float unitSegX = (segLen > 1.0e-4F) ? segDx / segLen : 0.0F;
+            float unitSegZ = (segLen > 1.0e-4F) ? segDz / segLen : 0.0F;
+
+            float inDx = unitSegX;
+            float inDz = unitSegZ;
+            List<RiverConnection> inList = incomingMap != null ? incomingMap.get(conn.from) : null;
+            if (inList != null && !inList.isEmpty()) {
+                RiverConnection mainIn = inList.get(0);
+                for (RiverConnection c : inList) {
+                    if (c.isMain) {
+                        mainIn = c;
+                        break;
+                    }
+                }
+                float dx = x1 - mainIn.from.x;
+                float dz = z1 - mainIn.from.z;
+                float len = (float) Math.sqrt(dx * dx + dz * dz);
+                if (len > 1.0e-4F) {
+                    inDx = dx / len;
+                    inDz = dz / len;
+                }
+            }
+
+            float outDx = unitSegX;
+            float outDz = unitSegZ;
+            RiverConnection outConn = outgoingMap != null ? outgoingMap.get(conn.to) : null;
+            if (outConn != null) {
+                float dx = outConn.to.x - x2;
+                float dz = outConn.to.z - z2;
+                float len = (float) Math.sqrt(dx * dx + dz * dz);
+                if (len > 1.0e-4F) {
+                    outDx = dx / len;
+                    outDz = dz / len;
+                }
+            }
+
+            float tan1X = inDx + unitSegX;
+            float tan1Z = inDz + unitSegZ;
+            float len1 = (float) Math.sqrt(tan1X * tan1X + tan1Z * tan1Z);
+            if (len1 > 1.0e-4F) {
+                tan1X /= len1;
+                tan1Z /= len1;
+            } else {
+                tan1X = unitSegX;
+                tan1Z = unitSegZ;
+            }
+            float dot1 = tan1X * unitSegX + tan1Z * unitSegZ;
+            if (dot1 < 0.80F) {
+                float perpX = tan1X - dot1 * unitSegX;
+                float perpZ = tan1Z - dot1 * unitSegZ;
+                float perpLen = (float) Math.sqrt(perpX * perpX + perpZ * perpZ);
+                if (perpLen > 1.0e-4F) {
+                    tan1X = 0.80F * unitSegX + 0.60F * (perpX / perpLen);
+                    tan1Z = 0.80F * unitSegZ + 0.60F * (perpZ / perpLen);
+                } else {
+                    tan1X = unitSegX;
+                    tan1Z = unitSegZ;
+                }
+            }
+
+            float tan2X = unitSegX + outDx;
+            float tan2Z = unitSegZ + outDz;
+            float len2 = (float) Math.sqrt(tan2X * tan2X + tan2Z * tan2Z);
+            if (len2 > 1.0e-4F) {
+                tan2X /= len2;
+                tan2Z /= len2;
+            } else {
+                tan2X = unitSegX;
+                tan2Z = unitSegZ;
+            }
+            float dot2 = tan2X * unitSegX + tan2Z * unitSegZ;
+            if (dot2 < 0.80F) {
+                float perpX = tan2X - dot2 * unitSegX;
+                float perpZ = tan2Z - dot2 * unitSegZ;
+                float perpLen = (float) Math.sqrt(perpX * perpX + perpZ * perpZ);
+                if (perpLen > 1.0e-4F) {
+                    tan2X = 0.80F * unitSegX + 0.60F * (perpX / perpLen);
+                    tan2Z = 0.80F * unitSegZ + 0.60F * (perpZ / perpLen);
+                } else {
+                    tan2X = unitSegX;
+                    tan2Z = unitSegZ;
+                }
+            }
+
+            this.kc1 = (tan1X * unitSegX + tan1Z * unitSegZ) * 0.35F;
+            this.kc2 = (tan2X * unitSegX + tan2Z * unitSegZ) * 0.35F;
         }
 
         @Override
@@ -353,13 +499,43 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
                 return 0L;
             }
             float clampedT = NoiseUtil.clamp(t, 0.0F, 1.0F);
-            double[] splinePt = sampleRoundedSpline(this.conn, this.outgoingMap, this.incomingMap, clampedT, this.seed);
+            float tau = solveSplineTau(clampedT, this.kc1, this.kc2);
+            long splinePt = sampleSplinePacked(this.conn, this.outgoingMap, this.incomingMap, tau, this.seed);
             float lx = river.x1 + clampedT * river.dx;
             float lz = river.z1 + clampedT * river.dz;
-            float dx = lx - (float) splinePt[0];
-            float dz = lz - (float) splinePt[1];
+            float dx = lx - PosUtil.unpackLeftf(splinePt);
+            float dz = lz - PosUtil.unpackRightf(splinePt);
             return PosUtil.packf(dx, dz);
         }
+    }
+
+    /**
+     * Solves the true spline parameter tau in [0, 1] such that the longitudinal projection u(tau)
+     * matches the line-projection targetU. Uses 4 iterations of Newton-Raphson with guaranteed
+     * quadratic convergence since u'(tau) >= 0.325 > 0 is strictly monotonic.
+     */
+    public static float solveSplineTau(float targetU, float kc1, float kc2) {
+        if (targetU <= 0.0F) return targetU;
+        if (targetU >= 1.0F) return targetU;
+        float tau = targetU;
+        for (int i = 0; i < 4; i++) {
+            float tau2 = tau * tau;
+            float tau3 = tau2 * tau;
+            float h01 = 3.0F * tau2 - 2.0F * tau3;
+            float h10 = tau - 2.0F * tau2 + tau3;
+            float h11 = -tau2 + tau3;
+            float u = h01 + kc1 * h10 + kc2 * h11;
+            float err = u - targetU;
+            if (Math.abs(err) < 1.0e-5F) break;
+
+            float dh01 = 6.0F * (tau - tau2);
+            float dh10 = 1.0F - 4.0F * tau + 3.0F * tau2;
+            float dh11 = -2.0F * tau + 3.0F * tau2;
+            float du = dh01 + kc1 * dh10 + kc2 * dh11;
+            if (du < 1.0e-4F) du = 1.0e-4F;
+            tau = NoiseUtil.clamp(tau - err / du, 0.0F, 1.0F);
+        }
+        return tau;
     }
 
     protected final GeneratorContext context;
@@ -429,17 +605,12 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
 
             for (RiverConnection conn : graph.connections) {
                 RiverConfig config = conn.isMain ? this.main : this.fork;
-                boolean isTerminalLake = conn.to.isLake && !graph.outgoing.containsKey(conn.to);
                 float boundingRadius = config.calculateBoundingRadius(this.levels);
-                if (isTerminalLake) {
-                    boundingRadius = Math.max(boundingRadius, 450.0F);
-                }
                 River river = new River(conn.from.x, conn.from.z, conn.to.x, conn.to.z, boundingRadius);
 
                 RiverCarverSettings settings = new RiverCarverSettings(random);
                 settings.fadeIn = conn.isHeadwater ? config.fade : 0.0F;
                 settings.connecting = !conn.isHeadwater;
-                settings.isTerminalLake = isTerminalLake;
                 settings.valleySize = 275.0F * (conn.isMain ? River.MAIN_VALLEY.next(random) : River.FORK_VALLEY.next(random));
 
                 RiverWarp riverWarp = new SplineRiverWarp(conn, graph.outgoing, graph.incoming, faceWarpSeed);
@@ -462,21 +633,21 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
                 }
             }
 
-            // Carve real lake basins for isolated valley lakes on this face
+            // Carve real, flat, organic lake basins for all explicit lake nodes on this face
             for (List<DrainageNode> row : graph.rows) {
                 for (DrainageNode lakeNode : row) {
-                    if (lakeNode.isLake && !lakeNode.isPopulated && lakeNode.feederCount == 0 && !lakeNode.isCulled) {
+                    if (lakeNode.isLake && !lakeNode.isCulled && !isBelowSeaLevel(lakeNode.x, lakeNode.z)) {
                         RiverConfig config = this.fork;
-                        float boundingRadius = 450.0F;
-                        River lakeRiver = new River(lakeNode.x, lakeNode.z, lakeNode.x + 0.1F, lakeNode.z + 0.1F, boundingRadius);
-                        RiverCarverSettings settings = new RiverCarverSettings(random);
-                        settings.fadeIn = 0.0F;
-                        settings.connecting = false;
-                        settings.isTerminalLake = true;
-                        settings.valleySize = 250.0F;
-                        FTFRiverCarver carver = new UpliftRiverCarver(lakeRiver, RiverWarp.NONE, config, settings, this.levels, this.lake, true);
-                        networks.add(Network.builder(carver));
+                        FTFRiverCarver lakeCarver = new UpliftLakeCarver(lakeNode, config, this.levels, this.lake, this.continentScale, worldSeed);
+                        networks.add(Network.builder(lakeCarver));
                     }
+                }
+            }
+            for (DrainageNode lakeNode : graph.coastalNodes) {
+                if (lakeNode.isLake && !lakeNode.isCulled && !isBelowSeaLevel(lakeNode.x, lakeNode.z)) {
+                    RiverConfig config = this.fork;
+                    FTFRiverCarver lakeCarver = new UpliftLakeCarver(lakeNode, config, this.levels, this.lake, this.continentScale, worldSeed);
+                    networks.add(Network.builder(lakeCarver));
                 }
             }
         }
@@ -504,16 +675,19 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
         float[] allPlateaus = ContinentalHydrology.getPlateauCenters();
 
         for (int i = 0; i < voronoi.edgeCount; i++) {
-            // Skip bridged borders with tectonic uplift connection to adjacent Voronoi peak (prevents uphill rivers)
-            if (voronoi.isTectonicActive[i]) {
-                continue;
-            }
-
             // Skip thin sliver sectors (< 20 degrees)
             if (PlateUpliftBridge.isSectorTooThin(voronoi.lo[i], voronoi.hi[i], voronoi.len[i])) {
                 continue;
             }
 
+            // Tectonic active borders connect to an adjacent peak via a high mountain saddle (~0.75 uplift);
+            // rivers cannot flow into or across this rising saddle, so tectonic active sectors generate no rivers.
+            if (voronoi.isTectonicActive[i]) {
+                continue;
+            }
+
+            // Bridged borders connect towards adjacent landmasses; rivers on these sectors flow
+            // downhill from the centroid peak and terminate in lakes before the border.
             boolean isBridged = voronoi.isBridged[i];
 
             float vAx = (voronoi.mx[i] + voronoi.lo[i] * voronoi.tx[i]) / frequency;
@@ -567,55 +741,63 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
             return 1.0F;
         }
 
+        // Lowland plains (r > 8) receive water from upstream networks and do not spawn new headwaters.
+        if (r > 8) {
+            return 0.0F;
+        }
+
         float frac = riverCount / 30.0F;
         if (r == 0) {
             // Centroid peak tier: moderate spawn chance scaled with river count (not every face starts at the peak)
-            return frac * 1.1F;
+            return frac * 0.9F;
         }
 
-        // Upper tiers spawn major tributaries; lower tiers spawn smaller feeds hooking in
-        float elevWeight = (float) (rowCount - 1 - r) / (float) (rowCount - 1);
-        float baseRate = 0.08F + 0.22F * elevWeight;
-
-        float nonLinearFrac = (float) Math.pow(frac, 1.3);
-        if (frac > 0.7F) {
-            float t = (frac - 0.7F) / 0.3F;
-            return baseRate * nonLinearFrac * (1.0F - t) + 1.0F * t;
+        if (r <= 3) {
+            // Upper catchment tiers (r = 1, 2, 3): primary headwater source across mountain face
+            float elevWeight = (float) (4 - r) / 4.0F;
+            float baseRate = 0.30F + 0.35F * elevWeight;
+            return baseRate * frac * 1.5F;
+        } else {
+            // Mid-elevation tiers (r = 4 to 8): secondary tributary spawning to create dendritic branching
+            float elevWeight = (float) (9 - r) / 5.0F;
+            float baseRate = 0.20F + 0.25F * elevWeight;
+            return baseRate * frac;
         }
-        return baseRate * nonLinearFrac * 1.8F;
     }
 
     /**
      * Finds the closest two candidate nodes on the row below BEFORE any ocean culling.
      * Ensures downstream routing only ever considers immediately adjacent downhill slots
-     * and never jumps laterally across the continent.
+     * based on sector fraction s and never jumps laterally across the continent.
      */
-    private DrainageNode[] findClosestTwoDownstreamNodes(DrainageNode node, List<DrainageNode> nextRow) {
+    private DrainageNode[] findClosestTwoDownstreamNodes(DrainageNode node, List<DrainageNode> curRow, List<DrainageNode> nextRow) {
         if (nextRow == null || nextRow.isEmpty()) {
             return new DrainageNode[0];
         }
         if (nextRow.size() == 1) {
             return new DrainageNode[]{nextRow.get(0)};
         }
-        DrainageNode best1 = null;
-        DrainageNode best2 = null;
-        float dist1 = Float.MAX_VALUE;
-        float dist2 = Float.MAX_VALUE;
-        for (DrainageNode cand : nextRow) {
-            float dx = cand.x - node.x;
-            float dz = cand.z - node.z;
-            float dSq = dx * dx + dz * dz;
-            if (dSq < dist1) {
-                dist2 = dist1;
-                best2 = best1;
-                dist1 = dSq;
-                best1 = cand;
-            } else if (dSq < dist2) {
-                dist2 = dSq;
-                best2 = cand;
-            }
+        int curCount = (curRow != null && !curRow.isEmpty()) ? curRow.size() : nextRow.size();
+        int nextCount = nextRow.size();
+
+        // Downstream routing: find the immediately adjacent downhill slots in nextRow based on sector fraction s.
+        // This strictly prevents lateral river travel by considering ONLY the two slots directly in front of the node.
+        float s = (2.0F * (float) node.col + 1.0F) / (2.0F * (float) curCount);
+        float targetColF = s * (float) nextCount - 0.5F;
+        int c1 = Math.max(0, Math.min(nextCount - 1, Math.round(targetColF)));
+        int c2;
+        if (targetColF > (float) c1) {
+            c2 = Math.min(nextCount - 1, c1 + 1);
+        } else {
+            c2 = Math.max(0, c1 - 1);
         }
-        return new DrainageNode[]{best1, best2};
+        if (c1 == c2) {
+            c2 = (c1 == 0) ? 1 : c1 - 1;
+        }
+
+        DrainageNode cand1 = nextRow.get(c1);
+        DrainageNode cand2 = nextRow.get(c2);
+        return new DrainageNode[]{cand1, cand2};
     }
 
     /**
@@ -673,7 +855,8 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
                 DrainageNode node = new DrainageNode(nodeX, nodeZ, u, r, col);
                 node.isMountain = this.isMountainTerrain(nodeX, nodeZ);
 
-                // On bridged tectonic borders, cull rows near the border to ensure rivers never reach the actual border
+                // On bridged borders (lowland supercontinent connections), cull rows near the border
+                // so rivers terminate naturally in valley lakes before the boundary.
                 if (isBridged && r >= rowCount - 2) {
                     node.isCulled = true;
                 }
@@ -682,35 +865,12 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
             graph.rows.add(rowNodes);
         }
 
-        // 2. Identify and propagate culling for nodes below sea level or downstream of ocean
+        // 2. Identify culling for candidate nodes directly below sea level
         for (int r = 0; r < rowCount; r++) {
             List<DrainageNode> curRow = graph.rows.get(r);
-            List<DrainageNode> prevRow = (r > 0) ? graph.rows.get(r - 1) : null;
-
             for (DrainageNode node : curRow) {
-                // Direct sea level check
                 if (this.isBelowSeaLevel(node.x, node.z)) {
                     node.isCulled = true;
-                    continue;
-                }
-
-                // Upstream candidate check (propagating top-down from row r-1)
-                if (prevRow != null) {
-                    DrainageNode nearestUpstream = null;
-                    float minDistSq = Float.MAX_VALUE;
-                    for (DrainageNode uNode : prevRow) {
-                        float dx = uNode.x - node.x;
-                        float dz = uNode.z - node.z;
-                        float dSq = dx * dx + dz * dz;
-                        if (dSq < minDistSq) {
-                            minDistSq = dSq;
-                            nearestUpstream = uNode;
-                        }
-                    }
-
-                    if (nearestUpstream != null && nearestUpstream.isCulled) {
-                        node.isCulled = true;
-                    }
                 }
             }
         }
@@ -752,33 +912,19 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
                         continue;
                     }
 
-                    float effectiveSpawnChance = spawnChance;
-
+                    // Anti-bundling spacing check: prevent parallel river channels running side-by-side
+                    // down the same slope. If an immediately adjacent slot in this row is already carrying
+                    // a river or active headwater, do not spawn a new parallel headwater next to it!
                     if (riverCount < 30) {
-                        // 1. If a node has a neighbour that is a river being fed by a parent, increase headwater likelihood by 50%
-                        boolean hasFedNeighbour = (col > 0 && !curRow.get(col - 1).isCulled && curRow.get(col - 1).feederCount > 0)
-                                               || (col < curCount - 1 && !curRow.get(col + 1).isCulled && curRow.get(col + 1).feederCount > 0);
-                        if (hasFedNeighbour) {
-                            effectiveSpawnChance = Math.min(1.0F, effectiveSpawnChance * 1.50F);
+                        if (col > 0 && curRow.get(col - 1).isPopulated) {
+                            continue;
                         }
-
-                        // 4. If a node is mountain terrain and both downstream nodes are mountain terrain, prevent headwater spawning 80% of the time
-                        if (node.isMountain && nextRow != null && !nextRow.isEmpty()) {
-                            DrainageNode[] closest = findClosestTwoDownstreamNodes(node, nextRow);
-                            if (closest.length > 0) {
-                                boolean allMtn = true;
-                                for (DrainageNode cand : closest) {
-                                    if (!cand.isMountain) {
-                                        allMtn = false;
-                                        break;
-                                    }
-                                }
-                                if (allMtn) {
-                                    effectiveSpawnChance *= 0.20F;
-                                }
-                            }
+                        if (col < curCount - 1 && curRow.get(col + 1).isPopulated) {
+                            continue;
                         }
                     }
+
+                    float effectiveSpawnChance = spawnChance;
 
                     // Empty node: check spawn chance > position based roll
                     if (effectiveSpawnChance > positionBasedRoll) {
@@ -818,15 +964,99 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
                 continue;
             }
 
-            // Intermediate rows: each active node only ever considers its closest two downhill nodes in nextRow (before culling)
+            // Intermediate rows: each active node considers downhill candidates in nextRow
+            int nextCount = nextRow.size();
             int lastTargetCol = -1;
 
             for (int i = 0; i < activeNodes.size(); i++) {
                 DrainageNode node = activeNodes.get(i);
                 boolean isHeadwater = (node.feederCount == 0);
 
-                DrainageNode[] closest = findClosestTwoDownstreamNodes(node, nextRow);
-                if (closest.length == 0) {
+                long connSeed = ((long) Float.floatToIntBits(node.x) * 7192831L)
+                              ^ ((long) Float.floatToIntBits(node.z) * 4827103L)
+                              ^ (faceSeed + (long) r * 37L + (long) node.col * 17L);
+                Random connRandom = new Random(connSeed);
+                long faceWarpSeed = ((long) faceIndex * 123456789L) ^ ((this.context != null && this.context.seed != null) ? this.context.seed.root() : this.seed);
+
+                float s = (2.0F * (float) node.col + 1.0F) / (2.0F * (float) curCount);
+                float targetColF = s * (float) nextCount - 0.5F;
+                int baseCol = Math.max(0, Math.min(nextCount - 1, Math.round(targetColF)));
+
+                // 1. Dendritic Convergence / Tributary Confluence Check:
+                // Check if the immediately preceding river on this row (at lastTargetCol) is within natural
+                // confluence reach (distance <= 750m) and can receive this tributary.
+                DrainageNode mergeCand = null;
+                float mergeDist = Float.MAX_VALUE;
+                if (lastTargetCol >= 0 && lastTargetCol < nextCount) {
+                    DrainageNode prevTarget = nextRow.get(lastTargetCol);
+                    float mdx = prevTarget.x - node.x;
+                    float mdz = prevTarget.z - node.z;
+                    float distSq = mdx * mdx + mdz * mdz;
+
+                    if (distSq <= 750.0F * 750.0F && !prevTarget.isCulled && !isBelowSeaLevel(prevTarget.x, prevTarget.z)) {
+                        RiverConnection testMerge = new RiverConnection(node, prevTarget, isHeadwater, true);
+                        if (!hasUphillRise(testMerge, graph.outgoing, graph.incoming, faceWarpSeed)) {
+                            mergeCand = prevTarget;
+                            mergeDist = (float) Math.sqrt(distSq);
+                        }
+                    }
+                }
+
+                // Calculate confluence merging probability based on distance, trunk hierarchy, and valley slope
+                float mergeChance = 0.0F;
+                if (mergeCand != null && riverCount < 30) {
+                    if (mergeCand.feederCount >= 2) {
+                        // Merging into an already established main trunk valley
+                        mergeChance = 0.92F;
+                    } else if (mergeDist <= 350.0F) {
+                        // Very close adjacent streams (~225m) on the same slope: strong natural convergence
+                        mergeChance = 0.88F;
+                    } else if (mergeDist <= 550.0F) {
+                        // Moderate convergence distance (~450m)
+                        mergeChance = 0.72F;
+                    } else {
+                        // Outer convergence reach (~650-750m)
+                        mergeChance = 0.52F;
+                    }
+
+                    // Inward basin slope bias: streams on the right flank (s > 0.5) naturally flow inward toward center
+                    if (s > 0.45F) {
+                        mergeChance = Math.min(0.96F, mergeChance * 1.20F);
+                    }
+
+                    // Terrain bias: if merge candidate is a valley, boost convergence; if mountain, reduce
+                    if (!mergeCand.isMountain) {
+                        mergeChance = Math.min(0.96F, mergeChance * 1.25F);
+                    } else {
+                        mergeChance *= 0.60F;
+                    }
+                }
+
+                if (mergeCand != null && connRandom.nextFloat() < mergeChance) {
+                    // Form confluence! The tributary merges into the existing river channel
+                    lastTargetCol = mergeCand.col;
+                    mergeCand.feederCount++;
+                    mergeCand.isPopulated = true;
+                    boolean isMain = true;
+                    graph.addConnection(new RiverConnection(node, mergeCand, isHeadwater, isMain));
+                    continue;
+                }
+
+                // 2. Independent Downhill Routing:
+                // If not merging, select from candidate slots strictly to the right (> lastTargetCol)
+                // to maintain non-crossing invariants.
+                int minIndependentCol = Math.max(lastTargetCol + 1, 0);
+                if (minIndependentCol >= nextCount) {
+                    // No independent columns available without crossing
+                    if (mergeCand != null) {
+                        // Fall back to merging into the adjacent river
+                        lastTargetCol = mergeCand.col;
+                        mergeCand.feederCount++;
+                        mergeCand.isPopulated = true;
+                        graph.addConnection(new RiverConnection(node, mergeCand, isHeadwater, true));
+                        continue;
+                    }
+
                     if (isBridged) {
                         DrainageNode waterMouth = findWaterMouthNode(node, apexX, apexZ, v1X, v1Z, v2X, v2Z, isBridged, rowCount);
                         if (waterMouth != null) {
@@ -836,15 +1066,25 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
                             node.isLake = true;
                         }
                     } else {
-                        connectToOcean(graph, node, apexX, apexZ, faceSeed, rowCount);
+                        if (r < rowCount - 2) {
+                            node.isLake = true;
+                        } else {
+                            connectToOcean(graph, node, apexX, apexZ, faceSeed, rowCount);
+                        }
                     }
                     continue;
                 }
 
-                DrainageNode cand1 = closest[0];
-                DrainageNode cand2 = (closest.length > 1) ? closest[1] : cand1;
+                int c1 = Math.max(minIndependentCol, Math.min(nextCount - 1, baseCol));
+                int c2 = (c1 + 1 < nextCount) ? c1 + 1 : c1;
+                if (c1 == c2 && c1 > minIndependentCol) {
+                    c2 = c1 - 1;
+                }
 
-                // 1. If BOTH downstream candidates are culled (ocean margin or bridged border buffer reached directly ahead):
+                DrainageNode cand1 = nextRow.get(c1);
+                DrainageNode cand2 = nextRow.get(c2);
+
+                // Both candidates culled
                 if (cand1.isCulled && cand2.isCulled) {
                     if (isBridged) {
                         DrainageNode waterMouth = findWaterMouthNode(node, apexX, apexZ, v1X, v1Z, v2X, v2Z, isBridged, rowCount);
@@ -860,40 +1100,34 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
                     continue;
                 }
 
-                // Position-seeded random choice between the candidates
-                long connSeed = ((long) Float.floatToIntBits(node.x) * 7192831L)
-                              ^ ((long) Float.floatToIntBits(node.z) * 4827103L)
-                              ^ (faceSeed + (long) r * 37L + (long) node.col * 17L);
-                Random connRandom = new Random(connSeed);
-
-                // 2. If EXACTLY ONE downstream candidate is culled (e.g. one in ocean, one on land):
+                // Exactly one candidate culled
                 if (cand1.isCulled || cand2.isCulled) {
-                    if (!isBridged) {
-                        // Open ocean face: encountering the ocean margin directly ahead means the river has reached the coast.
-                        // Connect cleanly and directly out into the ocean rather than turning sideways along the coastline.
+                    if (!isBridged && r >= rowCount - 3) {
                         connectToOcean(graph, node, apexX, apexZ, faceSeed, rowCount);
                         continue;
                     }
 
                     DrainageNode validCand = cand1.isCulled ? cand2 : cand1;
-                    // If connecting to the only valid land candidate crosses an earlier river on this terrace:
-                    if (validCand.col < lastTargetCol) {
-                        DrainageNode waterMouth = findWaterMouthNode(node, apexX, apexZ, v1X, v1Z, v2X, v2Z, isBridged, rowCount);
-                        if (waterMouth != null) {
-                            boolean isMain = (node.feederCount >= 2);
-                            graph.addConnection(new RiverConnection(node, waterMouth, isHeadwater, isMain));
+                    if (validCand.col < minIndependentCol) {
+                        if (mergeCand != null) {
+                            lastTargetCol = mergeCand.col;
+                            mergeCand.feederCount++;
+                            mergeCand.isPopulated = true;
+                            graph.addConnection(new RiverConnection(node, mergeCand, isHeadwater, true));
+                            continue;
+                        }
+                        if (isBridged) {
+                            DrainageNode waterMouth = findWaterMouthNode(node, apexX, apexZ, v1X, v1Z, v2X, v2Z, isBridged, rowCount);
+                            if (waterMouth != null) {
+                                boolean isMain = (node.feederCount >= 2);
+                                graph.addConnection(new RiverConnection(node, waterMouth, isHeadwater, isMain));
+                            } else {
+                                node.isLake = true;
+                            }
                         } else {
                             node.isLake = true;
                         }
                         continue;
-                    }
-
-                    // Mountain check on valid candidate: only empty headwaters can be stopped by mountain ridges
-                    if (validCand.isMountain && node.feederCount == 0 && riverCount < 30) {
-                        if (connRandom.nextFloat() < 0.80F) {
-                            node.isLake = true;
-                            continue;
-                        }
                     }
 
                     lastTargetCol = validCand.col;
@@ -904,93 +1138,133 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
                     continue;
                 }
 
-                // 3. NEITHER candidate is culled (both are valid land directly downhill):
-                boolean bothMountain = cand1.isMountain && cand2.isMountain;
-                if (bothMountain && node.feederCount == 0 && riverCount < 30) {
-                    if (connRandom.nextFloat() < 0.80F) {
+                // Neither candidate is culled
+                // Mountain Blockage Rule:
+                if (riverCount < 30 && cand1.isMountain && cand2.isMountain) {
+                    if (connRandom.nextFloat() < 0.75F) {
                         node.isLake = true;
                         continue;
                     }
                 }
 
-                DrainageNode leftCand = (cand1.col <= cand2.col) ? cand1 : cand2;
-                DrainageNode rightCand = (cand1.col <= cand2.col) ? cand2 : cand1;
-
-                // Non-crossing check:
-                if (rightCand.col < lastTargetCol) {
-                    // Both candidates would cross an earlier river
-                    if (isBridged) {
-                        DrainageNode waterMouth = findWaterMouthNode(node, apexX, apexZ, v1X, v1Z, v2X, v2Z, isBridged, rowCount);
-                        if (waterMouth != null) {
-                            boolean isMain = (node.feederCount >= 2);
-                            graph.addConnection(new RiverConnection(node, waterMouth, isHeadwater, isMain));
-                        } else {
-                            node.isLake = true;
-                        }
-                    } else {
-                        connectToOcean(graph, node, apexX, apexZ, faceSeed, rowCount);
-                    }
-                    continue;
-                }
+                boolean isMain = (node.feederCount >= 2) || (r <= 2 && node.col == 0);
+                RiverConnection testConn1 = new RiverConnection(node, cand1, isHeadwater, isMain);
+                RiverConnection testConn2 = new RiverConnection(node, cand2, isHeadwater, isMain);
+                boolean rise1 = hasUphillRise(testConn1, graph.outgoing, graph.incoming, faceWarpSeed);
+                boolean rise2 = (cand1 == cand2) ? rise1 : hasUphillRise(testConn2, graph.outgoing, graph.incoming, faceWarpSeed);
 
                 DrainageNode chosen;
-                if (leftCand.col < lastTargetCol) {
-                    // Left candidate crosses, only right candidate is valid
-                    chosen = rightCand;
+                if (rise1 && !rise2) {
+                    chosen = cand2;
+                } else if (!rise1 && rise2) {
+                    chosen = cand1;
+                } else if (rise1 && rise2) {
+                    if (mergeCand != null) {
+                        // Merge into adjacent valley river rather than getting blocked
+                        chosen = mergeCand;
+                        lastTargetCol = chosen.col;
+                        chosen.feederCount++;
+                        chosen.isPopulated = true;
+                        graph.addConnection(new RiverConnection(node, chosen, isHeadwater, true));
+                        continue;
+                    }
+                    node.isLake = true;
+                    continue;
                 } else {
-                    // Both candidates are valid without crossing!
-                    boolean fed1 = cand1.feederCount > 0;
-                    boolean fed2 = cand2.feederCount > 0;
-                    boolean fedDiff = (cand1 != cand2) && (fed1 ^ fed2);
-                    boolean mtnDiff = (cand1 != cand2) && (cand1.isMountain ^ cand2.isMountain);
+                    boolean off1 = (node.gradient > 0.08F) && isOffUpliftPlateau(cand1);
+                    boolean off2 = (node.gradient > 0.08F) && isOffUpliftPlateau(cand2);
 
-                    if (cand1 == cand2) {
+                    if (off1 && !off2) {
+                        chosen = cand2;
+                    } else if (!off1 && off2) {
                         chosen = cand1;
-                    } else if (fedDiff && !mtnDiff) {
-                        // Bias candidate with an upstream parent 80% of the time
-                        DrainageNode fed = fed1 ? cand1 : cand2;
-                        DrainageNode unfed = fed1 ? cand2 : cand1;
-                        chosen = (connRandom.nextFloat() < 0.80F) ? fed : unfed;
-                    } else if (mtnDiff && !fedDiff) {
-                        // Favor non-mountain candidate 80% of the time
-                        DrainageNode nonMtn = (!cand1.isMountain) ? cand1 : cand2;
-                        DrainageNode mtn = (cand1.isMountain) ? cand1 : cand2;
-                        chosen = (connRandom.nextFloat() < 0.80F) ? nonMtn : mtn;
-                    } else if (fedDiff && mtnDiff) {
-                        // Both apply: combined scoring
-                        float score1 = 1.0F;
-                        float score2 = 1.0F;
-                        if (!cand1.isMountain) score1 *= 4.0F; else score2 *= 4.0F;
-                        if (fed1) score1 *= 4.0F; else score2 *= 4.0F;
-                        float p1 = score1 / (score1 + score2);
-                        chosen = (connRandom.nextFloat() < p1) ? cand1 : cand2;
                     } else {
-                        // Base organic meandering (55% closer candidate, 45% second-nearest)
-                        chosen = (connRandom.nextFloat() < 0.55F) ? cand1 : cand2;
+                        boolean fed1 = cand1.feederCount > 0;
+                        boolean fed2 = cand2.feederCount > 0;
+                        boolean fedDiff = (cand1 != cand2) && (fed1 ^ fed2);
+                        boolean mtnDiff = (cand1 != cand2) && (cand1.isMountain ^ cand2.isMountain);
+
+                        if (cand1 == cand2) {
+                            chosen = cand1;
+                        } else if (fedDiff && !mtnDiff) {
+                            DrainageNode fed = fed1 ? cand1 : cand2;
+                            DrainageNode unfed = fed1 ? cand2 : cand1;
+                            chosen = (connRandom.nextFloat() < 0.80F) ? fed : unfed;
+                        } else if (mtnDiff && !fedDiff) {
+                            DrainageNode nonMtn = (!cand1.isMountain) ? cand1 : cand2;
+                            DrainageNode mtn = (cand1.isMountain) ? cand1 : cand2;
+                            chosen = (connRandom.nextFloat() < 0.80F) ? nonMtn : mtn;
+                        } else if (fedDiff && mtnDiff) {
+                            float score1 = 1.0F;
+                            float score2 = 1.0F;
+                            if (!cand1.isMountain) score1 *= 4.0F; else score2 *= 4.0F;
+                            if (fed1) score1 *= 4.0F; else score2 *= 4.0F;
+                            float p1 = score1 / (score1 + score2);
+                            chosen = (connRandom.nextFloat() < p1) ? cand1 : cand2;
+                        } else {
+                            // Organic meandering with inward drainage basin bias towards central valley
+                            if (s < 0.45F && cand2.col > cand1.col) {
+                                chosen = (connRandom.nextFloat() < 0.68F) ? cand2 : cand1;
+                            } else if (s > 0.55F && cand1.col < cand2.col) {
+                                chosen = (connRandom.nextFloat() < 0.68F) ? cand1 : cand2;
+                            } else {
+                                chosen = (connRandom.nextFloat() < 0.55F) ? cand1 : cand2;
+                            }
+                        }
                     }
                 }
 
                 lastTargetCol = chosen.col;
                 chosen.feederCount++;
                 chosen.isPopulated = true;
-                boolean isMain = (node.feederCount >= 2) || (r <= 2 && node.col == 0);
                 graph.addConnection(new RiverConnection(node, chosen, isHeadwater, isMain));
             }
         }
 
-        // 4. Unconnected, non-mountain nodes have a chance to spawn lakes based on preset lake chance
+        // 4. Place lakes on explicit nodes sitting centrally on ContinentalHydrology terrace plateaus
         float lakeChance = (this.lake != null) ? this.lake.chance : 0.25F;
         if (lakeChance > 0.0F && riverCount < 30) {
             for (int r = 0; r < rowCount; r++) {
                 List<DrainageNode> row = graph.rows.get(r);
                 for (int col = 0; col < row.size(); col++) {
                     DrainageNode node = row.get(col);
-                    if (!node.isCulled && !node.isPopulated && node.feederCount == 0 && !node.isMountain) {
-                        long lakeSeed = ((long) Float.floatToIntBits(node.x) * 8192837L)
-                                      ^ ((long) Float.floatToIntBits(node.z) * 1928371L)
-                                      ^ (faceSeed + (long) r * 2003L + (long) col * 17L);
-                        Random lakeRandom = new Random(lakeSeed);
-                        if (lakeRandom.nextFloat() < lakeChance) {
+
+                    // Strictly verify node sits on land (never spawn lakes in ocean or on culled nodes)
+                    if (node.isCulled || isBelowSeaLevel(node.x, node.z)) {
+                        node.isLake = false;
+                        continue;
+                    }
+
+                    long lakeSeed = ((long) Float.floatToIntBits(node.x) * 8192837L)
+                                  ^ ((long) Float.floatToIntBits(node.z) * 1928371L)
+                                  ^ (faceSeed + (long) r * 2003L + (long) col * 17L);
+                    Random lakeRandom = new Random(lakeSeed);
+
+                    // A. Confluence nodes: multiple incoming river channels meet -> High chance
+                    if (node.feederCount >= 2) {
+                        float confluenceLakeChance = lakeChance * 0.45F;
+                        if (lakeRandom.nextFloat() < confluenceLakeChance) {
+                            node.isLake = true;
+                        }
+                    }
+                    // B. Inline flowing river nodes: single feeder with downstream outflow -> Rare chance
+                    else if (node.feederCount == 1 && graph.outgoing.containsKey(node)) {
+                        float inlineLakeChance = lakeChance * 0.08F;
+                        if (lakeRandom.nextFloat() < inlineLakeChance) {
+                            node.isLake = true;
+                        }
+                    }
+                    // C. Spring / Headwater nodes: river origin feeding a downstream river
+                    else if (node.feederCount == 0 && graph.outgoing.containsKey(node)) {
+                        float springLakeChance = lakeChance * 0.20F;
+                        if (lakeRandom.nextFloat() < springLakeChance) {
+                            node.isLake = true;
+                        }
+                    }
+                    // D. Isolated upland/plateau tarns: unpopulated node with no feeder and no outlet
+                    else if (r >= 1 && r <= 10 && !node.isPopulated && node.feederCount == 0 && !node.isMountain) {
+                        float isolatedLakeChance = lakeChance * 0.12F;
+                        if (lakeRandom.nextFloat() < isolatedLakeChance) {
                             node.isLake = true;
                         }
                     }
@@ -998,28 +1272,20 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
             }
         }
 
-        // 5. Laterally connect adjacent lake nodes on the same row with a river
-        // (safe to do since they share the same uplift step plateau in ContinentalHydrology)
-        if (riverCount < 30) {
-            for (int r = 0; r < rowCount; r++) {
-                List<DrainageNode> row = graph.rows.get(r);
-                int rowSize = row.size();
-                for (int col = 0; col < rowSize - 1; col++) {
-                    DrainageNode nodeA = row.get(col);
-                    DrainageNode nodeB = row.get(col + 1);
-
-                    if (nodeA.isLake && nodeB.isLake) {
-                        // Both adjacent nodes are lakes on the same terrace plateau
-                        if (!graph.outgoing.containsKey(nodeA)) {
-                            nodeA.isPopulated = true;
-                            nodeB.isPopulated = true;
-                            nodeB.feederCount++;
-
-                            boolean isHeadwater = (nodeA.feederCount == 0);
-                            boolean isMain = false;
-                            graph.addConnection(new RiverConnection(nodeA, nodeB, isHeadwater, isMain, true));
-                        }
+        // 4b. Guaranteed lake basin for ANY terminal river on land (flowing river terminating without ocean outlet)
+        for (List<DrainageNode> row : graph.rows) {
+            for (DrainageNode node : row) {
+                if (node.feederCount >= 1 && !graph.outgoing.containsKey(node)) {
+                    if (!node.isCulled && !isBelowSeaLevel(node.x, node.z)) {
+                        node.isLake = true;
                     }
+                }
+            }
+        }
+        for (DrainageNode node : graph.coastalNodes) {
+            if (node.feederCount >= 1 && !graph.outgoing.containsKey(node)) {
+                if (!node.isCulled && !isBelowSeaLevel(node.x, node.z)) {
+                    node.isLake = true;
                 }
             }
         }
@@ -1176,8 +1442,9 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
         }
 
         if (mouthDist < 0.0F) {
-            // Fallback if ocean margin was unusually distant
-            mouthDist = Math.min(maxOceanDist, 2000.0F);
+            // Did not reach ocean within max distance: terminate in an organic endorheic lake on this terrace
+            edgeNode.isLake = true;
+            return;
         }
 
         // Subdivide coastal journey into organic meandering segments (~225m spacing)

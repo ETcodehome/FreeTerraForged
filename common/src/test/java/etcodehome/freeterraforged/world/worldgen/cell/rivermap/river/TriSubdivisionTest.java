@@ -12,6 +12,7 @@ import etcodehome.freeterraforged.world.worldgen.cell.rivermap.Rivermap;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.gen.GenWarp;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
+import etcodehome.freeterraforged.world.worldgen.noise.module.Line;
 import etcodehome.freeterraforged.world.worldgen.util.PosUtil;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.HolderGetter;
@@ -102,6 +103,9 @@ public class TriSubdivisionTest {
             assertNotNull(voronoi, "Voronoi cell for continent must exist");
 
             Random random = new Random(PosUtil.pack(centerX, centerZ) + gen.seed);
+            for (int i = 0; i < voronoi.edgeCount; i++) {
+                System.out.printf("Voronoi Edge %d: bridged=%b, tectonicActive=%b%n", i, voronoi.isBridged[i], voronoi.isTectonicActive[i]);
+            }
             List<TriSubdivisionRiverGenerator.FaceDrainageGraph> graphs = gen.buildDrainageGraphs(voronoi, frequency, random);
 
             assertFalse(graphs.isEmpty(), "At least one drainage face must be generated");
@@ -245,7 +249,8 @@ public class TriSubdivisionTest {
             }
             assertFalse(allBuilders.isEmpty(), "Generated river builders must not be empty");
             for (Network.Builder b : allBuilders) {
-                assertTrue(b.carver instanceof UpliftRiverCarver, "Carver must be UpliftRiverCarver");
+                assertTrue(b.carver instanceof UpliftRiverCarver || b.carver instanceof UpliftLakeCarver,
+                        "Carver must be UpliftRiverCarver or UpliftLakeCarver");
                 if (b.carver.getWarp() == RiverWarp.NONE) {
                     // Isolated valley lake basin carver
                     continue;
@@ -853,6 +858,63 @@ public class TriSubdivisionTest {
     }
 
     @Test
+    @DisplayName("Inspect NE Gap nodes and connections")
+    void testInspectNEGap() {
+        RegistryAccess registries = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY).freeze();
+        Preset preset = Presets.makeFTFDefault();
+        HolderGetter<Noise> noiseLookup = preset.buildPreviewLookups(registries).lookupOrThrow(FTFRegistries.NOISE);
+        long worldSeed = 42L;
+
+        try (GeneratorContext ctx = new GeneratorContext(preset, noiseLookup, worldSeed)) {
+            UpliftContinentGenerator uplift = (UpliftContinentGenerator) ctx.heightmap.continent();
+            long centerPacked = uplift.getNearestCenter(0, 0);
+            int centerX = PosUtil.unpackLeft(centerPacked);
+            int centerZ = PosUtil.unpackRight(centerPacked);
+
+            float startX = centerX - (400 * 32.0F * 0.5F);
+            float startZ = centerZ - (400 * 32.0F * 0.5F);
+
+            // NE gap is around x=285, y=120
+            float targetMinX = startX + 260 * 32.0F;
+            float targetMaxX = startX + 310 * 32.0F;
+            float targetMinZ = startZ + 105 * 32.0F;
+            float targetMaxZ = startZ + 135 * 32.0F;
+
+            System.out.printf("[NE GAP BOX] X in [%.1f, %.1f], Z in [%.1f, %.1f]%n",
+                    targetMinX, targetMaxX, targetMinZ, targetMaxZ);
+
+            TriSubdivisionRiverGenerator gen = new TriSubdivisionRiverGenerator(uplift, ctx);
+            PlateUpliftBridge bridge = uplift.getPlateUpliftBridge();
+            float frequency = uplift.getFrequency();
+            PlateUpliftBridge.CellVoronoi voronoi = TriSubdivisionRiverGenerator.findVoronoiCell(bridge, frequency, centerX, centerZ);
+            Random random = new Random(PosUtil.pack(centerX, centerZ) + gen.seed);
+            List<TriSubdivisionRiverGenerator.FaceDrainageGraph> graphs = gen.buildDrainageGraphs(voronoi, frequency, random);
+
+            for (int f = 0; f < graphs.size(); f++) {
+                TriSubdivisionRiverGenerator.FaceDrainageGraph g = graphs.get(f);
+                for (List<TriSubdivisionRiverGenerator.DrainageNode> row : g.rows) {
+                    for (TriSubdivisionRiverGenerator.DrainageNode n : row) {
+                        if (n.x >= targetMinX && n.x <= targetMaxX && n.z >= targetMinZ && n.z <= targetMaxZ) {
+                            System.out.printf("   [NODE] Face %d (r=%d, c=%d) at (%.1f, %.1f): pop=%b, culled=%b, mtn=%b, lake=%b, feeders=%d, hasOut=%b%n",
+                                    f, n.row, n.col, n.x, n.z, n.isPopulated, n.isCulled, n.isMountain, n.isLake, n.feederCount, g.outgoing.containsKey(n));
+                        }
+                    }
+                }
+                for (TriSubdivisionRiverGenerator.RiverConnection conn : g.connections) {
+                    boolean fromIn = conn.from.x >= targetMinX && conn.from.x <= targetMaxX && conn.from.z >= targetMinZ && conn.from.z <= targetMaxZ;
+                    boolean toIn = conn.to.x >= targetMinX && conn.to.x <= targetMaxX && conn.to.z >= targetMinZ && conn.to.z <= targetMaxZ;
+                    if (fromIn || toIn) {
+                        System.out.printf("   [CONN] Face %d from (%.1f, %.1f, r=%d, c=%d) to (%.1f, %.1f, r=%d, c=%d): isMain=%b, isCoastal=%b, isLateral=%b%n",
+                                f, conn.from.x, conn.from.z, conn.from.row, conn.from.col,
+                                conn.to.x, conn.to.z, conn.to.row, conn.to.col,
+                                conn.isMain, conn.isCoastal, conn.isLateral);
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
     @DisplayName("Print all river terminal points on all faces")
     void testPrintAllTerminals() {
         RegistryAccess registries = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY).freeze();
@@ -871,20 +933,26 @@ public class TriSubdivisionTest {
             float frequency = uplift.getFrequency();
             PlateUpliftBridge.CellVoronoi voronoi = TriSubdivisionRiverGenerator.findVoronoiCell(bridge, frequency, centerX, centerZ);
             Random random = new Random(PosUtil.pack(centerX, centerZ) + gen.seed);
+            for (int i = 0; i < voronoi.edgeCount; i++) {
+                System.out.printf("Voronoi Edge %d: bridged=%b, tectonicActive=%b%n", i, voronoi.isBridged[i], voronoi.isTectonicActive[i]);
+            }
             List<TriSubdivisionRiverGenerator.FaceDrainageGraph> graphs = gen.buildDrainageGraphs(voronoi, frequency, random);
 
             for (int f = 0; f < graphs.size(); f++) {
                 TriSubdivisionRiverGenerator.FaceDrainageGraph g = graphs.get(f);
                 System.out.printf("=== Face %d (bridged=%b) ===%n", f, g.isBridged);
                 for (TriSubdivisionRiverGenerator.RiverConnection conn : g.connections) {
-                    if (!g.outgoing.containsKey(conn.to)) {
-                        boolean isBelow = gen.isBelowSeaLevel(conn.to.x, conn.to.z);
-                        System.out.printf("   TERMINAL at r%d (c%d) at (%.1f, %.1f) from r%d (c%d) at (%.1f, %.1f): isLake=%b, isCoastal=%b, isBelowSea=%b, edgeVal=%.4f (shallow=%.4f)%n",
-                            conn.to.row, conn.to.col, conn.to.x, conn.to.z,
-                            conn.from.row, conn.from.col, conn.from.x, conn.from.z,
-                            conn.to.isLake, conn.isCoastal, isBelow,
-                            uplift.getEdgeValue(conn.to.x, conn.to.z),
-                            ctx.preset.world().controlPoints.shallowOcean);
+                    if (conn.to.x > centerX && conn.to.z < centerZ) {
+                        boolean isTerminal = !g.outgoing.containsKey(conn.to);
+                        if (isTerminal) {
+                            System.out.printf("   [NE TERMINAL] Face %d: conn (%s) from (%.1f, %.1f, r=%d) to (%.1f, %.1f, r=%d): isLake=%b, isCoastal=%b, isBelowSea=%b, edgeVal=%.4f%n",
+                                    f, conn.isMain ? "main" : "fork",
+                                    conn.from.x, conn.from.z, conn.from.row,
+                                    conn.to.x, conn.to.z, conn.to.row,
+                                    conn.to.isLake, conn.isCoastal,
+                                    gen.isBelowSeaLevel(conn.to.x, conn.to.z),
+                                    uplift.getEdgeValue(conn.to.x, conn.to.z));
+                        }
                     }
                 }
             }
@@ -910,6 +978,9 @@ public class TriSubdivisionTest {
             float frequency = uplift.getFrequency();
             PlateUpliftBridge.CellVoronoi voronoi = TriSubdivisionRiverGenerator.findVoronoiCell(bridge, frequency, centerX, centerZ);
             Random random = new Random(PosUtil.pack(centerX, centerZ) + gen.seed);
+            for (int i = 0; i < voronoi.edgeCount; i++) {
+                System.out.printf("Voronoi Edge %d: bridged=%b, tectonicActive=%b%n", i, voronoi.isBridged[i], voronoi.isTectonicActive[i]);
+            }
             List<TriSubdivisionRiverGenerator.FaceDrainageGraph> graphs = gen.buildDrainageGraphs(voronoi, frequency, random);
 
             // Find an open ocean face and follow one river branch from row 0 to its ocean mouth
@@ -971,6 +1042,52 @@ public class TriSubdivisionTest {
     }
 
     @Test
+    @DisplayName("Verify organic presence of isolated plateau lakes and absence of floating lateral river segments")
+    void testVerifyNoIsolatedLakesOrFloatingSegments() {
+        RegistryAccess registries = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY).freeze();
+        Preset preset = Presets.makeFTFDefault();
+        HolderGetter<Noise> noiseLookup = preset.buildPreviewLookups(registries).lookupOrThrow(FTFRegistries.NOISE);
+        long worldSeed = 42L;
+
+        try (GeneratorContext ctx = new GeneratorContext(preset, noiseLookup, worldSeed)) {
+            UpliftContinentGenerator uplift = (UpliftContinentGenerator) ctx.heightmap.continent();
+            long centerPacked = uplift.getNearestCenter(0, 0);
+            int centerX = PosUtil.unpackLeft(centerPacked);
+            int centerZ = PosUtil.unpackRight(centerPacked);
+
+            TriSubdivisionRiverGenerator gen = new TriSubdivisionRiverGenerator(uplift, ctx);
+            PlateUpliftBridge bridge = uplift.getPlateUpliftBridge();
+            float frequency = uplift.getFrequency();
+            PlateUpliftBridge.CellVoronoi voronoi = TriSubdivisionRiverGenerator.findVoronoiCell(bridge, frequency, centerX, centerZ);
+            Random random = new Random(PosUtil.pack(centerX, centerZ) + gen.seed);
+            List<TriSubdivisionRiverGenerator.FaceDrainageGraph> graphs = gen.buildDrainageGraphs(voronoi, frequency, random);
+
+            int isolatedLakes = 0;
+            int floatingLaterals = 0;
+
+            for (TriSubdivisionRiverGenerator.FaceDrainageGraph g : graphs) {
+                for (List<TriSubdivisionRiverGenerator.DrainageNode> row : g.rows) {
+                    for (TriSubdivisionRiverGenerator.DrainageNode n : row) {
+                        if (n.isLake && n.feederCount == 0 && !g.outgoing.containsKey(n)) {
+                            isolatedLakes++;
+                            System.out.printf("[ISOLATED LAKE] Face %d (r=%d, c=%d) at (%.1f, %.1f)%n", g.faceIndex, n.row, n.col, n.x, n.z);
+                        }
+                    }
+                }
+                for (TriSubdivisionRiverGenerator.RiverConnection conn : g.connections) {
+                    if (conn.isLateral && conn.from.feederCount == 0 && conn.to.feederCount <= 1 && !g.outgoing.containsKey(conn.to)) {
+                        floatingLaterals++;
+                        System.out.printf("[FLOATING LATERAL] Face %d from (%.1f, %.1f) to (%.1f, %.1f)%n", g.faceIndex, conn.from.x, conn.from.z, conn.to.x, conn.to.z);
+                    }
+                }
+            }
+
+            assertTrue(isolatedLakes > 0, "Isolated lakes with 0 feeders and 0 outflow should naturally spawn across upland plateaus: " + isolatedLakes);
+            assertEquals(0, floatingLaterals, "Floating lateral river segments must be strictly 0");
+        }
+    }
+
+    @Test
     @DisplayName("Verify River Water Level Monotonicity Along Warped Spline")
     void testSplineWaterLevelMonotonicity() {
         RegistryAccess registries = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY).freeze();
@@ -989,6 +1106,9 @@ public class TriSubdivisionTest {
             float frequency = uplift.getFrequency();
             PlateUpliftBridge.CellVoronoi voronoi = TriSubdivisionRiverGenerator.findVoronoiCell(bridge, frequency, centerX, centerZ);
             Random random = new Random(PosUtil.pack(centerX, centerZ) + gen.seed);
+            for (int i = 0; i < voronoi.edgeCount; i++) {
+                System.out.printf("Voronoi Edge %d: bridged=%b, tectonicActive=%b%n", i, voronoi.isBridged[i], voronoi.isTectonicActive[i]);
+            }
             List<TriSubdivisionRiverGenerator.FaceDrainageGraph> graphs = gen.buildDrainageGraphs(voronoi, frequency, random);
 
             Cell cell = new Cell();
@@ -1096,6 +1216,7 @@ public class TriSubdivisionTest {
             System.out.println("[Test] Saved simulated CONTINENT_UPLIFT preview to: " + outPath);
         }
     }
+
 
     private static void collectBuilders(Network.Builder builder, List<Network.Builder> out) {
         out.add(builder);

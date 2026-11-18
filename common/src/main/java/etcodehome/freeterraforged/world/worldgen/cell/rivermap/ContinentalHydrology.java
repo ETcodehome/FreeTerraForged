@@ -179,4 +179,16 @@ public class ContinentalHydrology {
         }
         return centers;
     }
+
+    public static double getPlateauStart(int stepId) {
+        if (stepId <= -1) return 0.0;
+        if (stepId >= NUM_STEPS) return 1.0;
+        return SPLITS[stepId * 2 + 1];
+    }
+
+    public static double getPlateauEnd(int stepId) {
+        if (stepId <= -1) return SPLITS[0];
+        if (stepId >= NUM_STEPS - 1) return 1.0;
+        return SPLITS[(stepId + 1) * 2];
+    }
 }
