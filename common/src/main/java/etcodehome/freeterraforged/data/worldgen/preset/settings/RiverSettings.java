@@ -149,7 +149,7 @@ public class RiverSettings {
             ),
 
             new Lake(
-                0.50F,
+                0.25F,
                 0.0F,
                 1.00F,
                 10,

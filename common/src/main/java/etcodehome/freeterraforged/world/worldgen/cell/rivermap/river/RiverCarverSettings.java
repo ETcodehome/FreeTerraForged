@@ -9,12 +9,14 @@ public class RiverCarverSettings {
     public float valleySize;
     public float fadeIn;
     public boolean connecting;
+    public boolean isTerminalLake;
     public CurveFunction valleyCurve;
 
     public RiverCarverSettings(Random random) {
         this.valleySize = 275.0F;
         this.fadeIn = 0.7F;
         this.connecting = false;
+        this.isTerminalLake = false;
         this.valleyCurve = getValleyType(random);
     }
 

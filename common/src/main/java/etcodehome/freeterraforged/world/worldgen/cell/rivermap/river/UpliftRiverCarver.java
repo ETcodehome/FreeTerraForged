@@ -42,6 +42,7 @@ public class UpliftRiverCarver implements FTFRiverCarver {
     private Noise lakeWarpNoise;
     public LakeConfig lakeConfig;
     private boolean isUpliftContinent;
+    private final boolean isTerminalLake;
 
     // Precomputed immutable constants to alleviate CPU overhead per cell
     private final float bankHeightOffset;
@@ -53,6 +54,7 @@ public class UpliftRiverCarver implements FTFRiverCarver {
     public UpliftRiverCarver(River river, RiverWarp warp, RiverConfig config, RiverCarverSettings settings, Levels levels, LakeConfig lakeConfig, boolean isUpliftContinent) {
         this.fade = settings.fadeIn;
         this.fadeInv = 1.0F / settings.fadeIn;
+        this.isTerminalLake = settings.isTerminalLake;
 
         this.bedWidth = new Range(0.25F, (float)(config.bedWidth * config.bedWidth));
 
@@ -332,6 +334,17 @@ public class UpliftRiverCarver implements FTFRiverCarver {
             distanceMask = distanceMask * distanceMask * (3.0F - 2.0F * distanceMask);
             widenMultiplier = 1.0F + (flatnessFactor * organicWarpFactor * distanceMask);
         }
+
+        // Terminal lake widening at the base of ridges and terminal nodes
+        if (this.isTerminalLake && currT >= 0.35F) {
+            float tLake = (currT - 0.35F) / 0.65F;
+            float lakeShape = tLake * tLake * (3.0F - 2.0F * tLake);
+            float shorelineWarp = this.lakeWarpNoise.compute(currX, currZ, 7439);
+            float organicWarp = 1.0F + shorelineWarp * 0.35F;
+            float terminalLakeScale = (lakeConfig != null ? (lakeConfig.sizeMax / 100.0F) * 3.5F : 3.5F);
+            widenMultiplier = Math.max(widenMultiplier, 1.0F + (terminalLakeScale * lakeShape * organicWarp));
+        }
+
         return widenMultiplier;
     }
 
@@ -376,7 +389,7 @@ public class UpliftRiverCarver implements FTFRiverCarver {
         float bedHeight = targetWaterLevel - (finalizedDepth * bedInfluence);
 
         cell.moisture = 1.0F;
-        this.tag(cell, targetWaterLevel, bedHeight);
+        this.tag(cell, targetWaterLevel, bedHeight, widenMultiplier);
         return bedHeight;
     }
 
@@ -540,15 +553,18 @@ public class UpliftRiverCarver implements FTFRiverCarver {
         return NoiseUtil.lerp(range.min(), range.max(), t * this.fadeInv);
     }
 
-    private void tag(Cell cell, float waterLevel, float bedHeight) {
-        if (cell.terrain.isLake()) return;
+    private void tag(Cell cell, float waterLevel, float bedHeight, float widenMultiplier) {
         float newMax = Math.max(this.waterLine, waterLevel);
         if (newMax > cell.riverWaterLevel) {
             cell.riverWaterLevel = newMax;
         }
         if (bedHeight <= newMax) {
             cell.erosionMask = true;
-            cell.terrain = TerrainType.RIVER;
+            if (this.isTerminalLake && widenMultiplier > 1.8F) {
+                cell.terrain = TerrainType.LAKE;
+            } else if (!cell.terrain.isLake()) {
+                cell.terrain = TerrainType.RIVER;
+            }
         }
     }
 
@@ -564,6 +580,9 @@ public class UpliftRiverCarver implements FTFRiverCarver {
         float maxLakeMultiplier = 1.0F;
         if (lakeConfig != null) {
             maxLakeMultiplier += (lakeConfig.sizeMax / 100.0F) * 1.45F;
+        }
+        if (settings != null && settings.isTerminalLake) {
+            maxLakeMultiplier = Math.max(maxLakeMultiplier, 5.0F);
         }
         float maxZone1 = (float) (config.bedWidth * 1.375F * maxLakeMultiplier);
         float zone2WidthFactor = (config.maxBankHeight - config.minBankHeight) / levels.unit;

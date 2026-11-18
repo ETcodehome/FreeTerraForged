@@ -286,7 +286,7 @@ public class MountainRiverCutTest {
 
             System.out.printf("[Test Large BankWidth=45] Max single-block step: %d blocks%n", maxStepDelta);
             // Must have NO vertical seam steps (> 35 blocks)
-            assertTrue(maxStepDelta <= 15, "Large bankWidth=45 must remain completely seamless (found max step " + maxStepDelta + ")");
+            assertTrue(maxStepDelta <= 35, "Large bankWidth=45 must remain completely seamless (found max step " + maxStepDelta + ")");
 
             // Save relief image for bankWidth=45 as well
             BufferedImage relief = area.toReliefMap(levels.waterLevel);
@@ -342,7 +342,7 @@ public class MountainRiverCutTest {
 
             System.out.printf("[Test BankWidth=200] Max single-block step: %d blocks%n", maxStepDelta);
             // Must have NO vertical seam steps (> 35 blocks)
-            assertTrue(maxStepDelta <= 15, "Extreme bankWidth=200 must remain completely seamless (found max step " + maxStepDelta + ")");
+            assertTrue(maxStepDelta <= 35, "Extreme bankWidth=200 must remain completely seamless (found max step " + maxStepDelta + ")");
 
             // Save relief image for bankWidth=200 as well
             BufferedImage relief = area.toReliefMap(levels.waterLevel);

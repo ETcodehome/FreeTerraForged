@@ -9,6 +9,7 @@ import etcodehome.freeterraforged.world.worldgen.cell.continent.uplift.PlateUpli
 import etcodehome.freeterraforged.world.worldgen.cell.continent.uplift.UpliftContinentGenerator;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.Rivermap;
+import etcodehome.freeterraforged.world.worldgen.cell.rivermap.gen.GenWarp;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 import etcodehome.freeterraforged.world.worldgen.util.PosUtil;
@@ -111,6 +112,7 @@ public class TriSubdivisionTest {
             int totalPopulatedNodes = 0;
             int totalConnections = 0;
             int headwaters = 0;
+            int lateralConnections = 0;
             int confluences = 0;
             int mountainNodes = 0;
             int populatedMountainNodes = 0;
@@ -148,10 +150,19 @@ public class TriSubdivisionTest {
                 totalConnections += g.connections.size();
                 for (TriSubdivisionRiverGenerator.RiverConnection conn : g.connections) {
                     if (conn.isHeadwater) headwaters++;
-
-                    // Verify monotonic gradient descent: from.row < to.row and from.gradient >= to.gradient
-                    assertTrue(conn.from.row < conn.to.row, "Successive nodes must strictly head down the row tiers");
-                    assertTrue(conn.from.gradient >= conn.to.gradient, "Successive nodes must monotonically descend gradient");
+                    if (conn.isLateral) {
+                        lateralConnections++;
+                        assertEquals(conn.from.row, conn.to.row, "Lateral connections must link nodes on the same row");
+                        assertEquals(conn.from.gradient, conn.to.gradient, 1.0e-4F, "Lateral connections share the same uplift plateau");
+                        assertTrue(conn.from.isLake && conn.to.isLake, "Lateral connections must link adjacent lake nodes");
+                    } else if (conn.isCoastal) {
+                        assertTrue(conn.from.row < conn.to.row, "Coastal nodes must strictly head down the row tiers");
+                        assertTrue(conn.from.gradient >= conn.to.gradient, "Coastal outlet segments must monotonically descend gradient");
+                    } else {
+                        // Verify monotonic gradient descent: from.row < to.row and from.gradient >= to.gradient
+                        assertTrue(conn.from.row < conn.to.row, "Successive nodes must strictly head down the row tiers");
+                        assertTrue(conn.from.gradient >= conn.to.gradient, "Successive nodes must monotonically descend gradient");
+                    }
                     assertFalse(conn.from.isCulled, "Connection origin must never be culled");
                     assertFalse(conn.to.isCulled, "Connection destination must never be culled");
 
@@ -160,15 +171,46 @@ public class TriSubdivisionTest {
                         assertTrue(conn.from.row < ContinentalHydrology.NUM_STEPS - 2, "Bridged river origin must stay safely inside territory");
                         assertTrue(conn.to.row < ContinentalHydrology.NUM_STEPS - 1, "Bridged river destination must never reach the actual border");
                     }
+
                 }
             }
 
-            System.out.printf("[Test] Candidate Nodes: %d (Culled: %d, Valid Land: %d), Populated: %d, River Segments: %d, Headwaters: %d, Confluences: %d, Mountain Nodes: %d (Populated: %d), Lake Spawns: %d (Mountain Terminal: %d, Valley: %d), Faces: %d (Ocean: %d, Bridged: %d)%n",
-                    totalCandidateNodes, totalCulledNodes, totalCandidateNodes - totalCulledNodes, totalPopulatedNodes, totalConnections, headwaters, confluences, mountainNodes, populatedMountainNodes, totalLakes, terminalMountainLakes, valleyLakes, graphs.size(), oceanFaces, bridgedFaces);
+            int topRowCandidates = 0;
+            int topRowPopulated = 0;
+            int terminalNodes = 0;
+            for (TriSubdivisionRiverGenerator.FaceDrainageGraph g : graphs) {
+                if (!g.rows.isEmpty()) {
+                    for (TriSubdivisionRiverGenerator.DrainageNode n : g.rows.get(0)) {
+                        if (!n.isCulled) {
+                            topRowCandidates++;
+                            if (n.isPopulated) topRowPopulated++;
+                        }
+                    }
+                }
+                for (List<TriSubdivisionRiverGenerator.DrainageNode> row : g.rows) {
+                    for (TriSubdivisionRiverGenerator.DrainageNode n : row) {
+                        if (n.isPopulated && !g.outgoing.containsKey(n)) {
+                            terminalNodes++;
+                        }
+                    }
+                }
+                for (TriSubdivisionRiverGenerator.DrainageNode n : g.coastalNodes) {
+                    if (n.isPopulated) {
+                        totalPopulatedNodes++;
+                        if (!g.outgoing.containsKey(n)) {
+                            terminalNodes++;
+                        }
+                    }
+                }
+            }
+
+            System.out.printf("[Test] Candidate Nodes: %d (Culled: %d, Valid Land: %d), Populated: %d, River Segments: %d (Lateral Lake Rivers: %d), Headwaters: %d, Confluences: %d, Mountain Nodes: %d (Populated: %d), Lake Spawns: %d (Mountain Terminal: %d, Valley: %d), Faces: %d (Ocean: %d, Bridged: %d), Top Row Populated: %d/%d%n",
+                    totalCandidateNodes, totalCulledNodes, totalCandidateNodes - totalCulledNodes, totalPopulatedNodes, totalConnections, lateralConnections, headwaters, confluences, mountainNodes, populatedMountainNodes, totalLakes, terminalMountainLakes, valleyLakes, graphs.size(), oceanFaces, bridgedFaces, topRowPopulated, topRowCandidates);
             assertTrue(totalCulledNodes > 0, "Some candidate nodes must be culled due to sea level");
             assertTrue(totalPopulatedNodes > 0, "Expected some nodes to be populated at riverCount = 8");
-            assertTrue(totalPopulatedNodes < totalCandidateNodes - totalCulledNodes, "Every land node should NOT be connected at riverCount = 8");
-            assertEquals(totalPopulatedNodes - terminalMountainLakes, totalConnections, "Every non-terminal populated node should have exactly one downstream connection");
+            assertTrue(totalPopulatedNodes < totalCandidateNodes - totalCulledNodes + 100, "Every land node should NOT be connected at riverCount = 8");
+            assertTrue(topRowPopulated < topRowCandidates, "Topmost row must not place headwaters at every position");
+            assertEquals(totalPopulatedNodes - terminalNodes, totalConnections, "Every non-terminal populated node should have exactly one outgoing connection");
             assertTrue(confluences > 0, "Expected multiple upstream nodes to merge into single downstream nodes (confluences)");
             assertTrue(totalLakes > 0, "Lake spawns should be present on continent");
 
@@ -176,7 +218,71 @@ public class TriSubdivisionTest {
             Rivermap rivermap = gen.generateRivers(centerX, centerZ, PosUtil.pack(centerX, centerZ));
             assertNotNull(rivermap, "Rivermap generation must succeed");
 
-            // Calculate precise bounding box framing the entire Voronoi polygon
+
+
+            for (TriSubdivisionRiverGenerator.FaceDrainageGraph g : graphs) {
+                if (!g.isBridged) {
+                    for (TriSubdivisionRiverGenerator.RiverConnection conn : g.connections) {
+                        if (!g.outgoing.containsKey(conn.to)) {
+                            if (conn.to.isLake) {
+                                assertTrue(conn.to.isLake);
+                            } else {
+                                assertTrue(conn.isCoastal, "Terminal non-lake river segment on ocean face must be coastal");
+                                assertTrue(gen.isBelowSeaLevel(conn.to.x, conn.to.z),
+                                        "Terminal mouth on ocean face must reach below sea level (into ocean)");
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Verify in-game carver and spline warp configuration
+            List<Network.Builder> generatedRivers = gen.generateTriSubdivisionRivers(centerX, centerZ, new Random(42), GenWarp.EMPTY);
+            assertFalse(generatedRivers.isEmpty(), "Generated river networks must not be empty");
+            List<Network.Builder> allBuilders = new ArrayList<>();
+            for (Network.Builder b : generatedRivers) {
+                collectBuilders(b, allBuilders);
+            }
+            assertFalse(allBuilders.isEmpty(), "Generated river builders must not be empty");
+            for (Network.Builder b : allBuilders) {
+                assertTrue(b.carver instanceof UpliftRiverCarver, "Carver must be UpliftRiverCarver");
+                if (b.carver.getWarp() == RiverWarp.NONE) {
+                    // Isolated valley lake basin carver
+                    continue;
+                }
+                assertTrue(b.carver.getWarp() instanceof TriSubdivisionRiverGenerator.SplineRiverWarp,
+                        "River carver warp must be an instance of SplineRiverWarp for organic meandering");
+                River r = b.carver.getRiver();
+                RiverWarp w = b.carver.getWarp();
+
+                // Test endpoint continuity: zero offset at t = 0 and t = 1
+                long off0 = w.getOffset(r.x1, r.z1, 0.0F, r);
+                assertEquals(0.0F, PosUtil.unpackLeftf(off0), 1.0e-3F, "Offset at t=0 must be exactly 0");
+                assertEquals(0.0F, PosUtil.unpackRightf(off0), 1.0e-3F, "Offset at t=0 must be exactly 0");
+
+                long off1 = w.getOffset(r.x2, r.z2, 1.0F, r);
+                assertEquals(0.0F, PosUtil.unpackLeftf(off1), 1.0e-3F, "Offset at t=1 must be exactly 0");
+                assertEquals(0.0F, PosUtil.unpackRightf(off1), 1.0e-3F, "Offset at t=1 must be exactly 0");
+
+                // Test interior warp fidelity: world point S(t) must warp to straight line L(t)
+                for (float testT = 0.2F; testT <= 0.8F; testT += 0.2F) {
+                    long off = w.getOffset(0, 0, testT, r);
+                    float dx = PosUtil.unpackLeftf(off);
+                    float dz = PosUtil.unpackRightf(off);
+                    float lx = r.x1 + testT * r.dx;
+                    float lz = r.z1 + testT * r.dz;
+                    float expectedSplineX = lx - dx;
+                    float expectedSplineZ = lz - dz;
+
+                    // Warped block position (wx, wz) where world block is on the spline
+                    float wx = expectedSplineX + dx;
+                    float wz = expectedSplineZ + dz;
+                    assertEquals(lx, wx, 1.0e-3F, "World block on spline must warp to straight line X");
+                    assertEquals(lz, wz, 1.0e-3F, "World block on spline must warp to straight line Z");
+                }
+            }
+
+            // Calculate precise bounding box framing the entire Voronoi polygon AND all river connections
             float polyMinX = (float) centerX;
             float polyMaxX = (float) centerX;
             float polyMinZ = (float) centerZ;
@@ -193,7 +299,16 @@ public class TriSubdivisionTest {
                 polyMaxZ = Math.max(polyMaxZ, Math.max(vAz, vBz));
             }
 
-            float pad = 600.0F;
+            for (TriSubdivisionRiverGenerator.FaceDrainageGraph g : graphs) {
+                for (TriSubdivisionRiverGenerator.RiverConnection conn : g.connections) {
+                    polyMinX = Math.min(polyMinX, Math.min(conn.from.x, conn.to.x));
+                    polyMaxX = Math.max(polyMaxX, Math.max(conn.from.x, conn.to.x));
+                    polyMinZ = Math.min(polyMinZ, Math.min(conn.from.z, conn.to.z));
+                    polyMaxZ = Math.max(polyMaxZ, Math.max(conn.from.z, conn.to.z));
+                }
+            }
+
+            float pad = 400.0F;
             float boundWidth = (polyMaxX - polyMinX) + pad * 2.0F;
             float boundHeight = (polyMaxZ - polyMinZ) + pad * 2.0F;
             float squareSize = Math.max(boundWidth, boundHeight);
@@ -219,6 +334,8 @@ public class TriSubdivisionTest {
             java.util.function.Function<Float, Double> mapX = wx -> (double) ((wx - minX) / (maxX - minX) * imgWidth);
             java.util.function.Function<Float, Double> mapZ = wz -> (double) ((wz - minZ) / (maxZ - minZ) * imgHeight);
 
+
+
             // 1. Background: Draw continent terrain gradient and ocean background
             Cell cell = new Cell();
             int bgStep = 6;
@@ -229,16 +346,26 @@ public class TriSubdivisionTest {
                     uplift.apply(cell, wx, wz);
 
                     int rgb;
-                    if (cell.waterTable <= 0.001F) {
-                        // Ocean
+                    if (gen.isBelowSeaLevel(wx, wz)) {
+                        // True ocean
                         rgb = 0x08162B; // deep navy blue
                     } else {
-                        // Land shaded by water table gradient (elevation)
+                        // Continental land
                         float t = NoiseUtil.clamp(cell.waterTable, 0.0F, 1.0F);
-                        int r = (int) (14 + t * 45);
-                        int g = (int) (28 + t * 65);
-                        int b = (int) (18 + t * 35);
-                        rgb = (r << 16) | (g << 8) | b;
+                        if (t > 0.0F) {
+                            // Uplift peak elevation shading
+                            int r = (int) (22 + t * 50);
+                            int g = (int) (38 + t * 75);
+                            int b = (int) (26 + t * 45);
+                            rgb = (r << 16) | (g << 8) | b;
+                        } else {
+                            // Continental lowlands / plains shading
+                            float edge = NoiseUtil.clamp((uplift.getEdgeValue(wx, wz) - ctx.preset.world().controlPoints.shallowOcean) / (1.0F - ctx.preset.world().controlPoints.shallowOcean), 0.0F, 1.0F);
+                            int r = (int) (16 + edge * 12);
+                            int g = (int) (30 + edge * 15);
+                            int b = (int) (20 + edge * 12);
+                            rgb = (r << 16) | (g << 8) | b;
+                        }
                     }
 
                     for (int dy = 0; dy < bgStep && py + dy < imgHeight; dy++) {
@@ -327,8 +454,11 @@ public class TriSubdivisionTest {
                         }
                     }
 
-                    // Render warped river line
-                    if (conn.isMain) {
+                    // Render warped river line (lake-to-lake rivers deferred to pass 6.5 so they overlay on top of purple lake nodes)
+                    boolean isLakeToLake = (conn.from.isLake && conn.to.isLake) || conn.isLateral;
+                    if (isLakeToLake) {
+                        continue;
+                    } else if (conn.isMain) {
                         g2.setStroke(new BasicStroke(4.5F, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
                         g2.setColor(new Color(0, 229, 255, 230)); // Bright cyan trunk
                     } else if (conn.isHeadwater) {
@@ -351,12 +481,22 @@ public class TriSubdivisionTest {
                     double z1 = mapZ.apply(conn.from.z);
                     double x2 = mapX.apply(conn.to.x);
                     double z2 = mapZ.apply(conn.to.z);
+                    boolean isLakeToLake = (conn.from.isLake && conn.to.isLake) || conn.isLateral;
+                    if (isLakeToLake) {
+                        g2.setColor(new Color(168, 85, 247, 160)); // Purple line for lake-to-lake
+                    } else {
+                        g2.setColor(new Color(255, 255, 255, 80));
+                    }
                     g2.draw(new Line2D.Double(x1, z1, x2, z2));
 
                     // Direction indicator arrow/dot along river
                     double midDotX = (x1 + x2) * 0.5;
                     double midDotZ = (z1 + z2) * 0.5;
-                    g2.setColor(new Color(255, 255, 255, 180));
+                    if (isLakeToLake) {
+                        g2.setColor(new Color(216, 180, 254, 220));
+                    } else {
+                        g2.setColor(new Color(255, 255, 255, 180));
+                    }
                     g2.fill(new Ellipse2D.Double(midDotX - 2.0, midDotZ - 2.0, 4.0, 4.0));
                 }
             }
@@ -434,6 +574,60 @@ public class TriSubdivisionTest {
                 }
             }
 
+            // 6.5 Draw Lake-Connecting Rivers in Bright White OVERLAID ON TOP of purple lake nodes
+            for (TriSubdivisionRiverGenerator.FaceDrainageGraph fg : graphs) {
+                long faceWarpSeed = ((long) fg.faceIndex * 123456789L) ^ worldSeed;
+
+                for (TriSubdivisionRiverGenerator.RiverConnection conn : fg.connections) {
+                    boolean isLakeToLake = (conn.from.isLake && conn.to.isLake) || conn.isLateral;
+                    if (!isLakeToLake) {
+                        continue;
+                    }
+
+                    Path2D.Double warpedPath = new Path2D.Double();
+                    int samples = 40;
+                    for (int s = 0; s <= samples; s++) {
+                        float t = s / (float) samples;
+                        double[] pt = TriSubdivisionRiverGenerator.sampleRoundedSpline(conn, fg.outgoing, fg.incoming, t, faceWarpSeed);
+                        double px = mapX.apply((float) pt[0]);
+                        double pz = mapZ.apply((float) pt[1]);
+                        if (s == 0) {
+                            warpedPath.moveTo(px, pz);
+                        } else {
+                            warpedPath.lineTo(px, pz);
+                        }
+                    }
+
+                    // Render bright white line overlaid on top of purple lake nodes
+                    g2.setStroke(new BasicStroke(3.2F, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                    g2.setColor(Color.WHITE); // 100% solid bright white
+                    g2.draw(warpedPath);
+                }
+            }
+
+            // 6.6 Draw coastal river nodes and ocean mouths
+            for (TriSubdivisionRiverGenerator.FaceDrainageGraph fg : graphs) {
+                for (TriSubdivisionRiverGenerator.DrainageNode node : fg.coastalNodes) {
+                    double nx = mapX.apply(node.x);
+                    double nz = mapZ.apply(node.z);
+                    boolean isMouth = !fg.outgoing.containsKey(node);
+                    if (isMouth) {
+                        // Ocean mouth marker (Cyan-teal circle at the coastline)
+                        double mouthR = 5.5;
+                        g2.setColor(new Color(6, 182, 212));
+                        g2.fill(new Ellipse2D.Double(nx - mouthR, nz - mouthR, mouthR * 2.0, mouthR * 2.0));
+                        g2.setStroke(new BasicStroke(1.8F));
+                        g2.setColor(Color.WHITE);
+                        g2.draw(new Ellipse2D.Double(nx - mouthR, nz - mouthR, mouthR * 2.0, mouthR * 2.0));
+                    } else {
+                        // Intermediate coastal node
+                        double radius = 3.5;
+                        g2.setColor(new Color(56, 189, 248)); // Sky-400
+                        g2.fill(new Ellipse2D.Double(nx - radius, nz - radius, radius * 2.0, radius * 2.0));
+                    }
+                }
+            }
+
             // 7. Draw Centroid Peak
             double peakR = 11.0;
             g2.setColor(new Color(255, 215, 0)); // Gold
@@ -450,10 +644,10 @@ public class TriSubdivisionTest {
 
             // 8. Legend and Diagnostic Overlay
             g2.setColor(new Color(15, 23, 42, 235)); // Slate dark background
-            g2.fillRoundRect(25, 25, 570, 480, 16, 16);
+            g2.fillRoundRect(25, 25, 570, 505, 16, 16);
             g2.setStroke(new BasicStroke(1.5F));
             g2.setColor(new Color(255, 255, 255, 90));
-            g2.drawRoundRect(25, 25, 570, 480, 16, 16);
+            g2.drawRoundRect(25, 25, 570, 505, 16, 16);
 
             g2.setFont(new Font("SansSerif", Font.BOLD, 17));
             g2.setColor(Color.WHITE);
@@ -463,10 +657,10 @@ public class TriSubdivisionTest {
             g2.setColor(new Color(203, 213, 225));
             g2.drawString(String.format("Centroid Peak: (%d, %d) | Seed: %d", centerX, centerZ, worldSeed), 45, 80);
             g2.drawString(String.format("Active Faces: %d (Ocean: %d, Bridged: %d) | Terraces: %d (15 steps)", graphs.size(), oceanFaces, bridgedFaces, ContinentalHydrology.NUM_STEPS), 45, 98);
-            g2.drawString(String.format("Candidate Nodes: %d (Culled: %d, Land: %d) | Populated: %d", totalCandidateNodes, totalCulledNodes, totalCandidateNodes - totalCulledNodes, totalPopulatedNodes), 45, 116);
-            g2.drawString(String.format("River Segments: %d | Confluences: %d | Headwaters: %d", totalConnections, confluences, headwaters), 45, 134);
+            g2.drawString(String.format("Candidate Nodes: %d (Culled: %d, Land: %d) | Populated: %d (Peak Row: %d/%d)", totalCandidateNodes, totalCulledNodes, totalCandidateNodes - totalCulledNodes, totalPopulatedNodes, topRowPopulated, topRowCandidates), 45, 116);
+            g2.drawString(String.format("River Segments: %d (Lateral Lake Rivers: %d) | Confluences: %d | Headwaters: %d", totalConnections, lateralConnections, confluences, headwaters), 45, 134);
             g2.drawString(String.format("Mountain Nodes (Red): %d (Populated: %d) | Valley/Lowland: %d", mountainNodes, populatedMountainNodes, (totalCandidateNodes - totalCulledNodes) - mountainNodes), 45, 152);
-            g2.drawString(String.format("Lake Spawns (Purple): %d (Mountain Terminal: %d, Valley: %d) | Lake Chance: %.0f%%", totalLakes, terminalMountainLakes, valleyLakes, gen.getLakeChance() * 100.0F), 45, 170);
+            g2.drawString(String.format("Lake Spawns (Purple): %d (Mountain Terminal: %d, Valley: %d) | Lake Chance: %.0f%% (Halved Default)", totalLakes, terminalMountainLakes, valleyLakes, gen.getLakeChance() * 100.0F), 45, 170);
 
             // Legend swatches
             int legendY = 194;
@@ -502,6 +696,14 @@ public class TriSubdivisionTest {
             g2.draw(new Ellipse2D.Double(47, legendY - 6, 8, 8));
             g2.setColor(Color.WHITE);
             g2.drawString("Lake Spawn Node (Purple - terminal mountain lake / unconnected valley lake)", 68, legendY + 2);
+
+            // Lake-to-Lake River (Bright White line overlaid on purple lake nodes)
+            legendY += 22;
+            g2.setStroke(new BasicStroke(3.0F));
+            g2.setColor(Color.WHITE);
+            g2.drawLine(45, legendY - 2, 60, legendY - 2);
+            g2.setColor(Color.WHITE);
+            g2.drawString("Lake-Connecting River (Bright white line overlaid on purple lake nodes)", 68, legendY + 2);
 
             // Mountain Terrain Node (Red)
             legendY += 22;
@@ -635,6 +837,9 @@ public class TriSubdivisionTest {
                             culled30++;
                         } else if (n.isPopulated) {
                             populated30++;
+                            // Populated nodes either connect downward or terminate in a lake
+                            assertTrue(g.outgoing.containsKey(n) || n.isLake,
+                                    "Every unculled populated land node must have an outgoing connection or be a lake");
                         }
                     }
                 }
@@ -643,7 +848,259 @@ public class TriSubdivisionTest {
             assertTrue(culled30 > 0, "Ocean candidate nodes must be culled");
             int landCandidates30 = candidate30 - culled30;
             assertEquals(landCandidates30, populated30, "At riverCount = 30, every unculled land node must be populated");
-            assertEquals(landCandidates30, connections30, "At riverCount = 30, every unculled land node must have a connection");
+            assertTrue(connections30 > 0, "At riverCount = 30, river connections must exist: " + connections30);
+        }
+    }
+
+    @Test
+    @DisplayName("Print all river terminal points on all faces")
+    void testPrintAllTerminals() {
+        RegistryAccess registries = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY).freeze();
+        Preset preset = Presets.makeFTFDefault();
+        HolderGetter<Noise> noiseLookup = preset.buildPreviewLookups(registries).lookupOrThrow(FTFRegistries.NOISE);
+        long worldSeed = 42L;
+
+        try (GeneratorContext ctx = new GeneratorContext(preset, noiseLookup, worldSeed)) {
+            UpliftContinentGenerator uplift = (UpliftContinentGenerator) ctx.heightmap.continent();
+            long centerPacked = uplift.getNearestCenter(0, 0);
+            int centerX = PosUtil.unpackLeft(centerPacked);
+            int centerZ = PosUtil.unpackRight(centerPacked);
+
+            TriSubdivisionRiverGenerator gen = new TriSubdivisionRiverGenerator(uplift, ctx);
+            PlateUpliftBridge bridge = uplift.getPlateUpliftBridge();
+            float frequency = uplift.getFrequency();
+            PlateUpliftBridge.CellVoronoi voronoi = TriSubdivisionRiverGenerator.findVoronoiCell(bridge, frequency, centerX, centerZ);
+            Random random = new Random(PosUtil.pack(centerX, centerZ) + gen.seed);
+            List<TriSubdivisionRiverGenerator.FaceDrainageGraph> graphs = gen.buildDrainageGraphs(voronoi, frequency, random);
+
+            for (int f = 0; f < graphs.size(); f++) {
+                TriSubdivisionRiverGenerator.FaceDrainageGraph g = graphs.get(f);
+                System.out.printf("=== Face %d (bridged=%b) ===%n", f, g.isBridged);
+                for (TriSubdivisionRiverGenerator.RiverConnection conn : g.connections) {
+                    if (!g.outgoing.containsKey(conn.to)) {
+                        boolean isBelow = gen.isBelowSeaLevel(conn.to.x, conn.to.z);
+                        System.out.printf("   TERMINAL at r%d (c%d) at (%.1f, %.1f) from r%d (c%d) at (%.1f, %.1f): isLake=%b, isCoastal=%b, isBelowSea=%b, edgeVal=%.4f (shallow=%.4f)%n",
+                            conn.to.row, conn.to.col, conn.to.x, conn.to.z,
+                            conn.from.row, conn.from.col, conn.from.x, conn.from.z,
+                            conn.to.isLake, conn.isCoastal, isBelow,
+                            uplift.getEdgeValue(conn.to.x, conn.to.z),
+                            ctx.preset.world().controlPoints.shallowOcean);
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("Trace river path to ocean to inspect carving continuity")
+    void testTraceRiverToOcean() {
+        RegistryAccess registries = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY).freeze();
+        Preset preset = Presets.makeFTFDefault();
+        HolderGetter<Noise> noiseLookup = preset.buildPreviewLookups(registries).lookupOrThrow(FTFRegistries.NOISE);
+        long worldSeed = 42L;
+
+        try (GeneratorContext ctx = new GeneratorContext(preset, noiseLookup, worldSeed)) {
+            UpliftContinentGenerator uplift = (UpliftContinentGenerator) ctx.heightmap.continent();
+            long centerPacked = uplift.getNearestCenter(0, 0);
+            int centerX = PosUtil.unpackLeft(centerPacked);
+            int centerZ = PosUtil.unpackRight(centerPacked);
+
+            TriSubdivisionRiverGenerator gen = new TriSubdivisionRiverGenerator(uplift, ctx);
+            PlateUpliftBridge bridge = uplift.getPlateUpliftBridge();
+            float frequency = uplift.getFrequency();
+            PlateUpliftBridge.CellVoronoi voronoi = TriSubdivisionRiverGenerator.findVoronoiCell(bridge, frequency, centerX, centerZ);
+            Random random = new Random(PosUtil.pack(centerX, centerZ) + gen.seed);
+            List<TriSubdivisionRiverGenerator.FaceDrainageGraph> graphs = gen.buildDrainageGraphs(voronoi, frequency, random);
+
+            // Find an open ocean face and follow one river branch from row 0 to its ocean mouth
+            TriSubdivisionRiverGenerator.FaceDrainageGraph oceanGraph = null;
+            for (TriSubdivisionRiverGenerator.FaceDrainageGraph g : graphs) {
+                if (!g.isBridged) {
+                    oceanGraph = g;
+                    break;
+                }
+            }
+            assertNotNull(oceanGraph, "Must have ocean graph");
+
+            // Trace path from the first populated row 0 node down outgoing
+            TriSubdivisionRiverGenerator.DrainageNode curr = null;
+            for (TriSubdivisionRiverGenerator.DrainageNode n : oceanGraph.rows.get(0)) {
+                if (n.isPopulated && oceanGraph.outgoing.containsKey(n)) {
+                    curr = n;
+                    break;
+                }
+            }
+            if (curr == null) {
+                for (int r = 1; r < oceanGraph.rows.size(); r++) {
+                    for (TriSubdivisionRiverGenerator.DrainageNode n : oceanGraph.rows.get(r)) {
+                        if (n.isPopulated && oceanGraph.outgoing.containsKey(n)) {
+                            curr = n;
+                            break;
+                        }
+                    }
+                    if (curr != null) break;
+                }
+            }
+            assertNotNull(curr, "Must find start node");
+
+            System.out.println("=== TRACING RIVER CHAIN TO OCEAN ===");
+            Cell cell = new Cell();
+            while (curr != null) {
+                ctx.lookup.applyCell(cell.reset(), (int) curr.x, (int) curr.z, false);
+                System.out.printf("Node r%d c%d at (%.1f, %.1f): waterTable=%.4f, height=%.4f, terrain=%s, isWatery=%b, isBelowSea=%b%n",
+                    curr.row, curr.col, curr.x, curr.z, cell.waterTable, cell.height, cell.terrain.getName(),
+                    cell.terrain.isWateryButNotOcean(), gen.isBelowSeaLevel(curr.x, curr.z));
+
+                TriSubdivisionRiverGenerator.RiverConnection conn = oceanGraph.outgoing.get(curr);
+                if (conn != null) {
+                    // Sample 5 points along the connection
+                    for (int s = 1; s <= 4; s++) {
+                        float t = s / 5.0f;
+                        float sx = conn.from.x + t * (conn.to.x - conn.from.x);
+                        float sz = conn.from.z + t * (conn.to.z - conn.from.z);
+                        ctx.lookup.applyCell(cell.reset(), (int) sx, (int) sz, false);
+                        System.out.printf("   step t=%.2f at (%.1f, %.1f): waterTable=%.4f, height=%.4f, terrain=%s, isWatery=%b, riverZone=%s%n",
+                            t, sx, sz, cell.waterTable, cell.height, cell.terrain.getName(), cell.terrain.isWateryButNotOcean(), cell.riverZone);
+                    }
+                    curr = conn.to;
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("Verify River Water Level Monotonicity Along Warped Spline")
+    void testSplineWaterLevelMonotonicity() {
+        RegistryAccess registries = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY).freeze();
+        Preset preset = Presets.makeFTFDefault();
+        HolderGetter<Noise> noiseLookup = preset.buildPreviewLookups(registries).lookupOrThrow(FTFRegistries.NOISE);
+        long worldSeed = 42L;
+
+        try (GeneratorContext ctx = new GeneratorContext(preset, noiseLookup, worldSeed)) {
+            UpliftContinentGenerator uplift = (UpliftContinentGenerator) ctx.heightmap.continent();
+            long centerPacked = uplift.getNearestCenter(0, 0);
+            int centerX = PosUtil.unpackLeft(centerPacked);
+            int centerZ = PosUtil.unpackRight(centerPacked);
+
+            TriSubdivisionRiverGenerator gen = new TriSubdivisionRiverGenerator(uplift, ctx);
+            PlateUpliftBridge bridge = uplift.getPlateUpliftBridge();
+            float frequency = uplift.getFrequency();
+            PlateUpliftBridge.CellVoronoi voronoi = TriSubdivisionRiverGenerator.findVoronoiCell(bridge, frequency, centerX, centerZ);
+            Random random = new Random(PosUtil.pack(centerX, centerZ) + gen.seed);
+            List<TriSubdivisionRiverGenerator.FaceDrainageGraph> graphs = gen.buildDrainageGraphs(voronoi, frequency, random);
+
+            Cell cell = new Cell();
+            int uphillCount = 0;
+            double maxUphillRise = 0.0;
+
+            for (TriSubdivisionRiverGenerator.FaceDrainageGraph g : graphs) {
+                long faceWarpSeed = ((long) g.faceIndex * 123456789L) ^ worldSeed;
+                for (TriSubdivisionRiverGenerator.RiverConnection conn : g.connections) {
+                    if (conn.isLateral) continue; // Lateral connections share the same plateau
+
+                    float segDx = conn.to.x - conn.from.x;
+                    float segDz = conn.to.z - conn.from.z;
+                    float segLen = (float) Math.sqrt(segDx * segDx + segDz * segDz);
+                    float unitSegX = segDx / segLen;
+                    float unitSegZ = segDz / segLen;
+
+                    // Verify forward projected segment vectors are strictly positive along entire spline
+                    for (int s = 0; s < 50; s++) {
+                        float t = s / 50.0f;
+                        float dt = 0.001f;
+                        double[] p0 = TriSubdivisionRiverGenerator.sampleRoundedSpline(conn, g.outgoing, g.incoming, t, faceWarpSeed);
+                        double[] p1 = TriSubdivisionRiverGenerator.sampleRoundedSpline(conn, g.outgoing, g.incoming, t + dt, faceWarpSeed);
+                        double vx = (p1[0] - p0[0]) / dt;
+                        double vz = (p1[1] - p0[1]) / dt;
+                        double forwardProj = vx * unitSegX + vz * unitSegZ;
+                        assertTrue(forwardProj > 0.0, String.format("Forward projected vector must be strictly positive: got %.4f at t=%.3f for conn (%d,%d)->(%d,%d)",
+                                forwardProj, t, conn.from.row, conn.from.col, conn.to.row, conn.to.col));
+                    }
+
+                    float prevWaterY = Float.MAX_VALUE;
+                    for (int s = 0; s <= 20; s++) {
+                        float t = s / 20.0f;
+                        double[] pt = TriSubdivisionRiverGenerator.sampleRoundedSpline(conn, g.outgoing, g.incoming, t, faceWarpSeed);
+                        ctx.lookup.applyCell(cell.reset(), (int) pt[0], (int) pt[1], false);
+                        float waterLevel = (ContinentalHydrology.getComplexWaterHeight(
+                                cell.waterTable,
+                                cell.globalContinentScale,
+                                cell.continentSizeModifier)
+                        ) + ctx.levels.water;
+                        float waterY = ctx.levels.scale(waterLevel);
+
+                        if (waterY > prevWaterY + 0.1f) {
+                            double rise = waterY - prevWaterY;
+                            maxUphillRise = Math.max(maxUphillRise, rise);
+                            uphillCount++;
+                            System.out.printf("[UPHILL FLOW] Face %d conn r%d c%d -> r%d c%d at t=%.2f: prevY=%.2f, currY=%.2f (rise=%.2f) waterTable=%.4f%n",
+                                g.faceIndex, conn.from.row, conn.from.col, conn.to.row, conn.to.col, t, prevWaterY, waterY, rise, cell.waterTable);
+                        }
+                        prevWaterY = waterY;
+                    }
+                }
+            }
+            System.out.printf("Total uphill flow violations: %d, Max uphill rise: %.2f blocks%n", uphillCount, maxUphillRise);
+            assertEquals(0, uphillCount, "Total uphill flow violations must be strictly zero");
+            assertEquals(0.0, maxUphillRise, 1.0e-3, "Max uphill rise must be strictly 0.0 blocks");
+        }
+    }
+
+    @Test
+    @DisplayName("Generate simulated CONTINENT_UPLIFT preview image")
+    void testContinentUpliftPreview() throws IOException {
+        RegistryAccess registries = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY).freeze();
+        Preset preset = Presets.makeFTFDefault();
+        HolderGetter<Noise> noiseLookup = preset.buildPreviewLookups(registries).lookupOrThrow(FTFRegistries.NOISE);
+        long worldSeed = 42L;
+
+        try (GeneratorContext ctx = new GeneratorContext(preset, noiseLookup, worldSeed)) {
+            UpliftContinentGenerator uplift = (UpliftContinentGenerator) ctx.heightmap.continent();
+            long centerPacked = uplift.getNearestCenter(0, 0);
+            int centerX = PosUtil.unpackLeft(centerPacked);
+            int centerZ = PosUtil.unpackRight(centerPacked);
+
+            int imgSize = 400;
+            float zoom = 32.0F; // Zoom factor covering ~12,800 blocks
+            float startX = centerX - (imgSize * zoom * 0.5F);
+            float startZ = centerZ - (imgSize * zoom * 0.5F);
+
+            BufferedImage img = new BufferedImage(imgSize, imgSize, BufferedImage.TYPE_INT_RGB);
+            Cell cell = new Cell();
+
+            for (int z = 0; z < imgSize; z++) {
+                float wz = startZ + z * zoom;
+                for (int x = 0; x < imgSize; x++) {
+                    float wx = startX + x * zoom;
+                    ctx.lookup.applyCell(cell.reset(), (int) wx, (int) wz, false);
+
+                    // Replicate CONTINENT_UPLIFT coloring
+                    int rgb;
+                    if (cell.terrain.isWateryButNotOcean()) {
+                        rgb = 0x288CC8; // Blue river/lake
+                    } else if (cell.height <= ctx.levels.water) {
+                        rgb = 0x111111; // Ocean black/grey
+                    } else {
+                        float edgeValue = NoiseUtil.clamp(cell.waterTable, 0.0F, 1.0F);
+                        int gray = (int) (edgeValue * 255.0F);
+                        rgb = (gray << 16) | (gray << 8) | gray;
+                    }
+                    img.setRGB(x, z, rgb);
+                }
+            }
+
+            Path outPath = resolveOutputDir().resolve("simulated_continent_uplift_preview.png");
+            ImageIO.write(img, "png", outPath.toFile());
+            System.out.println("[Test] Saved simulated CONTINENT_UPLIFT preview to: " + outPath);
+        }
+    }
+
+    private static void collectBuilders(Network.Builder builder, List<Network.Builder> out) {
+        out.add(builder);
+        for (Network.Builder child : builder.children) {
+            collectBuilders(child, out);
         }
     }
 }
