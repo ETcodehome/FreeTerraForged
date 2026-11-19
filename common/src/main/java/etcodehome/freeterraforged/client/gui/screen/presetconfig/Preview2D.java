@@ -65,7 +65,7 @@ public class Preview2D extends Button implements IPreviewHandler {
 
             NativeImage pixels = STATIC_TEXTURE.getPixels();
             if (pixels != null) {
-                pixels.fillRect(0, 0, SIZE, SIZE, 0xFF000000);
+                pixels.fillRect(0, 0, pixels.getWidth(), pixels.getHeight(), 0xFF000000);
                 STATIC_TEXTURE.upload();
             }
         }
@@ -136,7 +136,8 @@ public class Preview2D extends Button implements IPreviewHandler {
 
     @Override
     public RasterParams captureRasterParams() {
-        return new RasterParams(SIZE, SIZE, 0);
+        boolean expanded = this.page instanceof PresetPreviewScreen screen && screen.isExpanded();
+        return new RasterParams(SIZE, SIZE, 0, expanded ? 0 : 2);
     }
 
     @Override
@@ -146,7 +147,7 @@ public class Preview2D extends Button implements IPreviewHandler {
 
     @Override
     public int[] createRasterData(PreviewGrid tile, BiomePreview.Sidecar biomes, RenderMode mode, Levels levels, WorldSettings.Properties properties, RasterParams params) {
-        int stroke = 2;
+        int stroke = params.border;
         int tileWidth = tile.size();
         int heightLimit = TerrainCeiling.buildLimitHeight(properties, TerrainCeiling.isEnabled(this.page.preset()));
         int[] pixels = new int[tileWidth * tileWidth];
@@ -184,6 +185,15 @@ public class Preview2D extends Button implements IPreviewHandler {
         if (pixels == null) return;
 
         int tileWidth = (int) Math.sqrt(pixelData.length);
+        if (pixels.getWidth() != tileWidth || pixels.getHeight() != tileWidth) {
+            Minecraft.getInstance().getTextureManager().release(STATIC_TEXTURE_ID);
+            STATIC_TEXTURE = new DynamicTexture(new NativeImage(tileWidth, tileWidth, false));
+            STATIC_TEXTURE_ID = Minecraft.getInstance().getTextureManager().register(
+                    FTFCommon.MOD_ID + "-preview-framebuffer", STATIC_TEXTURE
+            );
+            pixels = STATIC_TEXTURE.getPixels();
+            if (pixels == null) return;
+        }
         for (int bz = 0; bz < tileWidth; bz++) {
             int rowOffset = bz * tileWidth;
             for (int bx = 0; bx < tileWidth; bx++) {
@@ -552,8 +562,8 @@ public class Preview2D extends Button implements IPreviewHandler {
                 float fx = (mx - left) / size;
                 float fz = (my - top) / size;
                 int maxIndex = this.state.grid.size() - 1;
-                int ix = Math.max(0, Math.min(maxIndex, NoiseUtil.round(fx * maxIndex)));
-                int iz = Math.max(0, Math.min(maxIndex, NoiseUtil.round(fz * maxIndex)));
+                int ix = Math.max(0, Math.min(maxIndex, (int) (fx * this.state.grid.size())));
+                int iz = Math.max(0, Math.min(maxIndex, (int) (fz * this.state.grid.size())));
                 Cell cell = this.state.grid.lookup(ix, iz);
                 this.state.legendValues[1] = IPreviewHandler.getTerrainName(cell);
                 String biomeId = this.state.biomes == null ? null : this.state.biomes.legendId(ix, iz);
@@ -582,7 +592,7 @@ public class Preview2D extends Button implements IPreviewHandler {
         if (STATIC_TEXTURE != null) {
             NativeImage pixels = STATIC_TEXTURE.getPixels();
             if (pixels != null) {
-                pixels.fillRect(0, 0, SIZE, SIZE, 0xFF000000);
+                pixels.fillRect(0, 0, pixels.getWidth(), pixels.getHeight(), 0xFF000000);
                 STATIC_TEXTURE.upload();
             }
         }

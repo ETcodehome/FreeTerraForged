@@ -133,8 +133,7 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 			this.prepareEnvironment();
 			this.createControls();
 			this.layoutControls();
-			this.preview2D.regenerate();
-			this.preview3D.regenerate();
+			this.regeneratePreviews();
 		} catch (RuntimeException | LinkageError failure) {
 			FTFCommon.LOGGER.error("Could not initialize the active preset preview", failure);
 			this.status = Component.translatableWithFallback(
@@ -231,25 +230,28 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 		int margin = 12;
 		int gap = 12;
 		boolean expanded = this.expandedPreview != 0;
-		PreviewNavigation.ColumnLayout layout = PreviewNavigation.ColumnLayout.fromTop(expanded ? 8 : 42);
-		int availableWidth = this.width - margin * 2 - gap;
-		int previewSize = expanded ? Math.max(this.width, this.height) : Math.max(80, Math.min(
-			Math.max(100, availableWidth / 2),
-			this.height - layout.previewY() - Preview2D.LEGEND_FOOTER_HEIGHT - 4
-		));
+		PreviewNavigation.ColumnLayout layout = expanded
+			? new PreviewNavigation.ColumnLayout(8, 8, 8, 8)
+			: PreviewNavigation.ColumnLayout.fromTop(42);
+		int previewSize = expanded ? Math.max(this.width, this.height) : this.regularPreviewSize();
 		int leftX = expanded ? (this.width - previewSize) / 2 : Math.max(margin, this.width / 2 - gap / 2 - previewSize);
 		int rightX = expanded ? leftX : this.width / 2 + gap / 2;
 		int previewY = expanded ? (this.height - previewSize) / 2 : layout.previewY();
-		int controlsWidth = expanded ? Math.min(300, Math.max(100, this.width - 52)) : previewSize;
-		int controlsLeft = expanded ? (this.width - controlsWidth) / 2 : leftX;
-		int controlsRight = expanded ? controlsLeft : rightX;
-		int navigationWidth = controlsWidth;
-		int navigationX = (this.width - navigationWidth) / 2;
+		int rowWidth = Math.max(72, this.width - 52);
+		int gapWidth = Math.max(2, Math.min(12, rowWidth / 30));
+		int usableWidth = Math.max(60, rowWidth - gapWidth * 2);
+		int navigationWidth = expanded ? Math.min(300, usableWidth * 4 / 10) : previewSize;
+		int zoomWidth = expanded ? Math.min(220, (usableWidth - navigationWidth) / 2) : previewSize;
+		int modeWidth = expanded ? Math.min(220, usableWidth - navigationWidth - zoomWidth) : previewSize;
+		int navigationX = expanded ? 8 : (this.width - previewSize) / 2;
+		int modeX = expanded ? this.width - 36 - modeWidth : rightX;
+		int zoomX = expanded ? (navigationX + navigationWidth + modeX - zoomWidth) / 2 : leftX;
 
-		this.zoom2D.setRectangle(controlsWidth, 20, controlsLeft, layout.zoomY());
-		this.renderMode2D.setRectangle(controlsWidth, 20, controlsLeft, layout.modeY());
-		this.zoom3D.setRectangle(controlsWidth, 20, controlsRight, layout.zoomY());
-		this.renderMode3D.setRectangle(controlsWidth, 20, controlsRight, layout.modeY());
+		this.zoom2D.setRectangle(zoomWidth, 20, zoomX, layout.zoomY());
+		this.renderMode2D.setRectangle(expanded ? modeWidth : previewSize, 20,
+			expanded ? modeX : leftX, layout.modeY());
+		this.zoom3D.setRectangle(zoomWidth, 20, expanded ? zoomX : rightX, layout.zoomY());
+		this.renderMode3D.setRectangle(modeWidth, 20, modeX, layout.modeY());
 		this.preview2D = new Preview2D(this, leftX, previewY, previewSize, previewSize);
 		this.preview3D = new Preview3D(this, rightX, previewY, previewSize, previewSize);
 
@@ -388,6 +390,23 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 
 	boolean isExpanded() { return this.expandedPreview != 0; }
 
+	private int regularPreviewSize() {
+		int availableWidth = this.width - 12 * 2 - 12;
+		int previewY = PreviewNavigation.ColumnLayout.fromTop(42).previewY();
+		return Math.max(80, Math.min(Math.max(100, availableWidth / 2),
+			this.height - previewY - Preview2D.LEGEND_FOOTER_HEIGHT - 4));
+	}
+
+	@Override public int previewGridSize() {
+		if (!this.isExpanded()) return IPreviewHandler.SIZE;
+		return expandedGridSize(Math.max(this.width, this.height), this.regularPreviewSize());
+	}
+
+	static int expandedGridSize(int fullscreenSize, int regularSize) {
+		int size = (int) Math.ceil((double) IPreviewHandler.SIZE * fullscreenSize / regularSize);
+		return (size + 1) & ~1;
+	}
+
 	private void toggleExpanded(int pane) {
 		String query = this.navigation.input().getValue();
 		this.expandedPreview = this.expandedPreview == pane ? 0 : pane;
@@ -417,14 +436,25 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 			super.renderWidget(graphics, mouseX, mouseY, partialTick);
 			int x = this.getX() + 5, y = this.getY() + 5;
 			int color = 0xFFFFFFFF;
-			graphics.fill(x, y, x + 4, y + 1, color);
-			graphics.fill(x, y, x + 1, y + 4, color);
-			graphics.fill(x + 6, y, x + 10, y + 1, color);
-			graphics.fill(x + 9, y, x + 10, y + 4, color);
-			graphics.fill(x, y + 9, x + 4, y + 10, color);
-			graphics.fill(x, y + 6, x + 1, y + 10, color);
-			graphics.fill(x + 6, y + 9, x + 10, y + 10, color);
-			graphics.fill(x + 9, y + 6, x + 10, y + 10, color);
+			if (expandedPreview == 0) {
+				graphics.fill(x, y, x + 4, y + 1, color);
+				graphics.fill(x, y, x + 1, y + 4, color);
+				graphics.fill(x + 6, y, x + 10, y + 1, color);
+				graphics.fill(x + 9, y, x + 10, y + 4, color);
+				graphics.fill(x, y + 9, x + 4, y + 10, color);
+				graphics.fill(x, y + 6, x + 1, y + 10, color);
+				graphics.fill(x + 6, y + 9, x + 10, y + 10, color);
+				graphics.fill(x + 9, y + 6, x + 10, y + 10, color);
+			} else {
+				graphics.fill(x, y + 3, x + 4, y + 4, color);
+				graphics.fill(x + 3, y, x + 4, y + 4, color);
+				graphics.fill(x + 6, y + 3, x + 10, y + 4, color);
+				graphics.fill(x + 6, y, x + 7, y + 4, color);
+				graphics.fill(x, y + 6, x + 4, y + 7, color);
+				graphics.fill(x + 3, y + 6, x + 4, y + 10, color);
+				graphics.fill(x + 6, y + 6, x + 10, y + 7, color);
+				graphics.fill(x + 6, y + 6, x + 7, y + 10, color);
+			}
 		}
 
 		@Override public void renderString(GuiGraphics graphics, net.minecraft.client.gui.Font font, int color) { }
@@ -503,12 +533,17 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 	}
 
 	@Override
-	public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+	public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+		super.renderBackground(graphics, mouseX, mouseY, partialTick);
 		if (this.expandedPreview == 1 && this.preview2D != null) {
 			this.preview2D.render(graphics, mouseX, mouseY, partialTick);
 		} else if (this.expandedPreview == 2 && this.preview3D != null) {
 			this.preview3D.render(graphics, mouseX, mouseY, partialTick);
 		}
+	}
+
+	@Override
+	public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
 		super.render(graphics, mouseX, mouseY, partialTick);
 		if (this.expandedPreview == 0) graphics.drawCenteredString(
 			this.font,
@@ -518,7 +553,7 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 			0xFFFFFF
 		);
 		if (!this.status.getString().isEmpty()) {
-			graphics.drawCenteredString(this.font, this.status, this.width / 2, this.expandedPreview == 0 ? 24 : 82, 0xFFFFFF);
+			graphics.drawCenteredString(this.font, this.status, this.width / 2, this.expandedPreview == 0 ? 24 : 32, 0xFFFFFF);
 		}
 	}
 
@@ -601,8 +636,8 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 		this.teleportToSelection();
 	}
 	@Override public void regeneratePreviews() {
-		if (this.preview2D != null) this.preview2D.regenerate();
-		if (this.preview3D != null) this.preview3D.regenerate();
+		if (this.preview2D != null && this.expandedPreview != 2) this.preview2D.regenerate();
+		if (this.preview3D != null && this.expandedPreview != 1) this.preview3D.regenerate();
 	}
 
 	private static String sha256(String content) {

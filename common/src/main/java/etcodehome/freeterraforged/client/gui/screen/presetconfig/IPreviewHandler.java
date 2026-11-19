@@ -187,6 +187,7 @@ public interface IPreviewHandler {
         }
         long seed = requestedInput.seed();
         int zoomLevel = getZoom();
+        int gridSize = page.previewGridSize();
         int localOffsetX = page.previewNavigationX();
         int localOffsetZ = page.previewNavigationZ();
         boolean localNavigated = page.previewNavigated();
@@ -283,7 +284,7 @@ public interface IPreviewHandler {
                 }
 
                 PreviewComputationCache.GridKey gridKey = new PreviewComputationCache.GridKey(
-                        requestedKey, cx, cz, zoomLevel, SIZE, biomePipeline
+                        requestedKey, cx, cz, zoomLevel, gridSize, biomePipeline
                 );
                 return new PreGenContext(
                         generatorContext, biomePreview, cx, cz, zoomLevel, gridKey,
@@ -312,7 +313,7 @@ public interface IPreviewHandler {
                                 cacheCancelled -> PreviewGrid.generateZoomed(
                                         preGen.context.heightmap,
                                         preGen.context.filters,
-                                        preGen.cx, preGen.cz, preGen.zoomLevel, SIZE, cacheCancelled
+                                        preGen.cx, preGen.cz, preGen.zoomLevel, gridSize, cacheCancelled
                                 )
                         );
                 return gridFuture.thenApply(lease -> {
@@ -773,11 +774,17 @@ public interface IPreviewHandler {
         final int width;
         final int height;
         final double zoom;
+        final int border;
 
         RasterParams(int width, int height, double zoom) {
+            this(width, height, zoom, 0);
+        }
+
+        RasterParams(int width, int height, double zoom, int border) {
             this.width = width;
             this.height = height;
             this.zoom = zoom;
+            this.border = border;
         }
     }
 

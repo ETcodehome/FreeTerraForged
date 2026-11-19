@@ -15,6 +15,7 @@ import etcodehome.freeterraforged.world.worldgen.cell.heightmap.PreviewGrid;
 
 final class PreviewComputationCache implements AutoCloseable {
     private static final int MAX_GRID_ENTRIES = 6;
+    private static final long MAX_CACHED_GRID_CELLS = 1_048_576L;
     private static final int MAX_SIDECAR_ENTRIES = 8;
 
     private final LinkedHashMap<GridKey, GridEntry> grids = new LinkedHashMap<>(16, 0.75F, true);
@@ -370,11 +371,14 @@ final class PreviewComputationCache implements AutoCloseable {
     }
 
     private void trimGrids() {
+        long cells = this.grids.keySet().stream().mapToLong(key -> (long) key.size() * key.size()).sum();
         Iterator<Map.Entry<GridKey, GridEntry>> iterator = this.grids.entrySet().iterator();
-        while (this.grids.size() > MAX_GRID_ENTRIES && iterator.hasNext()) {
-            GridEntry entry = iterator.next().getValue();
+        while ((this.grids.size() > MAX_GRID_ENTRIES
+                || (cells > MAX_CACHED_GRID_CELLS && this.grids.size() > 1)) && iterator.hasNext()) {
+            Map.Entry<GridKey, GridEntry> entry = iterator.next();
+            cells -= (long) entry.getKey().size() * entry.getKey().size();
             iterator.remove();
-            entry.evict();
+            entry.getValue().evict();
         }
     }
 

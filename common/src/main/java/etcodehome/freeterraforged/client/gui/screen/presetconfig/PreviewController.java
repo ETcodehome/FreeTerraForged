@@ -10,6 +10,8 @@ interface PreviewController {
 
 	PreviewRequestKeyFactory.Input capturePreviewInput();
 
+	default int previewGridSize() { return IPreviewHandler.SIZE; }
+
 	PreviewRequestKeyFactory previewRequestKeys();
 
 	PreviewRequestPool previewRequests();
