@@ -711,8 +711,7 @@ public interface IPreviewHandler {
         if (button == 1) {
             if (updateLegend((int) mouseX, (int) mouseY) && !state.hoveredCoords.isEmpty()) {
                 playClickSound();
-                page().setPreviewNavigation(state.hoveredCoordX, state.hoveredCoordZ);
-                regenerate();
+                page().navigatePreviewPoint(state.hoveredCoordX, state.hoveredCoordZ);
                 return true;
             }
         }

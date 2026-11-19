@@ -32,6 +32,11 @@ interface PreviewController {
 
 	void setPreviewNavigation(int x, int z);
 
+	default void navigatePreviewPoint(int x, int z) {
+		this.setPreviewNavigation(x, z);
+		this.regeneratePreviews();
+	}
+
 	void resetPreviewNavigation();
 
 	void selectPreviewPoint(int x, int z);

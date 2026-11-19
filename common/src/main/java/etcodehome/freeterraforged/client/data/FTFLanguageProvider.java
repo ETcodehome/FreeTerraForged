@@ -61,6 +61,8 @@ public final class FTFLanguageProvider {
 			this.add("freeterraforged.gui.preset_preview.editor_navigation_help", "Enter x z, terrain <name>, or biome <namespace:id or #namespace:tag>. Press Enter or select Search.");
 			this.add("freeterraforged.gui.preset_preview.editor_invalid_navigation", "Enter x z, terrain <name>, or biome <namespace:id or #namespace:tag>.");
 			this.add("freeterraforged.gui.preset_preview.search", "Search");
+			this.add("freeterraforged.gui.preset_preview.expand", "Expand preview");
+			this.add("freeterraforged.gui.preset_preview.restore", "Restore previews");
 			this.add("freeterraforged.gui.preset_preview.invalid_navigation", "Enter here, spawn, x z, terrain <name>, or biome <namespace:id or #namespace:tag>.");
 			this.add("freeterraforged.gui.preset_preview.navigation", "Preview location");
 			this.add("freeterraforged.gui.preset_preview.navigation_help", "Enter here, spawn, x z, terrain <name>, or biome <namespace:id or #namespace:tag>. Press Enter or select Search.");

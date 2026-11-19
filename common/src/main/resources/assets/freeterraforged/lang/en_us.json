@@ -79,6 +79,8 @@
   "freeterraforged.gui.preset_preview.editor_navigation_help": "Enter x z, terrain <name>, or biome <namespace:id or #namespace:tag>. Press Enter or select Search.",
   "freeterraforged.gui.preset_preview.editor_invalid_navigation": "Enter x z, terrain <name>, or biome <namespace:id or #namespace:tag>.",
   "freeterraforged.gui.preset_preview.search": "Search",
+  "freeterraforged.gui.preset_preview.expand": "Expand preview",
+  "freeterraforged.gui.preset_preview.restore": "Restore previews",
   "freeterraforged.gui.preset_preview.invalid_navigation": "Enter here, spawn, x z, terrain <name>, or biome <namespace:id or #namespace:tag>.",
   "freeterraforged.gui.preset_preview.navigation": "Preview location",
   "freeterraforged.gui.preset_preview.navigation_help": "Enter here, spawn, x z, terrain <name>, or biome <namespace:id or #namespace:tag>. Press Enter or select Search.",

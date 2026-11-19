@@ -66,7 +66,9 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 	private Preview2D preview2D;
 	private Preview3D preview3D;
 	private PreviewNavigation navigation;
-	private Button teleportButton;
+	private Button expand2D;
+	private Button expand3D;
+	private int expandedPreview;
 	private Component status = Component.empty();
 	private int navigationX;
 	private int navigationZ;
@@ -75,6 +77,7 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 	private long latestLocateRequest;
 	private boolean locatePending;
 	private boolean closing;
+	private boolean restoringQuery;
 
 	private PresetPreviewScreen(ActivePresetSnapshot snapshot, Preset preset) {
 		super(Component.translatableWithFallback(KEY + "title", "FreeTerraForged Preview"));
@@ -125,6 +128,8 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 	@Override
 	protected void init() {
 		try {
+			if (this.preview2D != null) this.preview2D.close();
+			if (this.preview3D != null) this.preview3D.close();
 			this.prepareEnvironment();
 			this.createControls();
 			this.layoutControls();
@@ -228,17 +233,16 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 		int top = 42;
 		PreviewNavigation.ColumnLayout layout = PreviewNavigation.ColumnLayout.fromTop(top);
 		int availableWidth = this.width - margin * 2 - gap;
-		int panelWidth = Math.max(100, availableWidth / 2);
+		int panelWidth = Math.max(100, expandedPreview == 0 ? availableWidth / 2 : availableWidth);
 		int doneY = this.height - 27;
 		int previewSize = Math.max(80, Math.min(
 			panelWidth,
 			doneY - layout.previewY() - Preview2D.LEGEND_FOOTER_HEIGHT - 4
 		));
-		int leftX = Math.max(margin, this.width / 2 - gap / 2 - previewSize);
-		int rightX = this.width / 2 + gap / 2;
+		int leftX = expandedPreview == 0 ? Math.max(margin, this.width / 2 - gap / 2 - previewSize) : (this.width - previewSize) / 2;
+		int rightX = expandedPreview == 0 ? this.width / 2 + gap / 2 : leftX;
 		int navigationX = (this.width - previewSize) / 2;
-		int teleportWidth = Math.min(90, Math.max(64, previewSize / 4));
-		int navigationWidth = previewSize - teleportWidth - 4;
+		int navigationWidth = previewSize;
 
 		this.zoom2D.setRectangle(previewSize, 20, leftX, layout.zoomY());
 		this.renderMode2D.setRectangle(previewSize, 20, leftX, layout.modeY());
@@ -247,17 +251,26 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 		this.preview2D = new Preview2D(this, leftX, layout.previewY(), previewSize, previewSize);
 		this.preview3D = new Preview3D(this, rightX, layout.previewY(), previewSize, previewSize);
 
-		this.addRenderableWidget(this.preview2D);
-		this.addRenderableWidget(this.preview3D);
-		this.addRenderableWidget(this.zoom2D);
-		this.addRenderableWidget(this.renderMode2D);
-		this.addRenderableWidget(this.zoom3D);
-		this.addRenderableWidget(this.renderMode3D);
+		if (this.expandedPreview != 2) {
+			this.addRenderableWidget(this.preview2D);
+			this.addRenderableWidget(this.zoom2D);
+			this.addRenderableWidget(this.renderMode2D);
+		}
+		if (this.expandedPreview != 1) {
+			this.addRenderableWidget(this.preview3D);
+			this.addRenderableWidget(this.zoom3D);
+			this.addRenderableWidget(this.renderMode3D);
+		}
+		this.expand2D = this.expandedPreview == 2 ? null : this.addRenderableWidget(
+			new ExpandButton(leftX + previewSize - 22, layout.previewY() + 2, () -> this.toggleExpanded(1)));
+		this.expand3D = this.expandedPreview == 1 ? null : this.addRenderableWidget(
+			new ExpandButton(rightX + previewSize - 22, layout.previewY() + 2, () -> this.toggleExpanded(2)));
 
 		this.navigation = PreviewNavigation.forInWorldPreview(
 			this.font, navigationX, navigationWidth, layout, () -> this.registries, new PreviewNavigation.Handler() {
 			@Override
 			public void edited() {
+				if (PresetPreviewScreen.this.restoringQuery) return;
 				PresetPreviewScreen.this.cancelLocate();
 				PresetPreviewScreen.this.status = Component.empty();
 			}
@@ -299,11 +312,6 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 		this.addRenderableWidget(this.navigation.input());
 		this.addRenderableWidget(this.navigation.submitButton());
 		this.addRenderableWidget(this.navigation.suggestionsWidget());
-		this.teleportButton = this.addRenderableWidget(Button.builder(
-			Component.translatableWithFallback(KEY + "teleport", "Teleport"),
-			ignored -> this.teleportToSelection()
-		).bounds(navigationX + navigationWidth + 4, layout.navigationY(), teleportWidth, 20).build());
-		this.setTeleportEnabled(!this.locatePending);
 		this.addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, ignored -> this.onClose())
 			.bounds(this.width / 2 - 50, this.height - 27, 100, 20).build());
 	}
@@ -323,7 +331,6 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 			requestId, type, target.trim(), this.snapshot.dimension()
 		)));
 		this.locatePending = true;
-		this.setTeleportEnabled(false);
 		this.navigation.pending();
 		this.status = Component.translatableWithFallback(
 			KEY + "searching", "Searching for %s %s...",
@@ -337,7 +344,6 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 			return;
 		}
 		this.locatePending = false;
-		this.setTeleportEnabled(true);
 		if (!location.found()) {
 			this.navigation.failed();
 			this.status = this.locationMessage(location).copy().withStyle(ChatFormatting.RED);
@@ -356,7 +362,6 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 		this.cancelLocate();
 		this.navigationY = null;
 		this.setPreviewNavigation(x, z);
-		this.setTeleportEnabled(true);
 		this.regeneratePreviews();
 		this.navigation.succeeded();
 		this.status = Component.translatableWithFallback(
@@ -378,10 +383,46 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 		this.onClose();
 	}
 
-	private void setTeleportEnabled(boolean enabled) {
-		if (this.teleportButton != null) {
-			this.teleportButton.active = enabled;
+	private void toggleExpanded(int pane) {
+		String query = this.navigation.input().getValue();
+		this.expandedPreview = this.expandedPreview == pane ? 0 : pane;
+		this.preview2D.close();
+		this.preview3D.close();
+		this.clearWidgets();
+		this.layoutControls();
+		this.restoringQuery = true;
+		try {
+			this.navigation.input().setValue(query);
+		} finally {
+			this.restoringQuery = false;
 		}
+		this.regeneratePreviews();
+	}
+
+	private final class ExpandButton extends Button {
+		ExpandButton(int x, int y, Runnable action) {
+			super(x, y, 20, 20, Component.translatableWithFallback(
+				KEY + (expandedPreview == 0 ? "expand" : "restore"),
+				expandedPreview == 0 ? "Expand preview" : "Restore previews"),
+				button -> action.run(), DEFAULT_NARRATION);
+			this.setTooltip(net.minecraft.client.gui.components.Tooltip.create(this.getMessage()));
+		}
+
+		@Override protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+			super.renderWidget(graphics, mouseX, mouseY, partialTick);
+			int x = this.getX() + 5, y = this.getY() + 5;
+			int color = 0xFFFFFFFF;
+			graphics.fill(x, y, x + 4, y + 1, color);
+			graphics.fill(x, y, x + 1, y + 4, color);
+			graphics.fill(x + 6, y, x + 10, y + 1, color);
+			graphics.fill(x + 9, y, x + 10, y + 4, color);
+			graphics.fill(x, y + 9, x + 4, y + 10, color);
+			graphics.fill(x, y + 6, x + 1, y + 10, color);
+			graphics.fill(x + 6, y + 9, x + 10, y + 10, color);
+			graphics.fill(x + 9, y + 6, x + 10, y + 10, color);
+		}
+
+		@Override public void renderString(GuiGraphics graphics, net.minecraft.client.gui.Font font, int color) { }
 	}
 
 	private Component locationMessage(PreviewLocationPayload location) {
@@ -439,6 +480,10 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 	public boolean mouseClicked(double mouseX, double mouseY, int button) {
 		if (this.navigation != null && this.navigation.mouseClicked(this, mouseX, mouseY, button)) {
 			return true;
+		}
+		if (button == 0) {
+			if (this.expand2D != null && this.expand2D.mouseClicked(mouseX, mouseY, button)) return true;
+			if (this.expand3D != null && this.expand3D.mouseClicked(mouseX, mouseY, button)) return true;
 		}
 		return super.mouseClicked(mouseX, mouseY, button);
 	}
@@ -503,7 +548,6 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 			return;
 		}
 		this.locatePending = false;
-		this.setTeleportEnabled(true);
 		this.latestLocateRequest++;
 		if (this.minecraft.getConnection() != null) {
 			this.minecraft.getConnection().send(new ServerboundCustomPayloadPacket(new PreviewLocateRequestPayload(
@@ -537,8 +581,15 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 		this.navigationZ = z;
 		this.navigated = true;
 	}
+	@Override public void navigatePreviewPoint(int x, int z) { this.navigateTo(x, z); }
 	@Override public void resetPreviewNavigation() { this.navigated = false; }
-	@Override public void selectPreviewPoint(int x, int z) { this.navigateTo(x, z); }
+	@Override public void selectPreviewPoint(int x, int z) {
+		this.cancelLocate();
+		this.navigationX = x;
+		this.navigationZ = z;
+		this.navigationY = null;
+		this.teleportToSelection();
+	}
 	@Override public void regeneratePreviews() {
 		if (this.preview2D != null) this.preview2D.regenerate();
 		if (this.preview3D != null) this.preview3D.regenerate();
