@@ -40,6 +40,9 @@ public final class CompatibilityMixinPlugin implements IMixinConfigPlugin {
 			}
 			return assessment.supported();
 		}
+		if (mixinClassName.endsWith(".compat.MixinTerraBlenderLevelUtils")) {
+			return ModLoaderUtil.isLoaded("terrablender");
+		}
 		return true;
 	}
 
