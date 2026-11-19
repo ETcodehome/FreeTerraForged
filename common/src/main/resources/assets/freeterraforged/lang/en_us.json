@@ -2,7 +2,7 @@
   "freeterraforged.gui.button.edit": "Edit",
   "key.categories.freeterraforged": "FreeTerraForged",
   "key.freeterraforged.open_preview": "Open Preview",
-  "key.freeterraforged.shift": "Shift + %s",
+  "key.freeterraforged.shift": "Left Shift + %s",
   "freeterraforged.commands.locate.options.unknown": "Unknown locate option: %s.",
   "freeterraforged.commands.locate.options.duplicate": "Locate option %s was supplied more than once.",
   "freeterraforged.commands.locate.options.missing_value": "Locate option %s requires a value.",
