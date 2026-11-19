@@ -29,7 +29,7 @@ import net.minecraft.world.level.biome.BiomeSource;
 import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 
-final class UnifiedBiomeSource extends BiomeSource {
+public final class UnifiedBiomeSource extends BiomeSource {
 	private static final int PARALLEL_QUERY_THRESHOLD = 1024;
 	private static final Codec<BiomeSource> SAFE_ACQUISITION_SOURCE_CODEC = new Codec<>() {
 		@Override
@@ -59,7 +59,7 @@ final class UnifiedBiomeSource extends BiomeSource {
 	private final Optional<BiomeSourcePlanInput> acquisitionPlanInput;
 	private volatile TerraForgedChunkGenerator owner;
 
-	UnifiedBiomeSource(
+	public UnifiedBiomeSource(
 		BiomeSource acquisitionSource,
 		Optional<BiomeSourcePlanInput> acquisitionPlanInput
 	) {
@@ -74,7 +74,7 @@ final class UnifiedBiomeSource extends BiomeSource {
 		this.owner = owner;
 	}
 
-	BiomeSource acquisitionSource() {
+	public BiomeSource acquisitionSource() {
 		return this.acquisitionSource;
 	}
 
