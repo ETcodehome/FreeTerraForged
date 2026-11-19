@@ -80,6 +80,58 @@ public class ActivePresetSnapshotTest {
 		assertEquals(0, decoded.snapshot().spawnX());
 		assertEquals(0, decoded.snapshot().spawnZ());
 		assertEquals("replacements: test", decoded.snapshot().biomeReplacements());
+		assertEquals("", decoded.snapshot().biomeParameters());
+	}
+
+	@Test
+	public void testPayloadCodecRoundTripWithBiomeParameters() {
+		ActivePresetSnapshot snapshot = new ActivePresetSnapshot(
+			"{\"test\": 123}",
+			"minecraft:overworld",
+			123456789L,
+			100,
+			200,
+			0,
+			0,
+			"replacements: test",
+			"[{\"parameters\":{\"temperature\":0.0,\"humidity\":0.0,\"continentalness\":0.0,\"erosion\":0.0,\"depth\":0.0,\"weirdness\":0.0,\"offset\":0.0},\"biome\":\"stilllife:temperate_rainforest_wetlands\"}]"
+		);
+		ResourceLocation purpose = ResourceLocation.fromNamespaceAndPath("freeterraforged", "test_biomes");
+		ActivePresetSnapshotPayload payload = new ActivePresetSnapshotPayload(purpose, snapshot);
+
+		FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+		ActivePresetSnapshotPayload.CODEC.encode(buf, payload);
+
+		ActivePresetSnapshotPayload decoded = ActivePresetSnapshotPayload.CODEC.decode(buf);
+		assertEquals(purpose, decoded.purpose());
+		assertEquals(snapshot.biomeParameters(), decoded.snapshot().biomeParameters());
+	}
+
+	@Test
+	public void testBackwardsCompatiblePayloadDecodingWithoutBiomeParameters() {
+		ResourceLocation purpose = ResourceLocation.fromNamespaceAndPath("freeterraforged", "test_legacy");
+		FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+		buf.writeResourceLocation(purpose);
+		buf.writeUtf("{\"test\": 123}", 1_048_576);
+		buf.writeUtf("minecraft:overworld", 32767);
+		buf.writeLong(42L);
+		buf.writeInt(10);
+		buf.writeInt(20);
+		buf.writeInt(0);
+		buf.writeInt(0);
+
+		byte[] raw = "legacy replacements".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+		java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+		try (java.util.zip.GZIPOutputStream gzip = new java.util.zip.GZIPOutputStream(bytes)) {
+			gzip.write(raw);
+		} catch (java.io.IOException e) {
+			throw new RuntimeException(e);
+		}
+		buf.writeByteArray(bytes.toByteArray());
+
+		ActivePresetSnapshotPayload decoded = ActivePresetSnapshotPayload.CODEC.decode(buf);
+		assertEquals("legacy replacements", decoded.snapshot().biomeReplacements());
+		assertEquals("", decoded.snapshot().biomeParameters());
 	}
 
 	@Test

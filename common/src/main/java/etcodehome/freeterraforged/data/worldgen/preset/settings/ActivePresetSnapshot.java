@@ -17,11 +17,26 @@ public record ActivePresetSnapshot(
 	int playerZ,
 	int spawnX,
 	int spawnZ,
-	String biomeReplacements
+	String biomeReplacements,
+	String biomeParameters
 ) {
 	public ActivePresetSnapshot {
 		presetJson = Objects.requireNonNull(presetJson, "presetJson");
 		dimension = Objects.requireNonNull(dimension, "dimension");
 		biomeReplacements = Objects.requireNonNull(biomeReplacements, "biomeReplacements");
+		biomeParameters = Objects.requireNonNull(biomeParameters, "biomeParameters");
+	}
+
+	public ActivePresetSnapshot(
+		String presetJson,
+		String dimension,
+		long seed,
+		int playerX,
+		int playerZ,
+		int spawnX,
+		int spawnZ,
+		String biomeReplacements
+	) {
+		this(presetJson, dimension, seed, playerX, playerZ, spawnX, spawnZ, biomeReplacements, "");
 	}
 }

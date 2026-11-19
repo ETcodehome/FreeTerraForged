@@ -53,19 +53,32 @@ public record ActivePresetSnapshotPayload(
 		buffer.writeInt(snapshot.spawnX());
 		buffer.writeInt(snapshot.spawnZ());
 		buffer.writeByteArray(compress(snapshot.biomeReplacements()));
+		buffer.writeByteArray(compress(snapshot.biomeParameters()));
 	}
 
 	private static ActivePresetSnapshotPayload decode(FriendlyByteBuf buffer) {
 		ResourceLocation purpose = buffer.readResourceLocation();
+		String presetJson = buffer.readUtf(MAX_TEXT_LENGTH);
+		String dimension = buffer.readUtf(32767);
+		long seed = buffer.readLong();
+		int playerX = buffer.readInt();
+		int playerZ = buffer.readInt();
+		int spawnX = buffer.readInt();
+		int spawnZ = buffer.readInt();
+		String biomeReplacements = decompress(buffer.readByteArray(MAX_COMPRESSED_CONFIG_LENGTH));
+		String biomeParameters = buffer.isReadable()
+			? decompress(buffer.readByteArray(MAX_COMPRESSED_CONFIG_LENGTH))
+			: "";
 		ActivePresetSnapshot snapshot = new ActivePresetSnapshot(
-			buffer.readUtf(MAX_TEXT_LENGTH),
-			buffer.readUtf(32767),
-			buffer.readLong(),
-			buffer.readInt(),
-			buffer.readInt(),
-			buffer.readInt(),
-			buffer.readInt(),
-			decompress(buffer.readByteArray(MAX_COMPRESSED_CONFIG_LENGTH))
+			presetJson,
+			dimension,
+			seed,
+			playerX,
+			playerZ,
+			spawnX,
+			spawnZ,
+			biomeReplacements,
+			biomeParameters
 		);
 		return new ActivePresetSnapshotPayload(purpose, snapshot);
 	}
@@ -73,7 +86,7 @@ public record ActivePresetSnapshotPayload(
 	private static byte[] compress(String value) {
 		byte[] input = value.getBytes(StandardCharsets.UTF_8);
 		if (input.length > MAX_CONFIG_LENGTH) {
-			throw new IllegalArgumentException("Biome replacement config exceeds the 4 MiB payload limit");
+			throw new IllegalArgumentException("Payload text exceeds the 4 MiB payload limit");
 		}
 		try {
 			ByteArrayOutputStream bytes = new ByteArrayOutputStream();
@@ -82,11 +95,11 @@ public record ActivePresetSnapshotPayload(
 			}
 			byte[] compressed = bytes.toByteArray();
 			if (compressed.length > MAX_COMPRESSED_CONFIG_LENGTH) {
-				throw new IllegalArgumentException("Compressed biome replacement config exceeds the 1 MiB payload limit");
+				throw new IllegalArgumentException("Compressed payload exceeds the 1 MiB payload limit");
 			}
 			return compressed;
 		} catch (IOException failure) {
-			throw new IllegalStateException("Failed to compress biome replacement config", failure);
+			throw new IllegalStateException("Failed to compress payload", failure);
 		}
 	}
 
@@ -94,11 +107,11 @@ public record ActivePresetSnapshotPayload(
 		try (GZIPInputStream gzip = new GZIPInputStream(new ByteArrayInputStream(compressed))) {
 			byte[] value = gzip.readNBytes(MAX_CONFIG_LENGTH + 1);
 			if (value.length > MAX_CONFIG_LENGTH || gzip.read() != -1) {
-				throw new IllegalArgumentException("Biome replacement config exceeds the 4 MiB payload limit");
+				throw new IllegalArgumentException("Payload text exceeds the 4 MiB payload limit");
 			}
 			return new String(value, StandardCharsets.UTF_8);
 		} catch (IOException failure) {
-			throw new IllegalArgumentException("Invalid compressed biome replacement config", failure);
+			throw new IllegalArgumentException("Invalid compressed payload", failure);
 		}
 	}
 }

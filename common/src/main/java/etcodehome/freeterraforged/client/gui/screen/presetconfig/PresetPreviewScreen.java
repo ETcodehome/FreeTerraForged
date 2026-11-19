@@ -3,12 +3,19 @@ package etcodehome.freeterraforged.client.gui.screen.presetconfig;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Locale;
 
 import com.google.common.collect.ImmutableList;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
+import com.mojang.datafixers.util.Pair;
+import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
@@ -34,7 +41,10 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket;
+import net.minecraft.resources.RegistryOps;
 import net.minecraft.world.level.WorldDataConfiguration;
+import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.biome.MultiNoiseBiomeSource;
 import net.minecraft.world.level.biome.MultiNoiseBiomeSourceParameterList;
 import net.minecraft.world.level.block.Blocks;
@@ -47,6 +57,8 @@ import net.minecraft.world.level.levelgen.NoiseSettings;
 /** Standalone, read-only version of FTF's native terrain preview. */
 public final class PresetPreviewScreen extends Screen implements PreviewController {
 	private static final String KEY = "freeterraforged.gui.preset_preview.";
+	private static final Codec<Climate.ParameterList<Holder<Biome>>> BIOME_PARAMETERS_CODEC =
+		Climate.ParameterList.codec(Biome.CODEC.fieldOf("biome"));
 
 	private final ActivePresetSnapshot snapshot;
 	private final Preset preset;
@@ -150,8 +162,8 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 		Holder<DimensionType> dimensionType = this.registries.lookupOrThrow(Registries.DIMENSION_TYPE)
 			.getOrThrow(BuiltinDimensionTypes.OVERWORLD);
 		// Dynamic worldgen registries are not synchronized to a connected client. Recreate the
-		// generator inputs consumed by the preview from the authoritative preset and the synchronized
-		// biome registry instead of assuming the client owns a world-creation registry context.
+		// generator inputs consumed by the preview from the authoritative preset, the synchronized
+		// biome registry, and the server-authoritative snapshot biome parameters.
 		NoiseGeneratorSettings defaults = NoiseGeneratorSettings.dummy();
 		var properties = this.preset.world().properties;
 		Holder<NoiseGeneratorSettings> settings = Holder.direct(new NoiseGeneratorSettings(
@@ -172,17 +184,51 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 			this.preset.caves().largeOreVeins,
 			false
 		));
-		MultiNoiseBiomeSourceParameterList parameters = new MultiNoiseBiomeSourceParameterList(
-			MultiNoiseBiomeSourceParameterList.Preset.OVERWORLD,
-			this.registries.lookupOrThrow(Registries.BIOME)
-		);
+		Climate.ParameterList<Holder<Biome>> parameters = this.resolveBiomeParameters();
 		this.selectedStem = new LevelStem(
 			dimensionType,
-			new TerraForgedChunkGenerator(MultiNoiseBiomeSource.createFromList(parameters.parameters()), settings)
+			new TerraForgedChunkGenerator(MultiNoiseBiomeSource.createFromList(parameters), settings)
 		);
 		this.dataConfiguration = WorldDataConfiguration.DEFAULT.expandFeatures(
 			minecraft.getConnection().enabledFeatures()
 		);
+	}
+
+	private Climate.ParameterList<Holder<Biome>> resolveBiomeParameters() {
+		String serialized = this.snapshot.biomeParameters();
+		if (serialized != null && !serialized.isBlank()) {
+			try {
+				var ops = RegistryOps.create(JsonOps.INSTANCE, this.registries);
+				JsonElement json = JsonParser.parseString(serialized);
+				Climate.ParameterList<Holder<Biome>> decoded = BIOME_PARAMETERS_CODEC.parse(ops, json)
+					.resultOrPartial(FTFCommon.LOGGER::warn)
+					.orElse(null);
+				if (decoded != null && !decoded.values().isEmpty()) {
+					return decoded;
+				}
+				if (json.isJsonArray()) {
+					JsonArray array = json.getAsJsonArray();
+					List<Pair<Climate.ParameterPoint, Holder<Biome>>> recovered = new ArrayList<>();
+					Codec<Pair<Climate.ParameterPoint, Holder<Biome>>> entryCodec = RecordCodecBuilder.create(instance -> instance.group(
+						Climate.ParameterPoint.CODEC.fieldOf("parameters").forGetter(Pair::getFirst),
+						Biome.CODEC.fieldOf("biome").forGetter(Pair::getSecond)
+					).apply(instance, Pair::of));
+					for (JsonElement item : array) {
+						entryCodec.parse(ops, item).result().ifPresent(recovered::add);
+					}
+					if (!recovered.isEmpty()) {
+						return new Climate.ParameterList<>(recovered);
+					}
+				}
+			} catch (RuntimeException failure) {
+				FTFCommon.LOGGER.warn("Failed to decode snapshot biome parameters, falling back to vanilla Overworld preset", failure);
+			}
+		}
+		MultiNoiseBiomeSourceParameterList parameters = new MultiNoiseBiomeSourceParameterList(
+			MultiNoiseBiomeSourceParameterList.Preset.OVERWORLD,
+			this.registries.lookupOrThrow(Registries.BIOME)
+		);
+		return parameters.parameters();
 	}
 
 	private void createControls() {
