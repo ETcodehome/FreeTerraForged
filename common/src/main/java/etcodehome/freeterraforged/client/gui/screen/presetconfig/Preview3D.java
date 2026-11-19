@@ -14,7 +14,6 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.resources.ResourceLocation;
-import etcodehome.freeterraforged.data.worldgen.preset.settings.SpawnType;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.PreviewGrid;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.TerrainCeiling;
@@ -26,7 +25,7 @@ public class Preview3D extends Button implements IPreviewHandler {
     private static DynamicTexture STATIC_TEXTURE_CACHE;
     private static ResourceLocation STATIC_CACHE_LOCATION;
 
-    private final PresetEditorPage page;
+    private final PreviewController page;
     private final PreviewState state = new PreviewState();
 
     private RenderMode currentMode = RenderMode.BIOME;
@@ -39,7 +38,7 @@ public class Preview3D extends Button implements IPreviewHandler {
     private int lastHoveredIx = -1;
     private int lastHoveredIz = -1;
 
-    public Preview3D(PresetEditorPage page, int x, int y, int width, int height) {
+    public Preview3D(PreviewController page, int x, int y, int width, int height) {
         super(x, y, width, height, CommonComponents.EMPTY, IPreviewHandler.onPress(), DEFAULT_NARRATION);
         this.page = page;
     }
@@ -50,7 +49,7 @@ public class Preview3D extends Button implements IPreviewHandler {
     }
 
     @Override
-    public PresetEditorPage page() {
+    public PreviewController page() {
         return this.page;
     }
 
@@ -78,37 +77,37 @@ public class Preview3D extends Button implements IPreviewHandler {
 
     @Override
     public RenderMode getRenderMode() {
-        return this.page.renderMode3D == null ? this.currentMode : this.page.renderMode3D.getValue();
+        return this.page.renderMode3D() == null ? this.currentMode : this.page.renderMode3D().getValue();
     }
 
     @Override
     public int getZoom() {
-        return NoiseUtil.round(1.5F * (101 - (float) this.page.zoom3D.getLerpedValue()));
+        return NoiseUtil.round(1.5F * (101 - (float) this.page.zoom3D().getLerpedValue()));
     }
 
     @Override
     public boolean hasZoomControl() {
-        return this.page.zoom3D != null;
+        return this.page.zoom3D() != null;
     }
 
     @Override
     public double getZoomValue() {
-        return this.page.zoom3D.getValue();
+        return this.page.zoom3D().getValue();
     }
 
     @Override
     public void setZoomValue(double value) {
-        this.page.zoom3D.setValue(value);
+        this.page.zoom3D().setValue(value);
     }
 
     @Override
     public void applyZoomValue() {
-        this.page.zoom3D.applyValue();
+        this.page.zoom3D().applyValue();
     }
 
     @Override
     public RasterParams captureRasterParams() {
-        double zoomValue = this.page.zoom3D == null ? 95.0D : this.page.zoom3D.getLerpedValue();
+        double zoomValue = this.page.zoom3D() == null ? 95.0D : this.page.zoom3D().getLerpedValue();
         return new RasterParams(this.width, this.height, zoomValue);
     }
 
@@ -142,7 +141,7 @@ public class Preview3D extends Button implements IPreviewHandler {
         float heightScale = getHeightScale((float) blockW, params.zoom);
         int halfTile = tileSize / 2;
         float maxCellHeight = properties.worldHeight * levels.unit;
-        int heightLimit = TerrainCeiling.buildLimitHeight(properties, TerrainCeiling.isEnabled(this.page.preset.getPreset()));
+        int heightLimit = TerrainCeiling.buildLimitHeight(properties, TerrainCeiling.isEnabled(this.page.preset()));
         float[] hsb = new float[3];
 
         for (int iz = 0; iz < tileSize; iz++) {
@@ -343,9 +342,12 @@ public class Preview3D extends Button implements IPreviewHandler {
             guiGraphics.fill(x, y, x + this.width, y + this.height, 0xFF000000);
         }
 
-        renderSpawnMarker(guiGraphics);
+        renderCenterMarker(guiGraphics);
         updateLegend(mx, my);
-        renderLegend(guiGraphics, mx, my, this.state.legendLabels, this.state.legendValues, x, y + this.width + 30, 10, 0xFFFFFF);
+        boolean expanded = this.page instanceof PresetPreviewScreen screen && screen.isExpanded();
+        renderLegend(guiGraphics, mx, my, this.state.legendLabels, this.state.legendValues,
+            expanded ? Minecraft.getInstance().getWindow().getGuiScaledWidth() - this.width - 4 : x,
+            expanded ? Minecraft.getInstance().getWindow().getGuiScaledHeight() - 15 : y + this.height + 30, 10, 0xFFFFFF);
     }
 
     private static float getHeightScale(float blockW, double zoomValue) {
@@ -364,55 +366,37 @@ public class Preview3D extends Button implements IPreviewHandler {
         return darkenColor(baseColor, shadeFactor);
     }
 
-    private void renderSpawnMarker(GuiGraphics guiGraphics) {
-        WorldSettings.Properties props = this.page.preset.getPreset().world().properties;
-
-        if (props.spawnType == SpawnType.USER_SELECTED || props.spawnType == SpawnType.CONTINENT_CENTER) {
-            int zoomValue = this.getZoom();
-            PreviewGrid activeTile = this.state.grid;
-            int tileSize = activeTile != null ? activeTile.size() : 0;
-
-            if (tileSize > 0) {
-                int activeCX = this.state.centerX;
-                int activeCZ = this.state.centerZ;
-
-                int ix = NoiseUtil.round(((float) (props.spawnX - activeCX) / zoomValue) + (tileSize / 2.0f));
-                int iz = NoiseUtil.round(((float) (props.spawnZ - activeCZ) / zoomValue) + (tileSize / 2.0f));
-
-                if (ix >= 0 && ix < tileSize && iz >= 0 && iz < tileSize) {
-                    Cell cell = activeTile.lookup(ix, iz);
-
-                    float rawBlockW = calculateBlockWidth(this.width, this.height, tileSize);
-                    int halfW = Math.max(1, (int) (rawBlockW / 2.0f));
-                    int halfH = Math.max(1, halfW / 2);
-
-                    int blockW = halfW * 2;
-                    int blockH = halfH * 2;
-
-                    int centerVisualX = this.getX() + (this.width / 2);
-                    int centerVisualY = this.getY() + (this.height / 2);
-
-                    int dx = ix - (tileSize / 2);
-                    int dz = iz - (tileSize / 2);
-
-                    int isoX = centerVisualX + (dx - dz) * halfW;
-                    int isoY = centerVisualY + (dx + dz) * halfH - Math.round(cell.height * getHeightScale((float) blockW, this.page.zoom3D.getLerpedValue()));
-
-                    int markerX = isoX + halfW;
-                    int markerY = isoY + halfH;
-
-                    int size = 6;
-                    int color = 0xFFFFFFFF;
-                    int shadow = 0xFF000000;
-
-                    guiGraphics.fill(markerX - size + 1, markerY + 1, markerX + size + 2, markerY + 2, shadow);
-                    guiGraphics.fill(markerX - size, markerY, markerX + size + 1, markerY + 1, color);
-
-                    guiGraphics.fill(markerX + 1, markerY - size + 1, markerX + 2, markerY + size + 2, shadow);
-                    guiGraphics.fill(markerX, markerY - size, markerX + 1, markerY + size + 1, color);
-                }
-            }
+    private void renderCenterMarker(GuiGraphics guiGraphics) {
+        PreviewGrid activeTile = this.state.grid;
+        int tileSize = activeTile != null ? activeTile.size() : 0;
+        if (tileSize <= 0) {
+            return;
         }
+
+        int ix = tileSize / 2;
+        int iz = tileSize / 2;
+        Cell cell = activeTile.lookup(ix, iz);
+
+        float rawBlockW = calculateBlockWidth(this.width, this.height, tileSize);
+        int halfW = Math.max(1, (int) (rawBlockW / 2.0f));
+        int halfH = Math.max(1, halfW / 2);
+        int blockW = halfW * 2;
+
+        int isoX = this.getX() + (this.width / 2);
+        int isoY = this.getY() + (this.height / 2)
+            - Math.round(cell.height * getHeightScale((float) blockW, this.page.zoom3D().getLerpedValue()));
+        int markerX = isoX + halfW;
+        int markerY = isoY + halfH;
+
+        int size = 6;
+        int color = 0xFFFFFFFF;
+        int shadow = 0xFF000000;
+
+        guiGraphics.fill(markerX - size + 1, markerY + 1, markerX + size + 2, markerY + 2, shadow);
+        guiGraphics.fill(markerX - size, markerY, markerX + size + 1, markerY + 1, color);
+
+        guiGraphics.fill(markerX + 1, markerY - size + 1, markerX + 2, markerY + size + 2, shadow);
+        guiGraphics.fill(markerX, markerY - size, markerX + 1, markerY + size + 1, color);
     }
 
     public void updateBounds(int x, int y, int width, int height) {

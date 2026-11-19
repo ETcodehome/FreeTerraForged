@@ -4,6 +4,7 @@ import etcodehome.freeterraforged.client.network.FTFClientPayloadHandler;
 import etcodehome.freeterraforged.network.ActivePresetSnapshotPayload;
 import etcodehome.freeterraforged.network.FlowFieldSyncPayload;
 import etcodehome.freeterraforged.network.FlowSettingsSyncPayload;
+import etcodehome.freeterraforged.network.PreviewLocationPayload;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 
 public class FTFFabricClientNetworking {
@@ -21,6 +22,9 @@ public class FTFFabricClientNetworking {
 				context.client().execute(() ->
 						FTFClientPayloadHandler.handleFlowSettingsSync(payload, context.player())
 				)
+		);
+		ClientPlayNetworking.registerGlobalReceiver(PreviewLocationPayload.TYPE, (payload, context) ->
+			context.client().execute(() -> FTFClientPayloadHandler.handlePreviewLocation(payload))
 		);
     }
 }

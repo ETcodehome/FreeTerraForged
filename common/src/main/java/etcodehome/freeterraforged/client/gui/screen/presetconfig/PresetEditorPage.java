@@ -22,7 +22,7 @@ import etcodehome.freeterraforged.client.gui.screen.presetconfig.PresetListPage.
 import etcodehome.freeterraforged.client.gui.widget.Slider;
 import etcodehome.freeterraforged.FTFCommon;
 
-public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, AbstractWidget, AbstractWidget> {
+public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, AbstractWidget, AbstractWidget> implements PreviewController {
 	// Independent control components
 	Slider zoom2D;
 	Slider zoom3D;
@@ -43,6 +43,7 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 
 	private EditBox seedEdit;
 	private Button seedRandomize;
+	private PreviewNavigation previewNavigation;
 	private Preview3D preview3D;
 	private Preview2D preview2D;
 
@@ -54,6 +55,9 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 
 	protected void regenerate() {
 		this.screen.previewRequestKeys().invalidatePreset();
+		if (this.preview2D != null) {
+			this.preview2D.cancelPendingSearch();
+		}
 
 		if (this.preview3D != null) {
 			this.preview3D.regenerate();
@@ -64,33 +68,91 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		}
 	}
 
+	@Override
+	public void regeneratePreviews() {
+		this.regenerate();
+	}
+
+	@Override
+	public etcodehome.freeterraforged.data.worldgen.preset.settings.Preset preset() {
+		return this.preset.getPreset();
+	}
+
+	@Override
+	public PreviewRequestKeyFactory.Input capturePreviewInput() {
+		return this.screen.previewRequestKeys().capture(this.screen.getSettings(), this.preset());
+	}
+
+	@Override
+	public PreviewRequestKeyFactory previewRequestKeys() {
+		return this.screen.previewRequestKeys();
+	}
+
+	@Override
+	public PreviewRequestPool previewRequests() {
+		return this.screen.previewRequests();
+	}
+
+	@Override
+	public Slider zoom2D() { return this.zoom2D; }
+
+	@Override
+	public Slider zoom3D() { return this.zoom3D; }
+
+	@Override
+	public CycleButton<RenderMode> renderMode2D() { return this.renderMode2D; }
+
+	@Override
+	public CycleButton<RenderMode> renderMode3D() { return this.renderMode3D; }
+
+	@Override
+	public void selectPreviewPoint(int x, int z) {
+		etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.Properties props = this.preset().world().properties;
+		props.spawnType = etcodehome.freeterraforged.data.worldgen.preset.settings.SpawnType.USER_SELECTED;
+		props.spawnX = x;
+		props.spawnZ = z;
+		if (this instanceof WorldSettingsPage worldPage) {
+			worldPage.spawnType.setValue(etcodehome.freeterraforged.data.worldgen.preset.settings.SpawnType.USER_SELECTED);
+		}
+		// Persist the selected spawn and keep the preview centered on that exact locate result.
+		// Relying on the preset mutation alone made recentering an accidental regeneration side effect.
+		this.setPreviewNavigation(x, z);
+		this.regenerate();
+	}
+
 	PresetConfigScreen getScreen() {
 		return this.screen;
 	}
 
-	PreviewComputationCache previewCache() {
+	@Override
+	public PreviewComputationCache previewCache() {
 		return this.screen.previewCache();
 	}
 
-	int previewNavigationX() {
+	@Override
+	public int previewNavigationX() {
 		return this.previewNavigationX;
 	}
 
-	int previewNavigationZ() {
+	@Override
+	public int previewNavigationZ() {
 		return this.previewNavigationZ;
 	}
 
-	boolean previewNavigated() {
+	@Override
+	public boolean previewNavigated() {
 		return this.previewNavigated;
 	}
 
-	void setPreviewNavigation(int x, int z) {
+	@Override
+	public void setPreviewNavigation(int x, int z) {
 		this.previewNavigationX = x;
 		this.previewNavigationZ = z;
 		this.previewNavigated = true;
 	}
 
-	void resetPreviewNavigation() {
+	@Override
+	public void resetPreviewNavigation() {
 		this.previewNavigated = false;
 	}
 
@@ -136,11 +198,13 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 
 		int yButtonRow1 = this.left.getY();
 
+		int previewControlsTop = yButtonRow1 - 24 + 5;
+
 		// 2D Viewport setup (No background container)
-		this.initLeftPreviewColumn(0,4, forceOffset, elementWidth, yButtonRow1 + 5);
+		this.initLeftPreviewColumn(0, 4, forceOffset, elementWidth, previewControlsTop);
 
 		// 3D Viewport setup (No background container)
-		this.initRightPreviewColumn(startX + columnWidth * 2 + 24, 4, forceOffset, elementWidth, yButtonRow1 - 24 + 5);
+		this.initRightPreviewColumn(startX + columnWidth * 2 + 24, 4, forceOffset, elementWidth, previewControlsTop);
 
 		// fill out the remaining gap
 		this.left.setX(startX + columnWidth - 20);
@@ -216,32 +280,84 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 
 	private void initLeftPreviewColumn(int columnX, int padding, int offset, int width, int yBase) {
 		int x = columnX + padding + offset;
+		PreviewNavigation.ColumnLayout layout = PreviewNavigation.ColumnLayout.fromTop(yBase);
 
 		// Viewport, registered first so that dropdowns display over the top
-		this.preview2D = new Preview2D(this, x, yBase + 48, width, width);
+		this.preview2D = new Preview2D(this, x, layout.previewY(), width, width);
 		this.preview2D.regenerate();
 		this.screen.addWidgetToScreen(this.preview2D);
 
 		// Controls
 		this.zoom2D.setX(x);
-		this.zoom2D.setY(yBase);
+		this.zoom2D.setY(layout.zoomY());
 		this.zoom2D.setWidth(width);
 		this.zoom2D.setHeight(20);
 		this.screen.addWidgetToScreen(this.zoom2D);
 
 		this.renderMode2D.setX(x);
-		this.renderMode2D.setY(yBase + 24);
+		this.renderMode2D.setY(layout.modeY());
 		this.renderMode2D.setWidth(width);
 		this.renderMode2D.setHeight(20);
 		this.screen.addWidgetToScreen(this.renderMode2D);
+
+		this.previewNavigation = PreviewNavigation.forPresetEditor(
+			Minecraft.getInstance().font,
+			x,
+			width,
+			layout,
+			() -> PresetEditorPage.this.screen.getSettings().worldgenLoadContext(),
+			new PreviewNavigation.Handler() {
+				@Override
+				public void edited() {
+					PresetEditorPage.this.preview2D.cancelPendingSearch();
+				}
+
+				@Override
+				public void coordinates(int x, int z) {
+					PresetEditorPage.this.setPreviewNavigation(x, z);
+					PresetEditorPage.this.regenerate();
+					PresetEditorPage.this.previewNavigation.succeeded();
+				}
+
+				@Override
+				public void terrain(String name) {
+					PresetEditorPage.this.previewNavigation.pending();
+					PresetEditorPage.this.preview2D.navigateToTerrain(name, PresetEditorPage.this::completePreviewSearch);
+				}
+
+				@Override
+				public void biome(String id) {
+					PresetEditorPage.this.previewNavigation.pending();
+					if (PresetEditorPage.this.renderMode2D.getValue() != RenderMode.BIOME) {
+						PresetEditorPage.this.renderMode2D.setValue(RenderMode.BIOME);
+						PresetEditorPage.this.preview2D.refreshRenderMode(RenderMode.BIOME);
+					}
+					PresetEditorPage.this.preview2D.navigateToBiome(id, PresetEditorPage.this::completePreviewSearch);
+				}
+			}
+		);
+		this.screen.addWidgetToScreen(this.previewNavigation.input());
+		this.screen.addWidgetToScreen(this.previewNavigation.submitButton());
+		this.screen.addWidgetToScreen(this.previewNavigation.suggestionsWidget());
+		this.screen.setPreviewNavigation(this.previewNavigation);
+	}
+
+	private void completePreviewSearch(Preview2D.NavigationResult result) {
+		if (this.previewNavigation != null) {
+			if (result.found()) {
+				this.previewNavigation.searchSucceeded();
+			} else {
+				this.previewNavigation.failed(result.failure());
+			}
+		}
 	}
 
 	private void initRightPreviewColumn(int columnX, int padding, int offset, int width, int yBase) {
 		int x = columnX + padding + offset;
+		PreviewNavigation.ColumnLayout layout = PreviewNavigation.ColumnLayout.fromTop(yBase);
 
 		// Viewport, registered first so that dropdowns display over the top
-		int y3D = yBase + 48 + 24;
-		this.preview3D = new Preview3D(this, x, y3D, width, width);
+		this.preview3D = new Preview3D(this, x, layout.previewY(), width, width);
 		this.preview3D.regenerate();
 		this.screen.addWidgetToScreen(this.preview3D);
 
@@ -251,7 +367,7 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		int editWidth = width - buttonWidth - gap;
 
 		this.seedEdit.setX(x);
-		this.seedEdit.setY(yBase);
+		this.seedEdit.setY(layout.navigationY());
 		this.seedEdit.setWidth(editWidth);
 		this.seedEdit.setHeight(20);
 
@@ -260,20 +376,20 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		this.screen.addWidgetToScreen(this.seedEdit);
 
 		this.seedRandomize.setX(x + editWidth + gap);
-		this.seedRandomize.setY(yBase);
+		this.seedRandomize.setY(layout.navigationY());
 		this.seedRandomize.setWidth(buttonWidth);
 		this.seedRandomize.setHeight(20);
 		this.screen.addWidgetToScreen(this.seedRandomize);
 
 		// Controls
 		this.zoom3D.setX(x);
-		this.zoom3D.setY(yBase + 24);
+		this.zoom3D.setY(layout.zoomY());
 		this.zoom3D.setWidth(width);
 		this.zoom3D.setHeight(20);
 		this.screen.addWidgetToScreen(this.zoom3D);
 
 		this.renderMode3D.setX(x);
-		this.renderMode3D.setY(yBase + 48);
+		this.renderMode3D.setY(layout.modeY());
 		this.renderMode3D.setWidth(width);
 		this.renderMode3D.setHeight(20);
 		this.screen.addWidgetToScreen(this.renderMode3D);
@@ -286,6 +402,12 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		if (this.renderMode3D != null) this.screen.removeWidgetFromScreen(this.renderMode3D);
 		if (this.seedEdit != null) this.screen.removeWidgetFromScreen(this.seedEdit);
 		if (this.seedRandomize != null) this.screen.removeWidgetFromScreen(this.seedRandomize);
+		if (this.previewNavigation != null) {
+			this.screen.clearPreviewNavigation(this.previewNavigation);
+			this.screen.removeWidgetFromScreen(this.previewNavigation.input());
+			this.screen.removeWidgetFromScreen(this.previewNavigation.submitButton());
+			this.screen.removeWidgetFromScreen(this.previewNavigation.suggestionsWidget());
+		}
 
 		if (this.preview3D != null) {
 			this.screen.removeWidgetFromScreen(this.preview3D);
@@ -299,6 +421,9 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	@Override
 	public void onCancel() {
 		super.onCancel();
+		if (this.previewNavigation != null) {
+			this.screen.clearPreviewNavigation(this.previewNavigation);
+		}
 		this.closePreviews();
 	}
 

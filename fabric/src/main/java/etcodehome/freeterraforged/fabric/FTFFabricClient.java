@@ -11,6 +11,7 @@ public class FTFFabricClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         FTFFabricClientNetworking.init();
+        FTFFabricPreviewKeyMapping.register();
 
         Minecraft mc = Minecraft.getInstance();
         WorldRenderEvents.AFTER_TRANSLUCENT.register(context -> {

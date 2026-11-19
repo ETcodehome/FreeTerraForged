@@ -3,6 +3,9 @@ package etcodehome.freeterraforged.client.network;
 import etcodehome.freeterraforged.network.FlowFieldSyncPayload;
 import etcodehome.freeterraforged.network.ActivePresetSnapshotPayload;
 import etcodehome.freeterraforged.world.worldgen.IFlowFieldHolder;
+import etcodehome.freeterraforged.client.gui.screen.presetconfig.PresetPreviewScreen;
+import etcodehome.freeterraforged.network.PreviewSnapshotPurpose;
+import etcodehome.freeterraforged.network.PreviewLocationPayload;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.chunk.ChunkAccess;
@@ -13,6 +16,12 @@ import etcodehome.freeterraforged.world.worldgen.IFlowSettingsHolder;
 import etcodehome.freeterraforged.world.worldgen.IFlowFieldHolder;
 
 public class FTFClientPayloadHandler {
+	static {
+		ActivePresetSnapshotHandlers.register(
+			PreviewSnapshotPurpose.OPEN,
+			snapshot -> net.minecraft.client.Minecraft.getInstance().setScreen(PresetPreviewScreen.create(snapshot))
+		);
+	}
 
 	public static void handleActivePresetSnapshot(ActivePresetSnapshotPayload payload) {
 		ActivePresetSnapshotHandlers.handle(payload);
@@ -31,5 +40,9 @@ public class FTFClientPayloadHandler {
 		if (player != null && player.level() instanceof ClientLevel clientLevel) {
 			((IFlowSettingsHolder) clientLevel).freeterraforged$setFlowSettings(payload.settings());
 		}
+	}
+
+	public static void handlePreviewLocation(PreviewLocationPayload payload) {
+		PresetPreviewScreen.handleLocation(payload);
 	}
 }
