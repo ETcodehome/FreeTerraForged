@@ -47,6 +47,8 @@ import etcodehome.freeterraforged.world.worldgen.feature.placement.ChunkLocalPla
 import etcodehome.freeterraforged.world.worldgen.feature.placement.SurfacePlacementClassifier;
 import etcodehome.freeterraforged.world.worldgen.feature.ore.DynamicOrePlan;
 import etcodehome.freeterraforged.world.worldgen.feature.ore.DynamicOrePlanner;
+import etcodehome.freeterraforged.platform.ModLoaderUtil;
+import etcodehome.freeterraforged.world.worldgen.terrablender.TerraBlenderSurfaceBridge;
 import etcodehome.freeterraforged.world.worldgen.biome.modifier.BiomeModifier;
 import etcodehome.freeterraforged.world.worldgen.biome.FTFClimateSampler;
 import etcodehome.freeterraforged.world.worldgen.biome.ClimateQueryPolicy;
@@ -376,6 +378,9 @@ public final class MinecraftWorldgenPlanCompiler {
 			);
 		} else if (generator instanceof NoiseBasedChunkGenerator noiseGenerator) {
 			surfacePlan = compileFacet(WorldgenFacet.SURFACE, () -> {
+				if (ModLoaderUtil.isLoaded("terrablender")) {
+					TerraBlenderSurfaceBridge.bindSurfaceCategory(owner, noiseGenerator);
+				}
 				var root = noiseGenerator.generatorSettings().value().surfaceRule();
 				WorldgenSurfaceInputs.requireSupported(root, owner.registries());
 				return new WorldgenPlans.Surface(
