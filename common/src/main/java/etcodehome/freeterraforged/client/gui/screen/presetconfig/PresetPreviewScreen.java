@@ -230,41 +230,44 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 	private void layoutControls() {
 		int margin = 12;
 		int gap = 12;
-		int top = 42;
-		PreviewNavigation.ColumnLayout layout = PreviewNavigation.ColumnLayout.fromTop(top);
+		boolean expanded = this.expandedPreview != 0;
+		PreviewNavigation.ColumnLayout layout = PreviewNavigation.ColumnLayout.fromTop(expanded ? 8 : 42);
 		int availableWidth = this.width - margin * 2 - gap;
-		int panelWidth = Math.max(100, expandedPreview == 0 ? availableWidth / 2 : availableWidth);
-		int doneY = this.height - 27;
-		int previewSize = Math.max(80, Math.min(
-			panelWidth,
-			doneY - layout.previewY() - Preview2D.LEGEND_FOOTER_HEIGHT - 4
+		int previewSize = expanded ? Math.max(this.width, this.height) : Math.max(80, Math.min(
+			Math.max(100, availableWidth / 2),
+			this.height - layout.previewY() - Preview2D.LEGEND_FOOTER_HEIGHT - 4
 		));
-		int leftX = expandedPreview == 0 ? Math.max(margin, this.width / 2 - gap / 2 - previewSize) : (this.width - previewSize) / 2;
-		int rightX = expandedPreview == 0 ? this.width / 2 + gap / 2 : leftX;
-		int navigationX = (this.width - previewSize) / 2;
-		int navigationWidth = previewSize;
+		int leftX = expanded ? (this.width - previewSize) / 2 : Math.max(margin, this.width / 2 - gap / 2 - previewSize);
+		int rightX = expanded ? leftX : this.width / 2 + gap / 2;
+		int previewY = expanded ? (this.height - previewSize) / 2 : layout.previewY();
+		int controlsWidth = expanded ? Math.min(300, Math.max(100, this.width - 52)) : previewSize;
+		int controlsLeft = expanded ? (this.width - controlsWidth) / 2 : leftX;
+		int controlsRight = expanded ? controlsLeft : rightX;
+		int navigationWidth = controlsWidth;
+		int navigationX = (this.width - navigationWidth) / 2;
 
-		this.zoom2D.setRectangle(previewSize, 20, leftX, layout.zoomY());
-		this.renderMode2D.setRectangle(previewSize, 20, leftX, layout.modeY());
-		this.zoom3D.setRectangle(previewSize, 20, rightX, layout.zoomY());
-		this.renderMode3D.setRectangle(previewSize, 20, rightX, layout.modeY());
-		this.preview2D = new Preview2D(this, leftX, layout.previewY(), previewSize, previewSize);
-		this.preview3D = new Preview3D(this, rightX, layout.previewY(), previewSize, previewSize);
+		this.zoom2D.setRectangle(controlsWidth, 20, controlsLeft, layout.zoomY());
+		this.renderMode2D.setRectangle(controlsWidth, 20, controlsLeft, layout.modeY());
+		this.zoom3D.setRectangle(controlsWidth, 20, controlsRight, layout.zoomY());
+		this.renderMode3D.setRectangle(controlsWidth, 20, controlsRight, layout.modeY());
+		this.preview2D = new Preview2D(this, leftX, previewY, previewSize, previewSize);
+		this.preview3D = new Preview3D(this, rightX, previewY, previewSize, previewSize);
 
 		if (this.expandedPreview != 2) {
-			this.addRenderableWidget(this.preview2D);
+			if (!expanded) this.addRenderableWidget(this.preview2D);
 			this.addRenderableWidget(this.zoom2D);
 			this.addRenderableWidget(this.renderMode2D);
 		}
 		if (this.expandedPreview != 1) {
-			this.addRenderableWidget(this.preview3D);
+			if (!expanded) this.addRenderableWidget(this.preview3D);
 			this.addRenderableWidget(this.zoom3D);
 			this.addRenderableWidget(this.renderMode3D);
 		}
+		int expandY = expanded ? 8 : previewY + 2;
 		this.expand2D = this.expandedPreview == 2 ? null : this.addRenderableWidget(
-			new ExpandButton(leftX + previewSize - 22, layout.previewY() + 2, () -> this.toggleExpanded(1)));
+			new ExpandButton(expanded ? this.width - 28 : leftX + previewSize - 22, expandY, () -> this.toggleExpanded(1)));
 		this.expand3D = this.expandedPreview == 1 ? null : this.addRenderableWidget(
-			new ExpandButton(rightX + previewSize - 22, layout.previewY() + 2, () -> this.toggleExpanded(2)));
+			new ExpandButton(expanded ? this.width - 28 : rightX + previewSize - 22, expandY, () -> this.toggleExpanded(2)));
 
 		this.navigation = PreviewNavigation.forInWorldPreview(
 			this.font, navigationX, navigationWidth, layout, () -> this.registries, new PreviewNavigation.Handler() {
@@ -312,8 +315,8 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 		this.addRenderableWidget(this.navigation.input());
 		this.addRenderableWidget(this.navigation.submitButton());
 		this.addRenderableWidget(this.navigation.suggestionsWidget());
-		this.addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, ignored -> this.onClose())
-			.bounds(this.width / 2 - 50, this.height - 27, 100, 20).build());
+		// In expanded mode the preview renders behind the controls, but receives input after them.
+		if (expanded) this.addWidget(this.expandedPreview == 1 ? this.preview2D : this.preview3D);
 	}
 
 	private void requestLocate(PreviewLocateRequestPayload.TargetType type, String target) {
@@ -382,6 +385,8 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 		)));
 		this.onClose();
 	}
+
+	boolean isExpanded() { return this.expandedPreview != 0; }
 
 	private void toggleExpanded(int pane) {
 		String query = this.navigation.input().getValue();
@@ -499,8 +504,13 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 
 	@Override
 	public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+		if (this.expandedPreview == 1 && this.preview2D != null) {
+			this.preview2D.render(graphics, mouseX, mouseY, partialTick);
+		} else if (this.expandedPreview == 2 && this.preview3D != null) {
+			this.preview3D.render(graphics, mouseX, mouseY, partialTick);
+		}
 		super.render(graphics, mouseX, mouseY, partialTick);
-		graphics.drawCenteredString(
+		if (this.expandedPreview == 0) graphics.drawCenteredString(
 			this.font,
 			Component.empty().append(this.title).append(" — ").append(this.presetName),
 			this.width / 2,
@@ -508,7 +518,7 @@ public final class PresetPreviewScreen extends Screen implements PreviewControll
 			0xFFFFFF
 		);
 		if (!this.status.getString().isEmpty()) {
-			graphics.drawCenteredString(this.font, this.status, this.width / 2, 24, 0xFFFFFF);
+			graphics.drawCenteredString(this.font, this.status, this.width / 2, this.expandedPreview == 0 ? 24 : 82, 0xFFFFFF);
 		}
 	}
 

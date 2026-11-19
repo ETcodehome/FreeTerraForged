@@ -344,7 +344,10 @@ public class Preview3D extends Button implements IPreviewHandler {
 
         renderCenterMarker(guiGraphics);
         updateLegend(mx, my);
-        renderLegend(guiGraphics, mx, my, this.state.legendLabels, this.state.legendValues, x, y + this.width + 30, 10, 0xFFFFFF);
+        boolean expanded = this.page instanceof PresetPreviewScreen screen && screen.isExpanded();
+        renderLegend(guiGraphics, mx, my, this.state.legendLabels, this.state.legendValues,
+            expanded ? Minecraft.getInstance().getWindow().getGuiScaledWidth() - this.width - 4 : x,
+            expanded ? Minecraft.getInstance().getWindow().getGuiScaledHeight() - 15 : y + this.height + 30, 10, 0xFFFFFF);
     }
 
     private static float getHeightScale(float blockW, double zoomValue) {

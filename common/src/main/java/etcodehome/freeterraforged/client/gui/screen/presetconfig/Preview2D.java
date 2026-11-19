@@ -244,9 +244,12 @@ public class Preview2D extends Button implements IPreviewHandler {
 
         drawCrosshair(guiGraphics, xPos + this.width / 2, yPos + this.height / 2);
         updateLegend(mx, my);
+        boolean expanded = this.page instanceof PresetPreviewScreen screen && screen.isExpanded();
         renderLegend(
             guiGraphics, mx, my, this.state.legendLabels, this.state.legendValues,
-            xPos, yPos + this.width + LEGEND_TOP_OFFSET, LEGEND_LINE_HEIGHT, 0xFFFFFF
+            expanded ? 4 : xPos,
+            expanded ? Minecraft.getInstance().getWindow().getGuiScaledHeight() - 15 : yPos + this.height + LEGEND_TOP_OFFSET,
+            LEGEND_LINE_HEIGHT, 0xFFFFFF
         );
     }
 
