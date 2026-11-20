@@ -1393,6 +1393,74 @@ public class TriSubdivisionTest {
         }
     }
 
+    @Test
+    @DisplayName("Verify Node Jitter Invariants: Strict Lateral Separation and Uplift Flatness > 0.5")
+    void testNodeJitterInvariants() {
+        RegistryAccess registries = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY).freeze();
+        Preset preset = Presets.makeFTFDefault();
+        HolderGetter<Noise> noiseLookup = preset.buildPreviewLookups(registries).lookupOrThrow(FTFRegistries.NOISE);
+        long worldSeed = 42L;
+
+        try (GeneratorContext ctx = new GeneratorContext(preset, noiseLookup, worldSeed)) {
+            UpliftContinentGenerator uplift = (UpliftContinentGenerator) ctx.heightmap.continent();
+            long centerPacked = uplift.getNearestCenter(0, 0);
+            int centerX = PosUtil.unpackLeft(centerPacked);
+            int centerZ = PosUtil.unpackRight(centerPacked);
+
+            TriSubdivisionRiverGenerator gen = new TriSubdivisionRiverGenerator(uplift, ctx);
+            PlateUpliftBridge bridge = uplift.getPlateUpliftBridge();
+            float frequency = uplift.getFrequency();
+            PlateUpliftBridge.CellVoronoi voronoi = TriSubdivisionRiverGenerator.findVoronoiCell(bridge, frequency, centerX, centerZ);
+            Random random = new Random(PosUtil.pack(centerX, centerZ) + gen.seed);
+            List<TriSubdivisionRiverGenerator.FaceDrainageGraph> graphs = gen.buildDrainageGraphs(voronoi, frequency, random);
+
+            Cell scratch = new Cell();
+            int validatedUpliftNodes = 0;
+            int validatedRowPairs = 0;
+
+            for (TriSubdivisionRiverGenerator.FaceDrainageGraph g : graphs) {
+                int upliftRowCount = ContinentalHydrology.NUM_STEPS; // 15
+                for (int r = 0; r < g.rows.size(); r++) {
+                    List<TriSubdivisionRiverGenerator.DrainageNode> row = g.rows.get(r);
+                    boolean isUplift = (r < upliftRowCount);
+
+                    // 1. Invariant: Strict lateral non-overlap between adjacent neighbours on the same row
+                    for (int c = 0; c < row.size() - 1; c++) {
+                        TriSubdivisionRiverGenerator.DrainageNode left = row.get(c);
+                        TriSubdivisionRiverGenerator.DrainageNode right = row.get(c + 1);
+
+                        float dx = right.x - left.x;
+                        float dz = right.z - left.z;
+                        float dist = (float) Math.sqrt(dx * dx + dz * dz);
+                        assertTrue(dist > 20.0F, String.format(
+                                "Adjacent nodes on row %d (cols %d and %d) must have positive separation > 20m, got %.2fm",
+                                r, c, c + 1, dist));
+                        validatedRowPairs++;
+                    }
+
+                    // 2. Invariant: A jittered node on non-lowlands areas must never leave flatness band (flatness > 0.5)
+                    if (isUplift) {
+                        for (TriSubdivisionRiverGenerator.DrainageNode node : row) {
+                            if (!node.isCulled) {
+                                uplift.apply(scratch.reset(), node.x, node.z);
+                                float flatness = ContinentalHydrology.getFlatnessFactor(scratch.waterTable);
+                                assertTrue(flatness > 0.5F, String.format(
+                                        "Uplift node on row %d, col %d at (%.1f, %.1f) must stay in flatness > 0.5, got %.4f (waterTable=%.4f)",
+                                        r, node.col, node.x, node.z, flatness, scratch.waterTable));
+                                validatedUpliftNodes++;
+                            }
+                        }
+                    }
+                }
+            }
+
+            System.out.printf("[Test] Successfully verified %d non-lowland nodes with flatness > 0.5 and %d adjacent row pairs with strict lateral separation%n",
+                    validatedUpliftNodes, validatedRowPairs);
+            assertTrue(validatedUpliftNodes > 500, "Must validate a substantial number of uplift nodes");
+            assertTrue(validatedRowPairs > 500, "Must validate a substantial number of adjacent node pairs");
+        }
+    }
+
 
     private static void collectBuilders(Network.Builder builder, List<Network.Builder> out) {
         out.add(builder);

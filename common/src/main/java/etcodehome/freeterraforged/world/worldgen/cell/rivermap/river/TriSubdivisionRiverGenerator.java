@@ -1054,18 +1054,77 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
             }
             nodeCount = Math.min(128, nodeCount);
 
+            // Determine plateau band boundaries for row r
+            int stepId = plateauIndex - 1;
+            double pStart = ContinentalHydrology.getPlateauStart(stepId);
+            double pEnd = ContinentalHydrology.getPlateauEnd(stepId);
+            double mid = (pStart + pEnd) * 0.5;
+            double radius = (pEnd - pStart) * 0.5;
+            // Flatness factor > 0.5 requires |uTarget - mid| < 0.5 * radius.
+            // Using 0.40 * radius gives linearDist >= 0.60, flatnessFactor >= 0.648 > 0.5
+            float maxUOffset = (float) (0.40 * radius);
+
             List<DrainageNode> rowNodes = new ArrayList<>(nodeCount);
             for (int col = 0; col < nodeCount; col++) {
-                float s = (2.0F * col + 1.0F) / (2.0F * (float) nodeCount);
-                float jitter = (faceRandom.nextFloat() - 0.5F) * (0.24F / (float) nodeCount);
-                float clampedS = NoiseUtil.clamp(s + jitter, 0.02F, 0.98F);
+                // Independent deterministic seed per node
+                long nodeSeed = ((long) Float.floatToIntBits(apexX) * 7192831L)
+                              ^ ((long) Float.floatToIntBits(v1X) * 4827103L)
+                              ^ ((long) Float.floatToIntBits(v2X) * 2938471L)
+                              ^ (faceSeed + (long) r * 3737L + (long) col * 101L);
+                Random nodeRand = new Random(nodeSeed);
+
+                // Non-overlapping lateral jitter within column slot [col / nodeCount, (col + 1) / nodeCount]
+                // Bounded with 0.12 padding so adjacent nodes col and col+1 have delta S >= 0.24 / nodeCount
+                float minS = Math.max(0.02F, (col + 0.12F) / (float) nodeCount);
+                float maxS = Math.min(0.98F, (col + 0.88F) / (float) nodeCount);
+                float sBase = (2.0F * col + 1.0F) / (2.0F * (float) nodeCount);
+                float sJitter = (nodeRand.nextFloat() - 0.5F) * (0.76F / (float) nodeCount);
+                float clampedS = NoiseUtil.clamp(sBase + sJitter, minS, maxS);
 
                 float rayBaseX = (1.0F - clampedS) * v1X + clampedS * v2X;
                 float rayBaseZ = (1.0F - clampedS) * v1Z + clampedS * v2Z;
 
-                float tNode = this.findPlateauT(apexX, apexZ, rayBaseX, rayBaseZ, u, scratch);
+                // Independent elevation jitter strictly inside the plateau flatness band (flatness > 0.5)
+                float uJitter = (nodeRand.nextFloat() - 0.5F) * (2.0F * maxUOffset);
+                float targetU = (float) (mid + uJitter);
+
+                float tNode = this.findPlateauT(apexX, apexZ, rayBaseX, rayBaseZ, targetU, scratch);
                 float nodeX = (1.0F - tNode) * apexX + tNode * rayBaseX;
                 float nodeZ = (1.0F - tNode) * apexZ + tNode * rayBaseZ;
+
+                // Verify and guarantee flatness > 0.5 in non-lowlands
+                this.continent.apply(scratch.reset(), nodeX, nodeZ);
+                float flatness = ContinentalHydrology.getFlatnessFactor(scratch.waterTable);
+                if (flatness <= 0.505F) {
+                    // Fall back toward plateau center mid
+                    tNode = this.findPlateauT(apexX, apexZ, rayBaseX, rayBaseZ, (float) mid, scratch);
+                    nodeX = (1.0F - tNode) * apexX + tNode * rayBaseX;
+                    nodeZ = (1.0F - tNode) * apexZ + tNode * rayBaseZ;
+                    this.continent.apply(scratch.reset(), nodeX, nodeZ);
+                    flatness = ContinentalHydrology.getFlatnessFactor(scratch.waterTable);
+                    if (flatness <= 0.505F) {
+                        // Fine-tune search along ray for peak flatness
+                        float bestT = tNode;
+                        float bestF = flatness;
+                        for (int step = -10; step <= 10; step++) {
+                            float testT = NoiseUtil.clamp(tNode + step * 0.005F, 0.0F, 1.0F);
+                            float tx = (1.0F - testT) * apexX + testT * rayBaseX;
+                            float tz = (1.0F - testT) * apexZ + testT * rayBaseZ;
+                            this.continent.apply(scratch.reset(), tx, tz);
+                            float f = ContinentalHydrology.getFlatnessFactor(scratch.waterTable);
+                            if (f > bestF) {
+                                bestF = f;
+                                bestT = testT;
+                                if (f > 0.505F) break;
+                            }
+                        }
+                        if (bestF > flatness) {
+                            tNode = bestT;
+                            nodeX = (1.0F - tNode) * apexX + tNode * rayBaseX;
+                            nodeZ = (1.0F - tNode) * apexZ + tNode * rayBaseZ;
+                        }
+                    }
+                }
 
                 DrainageNode node = new DrainageNode(nodeX, nodeZ, u, r, col);
                 node.isMountain = this.isMountainTerrain(nodeX, nodeZ);
@@ -1098,15 +1157,29 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
 
                 List<DrainageNode> rowNodes = new ArrayList<>(nodeCount);
                 for (int col = 0; col < nodeCount; col++) {
-                    float s = (2.0F * col + 1.0F) / (2.0F * (float) nodeCount);
-                    float jitter = (faceRandom.nextFloat() - 0.5F) * (0.24F / (float) nodeCount);
-                    float clampedS = NoiseUtil.clamp(s + jitter, 0.02F, 0.98F);
+                    // Independent deterministic seed per node
+                    long nodeSeed = ((long) Float.floatToIntBits(apexX) * 7192831L)
+                                  ^ ((long) Float.floatToIntBits(v1X) * 4827103L)
+                                  ^ ((long) Float.floatToIntBits(v2X) * 2938471L)
+                                  ^ (faceSeed + (long) r * 3737L + (long) col * 101L);
+                    Random nodeRand = new Random(nodeSeed);
+
+                    // Non-overlapping lateral jitter within column slot [col / nodeCount, (col + 1) / nodeCount]
+                    float minS = Math.max(0.02F, (col + 0.12F) / (float) nodeCount);
+                    float maxS = Math.min(0.98F, (col + 0.88F) / (float) nodeCount);
+                    float sBase = (2.0F * col + 1.0F) / (2.0F * (float) nodeCount);
+                    float sJitter = (nodeRand.nextFloat() - 0.5F) * (0.76F / (float) nodeCount);
+                    float clampedS = NoiseUtil.clamp(sBase + sJitter, minS, maxS);
 
                     float rayBaseX = (1.0F - clampedS) * v1X + clampedS * v2X;
                     float rayBaseZ = (1.0F - clampedS) * v1Z + clampedS * v2Z;
 
+                    // Independent radial along-ray jitter across lowlands
+                    float fracJitter = (nodeRand.nextFloat() - 0.5F) * (0.60F / (float) (lowlandRowCount + 1));
+                    float nodeFrac = NoiseUtil.clamp(fracLowland + fracJitter, 0.02F, 0.98F);
+
                     float tRay14 = this.findPlateauT(apexX, apexZ, rayBaseX, rayBaseZ, allPlateaus[0], scratch);
-                    float nodeT = (1.0F - fracLowland) * tRay14 + fracLowland * 1.0F;
+                    float nodeT = (1.0F - nodeFrac) * tRay14 + nodeFrac * 1.0F;
                     float nodeX = (1.0F - nodeT) * apexX + nodeT * rayBaseX;
                     float nodeZ = (1.0F - nodeT) * apexZ + nodeT * rayBaseZ;
 
