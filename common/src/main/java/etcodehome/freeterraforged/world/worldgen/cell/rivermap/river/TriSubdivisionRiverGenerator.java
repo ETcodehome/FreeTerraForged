@@ -746,8 +746,8 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
             return 1.0F;
         }
 
-        // Lowland plains (r > 8) receive water from upstream networks and do not spawn new headwaters.
-        if (r > 8) {
+        // Lowland plains outside the continental uplift receive water from upstream networks
+        if (r >= ContinentalHydrology.NUM_STEPS) {
             return 0.0F;
         }
 
@@ -763,8 +763,8 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
             float baseRate = 0.30F + 0.35F * elevWeight;
             return baseRate * frac * 1.5F;
         } else {
-            // Mid-elevation tiers (r = 4 to 8): secondary tributary spawning to create dendritic branching
-            float elevWeight = (float) (9 - r) / 5.0F;
+            // Highland flank & plateau tiers (r = 4 to 14): tributary and headwater spawning across all uplift plateaus
+            float elevWeight = (float) (ContinentalHydrology.NUM_STEPS - r) / (float) (ContinentalHydrology.NUM_STEPS - 4);
             float baseRate = 0.20F + 0.25F * elevWeight;
             return baseRate * frac;
         }
