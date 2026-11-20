@@ -73,6 +73,7 @@ public class Cell {
     public float moisture;
 
     public float beachNoise;
+    public float flatnessFactor;
     public RiverCarverSettings.RiverZone riverZone = RiverCarverSettings.RiverZone.None;
     public byte flowAngle;
     public boolean hasFlow;
@@ -83,6 +84,7 @@ public class Cell {
         this.erosionMask = false;
         this.terrain = TerrainType.NONE;
         this.waterTable = 0.0F;
+        this.flatnessFactor = 0.0F;
         this.continentSizeModifier = 1.0F;
     }
 
@@ -121,6 +123,7 @@ public class Cell {
         this.riverWaterLevel = other.riverWaterLevel;
         this.riverZone = other.riverZone;
         this.waterTable = other.waterTable;
+        this.flatnessFactor = other.flatnessFactor;
         this.flowAngle = other.flowAngle;
         this.hasFlow = other.hasFlow;
         this.globalContinentScale = other.globalContinentScale;

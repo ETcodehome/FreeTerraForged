@@ -38,6 +38,7 @@ public final class PreviewDetails {
             case CONTINENT_UPLIFT -> value("Uplift", cell.waterTable);
             case CONTROL_POINT -> new Detail(Component.literal("Control Point"), formatControlPoint(cell.controlPoint));
             case RIVER_ZONE -> new Detail(Component.literal("River Zone"), cell.riverZone.name());
+            case FLATNESS_FACTOR -> value("Flatness", cell.flatnessFactor);
         };
     }
 

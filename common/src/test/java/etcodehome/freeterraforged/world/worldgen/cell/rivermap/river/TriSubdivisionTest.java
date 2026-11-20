@@ -1,4 +1,5 @@
 package etcodehome.freeterraforged.world.worldgen.cell.rivermap.river;
+import etcodehome.freeterraforged.client.gui.screen.presetconfig.RenderMode;
 
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Presets;
@@ -343,7 +344,7 @@ public class TriSubdivisionTest {
 
             // 1. Background: Draw continent terrain gradient and ocean background
             Cell cell = new Cell();
-            int bgStep = 6;
+            int bgStep = 4;
             for (int py = 0; py < imgHeight; py += bgStep) {
                 float wz = minZ + (py / (float) imgHeight) * (maxZ - minZ);
                 for (int px = 0; px < imgWidth; px += bgStep) {
@@ -357,20 +358,29 @@ public class TriSubdivisionTest {
                     } else {
                         // Continental land
                         float t = NoiseUtil.clamp(cell.waterTable, 0.0F, 1.0F);
+                        int rVal, gVal, bVal;
                         if (t > 0.0F) {
                             // Uplift peak elevation shading
-                            int r = (int) (22 + t * 50);
-                            int g = (int) (38 + t * 75);
-                            int b = (int) (26 + t * 45);
-                            rgb = (r << 16) | (g << 8) | b;
+                            rVal = (int) (22 + t * 50);
+                            gVal = (int) (38 + t * 75);
+                            bVal = (int) (26 + t * 45);
                         } else {
                             // Continental lowlands / plains shading
                             float edge = NoiseUtil.clamp((uplift.getEdgeValue(wx, wz) - ctx.preset.world().controlPoints.shallowOcean) / (1.0F - ctx.preset.world().controlPoints.shallowOcean), 0.0F, 1.0F);
-                            int r = (int) (16 + edge * 12);
-                            int g = (int) (30 + edge * 15);
-                            int b = (int) (20 + edge * 12);
-                            rgb = (r << 16) | (g << 8) | b;
+                            rVal = (int) (16 + edge * 12);
+                            gVal = (int) (30 + edge * 15);
+                            bVal = (int) (20 + edge * 12);
                         }
+
+                        // Overlay flatness factor as a fade on the underlying green ground
+                        float flatness = NoiseUtil.clamp(cell.flatnessFactor, 0.0F, 1.0F);
+                        if (flatness > 0.0F) {
+                            float fade = flatness * 0.55F;
+                            rVal = (int) ((1.0F - fade) * rVal + fade * 255.0F);
+                            gVal = (int) ((1.0F - fade) * gVal + fade * 255.0F);
+                            bVal = (int) ((1.0F - fade) * bVal + fade * 255.0F);
+                        }
+                        rgb = (rVal << 16) | (gVal << 8) | bVal;
                     }
 
                     for (int dy = 0; dy < bgStep && py + dy < imgHeight; dy++) {
@@ -431,11 +441,13 @@ public class TriSubdivisionTest {
                 for (int r = 0; r < fg.rows.size(); r++) {
                     List<TriSubdivisionRiverGenerator.DrainageNode> row = fg.rows.get(r);
                     if (row.size() >= 2) {
-                        double xA = mapX.apply(row.get(0).x);
-                        double zA = mapZ.apply(row.get(0).z);
-                        double xB = mapX.apply(row.get(row.size() - 1).x);
-                        double zB = mapZ.apply(row.get(row.size() - 1).z);
-                        g2.draw(new Line2D.Double(xA, zA, xB, zB));
+                        for (int c = 0; c < row.size() - 1; c++) {
+                            double xA = mapX.apply(row.get(c).x);
+                            double zA = mapZ.apply(row.get(c).z);
+                            double xB = mapX.apply(row.get(c + 1).x);
+                            double zB = mapZ.apply(row.get(c + 1).z);
+                            g2.draw(new Line2D.Double(xA, zA, xB, zB));
+                        }
                     }
                 }
             }
@@ -738,7 +750,7 @@ public class TriSubdivisionTest {
             g2.setColor(new Color(130, 200, 255));
             g2.drawLine(45, legendY - 2, 60, legendY - 2);
             g2.setColor(Color.WHITE);
-            g2.drawString("ContinentalHydrology Flat Plateau Terraces (15 Rows)", 68, legendY + 2);
+            g2.drawString("ContinentalHydrology Terraces (15 Rows & Flatness Factor Fade)", 68, legendY + 2);
 
             // Unconnected Candidate Node
             legendY += 22;
@@ -1214,6 +1226,23 @@ public class TriSubdivisionTest {
             Path outPath = resolveOutputDir().resolve("simulated_continent_uplift_preview.png");
             ImageIO.write(img, "png", outPath.toFile());
             System.out.println("[Test] Saved simulated CONTINENT_UPLIFT preview to: " + outPath);
+
+            BufferedImage flatnessImg = new BufferedImage(imgSize, imgSize, BufferedImage.TYPE_INT_RGB);
+            for (int z = 0; z < imgSize; z++) {
+                float wz = startZ + z * zoom;
+                for (int x = 0; x < imgSize; x++) {
+                    float wx = startX + x * zoom;
+                    ctx.lookup.applyCell(cell.reset(), (int) wx, (int) wz, false);
+                    int color = RenderMode.FLATNESS_FACTOR.getColor(cell, ctx.levels, 1.0F, 0.0F);
+                    int r = color & 0xFF;
+                    int g = (color >> 8) & 0xFF;
+                    int b = (color >> 16) & 0xFF;
+                    flatnessImg.setRGB(x, z, (r << 16) | (g << 8) | b);
+                }
+            }
+            Path flatnessOutPath = resolveOutputDir().resolve("flatness_factor_continent_preview.png");
+            ImageIO.write(flatnessImg, "png", flatnessOutPath.toFile());
+            System.out.println("[Test] Saved simulated FLATNESS_FACTOR preview to: " + flatnessOutPath);
         }
     }
 

@@ -256,6 +256,7 @@ public record Heightmap(
                     cell.globalContinentScale,
                     cell.continentSizeModifier)
             );
+            cell.flatnessFactor = ContinentalHydrology.getFlatnessFactor(cell.waterTable);
         }, controlPoints.shallowOcean, controlPoints.inland);
         
         // Wrap with archipelago layer if enabled

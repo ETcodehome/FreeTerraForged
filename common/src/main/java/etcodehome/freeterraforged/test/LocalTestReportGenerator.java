@@ -244,8 +244,10 @@ public final class LocalTestReportGenerator {
 			List<ImageThumb> riverList = new ArrayList<>();
 			Path riverPreview = findLatest(allFiles, p -> p.getFileName().toString().equalsIgnoreCase("simulated_continent_uplift_preview.png"));
 			Path riverTopology = findLatest(allFiles, p -> p.getFileName().toString().equalsIgnoreCase("tri_subdivision_continent_review.png"));
+			Path flatnessPreview = findLatest(allFiles, p -> p.getFileName().toString().equalsIgnoreCase("flatness_factor_continent_preview.png"));
 			if (riverPreview != null) riverList.add(new ImageThumb(riverPreview.getFileName().toString(), "Uplift Rivers", "Simulated Continent Uplift Rivers"));
 			if (riverTopology != null) riverList.add(new ImageThumb(riverTopology.getFileName().toString(), "Topology Map", "2D River & Lake Network Topology"));
+			if (flatnessPreview != null) riverList.add(new ImageThumb(flatnessPreview.getFileName().toString(), "Flatness Factor", "Flatness Factor Alpha Mask & Rivers"));
 			if (!riverList.isEmpty()) map.put(riverToken, riverList);
 		}
 

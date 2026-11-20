@@ -14,6 +14,7 @@ import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.continent.SimpleContinent;
+import etcodehome.freeterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.Rivermap;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 
@@ -172,6 +173,7 @@ public class UpliftContinentGenerator extends AbstractContinent implements Simpl
             upliftGradient = customPeak;
         }
         cell.waterTable = upliftGradient;
+        cell.flatnessFactor = ContinentalHydrology.getFlatnessFactor(cell.waterTable);
     }
 
     // ------------------------------------------------------------------------------------------

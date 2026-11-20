@@ -487,7 +487,31 @@ public enum RenderMode {
             }
             return rgba(17, 17,17);
         }
+    },
+    FLATNESS_FACTOR {
+
+        @Override
+        public boolean handlesWater() {
+            return true;
+        }
+
+        @Override
+        public int getColor(Cell cell, Levels levels, float scale, float bias) {
+            if (cell.erosionMask) {
+                return rgba(255, 32, 32);
+            }
+
+            if (cell.height <= levels.water) {
+                return getWaterColor();
+            }
+
+            float val = NoiseUtil.clamp(cell.flatnessFactor, 0.0F, 1.0F);
+            int c = (int) (val * 255.0F);
+            return rgba(c, c, c);
+        }
     };
+
+    public static final RenderMode FLATNESS = FLATNESS_FACTOR;
 
 	public int getColor(Cell cell, Levels levels) {
 		return this.getColor(cell, levels, 0xFFFF00FF);
