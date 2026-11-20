@@ -129,7 +129,7 @@ public class TriSubdivisionTest {
             for (TriSubdivisionRiverGenerator.FaceDrainageGraph g : graphs) {
                 if (g.isBridged) bridgedFaces++;
                 else oceanFaces++;
-                assertEquals(ContinentalHydrology.NUM_STEPS, g.rows.size(), "Row count must strictly match ContinentalHydrology terracing steps (15)");
+                assertTrue(g.rows.size() >= ContinentalHydrology.NUM_STEPS, "Row count must have at least ContinentalHydrology terracing steps (15)");
                 for (List<TriSubdivisionRiverGenerator.DrainageNode> row : g.rows) {
                     totalCandidateNodes += row.size();
                     for (TriSubdivisionRiverGenerator.DrainageNode n : row) {
@@ -173,8 +173,8 @@ public class TriSubdivisionTest {
 
                     // Verify that rivers on bridged segments never reach the actual border
                     if (g.isBridged) {
-                        assertTrue(conn.from.row < ContinentalHydrology.NUM_STEPS - 2, "Bridged river origin must stay safely inside territory");
-                        assertTrue(conn.to.row < ContinentalHydrology.NUM_STEPS - 1, "Bridged river destination must never reach the actual border");
+                        assertTrue(conn.from.row < g.rows.size() - 2, "Bridged river origin must stay safely inside territory");
+                        assertTrue(conn.to.row < g.rows.size() - 1, "Bridged river destination must never reach the actual border");
                     }
 
                 }
@@ -314,7 +314,7 @@ public class TriSubdivisionTest {
                 }
             }
 
-            float pad = 400.0F;
+            float pad = 900.0F;
             float boundWidth = (polyMaxX - polyMinX) + pad * 2.0F;
             float boundHeight = (polyMaxZ - polyMinZ) + pad * 2.0F;
             float squareSize = Math.max(boundWidth, boundHeight);
@@ -372,13 +372,13 @@ public class TriSubdivisionTest {
                             bVal = (int) (20 + edge * 12);
                         }
 
-                        // Overlay flatness factor as a fade on the underlying green ground
+                        // Overlay flatness factor as a darkening fade on the underlying green ground
                         float flatness = NoiseUtil.clamp(cell.flatnessFactor, 0.0F, 1.0F);
                         if (flatness > 0.0F) {
-                            float fade = flatness * 0.55F;
-                            rVal = (int) ((1.0F - fade) * rVal + fade * 255.0F);
-                            gVal = (int) ((1.0F - fade) * gVal + fade * 255.0F);
-                            bVal = (int) ((1.0F - fade) * bVal + fade * 255.0F);
+                            float fade = flatness * 0.65F;
+                            rVal = (int) (rVal * (1.0F - fade));
+                            gVal = (int) (gVal * (1.0F - fade));
+                            bVal = (int) (bVal * (1.0F - fade));
                         }
                         rgb = (rVal << 16) | (gVal << 8) | bVal;
                     }
@@ -422,16 +422,15 @@ public class TriSubdivisionTest {
                 g2.draw(new Line2D.Double(ax, az, bx, bz));
             }
 
-            // Draw radial face boundary rays from peak
-            g2.setStroke(new BasicStroke(1.0F, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10.0F, new float[]{3.0F, 6.0F}, 0.0F));
-            g2.setColor(new Color(255, 255, 255, 50));
-            for (TriSubdivisionRiverGenerator.FaceDrainageGraph fg : graphs) {
-                double v1x = mapX.apply(fg.v1X);
-                double v1z = mapZ.apply(fg.v1Z);
-                double v2x = mapX.apply(fg.v2X);
-                double v2z = mapZ.apply(fg.v2Z);
+            // Draw radial face boundary rays from peak to ALL Voronoi vertices
+            g2.setStroke(new BasicStroke(1.2F, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10.0F, new float[]{4.0F, 6.0F}, 0.0F));
+            g2.setColor(new Color(255, 255, 255, 65));
+            for (int i = 0; i < voronoi.edgeCount; i++) {
+                float vAx = (voronoi.mx[i] + voronoi.lo[i] * voronoi.tx[i]) / frequency;
+                float vAz = (voronoi.my[i] + voronoi.lo[i] * voronoi.ty[i]) / frequency;
+                double v1x = mapX.apply(vAx);
+                double v1z = mapZ.apply(vAz);
                 g2.draw(new Line2D.Double(peakPx, peakPz, v1x, v1z));
-                g2.draw(new Line2D.Double(peakPx, peakPz, v2x, v2z));
             }
 
             // 3. Draw row terrace contours (the plateaus of ContinentalHydrology)
@@ -553,7 +552,7 @@ public class TriSubdivisionTest {
                                 g2.setColor(new Color(239, 68, 68, 140)); // Red for mountain candidate
                                 g2.fill(new Ellipse2D.Double(nx - 2.5, nz - 2.5, 5.0, 5.0));
                             } else {
-                                g2.setColor(new Color(148, 163, 184, 85));
+                                g2.setColor(new Color(148, 163, 184, 180));
                                 g2.fill(new Ellipse2D.Double(nx - 2.0, nz - 2.0, 4.0, 4.0));
                             }
                             continue;
@@ -660,128 +659,189 @@ public class TriSubdivisionTest {
             g2.draw(diamond);
 
             // 8. Legend and Diagnostic Overlay
+            int legBoxX = 35;
+            int legBoxY = 1045;
             g2.setColor(new Color(15, 23, 42, 235)); // Slate dark background
-            g2.fillRoundRect(25, 25, 570, 505, 16, 16);
+            g2.fillRoundRect(legBoxX, legBoxY, 570, 525, 16, 16);
             g2.setStroke(new BasicStroke(1.5F));
             g2.setColor(new Color(255, 255, 255, 90));
-            g2.drawRoundRect(25, 25, 570, 505, 16, 16);
+            g2.drawRoundRect(legBoxX, legBoxY, 570, 525, 16, 16);
 
             g2.setFont(new Font("SansSerif", Font.BOLD, 17));
             g2.setColor(Color.WHITE);
-            g2.drawString("FreeTerraForged - TriSubdivision River Network", 45, 56);
+            g2.drawString("FreeTerraForged - TriSubdivision River Network", legBoxX + 20, legBoxY + 31);
 
             g2.setFont(new Font("SansSerif", Font.PLAIN, 12));
             g2.setColor(new Color(203, 213, 225));
-            g2.drawString(String.format("Centroid Peak: (%d, %d) | Seed: %d", centerX, centerZ, worldSeed), 45, 80);
-            g2.drawString(String.format("Active Faces: %d (Ocean: %d, Bridged: %d) | Terraces: %d (15 steps)", graphs.size(), oceanFaces, bridgedFaces, ContinentalHydrology.NUM_STEPS), 45, 98);
-            g2.drawString(String.format("Candidate Nodes: %d (Culled: %d, Land: %d) | Populated: %d (Peak Row: %d/%d)", totalCandidateNodes, totalCulledNodes, totalCandidateNodes - totalCulledNodes, totalPopulatedNodes, topRowPopulated, topRowCandidates), 45, 116);
-            g2.drawString(String.format("River Segments: %d (Lateral Lake Rivers: %d) | Confluences: %d | Headwaters: %d", totalConnections, lateralConnections, confluences, headwaters), 45, 134);
-            g2.drawString(String.format("Mountain Nodes (Red): %d (Populated: %d) | Valley/Lowland: %d", mountainNodes, populatedMountainNodes, (totalCandidateNodes - totalCulledNodes) - mountainNodes), 45, 152);
-            g2.drawString(String.format("Lake Spawns (Purple): %d (Mountain Terminal: %d, Valley: %d) | Lake Chance: %.0f%% (Halved Default)", totalLakes, terminalMountainLakes, valleyLakes, gen.getLakeChance() * 100.0F), 45, 170);
+            g2.drawString(String.format("Centroid Peak: (%d, %d) | Seed: %d", centerX, centerZ, worldSeed), legBoxX + 20, legBoxY + 55);
+            g2.drawString(String.format("Active Faces: %d (Ocean: %d, Bridged: %d) | Terraces: %d (15 steps)", graphs.size(), oceanFaces, bridgedFaces, ContinentalHydrology.NUM_STEPS), legBoxX + 20, legBoxY + 73);
+            g2.drawString(String.format("Candidate Nodes: %d (Culled: %d, Land: %d) | Populated: %d (Peak Row: %d/%d)", totalCandidateNodes, totalCulledNodes, totalCandidateNodes - totalCulledNodes, totalPopulatedNodes, topRowPopulated, topRowCandidates), legBoxX + 20, legBoxY + 91);
+            g2.drawString(String.format("River Segments: %d (Lateral Lake Rivers: %d) | Confluences: %d | Headwaters: %d", totalConnections, lateralConnections, confluences, headwaters), legBoxX + 20, legBoxY + 109);
+            g2.drawString(String.format("Mountain Nodes (Red): %d (Populated: %d) | Valley/Lowland: %d", mountainNodes, populatedMountainNodes, (totalCandidateNodes - totalCulledNodes) - mountainNodes), legBoxX + 20, legBoxY + 127);
+            g2.drawString(String.format("Lake Spawns (Purple): %d (Mountain Terminal: %d, Valley: %d) | Lake Chance: %.0f%% (Halved Default)", totalLakes, terminalMountainLakes, valleyLakes, gen.getLakeChance() * 100.0F), legBoxX + 20, legBoxY + 145);
 
             // Legend swatches
-            int legendY = 194;
+            int legendY = legBoxY + 169;
 
             // Peak
             g2.setColor(new Color(255, 215, 0));
-            g2.fillRect(45, legendY - 8, 12, 12);
+            g2.fillRect(legBoxX + 20, legendY - 8, 12, 12);
             g2.setColor(Color.WHITE);
-            g2.drawString("Voronoi Centroid Peak (Elevation 1.0)", 68, legendY + 2);
+            g2.drawString("Voronoi Centroid Peak (Elevation 1.0)", legBoxX + 43, legendY + 2);
 
             // Main River
             legendY += 22;
             g2.setStroke(new BasicStroke(4.0F));
             g2.setColor(new Color(0, 229, 255));
-            g2.drawLine(45, legendY - 2, 60, legendY - 2);
+            g2.drawLine(legBoxX + 20, legendY - 2, legBoxX + 35, legendY - 2);
             g2.setColor(Color.WHITE);
-            g2.drawString("Main River Trunk (High flow / Confluence)", 68, legendY + 2);
+            g2.drawString("Main River Trunk (High flow / Confluence)", legBoxX + 43, legendY + 2);
 
             // Headwater / Branch
             legendY += 22;
             g2.setStroke(new BasicStroke(2.2F));
             g2.setColor(new Color(255, 215, 0));
-            g2.drawLine(45, legendY - 2, 60, legendY - 2);
+            g2.drawLine(legBoxX + 20, legendY - 2, legBoxX + 35, legendY - 2);
             g2.setColor(Color.WHITE);
-            g2.drawString("Headwater Origin (Empty node on terrace row)", 68, legendY + 2);
+            g2.drawString("Headwater Origin (Empty node on terrace row)", legBoxX + 43, legendY + 2);
 
             // Lake Spawn Node (Purple)
             legendY += 22;
             g2.setColor(new Color(168, 85, 247));
-            g2.fill(new Ellipse2D.Double(47, legendY - 6, 8, 8));
+            g2.fill(new Ellipse2D.Double(legBoxX + 22, legendY - 6, 8, 8));
             g2.setStroke(new BasicStroke(1.5F));
             g2.setColor(new Color(233, 213, 255));
-            g2.draw(new Ellipse2D.Double(47, legendY - 6, 8, 8));
+            g2.draw(new Ellipse2D.Double(legBoxX + 22, legendY - 6, 8, 8));
             g2.setColor(Color.WHITE);
-            g2.drawString("Lake Spawn Node (Purple - terminal mountain lake / unconnected valley lake)", 68, legendY + 2);
+            g2.drawString("Lake Spawn Node (Purple - terminal mountain lake / unconnected valley lake)", legBoxX + 43, legendY + 2);
 
             // Lake-to-Lake River (Bright White line overlaid on purple lake nodes)
             legendY += 22;
             g2.setStroke(new BasicStroke(3.0F));
             g2.setColor(Color.WHITE);
-            g2.drawLine(45, legendY - 2, 60, legendY - 2);
+            g2.drawLine(legBoxX + 20, legendY - 2, legBoxX + 35, legendY - 2);
             g2.setColor(Color.WHITE);
-            g2.drawString("Lake-Connecting River (Bright white line overlaid on purple lake nodes)", 68, legendY + 2);
+            g2.drawString("Lake-Connecting River (Bright white line overlaid on purple lake nodes)", legBoxX + 43, legendY + 2);
 
             // Mountain Terrain Node (Red)
             legendY += 22;
             g2.setColor(new Color(239, 68, 68));
-            g2.fill(new Ellipse2D.Double(47, legendY - 6, 8, 8));
+            g2.fill(new Ellipse2D.Double(legBoxX + 22, legendY - 6, 8, 8));
             g2.setColor(Color.WHITE);
-            g2.drawString("Mountain Terrain Node (Red - 80% non-mtn bias, suppressed headwaters)", 68, legendY + 2);
+            g2.drawString("Mountain Terrain Node (Red - 80% non-mtn bias, suppressed headwaters)", legBoxX + 43, legendY + 2);
 
             // Confluence
             legendY += 22;
             g2.setColor(new Color(0, 229, 255));
-            g2.fill(new Ellipse2D.Double(47, legendY - 6, 8, 8));
+            g2.fill(new Ellipse2D.Double(legBoxX + 22, legendY - 6, 8, 8));
             g2.setColor(Color.WHITE);
-            g2.drawString("Confluence Node (Multiple upstream nodes merged into 1)", 68, legendY + 2);
+            g2.drawString("Confluence Node (Multiple upstream nodes merged into 1)", legBoxX + 43, legendY + 2);
 
             // Warped River Flow
             legendY += 22;
             g2.setStroke(new BasicStroke(2.5F));
             g2.setColor(new Color(128, 222, 234));
-            g2.drawLine(45, legendY - 2, 60, legendY - 2);
+            g2.drawLine(legBoxX + 20, legendY - 2, legBoxX + 35, legendY - 2);
             g2.setColor(Color.WHITE);
-            g2.drawString("Warped River Flow (Domain simplex frequency warp)", 68, legendY + 2);
+            g2.drawString("Warped River Flow (Domain simplex frequency warp)", legBoxX + 43, legendY + 2);
 
             // Terrace Rows
             legendY += 22;
             g2.setStroke(new BasicStroke(1.5F, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10.0F, new float[]{3.0F, 4.0F}, 0.0F));
             g2.setColor(new Color(130, 200, 255));
-            g2.drawLine(45, legendY - 2, 60, legendY - 2);
+            g2.drawLine(legBoxX + 20, legendY - 2, legBoxX + 35, legendY - 2);
             g2.setColor(Color.WHITE);
-            g2.drawString("ContinentalHydrology Terraces (15 Rows & Flatness Factor Fade)", 68, legendY + 2);
+            g2.drawString("ContinentalHydrology Terraces (15 Rows & Flatness Darkening Fade)", legBoxX + 43, legendY + 2);
 
             // Unconnected Candidate Node
             legendY += 22;
             g2.setColor(new Color(148, 163, 184, 180));
-            g2.fill(new Ellipse2D.Double(49, legendY - 4, 4, 4));
+            g2.fill(new Ellipse2D.Double(legBoxX + 24, legendY - 4, 4, 4));
             g2.setColor(Color.WHITE);
-            g2.drawString("Unconnected Candidate Node (Terrace grid slot - not connected)", 68, legendY + 2);
+            g2.drawString("Unconnected Candidate Node (Terrace grid slot - not connected)", legBoxX + 43, legendY + 2);
 
             // Tectonic Active Border
             legendY += 22;
             g2.setStroke(new BasicStroke(2.5F, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10.0F, new float[]{6.0F, 6.0F}, 0.0F));
             g2.setColor(new Color(239, 68, 68));
-            g2.drawLine(45, legendY - 2, 60, legendY - 2);
+            g2.drawLine(legBoxX + 20, legendY - 2, legBoxX + 35, legendY - 2);
             g2.setColor(Color.WHITE);
-            g2.drawString("Tectonic Active Border (Peak connection saddle - 0 rivers)", 68, legendY + 2);
+            g2.drawString("Tectonic Active Border (Peak connection saddle - 0 rivers)", legBoxX + 43, legendY + 2);
 
             // Bridged Tectonic Border
             legendY += 22;
             g2.setStroke(new BasicStroke(2.0F, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10.0F, new float[]{8.0F, 8.0F}, 0.0F));
             g2.setColor(new Color(251, 146, 60));
-            g2.drawLine(45, legendY - 2, 60, legendY - 2);
+            g2.drawLine(legBoxX + 20, legendY - 2, legBoxX + 35, legendY - 2);
             g2.setColor(Color.WHITE);
-            g2.drawString("Bridged Tectonic Border (Rivers end in lakes before border)", 68, legendY + 2);
+            g2.drawString("Bridged Tectonic Border (Rivers end in lakes before border)", legBoxX + 43, legendY + 2);
 
             // Coastal Ocean Boundary
             legendY += 22;
             g2.setStroke(new BasicStroke(1.5F, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10.0F, new float[]{4.0F, 4.0F}, 0.0F));
             g2.setColor(new Color(255, 255, 255));
-            g2.drawLine(45, legendY - 2, 60, legendY - 2);
+            g2.drawLine(legBoxX + 20, legendY - 2, legBoxX + 35, legendY - 2);
             g2.setColor(Color.WHITE);
-            g2.drawString("Open Coastal Ocean Boundary", 68, legendY + 2);
+            g2.drawString("Open Coastal Ocean Boundary", legBoxX + 43, legendY + 2);
+
+            // Sector Guide
+            legendY += 22;
+            g2.setFont(new Font("SansSerif", Font.BOLD, 12));
+            g2.setColor(new Color(248, 113, 113));
+            g2.drawString("Sectors: A (Tectonic Active) | B, C, G (Bridged) | D, E, F (Ocean)", legBoxX + 20, legendY + 2);
+
+            // 9. Draw Sector Labels (A, B, C, D, E, F, G) matching user diagram
+            java.util.Map<Integer, String> sectorLabels = new java.util.HashMap<>();
+            sectorLabels.put(3, "A");
+            sectorLabels.put(5, "B");
+            sectorLabels.put(6, "C");
+            sectorLabels.put(4, "D");
+            sectorLabels.put(2, "E");
+            sectorLabels.put(0, "F");
+            sectorLabels.put(1, "G");
+
+            g2.setFont(new Font("SansSerif", Font.BOLD, 48));
+            FontMetrics fm = g2.getFontMetrics();
+
+            for (int i = 0; i < voronoi.edgeCount; i++) {
+                String label = sectorLabels.get(i);
+                if (label == null) continue;
+
+                float vAx = (voronoi.mx[i] + voronoi.lo[i] * voronoi.tx[i]) / frequency;
+                float vAz = (voronoi.my[i] + voronoi.lo[i] * voronoi.ty[i]) / frequency;
+                float vBx = (voronoi.mx[i] + voronoi.hi[i] * voronoi.tx[i]) / frequency;
+                float vBz = (voronoi.my[i] + voronoi.hi[i] * voronoi.ty[i]) / frequency;
+                float mX = (vAx + vBx) * 0.5F;
+                float mZ = (vAz + vBz) * 0.5F;
+
+                float dirX = mX - centerX;
+                float dirZ = mZ - centerZ;
+                float dist = NoiseUtil.sqrt(dirX * dirX + dirZ * dirZ);
+                float uX = dirX / dist;
+                float uZ = dirZ / dist;
+
+                // Place outside border by 450m
+                float labelWx = mX + uX * 450.0F;
+                float labelWz = mZ + uZ * 450.0F;
+
+                double lx = mapX.apply(labelWx);
+                double lz = mapZ.apply(labelWz);
+
+                int textW = fm.stringWidth(label);
+                int textH = fm.getAscent();
+
+                float drawX = (float) (lx - textW * 0.5);
+                float drawY = (float) (lz + textH * 0.38);
+
+
+                // Drop shadow
+                g2.setColor(new Color(0, 0, 0, 240));
+                g2.drawString(label, drawX + 3, drawY + 3);
+                g2.drawString(label, drawX - 1, drawY - 1);
+                // Vivid Red
+                g2.setColor(new Color(239, 68, 68));
+                g2.drawString(label, drawX, drawY);
+            }
 
             g2.dispose();
 
@@ -870,6 +930,63 @@ public class TriSubdivisionTest {
     }
 
     @Test
+    @DisplayName("Verify Tectonic Active Border (Peak to Peak Saddle) Sectors Never Generate Candidate Nodes")
+    void testTectonicActiveBordersNeverHaveNodes() {
+        RegistryAccess registries = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY).freeze();
+        Preset preset = Presets.makeFTFDefault();
+        HolderGetter<Noise> noiseLookup = preset.buildPreviewLookups(registries).lookupOrThrow(FTFRegistries.NOISE);
+
+        long[] testSeeds = {42L, 100L, 2024L, 99999L};
+        int validatedTectonicCount = 0;
+        for (long worldSeed : testSeeds) {
+            try (GeneratorContext ctx = new GeneratorContext(preset, noiseLookup, worldSeed)) {
+                UpliftContinentGenerator uplift = (UpliftContinentGenerator) ctx.heightmap.continent();
+                long centerPacked = uplift.getNearestCenter(0, 0);
+                int centerX = PosUtil.unpackLeft(centerPacked);
+                int centerZ = PosUtil.unpackRight(centerPacked);
+
+                TriSubdivisionRiverGenerator gen = new TriSubdivisionRiverGenerator(uplift, ctx);
+                PlateUpliftBridge bridge = uplift.getPlateUpliftBridge();
+                float frequency = uplift.getFrequency();
+                PlateUpliftBridge.CellVoronoi voronoi = TriSubdivisionRiverGenerator.findVoronoiCell(bridge, frequency, centerX, centerZ);
+                assertNotNull(voronoi, "Voronoi cell for continent must exist");
+
+                Random random = new Random(PosUtil.pack(centerX, centerZ) + gen.seed);
+                List<TriSubdivisionRiverGenerator.FaceDrainageGraph> graphs = gen.buildDrainageGraphs(voronoi, frequency, random);
+
+                // Identify all tectonic active edges on this continent Voronoi cell
+                java.util.Set<Integer> tectonicActiveEdgeIndices = new java.util.HashSet<>();
+                for (int i = 0; i < voronoi.edgeCount; i++) {
+                    if (voronoi.isTectonicActive[i]) {
+                        tectonicActiveEdgeIndices.add(i);
+                        validatedTectonicCount++;
+                    }
+                }
+
+                // If this seed has tectonic active borders, verify zero graphs and zero candidate nodes are ever generated for them
+                if (!tectonicActiveEdgeIndices.isEmpty()) {
+                    for (TriSubdivisionRiverGenerator.FaceDrainageGraph g : graphs) {
+                        assertFalse(tectonicActiveEdgeIndices.contains(g.faceIndex),
+                                String.format("Seed %d: Tectonic active border (edge %d) must never have a drainage graph or candidate nodes",
+                                        worldSeed, g.faceIndex));
+                    }
+                }
+
+                // Also test with maximum riverCount (30) to ensure high density cannot force candidate node generation on tectonic active borders
+                List<TriSubdivisionRiverGenerator.FaceDrainageGraph> graphsMax = gen.buildDrainageGraphs(voronoi, frequency, random, 30);
+                if (!tectonicActiveEdgeIndices.isEmpty()) {
+                    for (TriSubdivisionRiverGenerator.FaceDrainageGraph g : graphsMax) {
+                        assertFalse(tectonicActiveEdgeIndices.contains(g.faceIndex),
+                                String.format("Seed %d (riverCount=30): Tectonic active border (edge %d) must never have a drainage graph or candidate nodes",
+                                        worldSeed, g.faceIndex));
+                    }
+                }
+            }
+        }
+        assertTrue(validatedTectonicCount > 0, "Test suite must have validated at least one tectonic active border across test seeds");
+    }
+
+    @Test
     @DisplayName("Inspect NE Gap nodes and connections")
     void testInspectNEGap() {
         RegistryAccess registries = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY).freeze();
@@ -883,18 +1000,6 @@ public class TriSubdivisionTest {
             int centerX = PosUtil.unpackLeft(centerPacked);
             int centerZ = PosUtil.unpackRight(centerPacked);
 
-            float startX = centerX - (400 * 32.0F * 0.5F);
-            float startZ = centerZ - (400 * 32.0F * 0.5F);
-
-            // NE gap is around x=285, y=120
-            float targetMinX = startX + 260 * 32.0F;
-            float targetMaxX = startX + 310 * 32.0F;
-            float targetMinZ = startZ + 105 * 32.0F;
-            float targetMaxZ = startZ + 135 * 32.0F;
-
-            System.out.printf("[NE GAP BOX] X in [%.1f, %.1f], Z in [%.1f, %.1f]%n",
-                    targetMinX, targetMaxX, targetMinZ, targetMaxZ);
-
             TriSubdivisionRiverGenerator gen = new TriSubdivisionRiverGenerator(uplift, ctx);
             PlateUpliftBridge bridge = uplift.getPlateUpliftBridge();
             float frequency = uplift.getFrequency();
@@ -902,26 +1007,16 @@ public class TriSubdivisionTest {
             Random random = new Random(PosUtil.pack(centerX, centerZ) + gen.seed);
             List<TriSubdivisionRiverGenerator.FaceDrainageGraph> graphs = gen.buildDrainageGraphs(voronoi, frequency, random);
 
-            for (int f = 0; f < graphs.size(); f++) {
-                TriSubdivisionRiverGenerator.FaceDrainageGraph g = graphs.get(f);
-                for (List<TriSubdivisionRiverGenerator.DrainageNode> row : g.rows) {
-                    for (TriSubdivisionRiverGenerator.DrainageNode n : row) {
-                        if (n.x >= targetMinX && n.x <= targetMaxX && n.z >= targetMinZ && n.z <= targetMaxZ) {
-                            System.out.printf("   [NODE] Face %d (r=%d, c=%d) at (%.1f, %.1f): pop=%b, culled=%b, mtn=%b, lake=%b, feeders=%d, hasOut=%b%n",
-                                    f, n.row, n.col, n.x, n.z, n.isPopulated, n.isCulled, n.isMountain, n.isLake, n.feederCount, g.outgoing.containsKey(n));
-                        }
-                    }
-                }
-                for (TriSubdivisionRiverGenerator.RiverConnection conn : g.connections) {
-                    boolean fromIn = conn.from.x >= targetMinX && conn.from.x <= targetMaxX && conn.from.z >= targetMinZ && conn.from.z <= targetMaxZ;
-                    boolean toIn = conn.to.x >= targetMinX && conn.to.x <= targetMaxX && conn.to.z >= targetMinZ && conn.to.z <= targetMaxZ;
-                    if (fromIn || toIn) {
-                        System.out.printf("   [CONN] Face %d from (%.1f, %.1f, r=%d, c=%d) to (%.1f, %.1f, r=%d, c=%d): isMain=%b, isCoastal=%b, isLateral=%b%n",
-                                f, conn.from.x, conn.from.z, conn.from.row, conn.from.col,
-                                conn.to.x, conn.to.z, conn.to.row, conn.to.col,
-                                conn.isMain, conn.isCoastal, conn.isLateral);
-                    }
-                }
+            for (int i = 0; i < voronoi.edgeCount; i++) {
+                float vAx = (voronoi.mx[i] + voronoi.lo[i] * voronoi.tx[i]) / frequency;
+                float vAz = (voronoi.my[i] + voronoi.lo[i] * voronoi.ty[i]) / frequency;
+                float vBx = (voronoi.mx[i] + voronoi.hi[i] * voronoi.tx[i]) / frequency;
+                float vBz = (voronoi.my[i] + voronoi.hi[i] * voronoi.ty[i]) / frequency;
+                float mX = (vAx + vBx) * 0.5F;
+                float mZ = (vAz + vBz) * 0.5F;
+                double angle = Math.toDegrees(Math.atan2(mZ - centerZ, mX - centerX));
+                System.out.printf("Edge %d: angle=%.1f deg, mid=(%.1f, %.1f), tectonic=%b, bridged=%b%n",
+                        i, angle, mX, mZ, voronoi.isTectonicActive[i], voronoi.isBridged[i]);
             }
         }
     }

@@ -686,7 +686,7 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
             }
 
             // Tectonic active borders connect to an adjacent peak via a high mountain saddle (~0.75 uplift);
-            // rivers cannot flow into or across this rising saddle, so tectonic active sectors generate no rivers.
+            // tectonic active sectors (peak to peak saddle) should never have nodes or rivers.
             if (voronoi.isTectonicActive[i]) {
                 continue;
             }
@@ -805,66 +805,70 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
         return new DrainageNode[]{cand1, cand2};
     }
     /**
-     * Finds the distance fraction t along a ray from apex towards rayBase where cell.waterTable matches targetU.
+     * Finds the distance fraction t in [0.0, 1.0] along a ray from apex towards rayBase where cell.waterTable matches targetU.
      * Where uplift exists, uses bisection to locate the exact center of the ContinentalHydrology
      * flatness factor plateau band (where flatnessFactor == 1.0).
-     * Once outside the uplift bands (e.g. targetU does not exist in the uplift range along this ray),
-     * continues to place nodes as they currently are in the implementation using (1.0F - targetU).
+     * If targetU is below the lowest uplift value along this ray (e.g. high tectonic saddle or bridged border),
+     * smoothly scales between the lowest valid plateau position and the Voronoi boundary (1.0F).
      */
     private float findPlateauT(float apexX, float apexZ, float rayBaseX, float rayBaseZ, float targetU, Cell scratch) {
-        float defaultT = 1.0F - targetU;
-
-        // If targetU is below the uplift base threshold (0.01F), it is outside the uplift bands
-        if (targetU < 0.01F) {
-            return defaultT;
-        }
-
-        // Check waterTable at apex (t = 0.0)
+        // Measure waterTable at apex (t = 0.0) and at rayBase (t = 1.0)
         this.continent.apply(scratch.reset(), apexX, apexZ);
-        if (scratch.waterTable < targetU) {
-            // Apex itself is below targetU; outside uplift bands for this target
-            return defaultT;
+        float uApex = scratch.waterTable;
+
+        this.continent.apply(scratch.reset(), rayBaseX, rayBaseZ);
+        float uBase = scratch.waterTable;
+
+        // If targetU is above apex elevation (e.g. local apex dip), clamp to apex
+        if (targetU >= uApex) {
+            return 0.0F;
         }
 
-        // Check outer bound along ray (t = 1.35F, expandable to 1.6F)
-        float maxSearchT = 1.35F;
-        this.continent.apply(scratch.reset(), (1.0F - maxSearchT) * apexX + maxSearchT * rayBaseX, (1.0F - maxSearchT) * apexZ + maxSearchT * rayBaseZ);
-        if (scratch.waterTable > targetU) {
-            maxSearchT = 1.6F;
-            this.continent.apply(scratch.reset(), (1.0F - maxSearchT) * apexX + maxSearchT * rayBaseX, (1.0F - maxSearchT) * apexZ + maxSearchT * rayBaseZ);
-            // If even at 1.6F waterTable > targetU (e.g. high tectonic saddle), targetU does not exist on this ray
-            if (scratch.waterTable > targetU) {
-                return defaultT;
+        // Find where uplift ends along this ray: tUpliftBase where waterTable drops to <= 0.01F
+        float tUpliftBase;
+        if (uBase <= 0.01F) {
+            // Uplift ends before or at rayBase (t in [0.0, 1.0])
+            float low = 0.0F;
+            float high = 1.0F;
+            for (int iter = 0; iter < 10; iter++) {
+                float mid = (low + high) * 0.5F;
+                this.continent.apply(scratch.reset(), (1.0F - mid) * apexX + mid * rayBaseX, (1.0F - mid) * apexZ + mid * rayBaseZ);
+                if (scratch.waterTable > 0.01F) {
+                    low = mid;
+                } else {
+                    high = mid;
+                }
             }
+            tUpliftBase = high;
+        } else {
+            // Uplift extends all the way to the Voronoi border (e.g. high saddle / bridged border)
+            tUpliftBase = 1.0F;
         }
 
-        // Bisection to locate where cell.waterTable == targetU
-        float low = 0.0F;
-        float high = maxSearchT;
-        for (int iter = 0; iter < 14; iter++) {
-            float mid = (low + high) * 0.5F;
-            float px = (1.0F - mid) * apexX + mid * rayBaseX;
-            float pz = (1.0F - mid) * apexZ + mid * rayBaseZ;
-            this.continent.apply(scratch.reset(), px, pz);
-            if (scratch.waterTable > targetU) {
-                low = mid;
-            } else {
-                high = mid;
+        // Check if targetU exists along the uplift portion of this ray
+        float effectiveMinU = Math.max(0.01F, uBase);
+        if (targetU >= effectiveMinU) {
+            // targetU is guaranteed to exist in [0.0, tUpliftBase]
+            float low = 0.0F;
+            float high = tUpliftBase;
+            for (int iter = 0; iter < 14; iter++) {
+                float mid = (low + high) * 0.5F;
+                float px = (1.0F - mid) * apexX + mid * rayBaseX;
+                float pz = (1.0F - mid) * apexZ + mid * rayBaseZ;
+                this.continent.apply(scratch.reset(), px, pz);
+                if (scratch.waterTable > targetU) {
+                    low = mid;
+                } else {
+                    high = mid;
+                }
             }
+            return (low + high) * 0.5F;
         }
 
-        float bestT = (low + high) * 0.5F;
-        float px = (1.0F - bestT) * apexX + bestT * rayBaseX;
-        float pz = (1.0F - bestT) * apexZ + bestT * rayBaseZ;
-        this.continent.apply(scratch.reset(), px, pz);
-
-        // Verify that this position is within the uplift plateau (waterTable >= 0.01F)
-        // and matches targetU closely (within tolerance)
-        if (scratch.waterTable >= 0.01F && Math.abs(scratch.waterTable - targetU) < 0.05F) {
-            return bestT;
-        }
-
-        return defaultT;
+        // targetU is below the uplift base on this ray (saddle case where uBase > targetU)
+        // Smoothly interpolate between tUpliftBase and 1.0F
+        float frac = (effectiveMinU - targetU) / effectiveMinU;
+        return tUpliftBase + frac * (1.0F - tUpliftBase);
     }
 
 
@@ -881,9 +885,11 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
     ) {
         FaceDrainageGraph graph = new FaceDrainageGraph(faceIndex, apexX, apexZ, v1X, v1Z, v2X, v2Z, isBridged);
 
-        // Row count strictly matches ContinentalHydrology terracing step counts (NUM_STEPS = 15)
+        // Row count spans the entire face altitude at ~225m spacing, with at least 15 ContinentalHydrology terraces
         int upliftRowCount = ContinentalHydrology.NUM_STEPS; // 15
         float targetSpacing = 225.0F;
+        int totalRowCount = Math.max(upliftRowCount, Math.round(faceAltitude / targetSpacing));
+        int lowlandRowCount = totalRowCount - upliftRowCount;
         Cell scratch = this.scratchCell.get();
 
         // 1. Generate candidate rows and nodes for all 15 ContinentalHydrology terraces (rows 0 to 14)
@@ -906,7 +912,7 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
             if (r > 0) {
                 nodeCount = Math.max(graph.rows.get(r - 1).size(), nodeCount);
             }
-            nodeCount = Math.min(64, nodeCount);
+            nodeCount = Math.min(128, nodeCount);
 
             List<DrainageNode> rowNodes = new ArrayList<>(nodeCount);
             for (int col = 0; col < nodeCount; col++) {
@@ -929,13 +935,6 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
         }
 
         // 1b. Generate lowland candidate rows and nodes outside the uplift bands (full complete coverage)
-        float midBaseX = (v1X + v2X) * 0.5F;
-        float midBaseZ = (v1Z + v2Z) * 0.5F;
-        float tMid14 = this.findPlateauT(apexX, apexZ, midBaseX, midBaseZ, allPlateaus[0], scratch);
-        float lowlandDist = Math.max(0.0F, (1.0F - tMid14) * faceAltitude);
-        int lowlandRowCount = Math.max(0, Math.round(lowlandDist / targetSpacing));
-        int totalRowCount = upliftRowCount + lowlandRowCount;
-
         for (int r = upliftRowCount; r < totalRowCount; r++) {
             int stepIndex = (r - upliftRowCount) + 1;
             float fracLowland = (float) stepIndex / (float) (lowlandRowCount + 1);
@@ -953,7 +952,7 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
             float rowWidth = NoiseUtil.sqrt((rightX - leftX) * (rightX - leftX) + (rightZ - leftZ) * (rightZ - leftZ));
             int nodeCount = Math.max(1, Math.round(rowWidth / targetSpacing));
             nodeCount = Math.max(graph.rows.get(r - 1).size(), nodeCount);
-            nodeCount = Math.min(64, nodeCount);
+            nodeCount = Math.min(128, nodeCount);
 
             List<DrainageNode> rowNodes = new ArrayList<>(nodeCount);
             for (int col = 0; col < nodeCount; col++) {
@@ -976,14 +975,12 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
             graph.rows.add(rowNodes);
         }
 
-        // 2. Identify culling: bridged borders near boundary and nodes below sea level (open ocean)
+        // 2. Identify culling: nodes below sea level (open ocean)
         int rowCount = totalRowCount;
         for (int r = 0; r < rowCount; r++) {
             List<DrainageNode> curRow = graph.rows.get(r);
             for (DrainageNode node : curRow) {
-                if (isBridged && r >= rowCount - 2) {
-                    node.isCulled = true;
-                } else if (this.isBelowSeaLevel(node.x, node.z)) {
+                if (this.isBelowSeaLevel(node.x, node.z)) {
                     node.isCulled = true;
                 }
             }
@@ -1095,6 +1092,12 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
                 float s = (2.0F * (float) node.col + 1.0F) / (2.0F * (float) curCount);
                 float targetColF = s * (float) nextCount - 0.5F;
                 int baseCol = Math.max(0, Math.min(nextCount - 1, Math.round(targetColF)));
+
+                // On bridged faces, rivers terminate before reaching the border row (rowCount - 1)
+                if (isBridged && r >= rowCount - 2) {
+                    node.isLake = true;
+                    continue;
+                }
 
                 // 1. Dendritic Convergence / Tributary Confluence Check:
                 // Check if the immediately preceding river on this row (at lastTargetCol) is within natural
