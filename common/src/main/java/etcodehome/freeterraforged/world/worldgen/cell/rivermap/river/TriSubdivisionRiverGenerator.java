@@ -194,6 +194,46 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
     }
 
     /**
+     * Looks ahead to row r + 2 to count mountain candidates downstream of the given candidate node.
+     * Returns 0 if r + 2 is past the bottom of the graph (e.g. ocean / boundary) or has no mountains.
+     * Returns 2 if both downstream options on row r + 2 are mountains (high risk of mountain termination).
+     */
+    private static int countLookaheadMountains(DrainageNode cand, List<List<DrainageNode>> rows, int rNext, int rowCount) {
+        int rLook = rNext + 1; // row r + 2
+        if (rLook >= rowCount || rLook >= rows.size()) {
+            return 0;
+        }
+        List<DrainageNode> rowLook = rows.get(rLook);
+        if (rowLook.isEmpty()) {
+            return 0;
+        }
+        List<DrainageNode> rowNext = rows.get(rNext);
+        int nextCount = rowNext.size();
+        int lookCount = rowLook.size();
+
+        float sCand = (nextCount > 1) ? (float) cand.col / (float) (nextCount - 1) : 0.5F;
+        int baseCol = Math.round(sCand * (lookCount - 1));
+
+        int c1 = Math.max(0, Math.min(lookCount - 1, baseCol));
+        int c2 = (c1 + 1 < lookCount) ? c1 + 1 : c1;
+        if (c1 == c2 && c1 > 0) {
+            c2 = c1 - 1;
+        }
+
+        DrainageNode look1 = rowLook.get(c1);
+        DrainageNode look2 = rowLook.get(c2);
+
+        int mtnCount = 0;
+        if (!look1.isCulled && look1.isMountain) {
+            mtnCount++;
+        }
+        if (look1 != look2 && !look2.isCulled && look2.isMountain) {
+            mtnCount++;
+        }
+        return mtnCount;
+    }
+
+    /**
      * Samples a smooth, rounded, organic spline position between conn.from and conn.to at parameter t in [0, 1].
      * Uses Catmull-Rom cubic Hermite spline interpolation aligned with upstream and downstream flow directions,
      * combined with multi-frequency simplex domain warping and harmonic wiggles to match the organic meandering
@@ -1313,9 +1353,21 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
                         if (cand1 == cand2) {
                             chosen = cand1;
                         } else if (fedDiff && !mtnDiff) {
-                            DrainageNode fed = fed1 ? cand1 : cand2;
-                            DrainageNode unfed = fed1 ? cand2 : cand1;
-                            chosen = (connRandom.nextFloat() < 0.80F) ? fed : unfed;
+                            // Candidates have equal mountain status on row r + 1, but differ in feeder status.
+                            // Check 2-row lookahead to avoid merging into a channel that dead-ends into mountains.
+                            int laMtn1 = countLookaheadMountains(cand1, graph.rows, r + 1, rowCount);
+                            int laMtn2 = countLookaheadMountains(cand2, graph.rows, r + 1, rowCount);
+                            if (laMtn1 != laMtn2) {
+                                float score1 = fed1 ? 4.0F : 1.0F;
+                                float score2 = fed2 ? 4.0F : 1.0F;
+                                if (laMtn1 < laMtn2) score1 *= 4.0F; else score2 *= 4.0F;
+                                float p1 = score1 / (score1 + score2);
+                                chosen = (connRandom.nextFloat() < p1) ? cand1 : cand2;
+                            } else {
+                                DrainageNode fed = fed1 ? cand1 : cand2;
+                                DrainageNode unfed = fed1 ? cand2 : cand1;
+                                chosen = (connRandom.nextFloat() < 0.80F) ? fed : unfed;
+                            }
                         } else if (mtnDiff && !fedDiff) {
                             DrainageNode nonMtn = (!cand1.isMountain) ? cand1 : cand2;
                             DrainageNode mtn = (cand1.isMountain) ? cand1 : cand2;
@@ -1328,13 +1380,26 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
                             float p1 = score1 / (score1 + score2);
                             chosen = (connRandom.nextFloat() < p1) ? cand1 : cand2;
                         } else {
-                            // Organic meandering with inward drainage basin bias towards central valley
-                            if (s < 0.45F && cand2.col > cand1.col) {
-                                chosen = (connRandom.nextFloat() < 0.68F) ? cand2 : cand1;
-                            } else if (s > 0.55F && cand1.col < cand2.col) {
-                                chosen = (connRandom.nextFloat() < 0.68F) ? cand1 : cand2;
+                            // Two-row lookahead downstream check:
+                            // Where candidate nodes are equal otherwise (!mtnDiff && !fedDiff),
+                            // evaluate whether their downstream candidates on row r + 2 lead into mountains.
+                            int laMtn1 = countLookaheadMountains(cand1, graph.rows, r + 1, rowCount);
+                            int laMtn2 = countLookaheadMountains(cand2, graph.rows, r + 1, rowCount);
+
+                            if (laMtn1 != laMtn2) {
+                                DrainageNode laNonMtn = (laMtn1 < laMtn2) ? cand1 : cand2;
+                                DrainageNode laMtn = (laMtn1 < laMtn2) ? cand2 : cand1;
+                                chosen = (connRandom.nextFloat() < 0.80F) ? laNonMtn : laMtn;
                             } else {
-                                chosen = (connRandom.nextFloat() < 0.55F) ? cand1 : cand2;
+                                // Both candidates equal on 1-row and 2-row lookahead:
+                                // Organic meandering with inward drainage basin bias towards central valley
+                                if (s < 0.45F && cand2.col > cand1.col) {
+                                    chosen = (connRandom.nextFloat() < 0.68F) ? cand2 : cand1;
+                                } else if (s > 0.55F && cand1.col < cand2.col) {
+                                    chosen = (connRandom.nextFloat() < 0.68F) ? cand1 : cand2;
+                                } else {
+                                    chosen = (connRandom.nextFloat() < 0.55F) ? cand1 : cand2;
+                                }
                             }
                         }
                     }
