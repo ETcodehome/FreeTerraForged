@@ -159,13 +159,19 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
     }
 
     public void generateWetlands(Network.Builder builder, Random random) {
-        int skip = random.nextInt(this.wetland.skipSize);
-        if (skip == 0) {
+        if (this.wetland == null || this.wetland.chance <= 0.0F) {
+            return;
+        }
+
+        float riverLength = (builder.carver != null && builder.carver.getRiver() != null)
+                ? builder.carver.getRiver().length()
+                : 0.0F;
+
+        if (riverLength > 0.0F && random.nextFloat() < this.wetland.chance) {
             float width = this.wetland.width.next(random);
             float length = this.wetland.length.next(random);
-            float riverLength = builder.carver.getRiver().length();
             float startPos = random.nextFloat() * 0.75f;
-            float endPos = startPos + random.nextFloat() * (length / riverLength);
+            float endPos = Math.min(1.0F, startPos + Math.max(0.01F, random.nextFloat() * (length / riverLength)));
             long start = builder.carver.getRiver().pos(startPos);
             long end = builder.carver.getRiver().pos(endPos);
             float x1 = PosUtil.unpackLeftf(start);
@@ -174,6 +180,7 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
             float z2 = PosUtil.unpackRightf(end);
             builder.wetlands.add(new Wetland(random.nextInt(), new NoiseUtil.Vec2f(x1, z1), new NoiseUtil.Vec2f(x2, z2), width, this.levels));
         }
+
         for (Network.Builder child : builder.children) {
             this.generateWetlands(child, random);
         }

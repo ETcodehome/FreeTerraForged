@@ -53,6 +53,10 @@ public class Rivermap implements ExpiringEntry {
     public int getZ() {
         return this.z;
     }
+
+    public Network[] getNetworks() {
+        return this.networks;
+    }
     
     public static Rivermap get(Cell cell, Rivermap instance, Heightmap heightmap) {
         return get(cell.continentX, cell.continentZ, instance, heightmap);
