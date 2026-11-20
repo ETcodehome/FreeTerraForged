@@ -66,16 +66,23 @@ public class UpliftLakeCarver implements FTFRiverCarver {
         // This mathematically prevents lake basins from spilling across transition ramps into adjacent
         // terraces, guaranteeing that 100% of the carved basin and fadeout stay at a single uniform elevation.
         float scale = (continentScale > 0.0F) ? continentScale : 3000.0F;
-        int stepId = ContinentalHydrology.getStepId(this.plateauGradient);
-        double pStart = ContinentalHydrology.getPlateauStart(stepId);
-        double pEnd = ContinentalHydrology.getPlateauEnd(stepId);
-        double gradientMargin = Math.min(Math.abs(this.plateauGradient - pStart), Math.abs(pEnd - this.plateauGradient));
-        float blockMargin = (float) (gradientMargin * scale);
-
         this.bankFadeWidth = Math.min(22.0F, Math.max(14.0F, config.bankWidth * 1.1F));
 
-        // Effective max shoreline multiplier is 1.45; ensure effectiveFadeRadius strictly < blockMargin
-        float maxAllowedBaseRadius = Math.max(16.0F, (blockMargin * 0.88F - this.bankFadeWidth) / 1.45F);
+        float maxAllowedBaseRadius;
+        if (this.plateauGradient <= 0.01F) {
+            // Lowlands: completely flat, open plains outside the continental uplift terraces.
+            // Not constrained by terrace transition ramps, so allow standard natural lake radius.
+            maxAllowedBaseRadius = 45.0F;
+        } else {
+            int stepId = ContinentalHydrology.getStepId(this.plateauGradient);
+            double pStart = ContinentalHydrology.getPlateauStart(stepId);
+            double pEnd = ContinentalHydrology.getPlateauEnd(stepId);
+            double gradientMargin = Math.min(Math.abs(this.plateauGradient - pStart), Math.abs(pEnd - this.plateauGradient));
+            float blockMargin = (float) (gradientMargin * scale);
+
+            // Effective max shoreline multiplier is 1.45; ensure effectiveFadeRadius strictly < blockMargin
+            maxAllowedBaseRadius = Math.max(16.0F, (blockMargin * 0.88F - this.bankFadeWidth) / 1.45F);
+        }
 
         float minR = Math.min(30.0F, maxAllowedBaseRadius * 0.55F);
         float maxR = Math.min(65.0F, maxAllowedBaseRadius);

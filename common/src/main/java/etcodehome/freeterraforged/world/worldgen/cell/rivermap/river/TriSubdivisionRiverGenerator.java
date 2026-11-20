@@ -1387,13 +1387,6 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
                             node.isLake = true;
                         }
                     }
-                    // D. Isolated upland/plateau tarns: unpopulated node with no feeder and no outlet
-                    else if (r >= 1 && r <= 10 && !node.isPopulated && node.feederCount == 0 && !node.isMountain) {
-                        float isolatedLakeChance = lakeChance * 0.12F;
-                        if (lakeRandom.nextFloat() < isolatedLakeChance) {
-                            node.isLake = true;
-                        }
-                    }
                 }
             }
         }
@@ -1432,6 +1425,34 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
             if (node.feederCount >= 1 && !graph.outgoing.containsKey(node)) {
                 if (!node.isCulled && !isBelowSeaLevel(node.x, node.z)) {
                     node.isLake = true;
+                }
+            }
+        }
+
+        // 5. Chance-based isolated lake spawning at any open node after the river pass completes (including lowland areas)
+        if (lakeChance > 0.0F && riverCount < 30) {
+            for (int r = 0; r < rowCount; r++) {
+                List<DrainageNode> row = graph.rows.get(r);
+                for (int col = 0; col < row.size(); col++) {
+                    DrainageNode node = row.get(col);
+
+                    // Strictly verify node sits on land (never spawn lakes in ocean or on culled nodes)
+                    if (node.isCulled || isBelowSeaLevel(node.x, node.z)) {
+                        continue;
+                    }
+
+                    // Any open node: untouched by rivers (not populated, no incoming feeders, no outgoing river, not already a lake)
+                    if (!node.isPopulated && node.feederCount == 0 && !graph.outgoing.containsKey(node) && !node.isLake) {
+                        long lakeSeed = ((long) Float.floatToIntBits(node.x) * 8192837L)
+                                      ^ ((long) Float.floatToIntBits(node.z) * 1928371L)
+                                      ^ (faceSeed + (long) r * 2003L + (long) col * 17L);
+                        Random lakeRandom = new Random(lakeSeed);
+
+                        float isolatedLakeChance = lakeChance * 0.12F;
+                        if (lakeRandom.nextFloat() < isolatedLakeChance) {
+                            node.isLake = true;
+                        }
+                    }
                 }
             }
         }
