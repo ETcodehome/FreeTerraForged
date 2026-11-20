@@ -194,43 +194,104 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
     }
 
     /**
-     * Looks ahead to row r + 2 to count mountain candidates downstream of the given candidate node.
-     * Returns 0 if r + 2 is past the bottom of the graph (e.g. ocean / boundary) or has no mountains.
-     * Returns 2 if both downstream options on row r + 2 are mountains (high risk of mountain termination).
+     * Finds the two closest candidate nodes in nextRow to node (x, z)
+     * with column >= minCol to maintain planarity (no crossing rivers).
      */
-    private static int countLookaheadMountains(DrainageNode cand, List<List<DrainageNode>> rows, int rNext, int rowCount) {
+    private static DrainageNode[] findClosestDownstreamCandidates(
+            DrainageNode node,
+            List<DrainageNode> nextRow,
+            int minCol
+    ) {
+        int nextCount = nextRow.size();
+        int startCol = Math.max(0, Math.min(nextCount - 1, minCol));
+
+        DrainageNode best1 = null;
+        DrainageNode best2 = null;
+        float bestDist1 = Float.MAX_VALUE;
+        float bestDist2 = Float.MAX_VALUE;
+
+        for (int c = startCol; c < nextCount; c++) {
+            DrainageNode cand = nextRow.get(c);
+            float dx = cand.x - node.x;
+            float dz = cand.z - node.z;
+            float dSq = dx * dx + dz * dz;
+
+            if (dSq < bestDist1) {
+                bestDist2 = bestDist1;
+                best2 = best1;
+                bestDist1 = dSq;
+                best1 = cand;
+            } else if (dSq < bestDist2) {
+                bestDist2 = dSq;
+                best2 = cand;
+            }
+        }
+
+        if (best1 == null) {
+            best1 = nextRow.get(startCol);
+        }
+        if (best2 == null) {
+            best2 = best1;
+        }
+        return new DrainageNode[]{best1, best2};
+    }
+
+    private static class LookaheadResult {
+        final int mtnCount;
+        final float distToCenter;
+        final float distToTrunk;
+
+        LookaheadResult(int mtnCount, float distToCenter, float distToTrunk) {
+            this.mtnCount = mtnCount;
+            this.distToCenter = distToCenter;
+            this.distToTrunk = distToTrunk;
+        }
+    }
+
+    /**
+     * Evaluates lookahead metrics for a candidate node in row rNext looking at row rNext + 1 (r + 2):
+     * 1. Mountain count (0, 1, or 2)
+     * 2. Inward convergence distance to central drainage axis
+     * 3. Convergence distance to neighboring trunk on row r + 2 (if trunkNode != null)
+     */
+    private static LookaheadResult evaluateLookahead(
+            DrainageNode cand,
+            List<List<DrainageNode>> rows,
+            int rNext,
+            int rowCount,
+            DrainageNode trunkNode
+    ) {
         int rLook = rNext + 1; // row r + 2
         if (rLook >= rowCount || rLook >= rows.size()) {
-            return 0;
+            return new LookaheadResult(0, 0.0F, Float.MAX_VALUE);
         }
         List<DrainageNode> rowLook = rows.get(rLook);
         if (rowLook.isEmpty()) {
-            return 0;
-        }
-        List<DrainageNode> rowNext = rows.get(rNext);
-        int nextCount = rowNext.size();
-        int lookCount = rowLook.size();
-
-        float sCand = (nextCount > 1) ? (float) cand.col / (float) (nextCount - 1) : 0.5F;
-        int baseCol = Math.round(sCand * (lookCount - 1));
-
-        int c1 = Math.max(0, Math.min(lookCount - 1, baseCol));
-        int c2 = (c1 + 1 < lookCount) ? c1 + 1 : c1;
-        if (c1 == c2 && c1 > 0) {
-            c2 = c1 - 1;
+            return new LookaheadResult(0, 0.0F, Float.MAX_VALUE);
         }
 
-        DrainageNode look1 = rowLook.get(c1);
-        DrainageNode look2 = rowLook.get(c2);
+        DrainageNode[] lookCands = findClosestDownstreamCandidates(cand, rowLook, 0);
+        DrainageNode look1 = lookCands[0];
+        DrainageNode look2 = lookCands[1];
 
         int mtnCount = 0;
-        if (!look1.isCulled && look1.isMountain) {
-            mtnCount++;
+        if (!look1.isCulled && look1.isMountain) mtnCount++;
+        if (look1 != look2 && !look2.isCulled && look2.isMountain) mtnCount++;
+
+        int lookCount = rowLook.size();
+        float sLook = (2.0F * (float) look1.col + 1.0F) / (2.0F * (float) lookCount);
+        float distToCenter = Math.abs(sLook - 0.5F);
+
+        float distToTrunk = Float.MAX_VALUE;
+        if (trunkNode != null) {
+            DrainageNode[] trunkCands = findClosestDownstreamCandidates(trunkNode, rowLook, 0);
+            DrainageNode trunkLook = trunkCands[0];
+            float tdx = look1.x - trunkLook.x;
+            float tdz = look1.z - trunkLook.z;
+            distToTrunk = (float) Math.sqrt(tdx * tdx + tdz * tdz);
         }
-        if (look1 != look2 && !look2.isCulled && look2.isMountain) {
-            mtnCount++;
-        }
-        return mtnCount;
+
+        return new LookaheadResult(mtnCount, distToCenter, distToTrunk);
     }
 
     /**
@@ -1138,119 +1199,39 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
                 Random connRandom = new Random(connSeed);
                 long faceWarpSeed = ((long) faceIndex * 123456789L) ^ ((this.context != null && this.context.seed != null) ? this.context.seed.root() : this.seed);
 
-                float s = (2.0F * (float) node.col + 1.0F) / (2.0F * (float) curCount);
-                float targetColF = s * (float) nextCount - 0.5F;
-                int baseCol = Math.max(0, Math.min(nextCount - 1, Math.round(targetColF)));
-
                 // On bridged faces, rivers terminate before reaching the border row (rowCount - 1)
                 if (isBridged && r >= rowCount - 2) {
                     node.isLake = true;
                     continue;
                 }
 
-                // 1. Dendritic Convergence / Tributary Confluence Check:
-                // Check if the immediately preceding river on this row (at lastTargetCol) is within natural
-                // confluence reach (distance <= 750m) and can receive this tributary.
-                DrainageNode mergeCand = null;
-                float mergeDist = Float.MAX_VALUE;
+                // Identify neighboring trunk river on nextRow (if within close confluence reach <= 360m)
+                DrainageNode trunkNode = null;
                 if (lastTargetCol >= 0 && lastTargetCol < nextCount) {
                     DrainageNode prevTarget = nextRow.get(lastTargetCol);
-                    float mdx = prevTarget.x - node.x;
-                    float mdz = prevTarget.z - node.z;
-                    float distSq = mdx * mdx + mdz * mdz;
-
-                    if (distSq <= 750.0F * 750.0F && !prevTarget.isCulled && !isBelowSeaLevel(prevTarget.x, prevTarget.z)) {
-                        RiverConnection testMerge = new RiverConnection(node, prevTarget, isHeadwater, true);
-                        if (!hasUphillRise(testMerge, graph.outgoing, graph.incoming, faceWarpSeed)) {
-                            mergeCand = prevTarget;
-                            mergeDist = (float) Math.sqrt(distSq);
+                    if (!prevTarget.isCulled && !isBelowSeaLevel(prevTarget.x, prevTarget.z)) {
+                        float mdx = prevTarget.x - node.x;
+                        float mdz = prevTarget.z - node.z;
+                        if (mdx * mdx + mdz * mdz <= 360.0F * 360.0F) {
+                            trunkNode = prevTarget;
                         }
                     }
                 }
 
-                // Calculate confluence merging probability based on distance, trunk hierarchy, and valley slope
-                float mergeChance = 0.0F;
-                if (mergeCand != null && riverCount < 30) {
-                    if (mergeCand.feederCount >= 2) {
-                        // Merging into an already established main trunk valley
-                        mergeChance = 0.92F;
-                    } else if (mergeDist <= 350.0F) {
-                        // Very close adjacent streams (~225m) on the same slope: strong natural convergence
-                        mergeChance = 0.88F;
-                    } else if (mergeDist <= 550.0F) {
-                        // Moderate convergence distance (~450m)
-                        mergeChance = 0.72F;
-                    } else {
-                        // Outer convergence reach (~650-750m)
-                        mergeChance = 0.52F;
-                    }
+                // Candidate selection using true 2D Euclidean distance:
+                // minCol = Math.max(0, lastTargetCol) strictly guarantees non-crossing planarity (T_i >= T_{i-1}).
+                int minCol = Math.max(0, lastTargetCol);
+                DrainageNode[] cands = findClosestDownstreamCandidates(node, nextRow, minCol);
+                DrainageNode cand1 = (cands[0].col <= cands[1].col) ? cands[0] : cands[1];
+                DrainageNode cand2 = (cands[0].col <= cands[1].col) ? cands[1] : cands[0];
 
-                    // Inward basin slope bias: streams on the right flank (s > 0.5) naturally flow inward toward center
-                    if (s > 0.45F) {
-                        mergeChance = Math.min(0.96F, mergeChance * 1.20F);
-                    }
-
-                    // Terrain bias: if merge candidate is a valley, boost convergence; if mountain, reduce
-                    if (!mergeCand.isMountain) {
-                        mergeChance = Math.min(0.96F, mergeChance * 1.25F);
-                    } else {
-                        mergeChance *= 0.60F;
-                    }
+                // If a neighboring trunk is within natural confluence reach (<= 360m) and not already in candidates,
+                // offer it as cand2 so the scoring engine can evaluate merging vs independent path.
+                if (trunkNode != null && cand1 != trunkNode && cand2 != trunkNode) {
+                    cand2 = trunkNode;
                 }
 
-                if (mergeCand != null && connRandom.nextFloat() < mergeChance) {
-                    // Form confluence! The tributary merges into the existing river channel
-                    lastTargetCol = mergeCand.col;
-                    mergeCand.feederCount++;
-                    mergeCand.isPopulated = true;
-                    boolean isMain = true;
-                    graph.addConnection(new RiverConnection(node, mergeCand, isHeadwater, isMain));
-                    continue;
-                }
-
-                // 2. Independent Downhill Routing:
-                // If not merging, select from candidate slots strictly to the right (> lastTargetCol)
-                // to maintain non-crossing invariants.
-                int minIndependentCol = Math.max(lastTargetCol + 1, 0);
-                if (minIndependentCol >= nextCount) {
-                    // No independent columns available without crossing
-                    if (mergeCand != null) {
-                        // Fall back to merging into the adjacent river
-                        lastTargetCol = mergeCand.col;
-                        mergeCand.feederCount++;
-                        mergeCand.isPopulated = true;
-                        graph.addConnection(new RiverConnection(node, mergeCand, isHeadwater, true));
-                        continue;
-                    }
-
-                    if (isBridged) {
-                        DrainageNode waterMouth = findWaterMouthNode(node, apexX, apexZ, v1X, v1Z, v2X, v2Z, isBridged, rowCount);
-                        if (waterMouth != null) {
-                            boolean isMain = (node.feederCount >= 2);
-                            graph.addConnection(new RiverConnection(node, waterMouth, isHeadwater, isMain));
-                        } else {
-                            node.isLake = true;
-                        }
-                    } else {
-                        if (r < rowCount - 2) {
-                            node.isLake = true;
-                        } else {
-                            connectToOcean(graph, node, apexX, apexZ, faceSeed, rowCount);
-                        }
-                    }
-                    continue;
-                }
-
-                int c1 = Math.max(minIndependentCol, Math.min(nextCount - 1, baseCol));
-                int c2 = (c1 + 1 < nextCount) ? c1 + 1 : c1;
-                if (c1 == c2 && c1 > minIndependentCol) {
-                    c2 = c1 - 1;
-                }
-
-                DrainageNode cand1 = nextRow.get(c1);
-                DrainageNode cand2 = nextRow.get(c2);
-
-                // Both candidates culled
+                // Both candidates culled (in ocean)
                 if (cand1.isCulled && cand2.isCulled) {
                     if (isBridged) {
                         DrainageNode waterMouth = findWaterMouthNode(node, apexX, apexZ, v1X, v1Z, v2X, v2Z, isBridged, rowCount);
@@ -1266,6 +1247,8 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
                     continue;
                 }
 
+                boolean isMain = (node.feederCount >= 2) || (r <= 2 && node.col == 0);
+
                 // Exactly one candidate culled
                 if (cand1.isCulled || cand2.isCulled) {
                     if (!isBridged && r >= rowCount - 3) {
@@ -1274,33 +1257,25 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
                     }
 
                     DrainageNode validCand = cand1.isCulled ? cand2 : cand1;
-                    if (validCand.col < minIndependentCol) {
-                        if (mergeCand != null) {
-                            lastTargetCol = mergeCand.col;
-                            mergeCand.feederCount++;
-                            mergeCand.isPopulated = true;
-                            graph.addConnection(new RiverConnection(node, mergeCand, isHeadwater, true));
-                            continue;
-                        }
-                        if (isBridged) {
-                            DrainageNode waterMouth = findWaterMouthNode(node, apexX, apexZ, v1X, v1Z, v2X, v2Z, isBridged, rowCount);
-                            if (waterMouth != null) {
-                                boolean isMain = (node.feederCount >= 2);
-                                graph.addConnection(new RiverConnection(node, waterMouth, isHeadwater, isMain));
-                            } else {
-                                node.isLake = true;
+                    RiverConnection testConn = new RiverConnection(node, validCand, isHeadwater, isMain);
+                    if (hasUphillRise(testConn, graph.outgoing, graph.incoming, faceWarpSeed)) {
+                        if (trunkNode != null && !trunkNode.isCulled) {
+                            RiverConnection testTrunk = new RiverConnection(node, trunkNode, isHeadwater, true);
+                            if (!hasUphillRise(testTrunk, graph.outgoing, graph.incoming, faceWarpSeed)) {
+                                lastTargetCol = trunkNode.col;
+                                trunkNode.feederCount++;
+                                trunkNode.isPopulated = true;
+                                graph.addConnection(new RiverConnection(node, trunkNode, isHeadwater, true));
+                                continue;
                             }
-                        } else {
-                            node.isLake = true;
                         }
-                        continue;
+                        node.isLake = true;
+                    } else {
+                        lastTargetCol = validCand.col;
+                        validCand.feederCount++;
+                        validCand.isPopulated = true;
+                        graph.addConnection(new RiverConnection(node, validCand, isHeadwater, isMain));
                     }
-
-                    lastTargetCol = validCand.col;
-                    validCand.feederCount++;
-                    validCand.isPopulated = true;
-                    boolean isMain = (node.feederCount >= 2) || (r <= 2 && node.col == 0);
-                    graph.addConnection(new RiverConnection(node, validCand, isHeadwater, isMain));
                     continue;
                 }
 
@@ -1313,9 +1288,8 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
                     }
                 }
 
-                boolean isMain = (node.feederCount >= 2) || (r <= 2 && node.col == 0);
                 RiverConnection testConn1 = new RiverConnection(node, cand1, isHeadwater, isMain);
-                RiverConnection testConn2 = new RiverConnection(node, cand2, isHeadwater, isMain);
+                RiverConnection testConn2 = (cand1 == cand2) ? testConn1 : new RiverConnection(node, cand2, isHeadwater, isMain);
                 boolean rise1 = hasUphillRise(testConn1, graph.outgoing, graph.incoming, faceWarpSeed);
                 boolean rise2 = (cand1 == cand2) ? rise1 : hasUphillRise(testConn2, graph.outgoing, graph.incoming, faceWarpSeed);
 
@@ -1325,14 +1299,16 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
                 } else if (!rise1 && rise2) {
                     chosen = cand1;
                 } else if (rise1 && rise2) {
-                    if (mergeCand != null) {
-                        // Merge into adjacent valley river rather than getting blocked
-                        chosen = mergeCand;
-                        lastTargetCol = chosen.col;
-                        chosen.feederCount++;
-                        chosen.isPopulated = true;
-                        graph.addConnection(new RiverConnection(node, chosen, isHeadwater, true));
-                        continue;
+                    if (trunkNode != null && trunkNode != cand1 && trunkNode != cand2) {
+                        RiverConnection testTrunk = new RiverConnection(node, trunkNode, isHeadwater, true);
+                        if (!hasUphillRise(testTrunk, graph.outgoing, graph.incoming, faceWarpSeed)) {
+                            chosen = trunkNode;
+                            lastTargetCol = chosen.col;
+                            chosen.feederCount++;
+                            chosen.isPopulated = true;
+                            graph.addConnection(new RiverConnection(node, chosen, isHeadwater, true));
+                            continue;
+                        }
                     }
                     node.isLake = true;
                     continue;
@@ -1344,71 +1320,86 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
                         chosen = cand2;
                     } else if (!off1 && off2) {
                         chosen = cand1;
+                    } else if (cand1 == cand2) {
+                        chosen = cand1;
                     } else {
-                        boolean fed1 = cand1.feederCount > 0;
-                        boolean fed2 = cand2.feederCount > 0;
-                        boolean fedDiff = (cand1 != cand2) && (fed1 ^ fed2);
-                        boolean mtnDiff = (cand1 != cand2) && (cand1.isMountain ^ cand2.isMountain);
+                        // Multi-stage lookahead downstream routing:
+                        // Evaluates row r + 1 (immediate) and row r + 2 (lookahead) to favor dendritic merging,
+                        // mountain avoidance, and central valley convergence.
+                        LookaheadResult la1 = evaluateLookahead(cand1, graph.rows, r + 1, rowCount, trunkNode);
+                        LookaheadResult la2 = evaluateLookahead(cand2, graph.rows, r + 1, rowCount, trunkNode);
 
-                        if (cand1 == cand2) {
-                            chosen = cand1;
-                        } else if (fedDiff && !mtnDiff) {
-                            // Candidates have equal mountain status on row r + 1, but differ in feeder status.
-                            // Check 2-row lookahead to avoid merging into a channel that dead-ends into mountains.
-                            int laMtn1 = countLookaheadMountains(cand1, graph.rows, r + 1, rowCount);
-                            int laMtn2 = countLookaheadMountains(cand2, graph.rows, r + 1, rowCount);
-                            if (laMtn1 != laMtn2) {
-                                float score1 = fed1 ? 4.0F : 1.0F;
-                                float score2 = fed2 ? 4.0F : 1.0F;
-                                if (laMtn1 < laMtn2) score1 *= 4.0F; else score2 *= 4.0F;
-                                float p1 = score1 / (score1 + score2);
-                                chosen = (connRandom.nextFloat() < p1) ? cand1 : cand2;
-                            } else {
-                                DrainageNode fed = fed1 ? cand1 : cand2;
-                                DrainageNode unfed = fed1 ? cand2 : cand1;
-                                chosen = (connRandom.nextFloat() < 0.80F) ? fed : unfed;
-                            }
-                        } else if (mtnDiff && !fedDiff) {
-                            DrainageNode nonMtn = (!cand1.isMountain) ? cand1 : cand2;
-                            DrainageNode mtn = (cand1.isMountain) ? cand1 : cand2;
-                            chosen = (connRandom.nextFloat() < 0.80F) ? nonMtn : mtn;
-                        } else if (fedDiff && mtnDiff) {
-                            float score1 = 1.0F;
-                            float score2 = 1.0F;
-                            if (!cand1.isMountain) score1 *= 4.0F; else score2 *= 4.0F;
-                            if (fed1) score1 *= 4.0F; else score2 *= 4.0F;
-                            float p1 = score1 / (score1 + score2);
-                            chosen = (connRandom.nextFloat() < p1) ? cand1 : cand2;
-                        } else {
-                            // Two-row lookahead downstream check:
-                            // Where candidate nodes are equal otherwise (!mtnDiff && !fedDiff),
-                            // evaluate whether their downstream candidates on row r + 2 lead into mountains.
-                            int laMtn1 = countLookaheadMountains(cand1, graph.rows, r + 1, rowCount);
-                            int laMtn2 = countLookaheadMountains(cand2, graph.rows, r + 1, rowCount);
+                        float score1 = 1.0F;
+                        float score2 = 1.0F;
 
-                            if (laMtn1 != laMtn2) {
-                                DrainageNode laNonMtn = (laMtn1 < laMtn2) ? cand1 : cand2;
-                                DrainageNode laMtn = (laMtn1 < laMtn2) ? cand2 : cand1;
-                                chosen = (connRandom.nextFloat() < 0.80F) ? laNonMtn : laMtn;
-                            } else {
-                                // Both candidates equal on 1-row and 2-row lookahead:
-                                // Organic meandering with inward drainage basin bias towards central valley
-                                if (s < 0.45F && cand2.col > cand1.col) {
-                                    chosen = (connRandom.nextFloat() < 0.68F) ? cand2 : cand1;
-                                } else if (s > 0.55F && cand1.col < cand2.col) {
-                                    chosen = (connRandom.nextFloat() < 0.68F) ? cand1 : cand2;
-                                } else {
-                                    chosen = (connRandom.nextFloat() < 0.55F) ? cand1 : cand2;
-                                }
+                        // Factor 1: Stage 1 Mountain Avoidance
+                        if (!cand1.isMountain) score1 *= 4.0F; else score2 *= 1.5F;
+                        if (!cand2.isMountain) score2 *= 4.0F; else score1 *= 1.5F;
+
+                        // Factor 2: Stage 1 Confluence Merging (Tributaries joining established channels)
+                        if (cand1.feederCount >= 2) {
+                            score1 *= 6.0F;
+                        } else if (cand1.feederCount == 1) {
+                            score1 *= 4.5F;
+                        }
+                        if (cand2.feederCount >= 2) {
+                            score2 *= 6.0F;
+                        } else if (cand2.feederCount == 1) {
+                            score2 *= 4.5F;
+                        }
+
+                        // Factor 3: Stage 2 Lookahead Mountain Avoidance (pathway into row r + 2)
+                        if (la1.mtnCount < la2.mtnCount) {
+                            score1 *= 3.0F;
+                        } else if (la2.mtnCount < la1.mtnCount) {
+                            score2 *= 3.0F;
+                        }
+
+                        // Factor 4: Stage 2 Lookahead Dendritic Tree Convergence (bending towards trunk on row r + 2)
+                        if (la1.distToTrunk < Float.MAX_VALUE && la2.distToTrunk < Float.MAX_VALUE) {
+                            float diffTrunk = la2.distToTrunk - la1.distToTrunk;
+                            if (diffTrunk > 40.0F) {
+                                score1 *= 2.5F;
+                            } else if (diffTrunk < -40.0F) {
+                                score2 *= 2.5F;
                             }
                         }
+
+                        // Factor 5: Central Basin Drainage Bias (Inward flow towards center axis)
+                        float diffCenter = la2.distToCenter - la1.distToCenter;
+                        if (diffCenter > 0.05F) {
+                            score1 *= 1.8F;
+                        } else if (diffCenter < -0.05F) {
+                            score2 *= 1.8F;
+                        }
+
+                        // Factor 6: Spatial Euclidean Proximity (favor closer candidate, discourage lateral detours)
+                        float dx1 = cand1.x - node.x;
+                        float dz1 = cand1.z - node.z;
+                        float dist1 = (float) Math.sqrt(dx1 * dx1 + dz1 * dz1);
+
+                        float dx2 = cand2.x - node.x;
+                        float dz2 = cand2.z - node.z;
+                        float dist2 = (float) Math.sqrt(dx2 * dx2 + dz2 * dz2);
+
+                        if (dist1 < dist2) {
+                            float proxRatio = Math.min(2.0F, dist2 / Math.max(1.0F, dist1));
+                            score1 *= (1.0F + 0.4F * (proxRatio - 1.0F));
+                        } else if (dist2 < dist1) {
+                            float proxRatio = Math.min(2.0F, dist1 / Math.max(1.0F, dist2));
+                            score2 *= (1.0F + 0.4F * (proxRatio - 1.0F));
+                        }
+
+                        float p1 = score1 / (score1 + score2);
+                        chosen = (connRandom.nextFloat() < p1) ? cand1 : cand2;
                     }
                 }
 
                 lastTargetCol = chosen.col;
                 chosen.feederCount++;
                 chosen.isPopulated = true;
-                graph.addConnection(new RiverConnection(node, chosen, isHeadwater, isMain));
+                boolean isFinalMain = isMain || (chosen.feederCount >= 2);
+                graph.addConnection(new RiverConnection(node, chosen, isHeadwater, isFinalMain));
             }
         }
 
