@@ -1182,15 +1182,20 @@ public class TriSubdivisionTest {
                     }
                 }
                 for (TriSubdivisionRiverGenerator.RiverConnection conn : g.connections) {
-                    if (conn.isLateral && conn.from.feederCount == 0 && conn.to.feederCount <= 1 && !g.outgoing.containsKey(conn.to)) {
-                        floatingLaterals++;
-                        System.out.printf("[FLOATING LATERAL] Face %d from (%.1f, %.1f) to (%.1f, %.1f)%n", g.faceIndex, conn.from.x, conn.from.z, conn.to.x, conn.to.z);
+                    if (conn.isLateral) {
+                        // All lateral connections must link adjacent lake nodes on the same row
+                        assertTrue(conn.from.isLake && conn.to.isLake, "Lateral connections must link adjacent lake nodes");
+                        assertEquals(conn.from.row, conn.to.row, "Lateral connections must link nodes on the same row");
+                        if (!conn.from.isLake || !conn.to.isLake) {
+                            floatingLaterals++;
+                            System.out.printf("[INVALID LATERAL] Face %d from (%.1f, %.1f) to (%.1f, %.1f)%n", g.faceIndex, conn.from.x, conn.from.z, conn.to.x, conn.to.z);
+                        }
                     }
                 }
             }
 
             assertTrue(isolatedLakes > 0, "Isolated lakes with 0 feeders and 0 outflow should naturally spawn across upland plateaus: " + isolatedLakes);
-            assertEquals(0, floatingLaterals, "Floating lateral river segments must be strictly 0");
+            assertEquals(0, floatingLaterals, "Invalid non-lake lateral river segments must be strictly 0");
         }
     }
 

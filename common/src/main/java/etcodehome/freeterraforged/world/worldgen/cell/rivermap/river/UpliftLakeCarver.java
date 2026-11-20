@@ -164,6 +164,17 @@ public class UpliftLakeCarver implements FTFRiverCarver {
             return;
         }
 
+        // In non-lowland locations, ensure lakes never leave the flatness factor alpha mask
+        // (effectively making it control their occurrence and influence strength on the terrain)
+        float flatnessAlpha = 1.0F;
+        if (this.plateauGradient > 0.01F) {
+            flatnessAlpha = (cell.flatnessFactor > 0.0F) ? cell.flatnessFactor : ContinentalHydrology.getFlatnessFactor(cell.waterTable);
+            flatnessAlpha = NoiseUtil.clamp(flatnessAlpha, 0.0F, 1.0F);
+            if (flatnessAlpha <= 0.001F) {
+                return; // Never leave the flatness factor alpha mask in non-lowlands
+            }
+        }
+
         // 1. Multi-octave organic shoreline deformation (natural coves, bays, points)
         double angle = Math.atan2(dz, dx);
         float lobe1 = (float) Math.sin(2.0 * angle + this.anglePhase1) * 0.16F;
@@ -219,13 +230,19 @@ public class UpliftLakeCarver implements FTFRiverCarver {
             finalHeight = Math.min(cell.height, cell.height - carveAmount);
         }
 
+        float rawCarve = cell.height - finalHeight;
+        if (rawCarve > 0.0F) {
+            float carveAmount = rawCarve * flatnessAlpha;
+            finalHeight = cell.height - carveAmount;
+        }
+
         boolean carved = finalHeight < cell.height;
         if (carved) {
             cell.height = finalHeight;
         }
 
-        // Submerged lake water surface: strictly flat at targetWaterLevel
-        if (finalHeight <= targetWaterLevel) {
+        // Submerged lake water surface: strictly flat at targetWaterLevel within the alpha mask
+        if (finalHeight <= targetWaterLevel && (this.plateauGradient <= 0.01F || flatnessAlpha > 0.05F)) {
             cell.riverWaterLevel = targetWaterLevel;
             cell.terrain = TerrainType.LAKE;
             cell.erosionMask = true;

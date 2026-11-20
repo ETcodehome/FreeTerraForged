@@ -1361,6 +1361,16 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
                         continue;
                     }
 
+                    // In non-lowland locations, ensure lakes never leave the flatness factor alpha mask
+                    float nodeFlatness = 1.0F;
+                    if (node.gradient > 0.01F) {
+                        this.continent.apply(scratch.reset(), node.x, node.z);
+                        nodeFlatness = ContinentalHydrology.getFlatnessFactor(scratch.waterTable);
+                        if (nodeFlatness <= 0.05F) {
+                            continue; // Never spawn outside the flatness factor alpha mask in non-lowlands
+                        }
+                    }
+
                     long lakeSeed = ((long) Float.floatToIntBits(node.x) * 8192837L)
                                   ^ ((long) Float.floatToIntBits(node.z) * 1928371L)
                                   ^ (faceSeed + (long) r * 2003L + (long) col * 17L);
@@ -1368,21 +1378,21 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
 
                     // A. Confluence nodes: multiple incoming river channels meet -> High chance
                     if (node.feederCount >= 2) {
-                        float confluenceLakeChance = lakeChance * 0.45F;
+                        float confluenceLakeChance = lakeChance * 0.45F * nodeFlatness;
                         if (lakeRandom.nextFloat() < confluenceLakeChance) {
                             node.isLake = true;
                         }
                     }
                     // B. Inline flowing river nodes: single feeder with downstream outflow -> Rare chance
                     else if (node.feederCount == 1 && graph.outgoing.containsKey(node)) {
-                        float inlineLakeChance = lakeChance * 0.08F;
+                        float inlineLakeChance = lakeChance * 0.08F * nodeFlatness;
                         if (lakeRandom.nextFloat() < inlineLakeChance) {
                             node.isLake = true;
                         }
                     }
                     // C. Spring / Headwater nodes: river origin feeding a downstream river
                     else if (node.feederCount == 0 && graph.outgoing.containsKey(node)) {
-                        float springLakeChance = lakeChance * 0.20F;
+                        float springLakeChance = lakeChance * 0.20F * nodeFlatness;
                         if (lakeRandom.nextFloat() < springLakeChance) {
                             node.isLake = true;
                         }
@@ -1441,6 +1451,16 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
                         continue;
                     }
 
+                    // In non-lowland locations, ensure lakes never leave the flatness factor alpha mask
+                    float nodeFlatness = 1.0F;
+                    if (node.gradient > 0.01F) {
+                        this.continent.apply(scratch.reset(), node.x, node.z);
+                        nodeFlatness = ContinentalHydrology.getFlatnessFactor(scratch.waterTable);
+                        if (nodeFlatness <= 0.05F) {
+                            continue; // Never spawn outside the flatness factor alpha mask in non-lowlands
+                        }
+                    }
+
                     // Any open node: untouched by rivers (not populated, no incoming feeders, no outgoing river, not already a lake)
                     if (!node.isPopulated && node.feederCount == 0 && !graph.outgoing.containsKey(node) && !node.isLake) {
                         long lakeSeed = ((long) Float.floatToIntBits(node.x) * 8192837L)
@@ -1448,7 +1468,7 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
                                       ^ (faceSeed + (long) r * 2003L + (long) col * 17L);
                         Random lakeRandom = new Random(lakeSeed);
 
-                        float isolatedLakeChance = lakeChance * 0.12F;
+                        float isolatedLakeChance = lakeChance * 0.12F * nodeFlatness;
                         if (lakeRandom.nextFloat() < isolatedLakeChance) {
                             node.isLake = true;
                         }
@@ -1457,7 +1477,80 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
             }
         }
 
+        // 6. Make neighbouring lakes adjacent to another in the same row always bridge together to form a larger, diverse lake
+        if (riverCount < 30) {
+            for (int r = 0; r < rowCount; r++) {
+                List<DrainageNode> row = graph.rows.get(r);
+                int rowSize = row.size();
+                for (int col = 0; col < rowSize - 1; col++) {
+                    DrainageNode nodeA = row.get(col);
+                    DrainageNode nodeB = row.get(col + 1);
+
+                    if (nodeA.isLake && nodeB.isLake) {
+                        bridgeAdjacentLakes(graph, nodeA, nodeB);
+                    }
+                }
+            }
+        }
+
         return graph;
+    }
+
+    /**
+     * Bridges two neighbouring lakes adjacent to each other on the same row with a lateral connection,
+     * merging them into a larger, diverse multi-lobed lake body at the exact same elevation.
+     */
+    private void bridgeAdjacentLakes(FaceDrainageGraph graph, DrainageNode nodeA, DrainageNode nodeB) {
+        RiverConnection outA = graph.outgoing.get(nodeA);
+        RiverConnection outB = graph.outgoing.get(nodeB);
+
+        // Already bridged together
+        if ((outA != null && outA.to == nodeB) || (outB != null && outB.to == nodeA)) {
+            return;
+        }
+
+        nodeA.isPopulated = true;
+        nodeB.isPopulated = true;
+
+        if (outA == null && outB == null) {
+            // Neither has an outgoing connection: connect nodeA -> nodeB
+            nodeB.feederCount++;
+            boolean isHead = (nodeA.feederCount == 0);
+            graph.addConnection(new RiverConnection(nodeA, nodeB, isHead, false, true));
+        } else if (outA != null && outB == null) {
+            // nodeA already has an outlet (e.g. downstream): connect nodeB -> nodeA
+            nodeA.feederCount++;
+            boolean isHead = (nodeB.feederCount == 0);
+            graph.addConnection(new RiverConnection(nodeB, nodeA, isHead, false, true));
+        } else if (outA == null && outB != null) {
+            // nodeB already has an outlet: connect nodeA -> nodeB
+            nodeB.feederCount++;
+            boolean isHead = (nodeA.feederCount == 0);
+            graph.addConnection(new RiverConnection(nodeA, nodeB, isHead, false, true));
+        } else {
+            // Both already have outgoing connections: redirect the branch with fewer feeders into the other
+            if (nodeA.feederCount <= nodeB.feederCount && !outA.isLateral) {
+                graph.connections.remove(outA);
+                graph.outgoing.remove(nodeA);
+                List<RiverConnection> inList = graph.incoming.get(outA.to);
+                if (inList != null) inList.remove(outA);
+                outA.to.feederCount = Math.max(0, outA.to.feederCount - 1);
+
+                nodeB.feederCount++;
+                boolean isHead = (nodeA.feederCount == 0);
+                graph.addConnection(new RiverConnection(nodeA, nodeB, isHead, false, true));
+            } else if (!outB.isLateral) {
+                graph.connections.remove(outB);
+                graph.outgoing.remove(nodeB);
+                List<RiverConnection> inList = graph.incoming.get(outB.to);
+                if (inList != null) inList.remove(outB);
+                outB.to.feederCount = Math.max(0, outB.to.feederCount - 1);
+
+                nodeA.feederCount++;
+                boolean isHead = (nodeB.feederCount == 0);
+                graph.addConnection(new RiverConnection(nodeB, nodeA, isHead, false, true));
+            }
+        }
     }
 
     /**
