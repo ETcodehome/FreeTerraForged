@@ -885,12 +885,18 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
     ) {
         FaceDrainageGraph graph = new FaceDrainageGraph(faceIndex, apexX, apexZ, v1X, v1Z, v2X, v2Z, isBridged);
 
-        // Row count spans the entire face altitude at ~225m spacing, with at least 15 ContinentalHydrology terraces
+        // 15 ContinentalHydrology terraces span the uplift bands (rows 0 to 14)
         int upliftRowCount = ContinentalHydrology.NUM_STEPS; // 15
         float targetSpacing = 225.0F;
-        int totalRowCount = Math.max(upliftRowCount, Math.round(faceAltitude / targetSpacing));
-        int lowlandRowCount = totalRowCount - upliftRowCount;
         Cell scratch = this.scratchCell.get();
+
+        // Calculate lowland span outside the uplift to achieve uniform ~225m row spacing in lowlands
+        float midBaseX = (v1X + v2X) * 0.5F;
+        float midBaseZ = (v1Z + v2Z) * 0.5F;
+        float tCenterUplift = this.findPlateauT(apexX, apexZ, midBaseX, midBaseZ, allPlateaus[0], scratch);
+        float lowlandDist = Math.max(0.0F, faceAltitude * (1.0F - tCenterUplift));
+        int lowlandRowCount = (lowlandDist > targetSpacing * 0.5F) ? Math.round(lowlandDist / targetSpacing) : 0;
+        int totalRowCount = upliftRowCount + lowlandRowCount;
 
         // 1. Generate candidate rows and nodes for all 15 ContinentalHydrology terraces (rows 0 to 14)
         for (int r = 0; r < upliftRowCount; r++) {
@@ -934,45 +940,48 @@ public class TriSubdivisionRiverGenerator extends BaseRiverGenerator<SimpleConti
             graph.rows.add(rowNodes);
         }
 
-        // 1b. Generate lowland candidate rows and nodes outside the uplift bands (full complete coverage)
-        for (int r = upliftRowCount; r < totalRowCount; r++) {
-            int stepIndex = (r - upliftRowCount) + 1;
-            float fracLowland = (float) stepIndex / (float) (lowlandRowCount + 1);
-
+        // 1b. Generate lowland candidate rows and nodes outside the uplift bands (uniform ~225m spacing)
+        if (lowlandRowCount > 0) {
             float tLeft14 = this.findPlateauT(apexX, apexZ, v1X, v1Z, allPlateaus[0], scratch);
-            float tLeft = (1.0F - fracLowland) * tLeft14 + fracLowland * 1.0F;
-            float leftX = (1.0F - tLeft) * apexX + tLeft * v1X;
-            float leftZ = (1.0F - tLeft) * apexZ + tLeft * v1Z;
-
             float tRight14 = this.findPlateauT(apexX, apexZ, v2X, v2Z, allPlateaus[0], scratch);
-            float tRight = (1.0F - fracLowland) * tRight14 + fracLowland * 1.0F;
-            float rightX = (1.0F - tRight) * apexX + tRight * v2X;
-            float rightZ = (1.0F - tRight) * apexZ + tRight * v2Z;
 
-            float rowWidth = NoiseUtil.sqrt((rightX - leftX) * (rightX - leftX) + (rightZ - leftZ) * (rightZ - leftZ));
-            int nodeCount = Math.max(1, Math.round(rowWidth / targetSpacing));
-            nodeCount = Math.max(graph.rows.get(r - 1).size(), nodeCount);
-            nodeCount = Math.min(128, nodeCount);
+            for (int r = upliftRowCount; r < totalRowCount; r++) {
+                int stepIndex = (r - upliftRowCount) + 1;
+                float fracLowland = (float) stepIndex / (float) (lowlandRowCount + 1);
 
-            List<DrainageNode> rowNodes = new ArrayList<>(nodeCount);
-            for (int col = 0; col < nodeCount; col++) {
-                float s = (2.0F * col + 1.0F) / (2.0F * (float) nodeCount);
-                float jitter = (faceRandom.nextFloat() - 0.5F) * (0.24F / (float) nodeCount);
-                float clampedS = NoiseUtil.clamp(s + jitter, 0.02F, 0.98F);
+                float tLeft = (1.0F - fracLowland) * tLeft14 + fracLowland * 1.0F;
+                float leftX = (1.0F - tLeft) * apexX + tLeft * v1X;
+                float leftZ = (1.0F - tLeft) * apexZ + tLeft * v1Z;
 
-                float rayBaseX = (1.0F - clampedS) * v1X + clampedS * v2X;
-                float rayBaseZ = (1.0F - clampedS) * v1Z + clampedS * v2Z;
+                float tRight = (1.0F - fracLowland) * tRight14 + fracLowland * 1.0F;
+                float rightX = (1.0F - tRight) * apexX + tRight * v2X;
+                float rightZ = (1.0F - tRight) * apexZ + tRight * v2Z;
 
-                float tRay14 = this.findPlateauT(apexX, apexZ, rayBaseX, rayBaseZ, allPlateaus[0], scratch);
-                float nodeT = (1.0F - fracLowland) * tRay14 + fracLowland * 1.0F;
-                float nodeX = (1.0F - nodeT) * apexX + nodeT * rayBaseX;
-                float nodeZ = (1.0F - nodeT) * apexZ + nodeT * rayBaseZ;
+                float rowWidth = NoiseUtil.sqrt((rightX - leftX) * (rightX - leftX) + (rightZ - leftZ) * (rightZ - leftZ));
+                int nodeCount = Math.max(1, Math.round(rowWidth / targetSpacing));
+                nodeCount = Math.max(graph.rows.get(r - 1).size(), nodeCount);
+                nodeCount = Math.min(128, nodeCount);
 
-                DrainageNode node = new DrainageNode(nodeX, nodeZ, 0.0F, r, col);
-                node.isMountain = this.isMountainTerrain(nodeX, nodeZ);
-                rowNodes.add(node);
+                List<DrainageNode> rowNodes = new ArrayList<>(nodeCount);
+                for (int col = 0; col < nodeCount; col++) {
+                    float s = (2.0F * col + 1.0F) / (2.0F * (float) nodeCount);
+                    float jitter = (faceRandom.nextFloat() - 0.5F) * (0.24F / (float) nodeCount);
+                    float clampedS = NoiseUtil.clamp(s + jitter, 0.02F, 0.98F);
+
+                    float rayBaseX = (1.0F - clampedS) * v1X + clampedS * v2X;
+                    float rayBaseZ = (1.0F - clampedS) * v1Z + clampedS * v2Z;
+
+                    float tRay14 = this.findPlateauT(apexX, apexZ, rayBaseX, rayBaseZ, allPlateaus[0], scratch);
+                    float nodeT = (1.0F - fracLowland) * tRay14 + fracLowland * 1.0F;
+                    float nodeX = (1.0F - nodeT) * apexX + nodeT * rayBaseX;
+                    float nodeZ = (1.0F - nodeT) * apexZ + nodeT * rayBaseZ;
+
+                    DrainageNode node = new DrainageNode(nodeX, nodeZ, 0.0F, r, col);
+                    node.isMountain = this.isMountainTerrain(nodeX, nodeZ);
+                    rowNodes.add(node);
+                }
+                graph.rows.add(rowNodes);
             }
-            graph.rows.add(rowNodes);
         }
 
         // 2. Identify culling: nodes below sea level (open ocean)
