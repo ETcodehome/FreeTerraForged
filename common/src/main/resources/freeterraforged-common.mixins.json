@@ -54,6 +54,8 @@
   ],
   "client": [
     "CreateWorldScreenAccessor",
+    "MixinGuiGraphicsCopyFeedback",
+    "MixinScreenCopyFeedback",
     "MixinCreateWorldScreen",
     "MixinCreateWorldScreenWorldTab",
     "MixinWorldCreationUiState",
