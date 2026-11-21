@@ -49,7 +49,8 @@
     "compat.MixinBiolithDimensionBiomePlacement",
     "MixinContext",
     "compat.MixinLithostitchedBiomeInjectorManager",
-    "compat.MixinLithostitchedEvent"
+    "compat.MixinLithostitchedEvent",
+    "compat.MixinTerraBlenderLevelUtils"
   ],
   "client": [
     "CreateWorldScreenAccessor",
