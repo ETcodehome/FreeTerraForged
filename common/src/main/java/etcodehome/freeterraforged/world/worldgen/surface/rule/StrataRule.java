@@ -3,6 +3,7 @@ package etcodehome.freeterraforged.world.worldgen.surface.rule;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 
 import com.mojang.serialization.MapCodec;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
@@ -30,21 +31,36 @@ import net.minecraft.world.level.levelgen.SurfaceRules.Context;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 import etcodehome.freeterraforged.world.worldgen.surface.FTFSurfaceSystem;
 
-public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Strata> strata, int iterations) implements SurfaceRules.RuleSource {
+public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Strata> strata, int iterations,
+		boolean geology, Optional<SurfaceRules.RuleSource> surface) implements SurfaceRules.RuleSource {
 	public static final MapCodec<StrataRule> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 			ResourceLocation.CODEC.fieldOf("name").forGetter(StrataRule::name),
 			Noise.CODEC.fieldOf("selector").forGetter(StrataRule::selector),
 			Strata.CODEC.listOf().fieldOf("strata").forGetter(StrataRule::strata),
-			Codec.INT.fieldOf("iterations").forGetter(StrataRule::iterations)
+			Codec.INT.fieldOf("iterations").forGetter(StrataRule::iterations),
+			Codec.BOOL.optionalFieldOf("geology", false).forGetter(StrataRule::geology),
+			SurfaceRules.RuleSource.CODEC.optionalFieldOf("surface").forGetter(StrataRule::surface)
 	).apply(instance, StrataRule::new));
 
 	public StrataRule {
 		strata = ImmutableList.copyOf(strata);
 	}
 
+	public StrataRule(ResourceLocation name, Holder<Noise> selector, List<Strata> strata, int iterations) {
+		this(name, selector, strata, iterations, false, Optional.empty());
+	}
+
 	@Override
-	public Source apply(Context ctx) {
+	public SurfaceRules.SurfaceRule apply(Context ctx) {
 		if(ctx.system instanceof FTFSurfaceSystem ftfSurfaceSystem && (Object) ctx.randomState instanceof FTFRandomState ftfRandomState) {
+			if (this.geology) {
+				var generator = ftfRandomState.generatorContext();
+				if (generator == null) {
+					throw new IllegalStateException("Geological strata require a generator context");
+				}
+				var geological = GeologicalSurfaceRules.geology(ctx, generator);
+				return this.surface.map(base -> GeologicalSurfaceRules.compose(base.apply(ctx), geological)).orElse(geological);
+			}
 			return new Source(ctx, ftfRandomState.seed(this.selector.value()), ftfSurfaceSystem.getOrCreateStrata(this.name, this::generateStrata));
 		} else {
 			throw new IllegalStateException();

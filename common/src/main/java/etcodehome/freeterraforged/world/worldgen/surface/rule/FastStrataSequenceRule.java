@@ -116,6 +116,10 @@ public class FastStrataSequenceRule implements SurfaceRules.SurfaceRule {
 			return root;
 		}
 		StrataRule strata = findStrataRule(root);
+		// Structured strata must see the biome rule's decision before picking a rock.
+		if (strata != null && strata.geology() && strata.surface().isPresent()) {
+			return root;
+		}
 		SurfaceRules.RuleSource base = strata != null ? removeStrataRule(root, strata) : root;
 		return new Source(base != null ? base : SurfaceRules.sequence(), strata);
 	}
@@ -247,6 +251,9 @@ public class FastStrataSequenceRule implements SurfaceRules.SurfaceRule {
 		public SurfaceRules.SurfaceRule apply(SurfaceRules.Context context) {
 			SurfaceRules.SurfaceRule baseRule = this.base.apply(context);
 			SurfaceRules.SurfaceRule strataRule = this.strata != null ? this.strata.apply(context) : null;
+			if (this.strata != null && this.strata.geology()) {
+				return GeologicalSurfaceRules.compose(baseRule, strataRule);
+			}
 			return new FastStrataSequenceRule(context, baseRule, strataRule);
 		}
 

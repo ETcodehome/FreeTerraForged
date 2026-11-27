@@ -302,6 +302,23 @@ public final class EffectivePresetSnapshot {
 		result.addProperty("vanillaLavaSprings", settings.vanillaLavaSprings);
 		result.addProperty("mountainBiomeUsage", settings.mountainBiomeUsage);
 		result.addProperty("volcanoBiomeUsage", settings.volcanoBiomeUsage);
+		result.addProperty("snowCoversSmallPlants", settings.snowCoversSmallPlants);
+		result.addProperty("structuredStrata", settings.structuredStrata);
+		result.addProperty("geologicalTilt", settings.geologicalTilt);
+		result.addProperty("geologicalFolding", settings.geologicalFolding);
+		JsonObject geology = new JsonObject();
+		geology.addProperty("faultThrow", settings.geology.faultThrow());
+		geology.addProperty("intrusions", settings.geology.intrusions());
+		geology.addProperty("unconformities", settings.geology.unconformities());
+		var layerSettings = settings.geology.layers();
+		JsonObject layers = new JsonObject();
+		layers.addProperty("bedThicknessScale", layerSettings.bedThicknessScale());
+		layers.addProperty("contrastFrequency", layerSettings.contrastFrequency());
+		layers.addProperty("contrastThickness", layerSettings.contrastThickness());
+		layers.addProperty("gravelThickness", layerSettings.gravelThickness());
+		layers.addProperty("lensThickness", layerSettings.lensThickness());
+		geology.add("layers", layers);
+		result.add("geology", geology);
 		return result;
 	}
 

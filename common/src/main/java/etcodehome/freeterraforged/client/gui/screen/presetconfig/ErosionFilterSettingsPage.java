@@ -49,7 +49,7 @@ class ErosionFilterSettingsPage extends PresetEditorPage {
 
 	@Override
 	public Optional<Page> next() {
-		return Optional.of(new MiscellaneousPage(this.screen));
+		return Optional.of(new StrataSettingsPage(this.screen));
 	}
 
 }

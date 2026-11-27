@@ -43,6 +43,19 @@ public final class FTFTranslationKeys {
 	public static final String GUI_RIVER_SETTINGS_TITLE = resolve("gui.riverSettings.title");
 	public static final String GUI_FILTER_SETTINGS_TITLE = resolve("gui.filterSettings.title");
 	public static final String GUI_MISCELLANEOUS_SETTINGS_TITLE = resolve("gui.miscellaneousSettings.title");
+	public static final String GUI_STRATA_SETTINGS_TITLE = resolve("gui.strataSettings.title");
+	public static final String GUI_STRATA_PREVIEW = resolve("gui.strataPreview.title");
+	public static final String GUI_STRATA_PREVIEW_DISABLED = resolve("gui.strataPreview.disabled");
+	public static final String GUI_STRATA_PREVIEW_COORDINATES = resolve("gui.strataPreview.coordinates");
+	public static final String GUI_STRATA_PREVIEW_SAMPLE = resolve("gui.strataPreview.sample");
+	public static final String GUI_BUTTON_NEXT_STRATA_SLICE = resolve("gui.button.nextStrataSlice");
+	public static final String GUI_SLIDER_STRATA_PREVIEW_SPAN = resolve("gui.slider.strataPreviewSpan");
+	public static final String GUI_SLIDER_STRATA_PREVIEW_Y = resolve("gui.slider.strataPreviewY");
+	public static final String GUI_SLIDER_BED_THICKNESS = resolve("gui.slider.bedThickness");
+	public static final String GUI_SLIDER_CONTRAST_FREQUENCY = resolve("gui.slider.contrastFrequency");
+	public static final String GUI_SLIDER_CONTRAST_THICKNESS = resolve("gui.slider.contrastThickness");
+	public static final String GUI_SLIDER_GRAVEL_THICKNESS = resolve("gui.slider.gravelThickness");
+	public static final String GUI_SLIDER_LENS_THICKNESS = resolve("gui.slider.lensThickness");
 	public static final String GUI_ISLAND_SETTINGS_TITLE = resolve("gui.islandSettings.title");
 
 	public static final String GUI_BUTTON_TRUE = resolve("gui.button.true");
@@ -78,6 +91,12 @@ public final class FTFTranslationKeys {
 	public static final String GUI_BUTTON_SMOOTH_LAYER_DECORATOR = resolve("gui.button.smoothLayerDecorator");
 	public static final String GUI_BUTTON_SNOW_COVERS_SMALL_PLANTS = resolve("gui.button.snowCoversSmallPlants");
 	public static final String GUI_BUTTON_STRATA_DECORATOR = resolve("gui.button.strataDecorator");
+	public static final String GUI_BUTTON_STRUCTURED_STRATA = resolve("gui.button.structuredStrata");
+	public static final String GUI_SLIDER_GEOLOGICAL_TILT = resolve("gui.slider.geologicalTilt");
+	public static final String GUI_SLIDER_GEOLOGICAL_FOLDING = resolve("gui.slider.geologicalFolding");
+	public static final String GUI_SLIDER_FAULT_THROW = resolve("gui.slider.faultThrow");
+	public static final String GUI_BUTTON_GEOLOGICAL_INTRUSIONS = resolve("gui.button.geologicalIntrusions");
+	public static final String GUI_BUTTON_UNCONFORMITIES = resolve("gui.button.unconformities");
 	public static final String GUI_BUTTON_ORE_COMPATIBLE_STONE_ONLY = resolve("gui.button.oreCompatibleStoneOnly");
 	public static final String GUI_BUTTON_EROSION_DECORATOR = resolve("gui.button.erosionDecorator");
 	public static final String GUI_BUTTON_PLAIN_STONE_EROSION = resolve("gui.button.stoneErosion");

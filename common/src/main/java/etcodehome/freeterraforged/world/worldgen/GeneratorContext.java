@@ -12,6 +12,9 @@ import etcodehome.freeterraforged.world.worldgen.cell.heightmap.FilteredChunkCac
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.RawChunkCache;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.WorldLookup;
 import etcodehome.freeterraforged.world.worldgen.feature.ScreeNoises;
+import etcodehome.freeterraforged.world.worldgen.geology.GeologySampler;
+import etcodehome.freeterraforged.world.worldgen.geology.RiverSubstrate;
+import etcodehome.freeterraforged.world.worldgen.geology.StructuredGeology;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 
 public class GeneratorContext implements AutoCloseable {
@@ -19,6 +22,7 @@ public class GeneratorContext implements AutoCloseable {
         new etcodehome.freeterraforged.world.worldgen.biome.BiomeSurfaceEnvelope();
     public Seed seed;
     public final Levels levels;
+    public final GeologySampler surfaceGeology;
     public Preset preset;
     public HolderGetter<Noise> noiseLookup;
     public Heightmap heightmap;
@@ -34,6 +38,10 @@ public class GeneratorContext implements AutoCloseable {
         this.levels = new Levels(preset.world().properties);
         this.noiseLookup = noiseLookup;
         this.seed = new Seed(seed);
+        var miscellaneous = preset.miscellaneous();
+        this.surfaceGeology = new RiverSubstrate(StructuredGeology.create(seed, miscellaneous.strataRegionSize,
+            this.levels.waterLevel, miscellaneous.geologicalTilt, miscellaneous.geologicalFolding,
+            miscellaneous.geology), seed);
         this.heightmap = Heightmap.make(this);
         this.rawChunkCache = new RawChunkCache(this);
         this.filteredChunkCache = new FilteredChunkCache(this);

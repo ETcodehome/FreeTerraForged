@@ -2,6 +2,7 @@ package etcodehome.freeterraforged.data.worldgen.preset;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.tags.FTFBlockTags;
@@ -21,12 +22,16 @@ public class PresetSurfaceRuleData {
 		var base = new etcodehome.freeterraforged.world.worldgen.surface.rule.InheritedSurfaceRule(SurfaceRuleData.overworld(),
 			etcodehome.freeterraforged.world.worldgen.surface.rule.InheritedSurfaceRule.BIOME_DOMAINS);
 		if (preset.miscellaneous().strataDecorator) {
-			return SurfaceRules.sequence(base, makeStrataRule(noise));
+			StrataRule strata = makeStrataRule(noise);
+			if (preset.miscellaneous().structuredStrata) {
+				return new StrataRule(strata.name(), strata.selector(), strata.strata(), strata.iterations(), true, Optional.of(base));
+			}
+			return SurfaceRules.sequence(base, strata);
 		}
 		return SurfaceRules.sequence(base);
     }
     
-	private static SurfaceRules.RuleSource makeStrataRule(HolderGetter<Noise> noise) {
+	private static StrataRule makeStrataRule(HolderGetter<Noise> noise) {
 		Holder<Noise> depth = noise.getOrThrow(PresetStrataNoise.STRATA_DEPTH);
 
 		List<StrataRule.Strata> strata = new ArrayList<>();

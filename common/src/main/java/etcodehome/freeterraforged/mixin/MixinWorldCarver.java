@@ -10,6 +10,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
+import etcodehome.freeterraforged.world.worldgen.surface.rule.GeologicalSurfaceRules;
 
 @Mixin(WorldCarver.class)
 public class MixinWorldCarver {
@@ -20,17 +21,26 @@ public class MixinWorldCarver {
 			target = "Lnet/minecraft/world/level/levelgen/carver/WorldCarver;canReplaceBlock(Lnet/minecraft/world/level/levelgen/carver/CarverConfiguration;Lnet/minecraft/world/level/block/state/BlockState;)Z"
 		)
 	)
-	private boolean freeterraforged$preventWaterCarving(
+	private boolean freeterraforged$carverReplaceable(
 		WorldCarver<?> carver,
 		CarverConfiguration config,
 		BlockState state,
 		Operation<Boolean> original,
 		CarvingContext context
 	) {
-		if ((Object) context.randomState() instanceof FTFRandomState randomState
-			&& randomState.isTerraForged()
-			&& (state.getFluidState().isSourceOfType(Fluids.WATER)
-				|| state.getFluidState().isSourceOfType(Fluids.FLOWING_WATER))) {
+		if ((Object) context.randomState() instanceof FTFRandomState randomState && randomState.isTerraForged()) {
+			if (state.getFluidState().isSourceOfType(Fluids.WATER)
+				|| state.getFluidState().isSourceOfType(Fluids.FLOWING_WATER)) {
+				return false;
+			}
+			if (original.call(carver, config, state)) {
+				return true;
+			}
+			var generator = randomState.generatorContext();
+			if (generator != null) {
+				BlockState substrate = GeologicalSurfaceRules.carverSubstrate(state, generator.preset.miscellaneous());
+				return substrate != state && original.call(carver, config, substrate);
+			}
 			return false;
 		}
 		return original.call(carver, config, state);

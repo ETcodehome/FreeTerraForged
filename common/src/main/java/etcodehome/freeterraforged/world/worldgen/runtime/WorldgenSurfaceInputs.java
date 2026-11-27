@@ -200,6 +200,7 @@ public final class WorldgenSurfaceInputs {
 			case "minecraft:sequence" -> "sequence";
 			case "minecraft:condition" -> "then_run";
 			case AcquiredSurfaceRule.TYPE -> "root";
+			case "freeterraforged:strata" -> value.getAsJsonObject().has("surface") ? "surface" : "";
 			default -> "";
 		};
 	}

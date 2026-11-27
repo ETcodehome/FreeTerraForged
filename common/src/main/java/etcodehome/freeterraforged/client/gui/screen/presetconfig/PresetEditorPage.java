@@ -98,6 +98,9 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	public void init() {
 		super.init();
 		this.cleanupWidgets();
+		if (!this.showTerrainPreviews()) {
+			return;
+		}
 
 		int startX = this.left.getX();
 		int totalWidth = (this.right.getX() + this.right.getWidth()) - startX;
@@ -145,6 +148,10 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		// fill out the remaining gap
 		this.left.setX(startX + columnWidth - 20);
 		this.left.setWidth(columnWidth + 44);
+	}
+
+	protected boolean showTerrainPreviews() {
+		return true;
 	}
 
 	private void createControls() {

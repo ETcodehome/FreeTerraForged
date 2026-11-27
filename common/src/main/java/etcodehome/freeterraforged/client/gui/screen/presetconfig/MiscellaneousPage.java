@@ -13,9 +13,6 @@ import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 public class MiscellaneousPage extends PresetEditorPage {
 	private CycleButton<Boolean> smoothLayerDecorator;
 	private CycleButton<Boolean> snowCoversSmallPlants;
-	private Slider strataRegionSize;
-	private CycleButton<Boolean> strataDecorator;
-	private CycleButton<Boolean> oreCompatibleStoneOnly;
 	private CycleButton<Boolean> plainStoneErosion;
 	private CycleButton<Boolean> naturalSnowDecorator;
 	private CycleButton<Boolean> customBiomeFeatures;
@@ -47,16 +44,6 @@ public class MiscellaneousPage extends PresetEditorPage {
 		this.snowCoversSmallPlants = PresetWidgets.createToggle(miscellaneous.snowCoversSmallPlants, FTFTranslationKeys.GUI_BUTTON_SNOW_COVERS_SMALL_PLANTS, (button, value) -> {
 			miscellaneous.snowCoversSmallPlants = value;
 		});
-		this.strataRegionSize = PresetWidgets.createIntSlider(miscellaneous.strataRegionSize, 50, 1000, FTFTranslationKeys.GUI_SLIDER_STRATA_REGION_SIZE, (slider, value) -> {
-			miscellaneous.strataRegionSize = (int) slider.scaleValue(value);
-			return value;
-		});
-		this.strataDecorator = PresetWidgets.createToggle(miscellaneous.strataDecorator, FTFTranslationKeys.GUI_BUTTON_STRATA_DECORATOR, (button, value) -> {
-			miscellaneous.strataDecorator = value;
-		});
-		this.oreCompatibleStoneOnly = PresetWidgets.createToggle(miscellaneous.oreCompatibleStoneOnly, FTFTranslationKeys.GUI_BUTTON_ORE_COMPATIBLE_STONE_ONLY, (button, value) -> {
-			miscellaneous.oreCompatibleStoneOnly = value;
-		});
 		this.plainStoneErosion = PresetWidgets.createToggle(miscellaneous.plainStoneErosion, FTFTranslationKeys.GUI_BUTTON_PLAIN_STONE_EROSION, (button, value) -> {
 			miscellaneous.plainStoneErosion = value;
 		});
@@ -86,9 +73,6 @@ public class MiscellaneousPage extends PresetEditorPage {
 		
 		this.left.addWidget(this.smoothLayerDecorator);
 		this.left.addWidget(this.snowCoversSmallPlants);
-		this.left.addWidget(this.strataRegionSize);
-		this.left.addWidget(this.strataDecorator);
-		this.left.addWidget(this.oreCompatibleStoneOnly);
 		this.left.addWidget(this.plainStoneErosion);
 		this.left.addWidget(this.naturalSnowDecorator);
 		this.left.addWidget(this.customBiomeFeatures);
@@ -101,7 +85,7 @@ public class MiscellaneousPage extends PresetEditorPage {
 	
 	@Override
 	public Optional<Page> previous() {
-		return Optional.of(new ErosionFilterSettingsPage(this.screen));
+		return Optional.of(new StrataSettingsPage(this.screen));
 	}
 
 	@Override
