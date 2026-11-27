@@ -7,6 +7,7 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.BlockPos.MutableBlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.ChunkPos;
@@ -32,8 +33,10 @@ import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
 import etcodehome.freeterraforged.world.worldgen.feature.ScreeFeature.Config;
+import etcodehome.freeterraforged.world.worldgen.geology.GeologySampler;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
+import etcodehome.freeterraforged.world.worldgen.surface.rule.GeologicalSurfaceRules;
 
 import java.util.List;
 import java.util.Map;
@@ -45,6 +48,7 @@ public class ScreeFeature extends Feature<Config> {
     // Internal fixed modifiers
     private static final float SEDIMENT_NOISE = 3F / 255F;
     private static final float SCREE_VALUE = 0.55F;
+    private static final int MAX_ROCK_EROSION_DEPTH = 32;
 
     // Noise sampling parameters
     private static final float CLUSTER_SCALE = 0.05F;
@@ -117,7 +121,7 @@ public class ScreeFeature extends Feature<Config> {
                         if (chunkCells == null && cell.gradient == 0.0F) {
                             generatorContext.lookup.computeSteepness(cell, worldX, worldZ);
                         }
-                        erodeColumn(config, levels, rand, clusterNoise, warpX, warpZ, generator, chunk, cell, pos, surfaceY);
+                        erodeColumn(config, levels, rand, clusterNoise, warpX, warpZ, generator, generatorContext, chunk, cell, pos, surfaceY);
                         // remove any foliage that may have generated above
                         pos.setY(surfaceY);
                         while(!level.getBlockState(pos.setY(pos.getY() + 1)).canSurvive(level, pos)) {
@@ -172,7 +176,9 @@ public class ScreeFeature extends Feature<Config> {
         }
     }
 
-    private static void erodeColumn(Config config, Levels levels, Noise rand, Noise clusterNoise, Noise warpX, Noise warpZ, ChunkGenerator generator, ChunkAccess chunk, Cell cell, BlockPos.MutableBlockPos pos, int surfaceY) {
+    private static void erodeColumn(Config config, Levels levels, Noise rand, Noise clusterNoise, Noise warpX, Noise warpZ,
+                                    ChunkGenerator generator, GeneratorContext context, ChunkAccess chunk, Cell cell,
+                                    BlockPos.MutableBlockPos pos, int surfaceY) {
         if (cell.terrain.isRiver() || cell.terrain.isWetland()) {
             return;
         }
@@ -187,7 +193,13 @@ public class ScreeFeature extends Feature<Config> {
             if (material != top) {
                 // Treat TUFF as a decorative band (like Mossy Cobble) rather than running erodeRock on it
                 if (material.is(FTFBlockTags.ROCK) && !material.is(Blocks.TUFF)) {
-                    erodeRock(chunk, cell, pos, surfaceY);
+                    var settings = context.preset.miscellaneous();
+                    if (settings.strataDecorator && settings.structuredStrata) {
+                        erodeGeologicalCover(chunk, pos, surfaceY, context.surfaceGeology, cell,
+                            levels.terrainScaleFactor, settings.oreCompatibleStoneOnly);
+                    } else {
+                        erodeRock(chunk, pos, surfaceY);
+                    }
                     return;
                 } else {
                     ColumnDecorator.fillDownSolid(chunk, pos, surfaceY, surfaceY - 4, material);
@@ -197,10 +209,35 @@ public class ScreeFeature extends Feature<Config> {
         }
     }
 
-    private static void erodeRock(ChunkAccess chunk, Cell cell, BlockPos.MutableBlockPos pos, int y) {
-        int depth = 32;
+    static void erodeGeologicalCover(ChunkAccess chunk, MutableBlockPos pos, int surfaceY, GeologySampler geology,
+                                     Cell cell, int terrainScale, boolean oreCompatibleOnly) {
+        int x = pos.getX();
+        int z = pos.getZ();
+        int bottomY = Math.max(chunk.getMinBuildHeight(), surfaceY - MAX_ROCK_EROSION_DEPTH + 1);
+        for (int y = surfaceY; y >= bottomY; y--) {
+            BlockState cover = chunk.getBlockState(pos.setY(y));
+            if (!cover.is(FTFBlockTags.ERODIBLE) || !cover.getFluidState().isEmpty()) {
+                break;
+            }
+
+            BlockState material = GeologicalSurfaceRules.materialFor(
+                geology.sample(x, y, z, cell, terrainScale).type(), oreCompatibleOnly);
+            if (material.is(Blocks.GRAVEL)) {
+                BlockPos support = pos.below();
+                if (y != surfaceY || !chunk.getBlockState(support).isFaceSturdy(chunk, support, Direction.UP)) {
+                    material = Blocks.TUFF.defaultBlockState();
+                }
+            }
+            if (material != cover) {
+                chunk.setBlockState(pos, material, false);
+            }
+        }
+    }
+
+    private static void erodeRock(ChunkAccess chunk, BlockPos.MutableBlockPos pos, int y) {
+        int depth = MAX_ROCK_EROSION_DEPTH;
         BlockState material = Blocks.GRAVEL.defaultBlockState();
-        for (int dy = 3; dy < 32; dy++) {
+        for (int dy = 3; dy < MAX_ROCK_EROSION_DEPTH; dy++) {
             pos.setY(y - dy);
             BlockState state = chunk.getBlockState(pos);
             if (state.is(FTFBlockTags.ROCK)) {
